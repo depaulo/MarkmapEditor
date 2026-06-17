@@ -1,0 +1,47 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/.ropeproject/
+.idea/
+
+# Temporary files
+*.tmp
+*.bak
+*.old
+*.orig
+*.zip
+*.7z
+*.rar
+
+# Logs
+*.log
+
+# Local exports / generated files
+exports/
+dist/
+build/
+.cache/
+cache/
+
+# Local workspace/user data
+OKF-Workspace/
+journals/
+concepts/
+archive/
+assets/
+system/
+
+# Drafts / local-only notes
+drafts/
+private/
+personal/
+work-notes/
+
+# Test downloads
+*_mindmap_*.svg
+*_html-preview_*.html
+*_*.md
+
+# OneDrive / sync conflict noise
+*conflict*
+*Conflict*
