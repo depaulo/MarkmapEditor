@@ -1,0 +1,22 @@
+/sw.js
+  Cache-Control: no-cache
+  Content-Type: application/javascript
+
+/manifest.webmanifest
+  Cache-Control: no-cache
+  Content-Type: application/manifest+json
+
+/*.html
+  Cache-Control: no-cache
+
+/icon.svg
+  Content-Type: image/svg+xml
+  Cache-Control: public, max-age=31536000, immutable
+
+/icon-192.png
+  Content-Type: image/png
+  Cache-Control: public, max-age=31536000, immutable
+
+/icon-512.png
+  Content-Type: image/png
+  Cache-Control: public, max-age=31536000, immutable
