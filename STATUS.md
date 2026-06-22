@@ -1,26 +1,29 @@
-# Release 40 Dev Status
+# MarkMapJournal Release 40 Dev Status
 
 ## Goal
 
-Prepare MarkmapEditor for OKF Workspace Mode.
+Prepare MarkMapJournal for a future multi-context app:
+
+- MarkMapEditor
+- MarkMapJournal
+- MarkMapSlides
 
 ## Current state
 
-- App split into index.html, css/app.css, js/main.js
-- HTML preview renderer moved to js/render/html-preview.js
-- Template data moved to js/data/templates-data.js
-- app.css cleaned
-- PWA cache needs to track split files
+- App has been partially split from single-file HTML.
+- CSS is currently mainly in css/app.css.
+- Main JavaScript is currently mainly in js/main.js.
+- HTML preview rendering has been moved to js/render/html-preview.js.
+- Template data has been moved to js/data/templates-data.js.
+
+## Current priority
+
+Refactor file organization safely before implementing the context selector.
 
 ## Browser target
 
-Chrome desktop / Chromium.
+Chrome / Chromium.
 
-## Next feature
+## Run command
 
-Workspace Mode Alpha:
-
-- Open Workspace
-- Create folders
-- Scan journals/concepts
-- Show sidebar
+python3 -m http.server 8000
