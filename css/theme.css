@@ -1,0 +1,78 @@
+/* =========================== */
+/* CSS Variables (Light Theme) */
+/* =========================== */
+:root {
+  --bg: #ffffff;
+  --text: #1a1a1a;
+  --toolbar-bg: #ffffff;
+  --toolbar-border: #cccccc;
+  --editor-bg: #ffffff;
+  --editor-border: #cccccc;
+  --splitter-bg: #e0e0e0;
+  --map-bg: #ffffff;
+  --html-bg: #fafafa;
+  --html-border: #cccccc;
+  --log-bg: rgba(0, 0, 0, 0.88);
+  --log-color: #0f0;
+  --toast-bg: rgba(60, 60, 60, 0.95);
+  --toast-color: #ffffff;
+  --menu-bg: #ffffff;
+  --menu-border: #cccccc;
+  --menu-item-border: #e5e5e5;
+  --menu-hover: #f0f0f0;
+  --btn-sep: #d0d0d0;
+  --table-border: #cfcfcf;
+  --table-head-bg: #f3f3f3;
+  --code-bg: #f4f4f4;
+}
+
+/* =========================== */
+/* Dark Theme Overrides        */
+/* =========================== */
+html.dark {
+  --bg: #1e1e1e;
+  --text: #d4d4d4;
+  --toolbar-bg: #252526;
+  --toolbar-border: #3e3e42;
+  --editor-bg: #1e1e1e;
+  --editor-border: #3e3e42;
+  --splitter-bg: #3e3e42;
+  --map-bg: #1e1e1e;
+  --html-bg: #252526;
+  --html-border: #3e3e42;
+  --log-bg: rgba(0, 0, 0, 0.9);
+  --log-color: #0f0;
+  --toast-bg: #333333;
+  --toast-color: #ffffff;
+  --menu-bg: #2d2d2d;
+  --menu-border: #3e3e42;
+  --menu-item-border: #3e3e42;
+  --menu-hover: #3e3e42;
+  --btn-sep: #3e3e42;
+  --table-border: #555555;
+  --table-head-bg: #3a3a3a;
+  --code-bg: #2a2a2a;
+  --btn-bg: #2d2d30;
+  --btn-hover: #3a3a3d;
+  --btn-active: #434346;
+  --btn-border: #555;
+}
+
+/* Toolbar button contrast in dark mode */
+html.dark #toolbar .btnGroup > button {
+  background: var(--btn-bg);
+  border-color: var(--btn-border);
+}
+
+html.dark #toolbar .btnGroup > button:hover {
+  background: var(--btn-hover);
+}
+
+html.dark #toolbar .btnGroup > button:active {
+  background: var(--btn-active);
+}
+
+html.dark #toolbar .btnGroup > button:focus-visible {
+  outline: 2px solid #4fc3f7;
+  outline-offset: 2px;
+}

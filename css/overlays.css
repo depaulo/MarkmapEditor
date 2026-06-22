@@ -1,0 +1,559 @@
+/* =========================== */
+/* Map Overlay Controls        */
+/* =========================== */
+
+#mapOverlayControls {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 25;
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 7px;
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--toolbar-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+
+  backdrop-filter: blur(6px);
+}
+
+#mapOverlayControls button {
+  width: 30px;
+  height: 28px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 13px;
+  line-height: 1;
+
+  background: var(--toolbar-bg);
+  color: var(--text);
+  border: 1px solid var(--toolbar-border);
+  border-radius: 6px;
+
+  cursor: pointer;
+  user-select: none;
+}
+
+#mapOverlayControls button:hover {
+  background: var(--menu-hover);
+}
+
+#mapOverlayControls button:active {
+  transform: translateY(1px);
+}
+
+html.dark #mapOverlayControls {
+  background: rgba(37, 37, 38, 0.88);
+  border-color: var(--toolbar-border);
+}
+
+html.dark #mapOverlayControls button {
+  background: var(--btn-bg);
+  border-color: var(--btn-border);
+  color: var(--text);
+}
+
+html.dark #mapOverlayControls button:hover {
+  background: var(--btn-hover);
+}
+
+html.compact #mapOverlayControls {
+  right: 10px;
+  bottom: 10px;
+  padding: 5px;
+  gap: 4px;
+}
+
+html.compact #mapOverlayControls button {
+  width: 26px;
+  height: 24px;
+  font-size: 12px;
+}
+
+/* =========================== */
+/* Editor Overlay Controls     */
+/* =========================== */
+
+#editorOverlayControls {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 45;
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 7px;
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--toolbar-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+
+  backdrop-filter: blur(6px);
+}
+
+#editorOverlayControls button {
+  width: 30px;
+  height: 28px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 13px;
+  line-height: 1;
+
+  background: var(--toolbar-bg);
+  color: var(--text);
+  border: 1px solid var(--toolbar-border);
+  border-radius: 6px;
+
+  cursor: pointer;
+  user-select: none;
+}
+
+#editorOverlayControls button:hover {
+  background: var(--menu-hover);
+}
+
+#editorOverlayControls button:active {
+  transform: translateY(1px);
+}
+
+html.dark #editorOverlayControls {
+  background: rgba(37, 37, 38, 0.88);
+  border-color: var(--toolbar-border);
+}
+
+html.dark #editorOverlayControls button {
+  background: var(--btn-bg);
+  border-color: var(--btn-border);
+  color: var(--text);
+}
+
+html.dark #editorOverlayControls button:hover {
+  background: var(--btn-hover);
+}
+
+html.compact #editorOverlayControls {
+  right: 10px;
+  bottom: 10px;
+  padding: 5px;
+  gap: 4px;
+}
+
+html.compact #editorOverlayControls button {
+  width: 26px;
+  height: 24px;
+  font-size: 12px;
+}
+
+/* =========================== */
+/* Editor Overlay Tools Panel  */
+/* =========================== */
+
+#editorOverlayControls.__expanded #editorBtnEditToggle {
+  background: var(--menu-hover);
+  outline: 2px solid #22c55e;
+  outline-offset: 1px;
+}
+
+.editorOverlayToolsPanel {
+  position: absolute;
+  right: 14px;
+  bottom: 58px;
+  z-index: 44;
+
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+
+  width: max-content;
+  max-width: min(360px, calc(100% - 28px));
+
+  padding: 7px;
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--toolbar-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(6px);
+}
+
+.editorOverlayToolsPanel[hidden] {
+  display: none !important;
+}
+
+.editorOverlayToolRow {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+
+.editorOverlayToolRow + .editorOverlayToolRow {
+  padding-top: 6px;
+  border-top: 1px solid var(--toolbar-border);
+}
+
+.editorOverlayToolsPanel button {
+  width: 30px;
+  height: 28px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 13px;
+  line-height: 1;
+
+  background: var(--toolbar-bg);
+  color: var(--text);
+  border: 1px solid var(--toolbar-border);
+  border-radius: 6px;
+
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.editorOverlayToolsPanel button:hover {
+  background: var(--menu-hover);
+}
+
+.editorOverlayToolsPanel button:active {
+  transform: translateY(1px);
+}
+
+.editorOverlayToolsPanel button[data-heading-level] {
+  width: 34px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.editorOverlayToolsPanel button[data-editor-command='boldItalic'] {
+  width: 34px;
+  font-size: 11px;
+}
+
+.editorOverlayToolsPanel button[data-editor-command='inlineCode'] {
+  width: 38px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+}
+
+.editorOverlayToolsPanel button[data-editor-command='checkboxUnchecked'],
+.editorOverlayToolsPanel button[data-editor-command='checkboxChecked'] {
+  font-size: 15px;
+}
+
+html.dark #editorOverlayControls.__expanded #editorBtnEditToggle {
+  background: var(--btn-hover);
+  outline-color: #22c55e;
+}
+
+html.dark .editorOverlayToolsPanel {
+  background: rgba(37, 37, 38, 0.88);
+  border-color: var(--toolbar-border);
+}
+
+html.dark .editorOverlayToolsPanel button {
+  background: var(--btn-bg);
+  border-color: var(--btn-border);
+  color: var(--text);
+}
+
+html.dark .editorOverlayToolsPanel button:hover {
+  background: var(--btn-hover);
+}
+
+html.compact .editorOverlayToolsPanel {
+  right: 10px;
+  bottom: 44px;
+  padding: 5px;
+  gap: 4px;
+  max-width: min(320px, calc(100% - 20px));
+}
+
+html.compact .editorOverlayToolRow {
+  gap: 4px;
+}
+
+html.compact .editorOverlayToolRow + .editorOverlayToolRow {
+  padding-top: 4px;
+}
+
+html.compact .editorOverlayToolsPanel button {
+  width: 26px;
+  height: 24px;
+  font-size: 12px;
+}
+
+html.compact .editorOverlayToolsPanel button[data-heading-level] {
+  width: 30px;
+  font-size: 10px;
+}
+
+html.compact .editorOverlayToolsPanel button[data-editor-command='boldItalic'] {
+  width: 30px;
+  font-size: 10px;
+}
+
+html.compact .editorOverlayToolsPanel button[data-editor-command='inlineCode'] {
+  width: 34px;
+  font-size: 10px;
+}
+
+/* =========================== */
+/* Logs Display                */
+/* =========================== */
+
+#logs {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  width: 600px;
+  height: 280px;
+  background: var(--log-bg);
+  color: var(--log-color);
+  display: none;
+  padding: 8px;
+  font: 12px ui-monospace;
+  overflow: auto;
+  resize: both;
+  z-index: 9999;
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--menu-border);
+}
+
+#logs pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+#file {
+  display: none;
+}
+
+/* =========================== */
+/* Toast Notifications         */
+/* =========================== */
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translate(-50%, 10px);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font: 13px system-ui;
+  color: var(--toast-color);
+  background: var(--toast-bg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+  z-index: 10001;
+  max-width: min(680px, 92vw);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid var(--menu-border);
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+#toast.ok {
+  background: rgba(30, 136, 56, 0.95);
+}
+
+#toast.download {
+  background: rgba(2, 119, 189, 0.95);
+}
+
+#toast.error {
+  background: rgba(198, 40, 40, 0.95);
+}
+
+/* =========================== */
+/* Style Modal                 */
+/* =========================== */
+
+.styleModal {
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.styleModalPanel {
+  width: min(620px, 92vw);
+  max-height: min(760px, 88vh);
+  overflow: auto;
+
+  background: var(--menu-bg);
+  color: var(--text);
+  border: 1px solid var(--menu-border);
+  border-radius: 14px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+  padding: 14px;
+}
+
+.styleModalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.styleModalTitle {
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.styleModalSub {
+  font-size: 12px;
+  opacity: 0.72;
+  margin-top: 2px;
+}
+
+#mapStyleClose {
+  width: 32px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--toolbar-border);
+  background: var(--toolbar-bg);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.styleModalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.styleSection {
+  border: 1px solid var(--menu-border);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(127, 127, 127, 0.05);
+}
+
+.styleSection h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.styleOptionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px;
+}
+
+.styleChoice {
+  border: 1px solid var(--menu-border);
+  background: var(--menu-bg);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.styleChoice:hover {
+  background: var(--menu-hover);
+}
+
+.styleChoice.__selected {
+  outline: 2px solid #22c55e;
+  border-color: #22c55e;
+}
+
+.styleChoiceTitle {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.styleChoiceSub {
+  font-size: 11px;
+  opacity: 0.72;
+  margin-top: 2px;
+}
+
+.styleSwatches {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.styleSwatch {
+  width: 18px;
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.styleModalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--menu-border);
+}
+
+.styleModalFooter button {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--toolbar-border);
+  background: var(--toolbar-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+#mapStyleReset {
+  margin-right: auto;
+}
+
+#mapStyleApply {
+  background: #22c55e;
+  color: #06120a;
+  border-color: #22c55e;
+  font-weight: 700;
+}
+
+html.dark #mapStyleApply {
+  color: #06120a;
+}
+
+/* Hot reload status */
+#hotStatus {
+  color: var(--text);
+}

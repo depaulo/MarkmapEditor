@@ -1,0 +1,93 @@
+/* =========================== */
+/* Toolbar Styles              */
+/* =========================== */
+
+#toolbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--toolbar-bg);
+  border-bottom: 1px solid var(--toolbar-border);
+  z-index: 10;
+  flex-wrap: nowrap;
+}
+
+.btnGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btnSep {
+  width: 1px;
+  height: 24px;
+  background: var(--btn-sep);
+}
+
+#toolbar .btnGroup > button {
+  height: 28px;
+  font-size: 12px;
+  padding: 0 8px;
+  background: var(--toolbar-bg);
+  color: var(--text);
+  border: 1px solid var(--toolbar-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#grpFile > button {
+  width: 32px;
+  padding: 0;
+}
+
+#saveStatus {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.65;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+/* Hot reload toolbar labels */
+#hotReloadCtl .hotLabelShort {
+  display: none;
+}
+
+/* Compact mode: show HR, hide full text */
+html.compact #hotReloadCtl .hotLabelFull {
+  display: none;
+}
+
+html.compact #hotReloadCtl .hotLabelShort {
+  display: inline;
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+/* Optional: tighten spacing in compact mode */
+html.compact #hotReloadCtl {
+  gap: 4px;
+}
+
+/* ===========================
+   Compact Mode
+   =========================== */
+html.compact #toolbar {
+  padding: 2px 6px;
+}
+
+html.compact #toolbar .btnGroup > button {
+  height: 24px;
+  padding: 0 5px;
+  font-size: 11px;
+}
+
+html.compact #saveStatus {
+  font-size: 11px;
+  opacity: 0.6;
+}

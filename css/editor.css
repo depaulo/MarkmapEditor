@@ -1,0 +1,116 @@
+/* =========================== */
+/* Editor Styles               */
+/* =========================== */
+
+#editor {
+  width: 30%;
+  min-width: 200px;
+  border-right: 1px solid var(--editor-border);
+  background: var(--editor-bg);
+  position: relative;
+}
+
+#editor textarea {
+  width: 100%;
+  height: 100%;
+  border: none;
+  padding: 10px;
+  font-family: ui-monospace, monospace;
+  background: var(--editor-bg);
+  color: var(--text);
+  resize: none;
+}
+
+#cmHost {
+  height: 100%;
+}
+
+.cm-editor .cm-content {
+  overflow-wrap: anywhere;
+}
+
+/* =========================== */
+/* CodeMirror dark adjustments */
+/* =========================== */
+
+html.dark .cm-editor {
+  background: var(--editor-bg);
+  color: var(--text);
+}
+
+html.dark .cm-editor .cm-scroller {
+  background: var(--editor-bg);
+}
+
+html.dark .cm-editor .cm-gutters {
+  background: var(--editor-bg);
+  border-right: 1px solid var(--editor-border);
+  color: #858585;
+}
+
+html.dark .cm-editor .cm-activeLineGutter {
+  background: #2a2d2e;
+}
+
+html.dark .cm-editor .cm-activeLine {
+  background: #2a2d2e;
+}
+
+html.dark .cm-editor .cm-selectionBackground {
+  background: #264f78;
+}
+
+html.dark .cm-editor .cm-cursor {
+  border-left-color: #aeafad;
+}
+
+/* Make markdown formatting markers like ### stand out in dark mode */
+html.dark .cm-editor .cm-formatting,
+html.dark .cm-editor .cm-formatting-header,
+html.dark .cm-editor span.cm-formatting,
+html.dark .cm-editor span.cm-formatting.cm-formatting-header {
+  color: #e6b3ff !important;
+  font-weight: 700;
+  opacity: 1;
+}
+
+html.dark .cm-editor .cm-header,
+html.dark .cm-editor .cm-heading {
+  color: #e7e7e7;
+  font-weight: 700;
+}
+
+/* =========================== */
+/* CodeMirror selection visibility */
+/* Makes selected text visible even on active line */
+/* =========================== */
+
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground,
+.cm-editor .cm-content ::selection {
+  background-color: rgba(34, 197, 94, 0.38) !important;
+}
+
+html.dark .cm-editor .cm-selectionBackground,
+html.dark .cm-editor.cm-focused .cm-selectionBackground,
+html.dark .cm-editor .cm-content ::selection {
+  background-color: rgba(34, 197, 94, 0.48) !important;
+}
+
+.cm-editor .cm-activeLine .cm-selectionBackground,
+html.dark .cm-editor .cm-activeLine .cm-selectionBackground {
+  background-color: rgba(34, 197, 94, 0.58) !important;
+}
+
+/* Fallback textarea */
+body.cmFailed #editor textarea {
+  display: block !important;
+}
+
+body.cmFailed #cmHost {
+  display: none !important;
+}
+
+#editor textarea {
+  display: none;
+}

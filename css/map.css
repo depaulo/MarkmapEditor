@@ -1,0 +1,151 @@
+/* =========================== */
+/* Map Pane Styles             */
+/* =========================== */
+
+#mapPane {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--map-bg);
+  position: relative;
+}
+
+#mapPane pre.markmap {
+  flex: 1;
+  margin: 0;
+}
+
+#mapSvg {
+  width: 100%;
+  height: 100%;
+  background: var(--map-bg);
+}
+
+/* Mindmap image constraints */
+#mapSvg .markmap-node img,
+#mapSvg foreignObject img {
+  max-width: 180px;
+  max-height: 110px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+#mapSvg foreignObject {
+  overflow: hidden;
+}
+
+/* Mindmap dark mode styling */
+html.dark .markmap-node text {
+  fill: #d4d4d4;
+}
+
+html.dark .markmap-node foreignObject div {
+  color: #d4d4d4;
+}
+
+html.dark .markmap-link {
+  stroke-opacity: 0.8;
+  stroke-width: 2px;
+}
+
+html.dark .markmap-node circle {
+  fill: #444;
+  stroke: #666;
+}
+
+/* Markmap active node styling */
+.markmap-node.__active text {
+  font-weight: 700;
+  fill: #1976d2;
+}
+
+.markmap-node.__active foreignObject div {
+  font-weight: 700;
+  color: #1976d2;
+}
+
+html.dark .markmap-node.__active text {
+  fill: #4fc3f7;
+}
+
+html.dark .markmap-node.__active foreignObject div {
+  color: #4fc3f7;
+}
+
+/* =========================== */
+/* Markmap Style Modifier — clean final CSS */
+/* Default keeps original Markmap colors */
+/* Custom themes override colors */
+/* =========================== */
+
+#mapPane {
+  --mme-map-bg: var(--map-bg);
+  --mme-mm-text: var(--text);
+  --mme-mm-link: #999999;
+  --mme-mm-circle-fill: #ffffff;
+  --mme-mm-circle-stroke: #999999;
+  --mme-mm-active: #1976d2;
+  --mme-mm-link-dash: none;
+  --mme-mm-link-width: 2px;
+}
+
+/* Keep default text readable, but do not force color in Default mode */
+#mapSvg .markmap-node text {
+  opacity: 1 !important;
+}
+
+#mapSvg .markmap-node foreignObject,
+#mapSvg .markmap-node foreignObject div {
+  opacity: 1 !important;
+}
+
+/* Link style is allowed in both Default and custom themes */
+#mapSvg .markmap-link {
+  stroke-dasharray: var(--mme-mm-link-dash, none) !important;
+  stroke-width: var(--mme-mm-link-width, 2px) !important;
+  stroke-opacity: 0.95 !important;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Only custom themes should control map colors */
+#mapPane.mme-map-styled {
+  background: var(--mme-map-bg) !important;
+}
+
+#mapPane.mme-map-styled #mapSvg {
+  background: var(--mme-map-bg) !important;
+}
+
+#mapPane.mme-map-styled #mapSvg .markmap-node text {
+  fill: var(--mme-mm-text) !important;
+  opacity: 1 !important;
+}
+
+#mapPane.mme-map-styled #mapSvg .markmap-node foreignObject,
+#mapPane.mme-map-styled #mapSvg .markmap-node foreignObject div {
+  color: var(--mme-mm-text) !important;
+  opacity: 1 !important;
+}
+
+#mapPane.mme-map-styled #mapSvg .markmap-node.__active text {
+  fill: var(--mme-mm-active) !important;
+  font-weight: 700;
+}
+
+#mapPane.mme-map-styled #mapSvg .markmap-node.__active foreignObject div {
+  color: var(--mme-mm-active) !important;
+  font-weight: 700;
+}
+
+/* Default active node keeps your original active styling */
+#mapSvg .markmap-node.__active text {
+  opacity: 1 !important;
+}
+
+#mapSvg .markmap-node.__active foreignObject div {
+  opacity: 1 !important;
+}

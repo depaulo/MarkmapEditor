@@ -1,0 +1,35 @@
+/* =========================== */
+/* Global Layout Styles        */
+/* =========================== */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: system-ui;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#layout {
+  position: absolute;
+  top: var(--toolbar-h, 56px);
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+#viewer {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.splitter {
+  width: 6px;
+  cursor: col-resize;
+  background: var(--splitter-bg);
+}
