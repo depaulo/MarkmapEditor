@@ -27,14 +27,16 @@
  * @param {string} mdText - Markdown text with layout directives
  * @returns {string} Pandoc-compatible Markdown
  */
-export function transformLayouts(mdText) {
+function transformLayouts(mdText) {
   const blocks = splitSlidesForPandoc(mdText);
   const output = [];
 
   let titleMeta = null;
 
   for (const rawBlock of blocks) {
-    const block = rawBlock.trim();
+    if (rawBlock === undefined) continue;
+    const block = String(rawBlock).trim();
+
     if (!block) continue;
 
     const lines = block.split('\n');
@@ -134,7 +136,7 @@ export function transformLayouts(mdText) {
  * @param {string} mdText - Raw Markdown text
  * @returns {Array<string>} Array of slide blocks
  */
-export function splitSlidesForPandoc(mdText) {
+function splitSlidesForPandoc(mdText) {
   return String(mdText || '')
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
@@ -146,7 +148,7 @@ export function splitSlidesForPandoc(mdText) {
  * @param {string} content - Raw content
  * @returns {string} Cleaned content
  */
-export function cleanPandocContent(content) {
+function cleanPandocContent(content) {
   return String(content || '')
     .split('\n')
     .map((line) => line.trimEnd())
@@ -159,7 +161,7 @@ export function cleanPandocContent(content) {
  * @param {string} content - Title slide content
  * @returns {string} YAML frontmatter for Pandoc
  */
-export function transformTitleMetadata(content) {
+function transformTitleMetadata(content) {
   const lines = content
     .split('\n')
     .map((line) => line.trim())
@@ -170,16 +172,21 @@ export function transformTitleMetadata(content) {
   let author = '';
   let date = '';
 
-  if (lines.length > 0 && lines[0].startsWith('# ')) {
-    title = lines[0].replace(/^#\s+/, '').trim();
-    subtitle = lines[1] || '';
-    author = lines[2] || '';
-    date = lines[3] || '';
+  const line0 = lines[0] ?? '';
+  const line1 = lines[1] ?? '';
+  const line2 = lines[2] ?? '';
+  const line3 = lines[3] ?? '';
+
+  if (lines.length > 0 && line0.startsWith('# ')) {
+    title = line0.replace(/^#\s+/, '').trim();
+    subtitle = line1;
+    author = line2;
+    date = line3;
   } else {
-    title = lines[0] || '';
-    subtitle = lines[1] || '';
-    author = lines[2] || '';
-    date = lines[3] || '';
+    title = line0;
+    subtitle = line1;
+    author = line2;
+    date = line3;
   }
 
   const meta = ['---', `title: "${escapeYamlString(title)}"`];
@@ -206,7 +213,7 @@ export function transformTitleMetadata(content) {
  * @param {string} value - String to escape
  * @returns {string} Escaped string
  */
-export function escapeYamlString(value) {
+function escapeYamlString(value) {
   return String(value || '')
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"')
@@ -218,7 +225,7 @@ export function escapeYamlString(value) {
  * @param {string} content - Slide content
  * @returns {string} Pandoc column syntax
  */
-export function transformTwoCols(content) {
+function transformTwoCols(content) {
   const lines = content.split('\n');
 
   let title = '';
@@ -284,7 +291,7 @@ export function transformTwoCols(content) {
  * @param {boolean} imageFirst - If true, image on left; otherwise text on left
  * @returns {string} Pandoc column syntax
  */
-export function transformImageText(content, imageFirst = true) {
+function transformImageText(content, imageFirst = true) {
   const lines = content.split('\n');
 
   let title = '';
@@ -354,7 +361,7 @@ export function transformImageText(content, imageFirst = true) {
  * @param {string} content - Slide content
  * @returns {string} Image with caption
  */
-export function transformImageCaption(content) {
+function transformImageCaption(content) {
   const lines = content.split('\n');
 
   let title = '';
@@ -389,7 +396,7 @@ export function transformImageCaption(content) {
  * @param {string} content - Slide content
  * @returns {string} Formatted KPI slide
  */
-export function transformKpi(content) {
+function transformKpi(content) {
   const lines = content
     .split('\n')
     .map((line) => line.trim())
@@ -423,7 +430,7 @@ export function transformKpi(content) {
  * @param {string} content - Slide content
  * @returns {string} Pandoc column syntax
  */
-export function transformBulletsTwoCols(content) {
+function transformBulletsTwoCols(content) {
   const lines = content.split('\n');
 
   let title = '';
@@ -470,10 +477,11 @@ export function transformBulletsTwoCols(content) {
  * @param {string} content - Slide content
  * @returns {string} Pandoc table syntax
  */
-export function transformThreeCols(content) {
+function transformThreeCols(content) {
   const lines = content.split('\n');
 
   let title = '';
+  /** @type {Array<{ heading: string; body: string[] }>} */
   const cols = [
     { heading: '', body: [] },
     { heading: '', body: [] },
@@ -481,6 +489,10 @@ export function transformThreeCols(content) {
   ];
 
   let current = 0;
+
+  const getCol = () => {
+    return cols[current] ?? cols[0] ?? { heading: '', body: [] };
+  };
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -517,11 +529,11 @@ export function transformThreeCols(content) {
         current = 0;
       }
 
-      cols[current].heading = sectionTitle;
+      getCol().heading = sectionTitle;
       continue;
     }
 
-    cols[current].body.push(line.replace(/^- /, '').trim());
+    getCol().body.push(line.replace(/^- /, '').trim());
   }
 
   const cellHeading = (col) => {
@@ -537,9 +549,9 @@ export function transformThreeCols(content) {
   return [
     title,
     '',
-    `| ${cellHeading(cols[0])} | ${cellHeading(cols[1])} | ${cellHeading(cols[2])} |`,
+    `| ${cellHeading(cols[0] ?? { heading: '', body: [] })} | ${cellHeading(cols[1] ?? { heading: '', body: [] })} | ${cellHeading(cols[2] ?? { heading: '', body: [] })} |`,
     '|---|---|---|',
-    `| ${cellBody(cols[0])} | ${cellBody(cols[1])} | ${cellBody(cols[2])} |`,
+    `| ${cellBody(cols[0] ?? { heading: '', body: [] })} | ${cellBody(cols[1] ?? { heading: '', body: [] })} | ${cellBody(cols[2] ?? { heading: '', body: [] })} |`,
   ]
     .join('\n')
     .trim();
@@ -550,11 +562,12 @@ export function transformThreeCols(content) {
  * @param {string} content - Slide content
  * @returns {string} Pandoc table syntax
  */
-export function transformGrid2(content) {
+function transformGrid2(content) {
   const lines = content.split('\n');
 
   let title = '';
   const blocks = [];
+  /** @type {{ heading: string; body: string[] } | null} */
   let currentBlock = null;
 
   for (const rawLine of lines) {
@@ -586,8 +599,10 @@ export function transformGrid2(content) {
   }
 
   const cell = (block) => {
-    const heading = escapePandocTableCell(block.heading || '');
-    const body = block.body.map(escapePandocTableCell).join(' ');
+    const safeBlock = block ?? { heading: '', body: [] };
+
+    const heading = escapePandocTableCell(safeBlock.heading);
+    const body = safeBlock.body.map(escapePandocTableCell).join(' ');
 
     if (heading && body) return `**${heading}** — ${body}`;
     if (heading) return `**${heading}**`;
@@ -612,7 +627,7 @@ export function transformGrid2(content) {
  * @param {string} content - Slide content
  * @returns {string} Cleaned content
  */
-export function transformSection(content) {
+function transformSection(content) {
   return cleanPandocContent(content);
 }
 
@@ -621,7 +636,7 @@ export function transformSection(content) {
  * @param {string} content - Slide content
  * @returns {string} Cleaned content
  */
-export function transformHighlight(content) {
+function transformHighlight(content) {
   return cleanPandocContent(content);
 }
 
@@ -630,7 +645,7 @@ export function transformHighlight(content) {
  * @param {string} content - Slide content
  * @returns {string} Cleaned content
  */
-export function transformBigNumber(content) {
+function transformBigNumber(content) {
   return cleanPandocContent(content);
 }
 
@@ -639,7 +654,7 @@ export function transformBigNumber(content) {
  * @param {string} text - Cell text
  * @returns {string} Escaped text
  */
-export function escapePandocTableCell(text) {
+function escapePandocTableCell(text) {
   return String(text || '')
     .replace(/\|/g, '\\|')
     .trim();
@@ -650,7 +665,7 @@ export function escapePandocTableCell(text) {
  * @param {string} value - Line content
  * @returns {boolean} True if line contains image
  */
-export function isImageLine(value) {
+function isImageLine(value) {
   return /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(value);
 }
 
@@ -659,19 +674,30 @@ export function isImageLine(value) {
  * @param {string} line - Line content
  * @returns {string} Formatted Pandoc image syntax
  */
-export function formatPandocImage(line) {
+function formatPandocImage(line) {
+  // Intentionally left as function declaration for CJS compatibility.
+
   const value = String(line || '').trim();
 
   if (!value) return '';
   if (/^!\[.*\]\(.+\)$/.test(value)) return value;
 
   const alt =
-    value
+    (value
       .split('/')
-      .pop()
+      .pop() ?? '')
       .replace(/\.[^.]+$/, '')
       .replace(/[-_]+/g, ' ')
       .trim() || 'image';
 
   return `![${alt}](${value})`;
 }
+
+// CJS/ESM compatibility for usage elsewhere in the codebase.
+// eslint-disable-next-line no-undef
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    transformLayouts,
+  };
+}
+

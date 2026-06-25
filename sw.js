@@ -1,10 +1,6 @@
 // @ts-check
 
-/// <reference lib="webworker" />
-
-export {}; // makes TS treat file as a module
-
-declare const self: ServiceWorkerGlobalScope;
+const sw = /** @type {any} */ (self);
 
 const APP_VERSION = 'markmap-journal-pwa-v2-css-split';
 const APP_CACHE = `${APP_VERSION}-app`;
@@ -102,7 +98,7 @@ async function precacheOne(cache, url) {
   }
 }
 
-self.addEventListener('install', (event) => {
+sw.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(APP_CACHE).then(async (cache) => {
       // Cache local files first.
@@ -118,10 +114,10 @@ self.addEventListener('install', (event) => {
     })
   );
 
-  self.skipWaiting();
+  sw.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
+sw.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
@@ -132,10 +128,10 @@ self.addEventListener('activate', (event) => {
     })
   );
 
-  self.clients.claim();
+  sw.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
+sw.addEventListener('fetch', (event) => {
   const request = event.request;
 
   if (!isHttpRequest(request)) {
@@ -143,7 +139,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   const url = new URL(request.url);
-  const isLocal = url.origin === self.location.origin;
+  const isLocal = url.origin === sw.location.origin;
 
   // Navigation fallback.
   // Cache-first for installed PWA stability.
