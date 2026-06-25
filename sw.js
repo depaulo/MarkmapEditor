@@ -2,7 +2,9 @@
 
 const sw = /** @type {any} */ (self);
 
-const APP_VERSION = 'markmap-journal-pwa-v2-css-split';
+const CACHE_NAME = 'markmap-journal-pwa-v3-pandoc-module';
+
+const APP_VERSION = CACHE_NAME;
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -22,6 +24,8 @@ const LOCAL_APP_SHELL = [
   './css/menus.css',
   './css/overlays.css',
   './css/workspace.css',
+  // Pandoc export layout engine
+  './js/export/pandoc-layout-engine.js',
 ];
 
 const CDN_APP_SHELL = [

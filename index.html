@@ -1253,7 +1253,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
     <!-- Pandoc layout engine module bridge -->
     <script type="module">
-      import { transformLayouts } from './pandoc-layout-engine.js';
+      import { transformLayouts } from './js/export/pandoc-layout-engine.js';
       window.transformLayouts = transformLayouts;
     </script>
 
@@ -6110,7 +6110,15 @@ layout: content
 
       function exportMarkdownDownload() {
         try {
-          const text = transformLayouts(md.value);
+
+          if (typeof window.transformLayouts !== 'function') {
+            showToast('Pandoc export error: transformLayouts is not loaded', 'error', 3500);
+            log('Pandoc export error: window.transformLayouts is not defined');
+            return;
+          }
+
+          const text = window.transformLayouts(md.value);
+
 
           const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
           const url = URL.createObjectURL(blob);
