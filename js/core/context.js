@@ -1,5 +1,5 @@
-// @ts-nocheck
-// App context foundation — future three-context app:
+// @ts-check
+// App context foundation:
 //   1. MarkMapEditor
 //   2. MarkMapJournal
 //   3. MarkMapSlides
@@ -18,7 +18,7 @@ export const APP_CONTEXTS = {
     showPandocTools: false,
     defaultMarkdown: `# New Mindmap
 
-### Ideas
+## Ideas
 - `,
   },
 
@@ -32,7 +32,6 @@ export const APP_CONTEXTS = {
     showJournalControls: true,
     showPandocTools: false,
     defaultMarkdown: `# Today
-
 Tags:
 
 ## Capture
@@ -58,6 +57,7 @@ Tags:
 title: Presentation Title
 author:
 date:
+
 ---
 
 # Title Slide
@@ -83,9 +83,13 @@ export function getStoredAppContextId() {
 
 export function storeAppContextId(contextId) {
   const ctx = getAppContext(contextId);
+
   try {
     localStorage.setItem(APP_CONTEXT_STORAGE_KEY, ctx.id);
-  } catch {}
+  } catch {
+    // Ignore storage errors.
+  }
+
   return ctx;
 }
 

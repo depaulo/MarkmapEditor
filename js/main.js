@@ -246,7 +246,7 @@
 
       // PWA diagnostics flag.
       // Set to false after debugging is finished.
-      const PWA_DEBUG_LOGS = true;
+      const PWA_DEBUG_LOGS = false;
 
       // Expose for js/pwa/diagnostics.js
       globalThis.log = log;
@@ -1985,29 +1985,9 @@ layout: content
       let dirty = false;
       let currentFileName = 'markmap.md';
 
-      function getContextApi() {
-        return globalThis.APP_CONTEXT_API || null;
-      }
-      function getStoredContextIdSafe() {
-        const api = getContextApi();
-        return api ? api.getStoredAppContextId() : 'editor';
-      }
-      function getContextSafe(id) {
-        const api = getContextApi();
-        return api ? api.getAppContext(id) : null;
-      }
+let currentSaveHandle = null;
 
-      let currentAppContextId = getStoredContextIdSafe();
-      let currentSaveHandle = null;
 
-      function getAppContext(contextId) {
-        try {
-          if (typeof globalThis.APP_CONTEXT_API?.getAppContext === 'function') {
-            return globalThis.APP_CONTEXT_API.getAppContext(contextId);
-          }
-        } catch {}
-        return null;
-      }
       let fileLastSeenModified = 0;
       let externalStale = false;
       let externalStaleModified = 0;
@@ -2025,6 +2005,7 @@ layout: content
       }
 
       function saveDraft() {
+        if (globalThis.__creatingNewDocument) return;
         if (!dirty) return;
         try {
           const data = {
@@ -2753,21 +2734,6 @@ layout: content
 
       function saveViewState(state, reason = 'saveViewState') {
         try {
-          const safeState = normalizeViewState(state);
-
-          if (!safeState) {
-            console.warn(`${reason}: skipped invalid view state save`, state);
-            return;
-          }
-
-          localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(safeState));
-          log(`${reason}: saved zoom/pan`);
-        } catch (e) {
-          log(`${reason} error: ${e?.message || e}`);
-        }
-      }
-      function saveViewState(state, reason = 'saveViewState') {
-        try {
           if (!state || !isFinite(state.k) || !isFinite(state.x) || !isFinite(state.y)) {
             console.warn('Skipping invalid view state save:', state);
             return;
@@ -3204,6 +3170,10 @@ layout: content
         const max = el.scrollHeight - el.clientHeight;
         return max > 0 ? el.scrollTop / max : 0;
       }
+      function _setScrollRatio(el, ratio) {
+        const max = el.scrollHeight - el.clientHeight;
+        el.scrollTop = max > 0 ? ratio * max : 0;
+      }
 
       let __mdHeadings = [];
       let __mdTotalLines = 0;
@@ -3409,15 +3379,6 @@ layout: content
         } finally {
           _scrollSyncBusy = false;
         }
-      }
-
-      function _getScrollRatio(el) {
-        const max = el.scrollHeight - el.clientHeight;
-        return max > 0 ? el.scrollTop / max : 0;
-      }
-      function _setScrollRatio(el, ratio) {
-        const max = el.scrollHeight - el.clientHeight;
-        el.scrollTop = max > 0 ? ratio * max : 0;
       }
 
       // Markmap click → Editor jump
@@ -4682,42 +4643,85 @@ layout: content
       function newDocument() {
         try {
           globalThis.__creatingNewDocument = true;
+
+          logContextState('newDocument before confirm');
+
           if (dirty) {
             const ok = confirm(
               'Current document has unsaved changes. Create new document anyway?'
             );
-            if (!ok) return;
+
+            if (!ok) {
+              globalThis.__creatingNewDocument = false;
+              logContextState('newDocument canceled');
+              return;
+            }
           }
 
-          const ctx = globalThis.APP_CONTEXT_API?.getAppContext(globalThis.currentAppContextId) || null;
-          log('DEBUG newDocument context:' , globalThis.currentAppContextId);
-          log('DEBUG ctx object:' , ctx);
+          const starter = getCurrentContextStarter();
 
-          currentFileName = ctx.defaultFileName;
-          md.value = ctx.defaultMarkdown;
+          log(
+            `newDocument starter: ${JSON.stringify({
+              contextId: starter.contextId,
+              defaultFileName: starter.defaultFileName,
+              firstLine: String(starter.defaultMarkdown || '').split('\n')[0],
+              length: String(starter.defaultMarkdown || '').length,
+            })}`
+          );
+
+          try {
+            clearDraft(currentFileName);
+          } catch {}
+
+          try {
+            hotStop('newDocument');
+          } catch {}
+
+          currentSaveHandle = null;
+          externalStale = false;
+          externalStaleModified = 0;
+          fileLastSeenModified = 0;
+
+          currentFileName = starter.defaultFileName;
+          md.value = starter.defaultMarkdown;
 
           if (typeof window.__cmSetText === 'function') {
-            window.__cmSetText(md.value);
+            window.__cmSetText(starter.defaultMarkdown);
+          } else {
+            md.dispatchEvent(new Event('input', { bubbles: true }));
           }
 
           dirty = false;
+          hasAutoFitted = false;
+          forceFitNextRender = true;
+
           setStatus(modeLabel());
           updateDocumentTitle();
 
-          hasAutoFitted = false;
+          try {
+            clearDraft(currentFileName);
+          } catch {}
+
           render('newDocument');
 
           showToast(`New document ✓ ${currentFileName}`, 'ok');
 
-          try {
-            localStorage.removeItem(draftKey(currentFileName));
-          } catch {}
-
           setTimeout(() => {
-            globalThis.__creatingNewDocument = false;
-          }, 0);
+            log(
+              `newDocument after setText: ${JSON.stringify({
+                currentFileName,
+                firstLine: String(md.value || '').split('\n')[0],
+                length: String(md.value || '').length,
+                contextId: getSelectedAppContextId(),
+              })}`
+            );
+          }, 250);
         } catch (e) {
           log('❌ newDocument failed: ' + (e?.message || e));
+        } finally {
+          setTimeout(() => {
+            globalThis.__creatingNewDocument = false;
+          }, 250);
         }
       }
 
@@ -6454,16 +6458,33 @@ ${bodyHtml}
         return globalThis.APP_CONTEXT_API || null;
       }
 
-      function getCurrentAppContext() {
-        const api = getContextApi();
-        const id = globalThis.currentAppContextId || 'editor';
-        return api ? api.getAppContext(id) : { id: 'editor', label: 'MarkMap Editor', templateLabel: 'Templates' };
+      function getSelectedAppContextId() {
+        const select = document.getElementById('appContextSelect');
+
+        const selectValue =
+          select && typeof select.value === 'string' && select.value
+            ? select.value
+            : '';
+
+        const globalValue =
+          typeof globalThis.currentAppContextId === 'string' && globalThis.currentAppContextId
+            ? globalThis.currentAppContextId
+            : '';
+
+        const datasetValue = document.documentElement.dataset.appContext || '';
+
+        let storedValue = '';
+        try {
+          storedValue = localStorage.getItem('markmap:appContext') || '';
+        } catch {}
+
+        return selectValue || globalValue || datasetValue || storedValue || 'editor';
       }
 
       function getCurrentContextStarter() {
         const api = getContextApi();
-        const id = globalThis.currentAppContextId || 'editor';
-        const ctx = api ? api.getAppContext(id) : null;
+        const selectedId = getSelectedAppContextId();
+        const ctx = api ? api.getAppContext(selectedId) : null;
 
         return {
           contextId: ctx?.id || 'editor',
@@ -6477,16 +6498,47 @@ ${bodyHtml}
         };
       }
 
+      function logContextState(reason = 'context') {
+        try {
+          const select = document.getElementById('appContextSelect');
+
+          const payload = {
+            reason,
+            selectValue: select?.value || null,
+            globalCurrentAppContextId: globalThis.currentAppContextId || null,
+            datasetAppContext: document.documentElement.dataset.appContext || null,
+            storedAppContext: localStorage.getItem('markmap:appContext') || null,
+            resolved: getSelectedAppContextId(),
+            hasApi: !!globalThis.APP_CONTEXT_API,
+          };
+
+          log(`CTX ${reason}: ${JSON.stringify(payload)}`);
+        } catch (e) {
+          try {
+            log(`CTX ${reason}: failed ${e?.message || e}`);
+          } catch {}
+        }
+      }
+
       function applyAppContextUi(contextId, reason = 'applyAppContextUi') {
         const api = getContextApi();
-        if (!api) return;
+
+        if (!api) {
+          try {
+            log(`CTX ${reason}: APP_CONTEXT_API missing`);
+          } catch {}
+          return;
+        }
 
         const ctx = api.storeAppContextId(contextId);
         api.applyAppContextDataset(ctx.id);
+
         globalThis.currentAppContextId = ctx.id;
 
         const select = document.getElementById('appContextSelect');
-        if (select) select.value = ctx.id;
+        if (select) {
+          select.value = ctx.id;
+        }
 
         const markmapBtn = document.getElementById('btnTemplatesMarkmap');
         const pandocBtn = document.getElementById('btnTemplatesPandoc');
@@ -6526,28 +6578,58 @@ ${bodyHtml}
           }
         }
 
-        try {
-          log(`${reason}: context=${ctx.label}`);
-        } catch {}
+        logContextState(reason);
       }
 
       function wireAppContextSelector() {
         const select = document.getElementById('appContextSelect');
         const api = getContextApi();
-        if (!select || !api || select.__bound) return;
 
-        const initialId = globalThis.currentAppContextId || api.getStoredAppContextId();
+        if (!select) {
+          try {
+            log('CTX wireAppContextSelector: select missing');
+          } catch {}
+          return;
+        }
+
+        if (!api) {
+          try {
+            log('CTX wireAppContextSelector: APP_CONTEXT_API missing');
+          } catch {}
+          return;
+        }
+
+        if (select.__bound) {
+          try {
+            log('CTX wireAppContextSelector: already bound');
+          } catch {}
+          logContextState('selector already bound');
+          return;
+        }
+
+        const initialId =
+          globalThis.currentAppContextId ||
+          api.getStoredAppContextId() ||
+          select.value ||
+          'editor';
+
         applyAppContextUi(initialId, 'context boot');
 
         select.addEventListener('change', () => {
           const nextId = select.value || 'editor';
 
+          try {
+            log(`CTX selector change: nextId=${nextId}`);
+          } catch {}
+
           if (dirty) {
             const ok = confirm(
               'Switch app mode? Current document has unsaved changes. The content will not be erased, but UI mode will change.'
             );
+
             if (!ok) {
               select.value = globalThis.currentAppContextId || 'editor';
+              logContextState('selector change canceled');
               return;
             }
           }
@@ -6556,6 +6638,7 @@ ${bodyHtml}
         });
 
         select.__bound = true;
+        logContextState('selector wired');
       }
 
       wireAppContextSelector();
