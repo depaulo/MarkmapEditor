@@ -1,3 +1,7 @@
+// @ts-nocheck
+// Legacy browser runtime extracted from index.html.
+// TypeScript checking is intentionally disabled for this file during the refactor.
+// Use node --check and browser testing for validation until this file is split into typed modules.
 // ================================
       // Shiki HTML syntax highlighting
       // Uses dynamic ESM import instead of global window.shiki
@@ -243,6 +247,10 @@
       // PWA diagnostics flag.
       // Set to false after debugging is finished.
       const PWA_DEBUG_LOGS = true;
+
+      // Expose for js/pwa/diagnostics.js
+      globalThis.log = log;
+      globalThis.pwaDebugLog = pwaDebugLog;
 
       function log(msg) {
         const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
@@ -4664,13 +4672,19 @@ layout: content
           externalStaleModified = 0;
           fileLastSeenModified = 0;
 
-          // Nome sugerido (não salva em disco até você clicar Save)
-          currentFileName = `untitled_${__newDocCounter++}.md`;
+          const starter = getCurrentContextStarter();
 
-          // Conteúdo inicial minimalista
-          const starter = `# New document\n\n- [ ] First idea\n`;
-          md.value = starter;
-          if (typeof window.__cmSetText === 'function') window.__cmSetText(starter);
+          const baseName =
+            starter.contextId === 'journal'
+              ? 'journal'
+              : starter.contextId === 'slides'
+                ? 'slides'
+                : 'mindmap';
+
+          currentFileName = `untitled_${baseName}_${Date.now()}.md`;
+
+          md.value = starter.defaultMarkdown;
+          if (typeof window.__cmSetText === 'function') window.__cmSetText(starter.defaultMarkdown);
 
           dirty = false;
           setStatus(modeLabel());
@@ -6412,6 +6426,120 @@ ${bodyHtml}
       __qiBind('qiOutdent', () => __qiIndent(-2));
       log('QuickInsert: wired');
       log('✅ UI wiring: editor toggle attached');
+
+      // ================================
+      // App Context Selector
+      // ================================
+      function getContextApi() {
+        return globalThis.APP_CONTEXT_API || null;
+      }
+
+      function getCurrentAppContext() {
+        const api = getContextApi();
+        const id = globalThis.currentAppContextId || 'editor';
+        return api ? api.getAppContext(id) : { id: 'editor', label: 'MarkMap Editor', templateLabel: 'Templates' };
+      }
+
+      function getCurrentContextStarter() {
+        const api = getContextApi();
+        const id = globalThis.currentAppContextId || 'editor';
+        const ctx = api ? api.getAppContext(id) : null;
+
+        return {
+          contextId: ctx?.id || 'editor',
+          defaultFileName: ctx?.defaultFileName || 'mindmap.md',
+          defaultMarkdown:
+            ctx?.defaultMarkdown ||
+            `# New Mindmap
+
+## Ideas
+- `,
+        };
+      }
+
+      function applyAppContextUi(contextId, reason = 'applyAppContextUi') {
+        const api = getContextApi();
+        if (!api) return;
+
+        const ctx = api.storeAppContextId(contextId);
+        api.applyAppContextDataset(ctx.id);
+        globalThis.currentAppContextId = ctx.id;
+
+        const select = document.getElementById('appContextSelect');
+        if (select) select.value = ctx.id;
+
+        const markmapBtn = document.getElementById('btnTemplatesMarkmap');
+        const pandocBtn = document.getElementById('btnTemplatesPandoc');
+
+        if (ctx.id === 'editor') {
+          if (markmapBtn) {
+            markmapBtn.style.display = '';
+            markmapBtn.textContent = '🧠 Templates ▾';
+            markmapBtn.title = 'Markmap templates';
+          }
+          if (pandocBtn) {
+            pandocBtn.style.display = '';
+            pandocBtn.textContent = '📊 Pandoc ▾';
+            pandocBtn.title = 'Pandoc templates';
+          }
+        }
+
+        if (ctx.id === 'journal') {
+          if (markmapBtn) {
+            markmapBtn.style.display = '';
+            markmapBtn.textContent = '📓 MMJ Templates ▾';
+            markmapBtn.title = 'MarkMap Journal templates';
+          }
+          if (pandocBtn) {
+            pandocBtn.style.display = 'none';
+          }
+        }
+
+        if (ctx.id === 'slides') {
+          if (markmapBtn) {
+            markmapBtn.style.display = 'none';
+          }
+          if (pandocBtn) {
+            pandocBtn.style.display = '';
+            pandocBtn.textContent = '📊 Pandoc Templates ▾';
+            pandocBtn.title = 'Pandoc slide templates';
+          }
+        }
+
+        try {
+          log(`${reason}: context=${ctx.label}`);
+        } catch {}
+      }
+
+      function wireAppContextSelector() {
+        const select = document.getElementById('appContextSelect');
+        const api = getContextApi();
+        if (!select || !api || select.__bound) return;
+
+        const initialId = globalThis.currentAppContextId || api.getStoredAppContextId();
+        applyAppContextUi(initialId, 'context boot');
+
+        select.addEventListener('change', () => {
+          const nextId = select.value || 'editor';
+
+          if (dirty) {
+            const ok = confirm(
+              'Switch app mode? Current document has unsaved changes. The content will not be erased, but UI mode will change.'
+            );
+            if (!ok) {
+              select.value = globalThis.currentAppContextId || 'editor';
+              return;
+            }
+          }
+
+          applyAppContextUi(nextId, 'context switch');
+        });
+
+        select.__bound = true;
+      }
+
+      wireAppContextSelector();
+
       syncToolbarHeight();
       setShowHideLabel('btnHtml', htmlPane.style.display === 'block', 'HTML');
       setShowHideLabel('btnLogs', logs.style.display === 'block', 'Logs');

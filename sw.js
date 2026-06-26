@@ -10,7 +10,7 @@
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
 
-const APP_VERSION = 'markmap-journal-pwa-v3-main-split-pandoc';
+const APP_VERSION = 'markmap-journal-pwa-v6-context-ui';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -32,6 +32,9 @@ const LOCAL_APP_SHELL = [
   './css/workspace.css',
   './js/main.js',
   './js/export/pandoc-layout-engine.js',
+  './js/editor/codemirror-bootstrap.js',
+  './js/core/context.js',
+  './js/pwa/diagnostics.js',
 ];
 
 const CDN_APP_SHELL = [

@@ -29,6 +29,29 @@
   background: var(--btn-sep);
 }
 
+.appContextLabel {
+  font-size: 12px;
+  color: var(--text);
+  user-select: none;
+}
+
+#appContextSelect {
+  height: 28px;
+  font-size: 12px;
+  padding: 0 6px;
+  background: var(--toolbar-bg);
+  color: var(--text);
+  border: 1px solid var(--toolbar-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+html.compact #appContextSelect {
+  height: 24px;
+  padding: 0 5px;
+  font-size: 11px;
+}
+
 #toolbar .btnGroup > button {
   height: 28px;
   font-size: 12px;
