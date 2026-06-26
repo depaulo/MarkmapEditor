@@ -693,6 +693,8 @@ function formatPandocImage(line) {
   return `![${alt}](${value})`;
 }
 
+export { transformLayouts };
+/*
 // CJS/ESM compatibility for usage elsewhere in the codebase.
 // eslint-disable-next-line no-undef
 if (typeof module !== 'undefined' && module.exports) {
@@ -700,4 +702,4 @@ if (typeof module !== 'undefined' && module.exports) {
     transformLayouts,
   };
 }
-
+*/

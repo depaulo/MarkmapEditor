@@ -2,7 +2,7 @@
 
 const sw = /** @type {any} */ (self);
 
-const CACHE_NAME = 'markmap-journal-pwa-v3-pandoc-module';
+const CACHE_NAME = 'markmap-journal-pwa-v4-pandoc-module';
 
 const APP_VERSION = CACHE_NAME;
 const APP_CACHE = `${APP_VERSION}-app`;

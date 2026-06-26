@@ -1254,8 +1254,9 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
     <!-- Pandoc layout engine module bridge -->
     <script type="module">
       import { transformLayouts } from './js/export/pandoc-layout-engine.js';
-      window.transformLayouts = transformLayouts;
+      globalThis.transformLayouts = transformLayouts;
     </script>
+
 
     <script>
       // ================================
