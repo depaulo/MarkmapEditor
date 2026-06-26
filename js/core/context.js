@@ -18,7 +18,7 @@ export const APP_CONTEXTS = {
     showPandocTools: false,
     defaultMarkdown: `# New Mindmap
 
-## Ideas
+### Ideas
 - `,
   },
 

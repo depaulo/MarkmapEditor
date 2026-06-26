@@ -1984,7 +1984,30 @@ layout: content
 
       let dirty = false;
       let currentFileName = 'markmap.md';
+
+      function getContextApi() {
+        return globalThis.APP_CONTEXT_API || null;
+      }
+      function getStoredContextIdSafe() {
+        const api = getContextApi();
+        return api ? api.getStoredAppContextId() : 'editor';
+      }
+      function getContextSafe(id) {
+        const api = getContextApi();
+        return api ? api.getAppContext(id) : null;
+      }
+
+      let currentAppContextId = getStoredContextIdSafe();
       let currentSaveHandle = null;
+
+      function getAppContext(contextId) {
+        try {
+          if (typeof globalThis.APP_CONTEXT_API?.getAppContext === 'function') {
+            return globalThis.APP_CONTEXT_API.getAppContext(contextId);
+          }
+        } catch {}
+        return null;
+      }
       let fileLastSeenModified = 0;
       let externalStale = false;
       let externalStaleModified = 0;
@@ -2025,6 +2048,7 @@ layout: content
       function checkAndRestoreDraft(filename) {
         try {
           const raw = localStorage.getItem(draftKey(filename));
+          if (globalThis.__creatingNewDocument) return false;
           if (!raw) return false;
           const draft = JSON.parse(raw);
           if (!draft || !draft.text) return false;
@@ -4657,47 +4681,43 @@ layout: content
 
       function newDocument() {
         try {
-          // Se houver alterações não salvas, confirmar antes de limpar
+          globalThis.__creatingNewDocument = true;
           if (dirty) {
             const ok = confirm(
-              'Você tem alterações não salvas.\n\nCriar um novo documento e descartar as alterações atuais?'
+              'Current document has unsaved changes. Create new document anyway?'
             );
             if (!ok) return;
           }
 
-          // Estado: novo doc não tem handle
-          currentSaveHandle = null;
-          hotStop('newDocument'); // desliga hot reload se estava ativo
-          externalStale = false;
-          externalStaleModified = 0;
-          fileLastSeenModified = 0;
+          const ctx = globalThis.APP_CONTEXT_API?.getAppContext(globalThis.currentAppContextId) || null;
+          log('DEBUG newDocument context:' , globalThis.currentAppContextId);
+          log('DEBUG ctx object:' , ctx);
 
-          const starter = getCurrentContextStarter();
+          currentFileName = ctx.defaultFileName;
+          md.value = ctx.defaultMarkdown;
 
-          const baseName =
-            starter.contextId === 'journal'
-              ? 'journal'
-              : starter.contextId === 'slides'
-                ? 'slides'
-                : 'mindmap';
-
-          currentFileName = `untitled_${baseName}_${Date.now()}.md`;
-
-          md.value = starter.defaultMarkdown;
-          if (typeof window.__cmSetText === 'function') window.__cmSetText(starter.defaultMarkdown);
+          if (typeof window.__cmSetText === 'function') {
+            window.__cmSetText(md.value);
+          }
 
           dirty = false;
           setStatus(modeLabel());
           updateDocumentTitle();
+
           hasAutoFitted = false;
-          render('newDocument render()');
+          render('newDocument');
+
           showToast(`New document ✓ ${currentFileName}`, 'ok');
-        } catch (e) {
-          const msg = e?.message || String(e);
+
           try {
-            log('❌ newDocument failed: ' + msg);
+            localStorage.removeItem(draftKey(currentFileName));
           } catch {}
-          showToast('New document error: ' + msg, 'error', 3500);
+
+          setTimeout(() => {
+            globalThis.__creatingNewDocument = false;
+          }, 0);
+        } catch (e) {
+          log('❌ newDocument failed: ' + (e?.message || e));
         }
       }
 
