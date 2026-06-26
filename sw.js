@@ -1,10 +1,16 @@
 // @ts-check
 
-const sw = /** @type {any} */ (self);
+/// <reference lib="webworker" />
 
-const CACHE_NAME = 'markmap-journal-pwa-v4-pandoc-module';
+/**
+ * Service worker global scope alias for JS type checking.
+ * Keeps this file as runtime-valid plain JavaScript.
+ * @type {ServiceWorkerGlobalScope}
+ */
+const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = CACHE_NAME;
+
+const APP_VERSION = 'markmap-journal-pwa-v3-main-split-pandoc';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -24,7 +30,7 @@ const LOCAL_APP_SHELL = [
   './css/menus.css',
   './css/overlays.css',
   './css/workspace.css',
-  // Pandoc export layout engine
+  './js/main.js',
   './js/export/pandoc-layout-engine.js',
 ];
 
