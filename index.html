@@ -94,7 +94,7 @@
         <button id="btnLogs" data-icon="📜" title="Toggle logs" aria-label="Toggle logs">📜</button>
 
         <button id="btnHtml" data-icon="</>" title="Toggle HTML" aria-label="Toggle HTML">
-          &lt;/&gt;
+          </>
         </button>
         <button id="btnCompact" title="Toggle compact mode">⚡</button>
       </div>
@@ -109,6 +109,23 @@
       <span id="saveStatus"></span>
     </div>
     <div id="layout">
+      <aside id="workspaceSidebar" aria-label="Journal workspace">
+        <div class="workspaceHeader">
+          <div id="workspaceTitle">Journal Workspace</div>
+          <button id="btnOpenWorkspace" type="button">Open Workspace</button>
+          <button id="btnJournalToday" type="button">Today</button>
+        </div>
+
+        <div class="workspaceSection">
+          <div class="workspaceSectionTitle">Journals</div>
+          <div id="workspaceJournalsList"></div>
+        </div>
+
+        <div class="workspaceSection">
+          <div class="workspaceSectionTitle">Concepts</div>
+          <div id="workspaceConceptsList"></div>
+        </div>
+      </aside>
       <div id="editor">
         <div id="editorOverlayControls" aria-label="Editor controls">
           <button id="editorBtnSearch" type="button" title="Search & Replace: Ctrl+F / Ctrl+H">
@@ -134,7 +151,7 @@
           <div class="editorOverlayToolRow editorOverlayToolRowInsert" aria-label="Insert tools">
             <button type="button" data-editor-command="link" title="Insert link">🔗</button>
             <button type="button" data-editor-command="inlineCode" title="Inline code">
-              &lt;/&gt;
+              </>
             </button>
             <button type="button" data-editor-command="bullet" title="Unordered list">•</button>
             <button type="button" data-editor-command="ordered" title="Ordered list">1.</button>
@@ -1187,7 +1204,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
 
 
-    </textarea
+    </textarea>
         >
       </div>
       <div class="splitter" id="splitEditor"></div>
@@ -1288,6 +1305,25 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
     <script type="module" src="./js/editor/codemirror-bootstrap.js"></script>
 
+    <script type="module">
+      import { WORKSPACE_STATE, isWorkspaceReady } from './js/workspace/workspace-state.js';
+      import { createWorkspaceActions } from './js/workspace/workspace-actions.js';
+      import { clearSidebar, renderSidebarFiles } from './js/workspace/workspace-sidebar.js';
+      import { openWorkspaceDirectory, ensureSubfolder } from './js/workspace/workspace-open.js';
+      import { scanFolder } from './js/workspace/workspace-scanner.js';
+
+      globalThis.WORKSPACE_STATE = WORKSPACE_STATE;
+      globalThis.WORKSPACE_API = {
+        isWorkspaceReady,
+        createWorkspaceActions,
+        clearSidebar,
+        renderSidebarFiles,
+        openWorkspaceDirectory,
+        ensureSubfolder,
+        scanFolder,
+      };
+    </script>
+
     <!-- Template Editor Modal -->
     <div
       id="tplModal"
@@ -1376,7 +1412,6 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         </div>
       </div>
     </div>
-
     <script src="./js/pwa/diagnostics.js"></script>
   </body>
 </html>

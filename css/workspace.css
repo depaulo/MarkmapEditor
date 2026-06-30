@@ -1,4 +1,52 @@
 /* =========================== */
 /* Workspace / Journal Sidebar */
 /* =========================== */
-/* Future workspace sidebar styles will live here */
+
+#workspaceSidebar {
+  display: none;
+  flex-direction: column;
+  background: var(--menu-bg);
+  color: var(--text);
+  border-left: 1px solid var(--menu-border);
+  overflow: auto;
+  width: 280px;
+  min-width: 240px;
+}
+
+html[data-app-context="journal"] #workspaceSidebar {
+  display: flex;
+}
+
+.workspaceHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid var(--menu-border);
+}
+
+.workspaceHeader button {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--menu-border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.workspaceSection {
+  padding: 10px;
+}
+
+.workspaceSectionTitle {
+  font-size: 12px;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+
+#workspaceJournalsList,
+#workspaceConceptsList {
+  min-height: 40px;
+}

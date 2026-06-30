@@ -287,6 +287,46 @@
         saveStatus.textContent = s || '';
       }
 
+      function confirmDiscardIfDirty() {
+        if (!dirty) return true;
+        return confirm('Current document has unsaved changes. Discard?');
+      }
+
+      function setWritableHandleForCurrentFile(handle) {
+        currentSaveHandle = handle || null;
+        setStatus(modeLabel());
+      }
+
+      function openTextDocument({ text, fileName, fileHandle = null, reason = 'openTextDocument' }) {
+        currentFileName = fileName || 'journal.md';
+        currentSaveHandle = fileHandle || null;
+
+        md.value = text || '';
+
+        if (typeof window.__cmSetText === 'function') {
+          window.__cmSetText(md.value);
+        }
+
+        dirty = false;
+        externalStale = false;
+        externalStaleModified = 0;
+
+        setStatus(modeLabel());
+        updateDocumentTitle();
+
+        hasAutoFitted = false;
+        render(reason);
+      }
+
+      globalThis.MME_APP = {
+        isDirty: () => dirty,
+        confirmDiscardIfDirty,
+        openTextDocument,
+        setWritableHandleForCurrentFile,
+        showToast,
+        log,
+      };
+
       window.addEventListener('error', (e) => {
         const msg = e?.message || 'Script error.';
         const src = e?.filename || '';

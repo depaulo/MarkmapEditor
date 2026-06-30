@@ -10,7 +10,7 @@
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
 
-const APP_VERSION = 'markmap-journal-pwa-v7-context-debug';
+const APP_VERSION = 'markmap-journal-pwa-v8-context-debug';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -35,6 +35,11 @@ const LOCAL_APP_SHELL = [
   './js/editor/codemirror-bootstrap.js',
   './js/core/context.js',
   './js/pwa/diagnostics.js',
+  './js/workspace/workspace-state.js',
+  './js/workspace/workspace-open.js',
+  './js/workspace/workspace-scanner.js',
+  './js/workspace/workspace-sidebar.js',
+  './js/workspace/workspace-actions.js',
 ];
 
 const CDN_APP_SHELL = [
