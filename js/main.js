@@ -6634,8 +6634,9 @@ ${bodyHtml}
 
         if (!api) {
           try {
-            log('CTX wireAppContextSelector: APP_CONTEXT_API missing');
+            log('CTX wireAppContextSelector: APP_CONTEXT_API missing; retrying');
           } catch {}
+          setTimeout(wireAppContextSelector, 100);
           return;
         }
 

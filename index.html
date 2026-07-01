@@ -93,8 +93,8 @@
 
         <button id="btnLogs" data-icon="📜" title="Toggle logs" aria-label="Toggle logs">📜</button>
 
-        <button id="btnHtml" data-icon="</>" title="Toggle HTML" aria-label="Toggle HTML">
-          </>
+        <button id="btnHtml" data-icon="&lt;/&gt;" title="Toggle HTML" aria-label="Toggle HTML">
+          &lt;/&gt;
         </button>
         <button id="btnCompact" title="Toggle compact mode">⚡</button>
       </div>
@@ -151,7 +151,7 @@
           <div class="editorOverlayToolRow editorOverlayToolRowInsert" aria-label="Insert tools">
             <button type="button" data-editor-command="link" title="Insert link">🔗</button>
             <button type="button" data-editor-command="inlineCode" title="Inline code">
-              </>
+              &lt;/&gt;
             </button>
             <button type="button" data-editor-command="bullet" title="Unordered list">•</button>
             <button type="button" data-editor-command="ordered" title="Ordered list">1.</button>
@@ -1301,7 +1301,14 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
       globalThis.currentAppContextId = ctx.id;
     </script>
-    <script src="./js/main.js"></script>
+    <script type="module">
+      const mainScript = document.createElement('script');
+      mainScript.src = './js/main.js';
+      mainScript.onload = function() {
+        window.dispatchEvent(new Event('mme-main-ready'));
+      };
+      document.body.appendChild(mainScript);
+    </script>
 
     <script type="module" src="./js/editor/codemirror-bootstrap.js"></script>
 
@@ -1313,6 +1320,182 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
       import { scanFolder } from './js/workspace/workspace-scanner.js';
 
       globalThis.WORKSPACE_STATE = WORKSPACE_STATE;
+
+      async function refreshWorkspaceSidebar() {
+        if (!WORKSPACE_STATE.folders.journals || !WORKSPACE_STATE.folders.concepts) {
+          clearSidebar();
+          return;
+        }
+
+        WORKSPACE_STATE.files.journals = (await scanFolder(WORKSPACE_STATE.folders.journals))
+          .map((handle) => ({
+            name: handle.name,
+            path: `journals/${handle.name}`,
+            handle,
+          }))
+          .sort((a, b) => b.name.localeCompare(a.name));
+
+        WORKSPACE_STATE.files.concepts = (await scanFolder(WORKSPACE_STATE.folders.concepts))
+          .map((handle) => ({
+            name: handle.name,
+            path: `concepts/${handle.name}`,
+            handle,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        renderSidebarFiles(WORKSPACE_STATE.files.journals, 'workspaceJournalsList');
+        renderSidebarFiles(WORKSPACE_STATE.files.concepts, 'workspaceConceptsList');
+      }
+
+      async function openWorkspace() {
+        const root = await openWorkspaceDirectory();
+
+        WORKSPACE_STATE.rootHandle = root;
+        WORKSPACE_STATE.rootName = root.name || 'Workspace';
+
+        WORKSPACE_STATE.folders.journals = await ensureSubfolder(root, 'journals');
+        WORKSPACE_STATE.folders.concepts = await ensureSubfolder(root, 'concepts');
+        WORKSPACE_STATE.folders.assets = await ensureSubfolder(root, 'assets');
+        WORKSPACE_STATE.folders.archive = await ensureSubfolder(root, 'archive');
+        WORKSPACE_STATE.folders.system = await ensureSubfolder(root, 'system');
+
+        const title = document.getElementById('workspaceTitle');
+        if (title) title.textContent = WORKSPACE_STATE.rootName;
+
+        await refreshWorkspaceSidebar();
+
+        globalThis.MME_APP?.showToast?.(`Workspace opened ✓ ${WORKSPACE_STATE.rootName}`, 'ok');
+        globalThis.MME_APP?.log?.(`Workspace opened: ${WORKSPACE_STATE.rootName}`);
+      }
+
+      async function openToday() {
+        if (!WORKSPACE_STATE.folders.journals) {
+          await openWorkspace();
+        }
+
+        if (!WORKSPACE_STATE.folders.journals) return;
+
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const fileName = `${yyyy}-${mm}-${dd}.md`;
+
+        const fileHandle = await WORKSPACE_STATE.folders.journals.getFileHandle(fileName, {
+          create: true,
+        });
+
+        let file = await fileHandle.getFile();
+        let text = await file.text();
+
+        if (!text.trim()) {
+          text = `---
+type: journal
+date: ${yyyy}-${mm}-${dd}
+tags: []
+---
+
+# Today
+Tags:
+
+## Capture
+-
+
+## Tasks
+- [ ]
+
+## Notes
+`;
+
+          const writable = await fileHandle.createWritable();
+          await writable.write(text);
+          await writable.close();
+        }
+
+        if (!globalThis.MME_APP?.confirmDiscardIfDirty?.()) return;
+
+        globalThis.MME_APP.openTextDocument({
+          text,
+          fileName,
+          fileHandle,
+          reason: 'workspace today',
+        });
+
+        WORKSPACE_STATE.activeFile = {
+          kind: 'journal',
+          name: fileName,
+          path: `journals/${fileName}`,
+          handle: fileHandle,
+        };
+
+        await refreshWorkspaceSidebar();
+        globalThis.MME_APP?.showToast?.(`Today opened ✓ ${fileName}`, 'ok');
+        globalThis.MME_APP?.log?.(`Today opened: ${fileName}`);
+      }
+
+      async function openWorkspaceFile(fileRecord) {
+        if (!fileRecord?.handle) return;
+
+        if (!globalThis.MME_APP?.confirmDiscardIfDirty?.()) return;
+
+        const file = await fileRecord.handle.getFile();
+        const text = await file.text();
+
+        globalThis.MME_APP.openTextDocument({
+          text,
+          fileName: file.name,
+          fileHandle: fileRecord.handle,
+          reason: 'workspace open file',
+        });
+
+        WORKSPACE_STATE.activeFile = fileRecord;
+        globalThis.MME_APP?.showToast?.(`Opened ✓ ${file.name}`, 'ok');
+      }
+
+      function handleSidebarClick(event) {
+        const item = event.target.closest('.workspaceFileItem');
+        if (!item) return;
+
+        const path = item.dataset.path || '';
+        const allFiles = [
+          ...WORKSPACE_STATE.files.journals,
+          ...WORKSPACE_STATE.files.concepts,
+        ];
+
+        const fileRecord = allFiles.find((file) => file.path === path);
+        if (!fileRecord) {
+          globalThis.MME_APP?.log?.(`Workspace file not found in state: ${path}`);
+          return;
+        }
+
+        openWorkspaceFile(fileRecord).catch((e) => {
+          globalThis.MME_APP?.showToast?.(`Open file failed: ${e?.message || e}`, 'error');
+          globalThis.MME_APP?.log?.(`Open file failed: ${e?.message || e}`);
+        });
+      }
+
+      function initWorkspace() {
+        if (initWorkspace.__done) return;
+        initWorkspace.__done = true;
+
+        createWorkspaceActions({
+          onOpenWorkspace: openWorkspace,
+          onToday: openToday,
+        });
+
+        clearSidebar();
+
+        document
+          .getElementById('workspaceJournalsList')
+          ?.addEventListener('click', handleSidebarClick);
+
+        document
+          .getElementById('workspaceConceptsList')
+          ?.addEventListener('click', handleSidebarClick);
+
+        globalThis.MME_APP?.log?.('Workspace: actions wired');
+      }
+
       globalThis.WORKSPACE_API = {
         isWorkspaceReady,
         createWorkspaceActions,
@@ -1321,7 +1504,17 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         openWorkspaceDirectory,
         ensureSubfolder,
         scanFolder,
+        refreshWorkspaceSidebar,
+        openWorkspace,
+        openToday,
+        initWorkspace,
       };
+
+      if (globalThis.MME_APP) {
+        initWorkspace();
+      } else {
+        window.addEventListener('mme-main-ready', initWorkspace, { once: true });
+      }
     </script>
 
     <!-- Template Editor Modal -->

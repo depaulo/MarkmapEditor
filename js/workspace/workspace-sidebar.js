@@ -1,9 +1,11 @@
+// @ts-check
+
 export function clearSidebar() {
   const journalsList = document.getElementById('workspaceJournalsList');
   const conceptsList = document.getElementById('workspaceConceptsList');
 
-  if (journalsList) journalsList.innerHTML = '';
-  if (conceptsList) conceptsList.innerHTML = '';
+  if (journalsList) journalsList.innerHTML = '<div class="workspaceEmpty">No journals</div>';
+  if (conceptsList) conceptsList.innerHTML = '<div class="workspaceEmpty">No concepts</div>';
 }
 
 export function renderSidebarFiles(files, containerId) {
@@ -12,22 +14,23 @@ export function renderSidebarFiles(files, containerId) {
   if (!container) return;
 
   if (!files || files.length === 0) {
-    container.innerHTML = '<div style="font-size: 12px; opacity: 0.5;">No files</div>';
+    container.innerHTML = '<div class="workspaceEmpty">No files</div>';
     return;
   }
 
   container.innerHTML = files
-    .map(
-      (file) =>
-        `<div class="workspaceFileItem" data-path="${file.path || ''}" data-name="${file.name || ''}">${escapeHtml(file.name || '')}</div>`
-    )
+    .map((file) => {
+      const name = escapeHtml(file.name || '');
+      const path = escapeHtml(file.path || '');
+      return `<button type="button" class="workspaceFileItem" data-path="${path}" data-name="${name}">${name}</button>`;
+    })
     .join('');
 }
 
 export function escapeHtml(text) {
-  return text
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"');
+  return String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }

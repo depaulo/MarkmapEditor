@@ -4,16 +4,23 @@
 
 #workspaceSidebar {
   display: none;
+  flex: 0 0 280px;
+  width: 280px;
+  min-width: 240px;
+  max-width: 360px;
+
   flex-direction: column;
   background: var(--menu-bg);
   color: var(--text);
-  border-left: 1px solid var(--menu-border);
+  border-right: 1px solid var(--menu-border);
   overflow: auto;
-  width: 280px;
-  min-width: 240px;
+
+  position: relative;
+  z-index: 20;
+  pointer-events: auto;
 }
 
-html[data-app-context="journal"] #workspaceSidebar {
+html[data-app-context='journal'] #workspaceSidebar {
   display: flex;
 }
 
@@ -25,13 +32,24 @@ html[data-app-context="journal"] #workspaceSidebar {
   border-bottom: 1px solid var(--menu-border);
 }
 
+#workspaceTitle {
+  font-weight: 700;
+  font-size: 13px;
+}
+
 .workspaceHeader button {
   padding: 8px 10px;
   border-radius: 6px;
   border: 1px solid var(--menu-border);
-  background: transparent;
+  background: var(--toolbar-bg);
   color: var(--text);
   cursor: pointer;
+  text-align: left;
+  pointer-events: auto;
+}
+
+.workspaceHeader button:hover {
+  background: var(--menu-hover);
 }
 
 .workspaceSection {
@@ -49,4 +67,39 @@ html[data-app-context="journal"] #workspaceSidebar {
 #workspaceJournalsList,
 #workspaceConceptsList {
   min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workspaceEmpty {
+  font-size: 12px;
+  opacity: 0.55;
+  padding: 6px 2px;
+}
+
+.workspaceFileItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceFileItem:hover {
+  background: var(--menu-hover);
+  border-color: var(--menu-border);
+}
+
+html.dark .workspaceHeader button,
+html.dark .workspaceFileItem {
+  color: var(--text);
 }
