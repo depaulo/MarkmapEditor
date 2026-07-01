@@ -10,7 +10,7 @@
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
 
-const APP_VERSION = 'markmap-journal-pwa-v9-workspace-actions';
+const APP_VERSION = 'markmap-journal-pwa-v10-sidebar-menu-layering';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 

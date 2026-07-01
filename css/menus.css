@@ -3,6 +3,7 @@
 /* =========================== */
 
 .menu {
+  z-index: 10020;
   position: fixed;
   background: var(--menu-bg);
   border: 1px solid var(--menu-border);
@@ -11,7 +12,6 @@
   min-width: 320px;
   max-width: min(520px, 92vw);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
-  z-index: 10002;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -75,4 +75,9 @@
   height: 1px;
   background: #eee;
   margin: 2px 0;
+}
+
+/* Optional: protect modal/dialog layers */
+#tplModal {
+  z-index: 20000;
 }

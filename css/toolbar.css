@@ -13,7 +13,7 @@
   padding: 4px 8px;
   background: var(--toolbar-bg);
   border-bottom: 1px solid var(--toolbar-border);
-  z-index: 10;
+  z-index: 10000;
   flex-wrap: nowrap;
 }
 
