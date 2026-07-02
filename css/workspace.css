@@ -189,16 +189,18 @@ html.workspace-ready #btnNewConcept {
 
 .workspaceFileItem.__active,
 .workspaceFileItem[data-active='1'] {
-  background: rgba(34, 197, 94, 0.18) !important;
-  border-color: #22c55e !important;
+  background: rgba(34, 197, 94, 0.11) !important;
+  border-color: rgba(34, 197, 94, 0.45) !important;
   color: var(--text) !important;
-  font-weight: 700 !important;
+  font-weight: 650 !important;
+  outline: none !important;
+  box-shadow: inset 3px 0 0 rgba(34, 197, 94, 0.85);
 }
 
 .workspaceFileItem.__active:hover,
 .workspaceFileItem[data-active='1']:hover {
-  background: rgba(34, 197, 94, 0.26) !important;
-  border-color: #22c55e !important;
+  background: rgba(34, 197, 94, 0.16) !important;
+  border-color: rgba(34, 197, 94, 0.65) !important;
 }
 
 .workspaceFileItem.__active .workspaceFileIcon,
@@ -208,18 +210,20 @@ html.workspace-ready #btnNewConcept {
 
 .workspaceFileItem.__active .workspaceFileName,
 .workspaceFileItem[data-active='1'] .workspaceFileName {
-  font-weight: 700;
+  font-weight: 650;
 }
 
 html.dark .workspaceFileItem.__active,
 html.dark .workspaceFileItem[data-active='1'] {
-  background: rgba(34, 197, 94, 0.22) !important;
-  border-color: #22c55e !important;
+  background: rgba(34, 197, 94, 0.13) !important;
+  border-color: rgba(34, 197, 94, 0.55) !important;
+  box-shadow: inset 3px 0 0 rgba(34, 197, 94, 0.9);
 }
 
 html.dark .workspaceFileItem.__active:hover,
 html.dark .workspaceFileItem[data-active='1']:hover {
-  background: rgba(34, 197, 94, 0.3) !important;
+  background: rgba(34, 197, 94, 0.19) !important;
+  border-color: rgba(34, 197, 94, 0.75) !important;
 }
 
 /* Collapsible Journal Sidebar (Stage 7.5B) */

@@ -33,4 +33,37 @@ body {
   width: 6px;
   cursor: col-resize;
   background: var(--splitter-bg);
+  position: relative;
+  flex: 0 0 6px;
+}
+
+.splitter::before {
+  content: '⋮';
+
+  position: absolute;
+  left: 50%;
+  top: 50%;
+
+  transform: translate(-50%, -50%);
+
+  color: var(--text);
+  opacity: 0.35;
+
+  font-size: 18px;
+  line-height: 1;
+
+  pointer-events: none;
+  user-select: none;
+}
+
+.splitter:hover::before {
+  opacity: 0.65;
+}
+
+html.dark .splitter::before {
+  opacity: 0.45;
+}
+
+html.dark .splitter:hover::before {
+  opacity: 0.75;
 }

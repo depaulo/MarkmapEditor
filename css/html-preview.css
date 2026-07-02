@@ -120,7 +120,7 @@
 }
 
 #btnHtmlEdgeOpen::before {
-  content: "\003C/\003E";
+  content: '\003C/\003E';
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -173,4 +173,86 @@
 
 #btnHtmlClose:active {
   transform: translateY(1px);
+}
+
+#htmlOverlayControls {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 44;
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 7px;
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--toolbar-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+
+  backdrop-filter: blur(6px);
+}
+
+#htmlOverlayControls[hidden] {
+  display: none !important;
+}
+
+#htmlOverlayControls button {
+  height: 28px;
+  min-width: 30px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0 8px;
+
+  font-size: 12px;
+  line-height: 1;
+
+  background: var(--toolbar-bg);
+  color: var(--text);
+  border: 1px solid var(--toolbar-border);
+  border-radius: 6px;
+
+  cursor: pointer;
+  user-select: none;
+}
+
+#htmlOverlayControls button:hover {
+  background: var(--menu-hover);
+}
+
+#htmlOverlayControls button:active {
+  transform: translateY(1px);
+}
+
+html.dark #htmlOverlayControls {
+  background: rgba(37, 37, 38, 0.88);
+  border-color: var(--toolbar-border);
+}
+
+html.dark #htmlOverlayControls button {
+  background: var(--btn-bg);
+  border-color: var(--btn-border);
+  color: var(--text);
+}
+
+html.dark #htmlOverlayControls button:hover {
+  background: var(--btn-hover);
+}
+
+html.compact #htmlOverlayControls {
+  right: 10px;
+  bottom: 10px;
+  padding: 5px;
+  gap: 4px;
+}
+
+html.compact #htmlOverlayControls button {
+  height: 24px;
+  padding: 0 6px;
+  font-size: 11px;
 }

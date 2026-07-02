@@ -1281,6 +1281,34 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
           >
             &times;
           </button>
+
+          <div id="htmlOverlayControls" hidden>
+            <button
+              id="htmlBtnCopyText"
+              type="button"
+              title="Copy rendered text"
+              aria-label="Copy rendered text"
+            >
+              Text
+            </button>
+
+            <button id="htmlBtnCopyHtml" type="button" title="Copy HTML" aria-label="Copy HTML">
+              HTML
+            </button>
+
+            <button id="htmlBtnExport" type="button" title="Export HTML" aria-label="Export HTML">
+              Export
+            </button>
+
+            <button
+              id="htmlBtnTop"
+              type="button"
+              title="Scroll HTML preview to top"
+              aria-label="Scroll HTML preview to top"
+            >
+              ↑
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1482,6 +1510,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
           .map((handle) => ({
             name: handle.name,
             path: `journals/${handle.name}`,
+            kind: 'journals',
             handle,
           }))
           .sort((a, b) => b.name.localeCompare(a.name));
@@ -1490,6 +1519,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
           .map((handle) => ({
             name: handle.name,
             path: `concepts/${handle.name}`,
+            kind: 'concepts',
             handle,
           }))
           .sort((a, b) => a.name.localeCompare(b.name));
@@ -1632,9 +1662,25 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
       globalThis.persistActiveWorkspaceFile = persistActiveWorkspaceFile;
       globalThis.refreshWorkspaceSidebar = refreshWorkspaceSidebar;
 
+      function normalizeWorkspaceKindForCompare(value) {
+        const kind = String(value || '')
+          .trim()
+          .toLowerCase();
+
+        if (kind === 'journal') return 'journals';
+        if (kind === 'journals') return 'journals';
+
+        if (kind === 'concept') return 'concepts';
+        if (kind === 'concepts') return 'concepts';
+
+        return kind;
+      }
+
       function buildArchiveFileName(activeFile) {
         const name = String(activeFile?.name || 'archived.md').trim();
-        const kind = String(activeFile?.kind || 'workspace').trim();
+        const kind = normalizeWorkspaceKindForCompare
+          ? normalizeWorkspaceKindForCompare(activeFile?.kind || 'workspace')
+          : String(activeFile?.kind || 'workspace').trim();
         const stamp = new Date().toISOString().slice(0, 10);
 
         return `${stamp}-${kind}-${name}`;
@@ -1878,13 +1924,25 @@ Tags:
       async function archiveActiveWorkspaceFile() {
         globalThis.MME_APP?.log?.('Workspace: archiveActiveWorkspaceFile() begin');
 
-        if (!WORKSPACE_STATE.rootHandle || !WORKSPACE_STATE.folders?.archive) {
+        if (!WORKSPACE_STATE.rootHandle) {
           globalThis.MME_APP?.showToast?.('Open a workspace first', 'error', 2600);
-          globalThis.MME_APP?.log?.('Workspace: Archive blocked because workspace is not ready');
+          globalThis.MME_APP?.log?.('Workspace: Archive blocked because rootHandle is missing');
+          return;
+        }
+
+        if (!WORKSPACE_STATE.folders?.archive) {
+          globalThis.MME_APP?.showToast?.('Archive folder is not ready', 'error', 2600);
+          globalThis.MME_APP?.log?.('Workspace: Archive blocked because archive folder is missing');
           return;
         }
 
         const active = WORKSPACE_STATE.activeFile;
+
+        globalThis.MME_APP?.log?.(
+          `Workspace: archive active candidate kind=${active?.kind || '(none)'} path=${
+            active?.path || '(none)'
+          } name=${active?.name || '(none)'} hasHandle=${Boolean(active?.handle)}`
+        );
 
         if (!active || !active.handle || !active.kind || !active.name) {
           globalThis.MME_APP?.showToast?.('No active workspace file to archive', 'error', 2600);
@@ -1894,7 +1952,17 @@ Tags:
           return;
         }
 
-        const activePath = active.path || `${active.kind}/${active.name}`;
+        const activeKind = normalizeWorkspaceKindForCompare
+          ? normalizeWorkspaceKindForCompare(active.kind)
+          : String(active.kind || '').trim();
+
+        const sourceFolder = WORKSPACE_STATE.folders?.[activeKind];
+
+        globalThis.MME_APP?.log?.(
+          `Workspace: archive sourceFolder kind=${activeKind} exists=${Boolean(sourceFolder)} removeEntry=${typeof sourceFolder?.removeEntry}`
+        );
+
+        const activePath = active.path || `${activeKind}/${active.name}`;
 
         const ok = confirm(`Archive ${activePath}?`);
 
@@ -1903,9 +1971,15 @@ Tags:
           return;
         }
 
-        const text = await readActiveWorkspaceFileText();
+        const file = await active.handle.getFile();
+        const text = await file.text();
 
-        const archiveFileName = buildArchiveFileName(active);
+        const archiveFileName = buildArchiveFileName({
+          ...active,
+          kind: activeKind,
+        });
+
+        globalThis.MME_APP?.log?.(`Workspace: archive target archive/${archiveFileName}`);
 
         const archiveHandle = await WORKSPACE_STATE.folders.archive.getFileHandle(archiveFileName, {
           create: true,
@@ -1915,10 +1989,18 @@ Tags:
         await writable.write(text);
         await writable.close();
 
+        globalThis.MME_APP?.log?.(`Workspace: archive copy written archive/${archiveFileName}`);
+
         let removedOriginal = false;
 
         try {
-          removedOriginal = await removeArchivedOriginalFile(active);
+          if (sourceFolder && typeof sourceFolder.removeEntry === 'function') {
+            await sourceFolder.removeEntry(active.name);
+            removedOriginal = true;
+            globalThis.MME_APP?.log?.(`Workspace: archive original removed ${activePath}`);
+          } else {
+            globalThis.MME_APP?.log?.('Workspace: removeEntry unavailable; original kept');
+          }
         } catch (e) {
           globalThis.MME_APP?.log?.(
             `Workspace: original remove failed after archive copy: ${e?.message || e}`
@@ -1926,11 +2008,31 @@ Tags:
           removedOriginal = false;
         }
 
-        clearActiveWorkspaceFileAfterArchive();
+        WORKSPACE_STATE.activeFile = null;
+
+        if (typeof currentSaveHandle !== 'undefined') {
+          currentSaveHandle = null;
+        }
+
+        if (
+          typeof removeLocalStorageValue === 'function' &&
+          typeof WORKSPACE_UI_STORAGE_KEYS !== 'undefined'
+        ) {
+          removeLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath);
+        }
 
         if (typeof refreshWorkspaceSidebar === 'function') {
           await refreshWorkspaceSidebar();
         }
+
+        window.updateWorkspaceActiveFileHighlight?.();
+
+        globalThis.MME_APP.openTextDocument({
+          text: `# Archived\n\nArchived: ${activePath}\n\nArchive copy: archive/${archiveFileName}\n`,
+          fileName: 'archived.md',
+          fileHandle: null,
+          reason: 'workspace archive active file',
+        });
 
         const archivedMessage = removedOriginal
           ? `Archived ${active.name}`
@@ -1944,14 +2046,68 @@ Tags:
             : `Workspace: archive copy created but original kept ${activePath} -> archive/${archiveFileName}`
         );
 
-        globalThis.MME_APP.openTextDocument({
-          text: `# Archived\n\nArchived: ${activePath}\n\nArchive copy: archive/${archiveFileName}\n`,
-          fileName: 'archived.md',
-          fileHandle: null,
-          reason: 'workspace archive active file',
-        });
-
         globalThis.MME_APP?.log?.('Workspace: archiveActiveWorkspaceFile() end');
+      }
+
+      let __archiveActiveInProgress = false;
+
+      function bindArchiveActiveDirect() {
+        const btn = document.getElementById('btnArchiveActive');
+
+        if (!btn) {
+          globalThis.MME_APP?.log?.('Workspace: Archive Active direct button not found');
+          return;
+        }
+
+        if (btn.__archiveDirectBound) {
+          return;
+        }
+
+        btn.addEventListener(
+          'click',
+          async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            globalThis.MME_APP?.log?.(
+              `Workspace: Archive Active direct clicked disabled=${Boolean(
+                btn.disabled
+              )} active=${WORKSPACE_STATE.activeFile?.path || '(none)'}`
+            );
+
+            if (__archiveActiveInProgress) {
+              globalThis.MME_APP?.log?.(
+                'Workspace: Archive Active ignored because archive is already in progress'
+              );
+              return;
+            }
+
+            try {
+              __archiveActiveInProgress = true;
+
+              if (btn.disabled) {
+                globalThis.MME_APP?.log?.('Workspace: Archive Active direct forced disabled=false');
+                btn.disabled = false;
+              }
+
+              if (typeof archiveActiveWorkspaceFile !== 'function') {
+                throw new Error('archiveActiveWorkspaceFile missing');
+              }
+
+              await archiveActiveWorkspaceFile();
+            } catch (e) {
+              const msg = e?.message || String(e);
+              globalThis.MME_APP?.log?.(`Workspace: Archive Active direct failed: ${msg}`);
+              globalThis.MME_APP?.showToast?.(`Archive failed: ${msg}`, 'error', 3500);
+            } finally {
+              __archiveActiveInProgress = false;
+            }
+          },
+          true
+        );
+
+        btn.__archiveDirectBound = true;
+        globalThis.MME_APP?.log?.('Workspace: Archive Active direct bound');
       }
 
       function initWorkspace() {
@@ -1967,6 +2123,14 @@ Tags:
           onNewConcept: createNewConcept,
           onArchiveActive: archiveActiveWorkspaceFile,
         });
+
+        globalThis.MME_APP?.log?.(
+          `Workspace: archive handler registered = ${
+            typeof archiveActiveWorkspaceFile === 'function'
+          }`
+        );
+
+        bindArchiveActiveDirect();
 
         clearSidebar();
 

@@ -100,6 +100,7 @@ Default starter markdown:
 # New Mindmap
 
 ## Ideas
+
 -
 
 Best for:
@@ -140,9 +141,11 @@ Default starter markdown:
 Tags:
 
 ## Capture
+
 -
 
 ## Tasks
+
 - [ ]
 
 ## Notes
@@ -181,14 +184,17 @@ Pandoc Templates
 Default starter markdown:
 
 ---
+
 title: Presentation Title
 author:
 date:
+
 ---
 
 # Title Slide
 
 ## Agenda
+
 - Topic 1
 - Topic 2
 
@@ -270,92 +276,128 @@ Add a central context configuration object.
 Example:
 
 const APP_CONTEXTS = {
-  editor: {
-    id: 'editor',
-    label: 'MarkMap Editor',
-    shortLabel: 'Editor',
-    templateLabel: 'Templates',
-    defaultFileName: 'mindmap.md',
-    showWorkspace: false,
-    showJournalControls: false,
-    showPandocTools: false,
-    defaultMarkdown: `# New Mindmap
+editor: {
+id: 'editor',
+label: 'MarkMap Editor',
+shortLabel: 'Editor',
+templateLabel: 'Templates',
+defaultFileName: 'mindmap.md',
+showWorkspace: false,
+showJournalControls: false,
+showPandocTools: false,
+defaultMarkdown: `# New Mindmap
 
 ## Ideas
+
 - `
   },
 
   journal: {
-    id: 'journal',
-    label: 'MarkMap Journal',
-    shortLabel: 'Journal',
-    templateLabel: 'MMJ Templates',
-    defaultFileName: 'journal.md',
-    showWorkspace: true,
-    showJournalControls: true,
-    showPandocTools: false,
-    defaultMarkdown: `# Today
+  id: 'journal',
+  label: 'MarkMap Journal',
+  shortLabel: 'Journal',
+  templateLabel: 'MMJ Templates',
+  defaultFileName: 'journal.md',
+  showWorkspace: true,
+  showJournalControls: true,
+  showPandocTools: false,
+  defaultMarkdown: `# Today
 
 Tags:
 
 ## Capture
+
 -
 
 ## Tasks
+
 - [ ]
 
 ## Notes
-`
-  },
 
-  slides: {
-    id: 'slides',
-    label: 'MarkMap Slides',
-    shortLabel: 'Slides',
-    templateLabel: 'Pandoc Templates',
-    defaultFileName: 'slides.md',
-    showWorkspace: false,
-    showJournalControls: false,
-    showPandocTools: true,
-    defaultMarkdown: `---
+`
+},
+
+slides: {
+id: 'slides',
+label: 'MarkMap Slides',
+shortLabel: 'Slides',
+templateLabel: 'Pandoc Templates',
+defaultFileName: 'slides.md',
+showWorkspace: false,
+showJournalControls: false,
+showPandocTools: true,
+defaultMarkdown: `---
 title: Presentation Title
 author:
 date:
+
 ---
 
 # Title Slide
 
 ## Agenda
+
 - Topic 1
 - Topic 2
-`
+  `
   }
-};
+  };
 
 Store the selected context:
 
 let currentAppContext =
-  localStorage.getItem('markmap:appContext') || 'editor';
+localStorage.getItem('markmap:appContext') || 'editor';
 
 Apply context:
 
 function applyAppContext(contextId) {
-  const ctx = APP_CONTEXTS[contextId] || APP_CONTEXTS.editor;
+const ctx = APP_CONTEXTS[contextId] || APP_CONTEXTS.editor;
 
-  currentAppContext = ctx.id;
-  localStorage.setItem('markmap:appContext', ctx.id);
+currentAppContext = ctx.id;
+localStorage.setItem('markmap:appContext', ctx.id);
 
-  document.documentElement.dataset.appContext = ctx.id;
+document.documentElement.dataset.appContext = ctx.id;
 
-  updateContextLabels(ctx);
-  updateContextVisibility(ctx);
+updateContextLabels(ctx);
+updateContextVisibility(ctx);
 
-  log(`App context changed: ${ctx.label}`);
+log(`App context changed: ${ctx.label}`);
 }
 
 ---
 
 # Implementation Plan
+
+## Roadmap — UI polish follow-ups
+
+These items are planned for later, after archive behavior is stable.
+
+- 7.5K — Resizable workspace sidebar
+  - Allow the journal workspace sidebar to be resized.
+  - Store width in localStorage.
+  - Respect a practical min/max range such as 220px–420px.
+  - Keep collapse/expand behavior intact.
+
+- 7.5L — Splitter grip visuals
+  - Add visible grip dots to the editor/map and map/html splitters.
+  - Keep the visual treatment subtle and low-contrast.
+  - Preserve current drag behavior.
+
+- 7.5N — Concept template/header alignment with OKF
+  - Use a lightweight concept starter structure with summary/notes/related/tasks sections.
+  - Keep the concept body readable while metadata remains simple.
+  - Defer hidden frontmatter support until a later pass.
+
+- 7.5O — Logs panel placement
+  - Keep logs controls in the panel header.
+  - Preserve the current top-header action layout.
+  - Leave room for a later pin/minimize option.
+
+- 7.5M — HTML viewer overlay controls
+  - Add bottom-right overlay actions for text/HTML copy and export.
+  - Keep the controls compact and non-invasive.
+  - Reuse the existing HTML export path.
 
 ## Phase 1 — Add Context State
 
@@ -407,13 +449,13 @@ function applyAppContext(contextId) {
 Template button behavior:
 
 if context is editor:
-  open existing Markmap templates menu
+open existing Markmap templates menu
 
 if context is journal:
-  open MMJ templates menu
+open MMJ templates menu
 
 if context is slides:
-  open existing Pandoc templates menu
+open existing Pandoc templates menu
 
 First version:
 
@@ -650,7 +692,6 @@ Estimated time:
 - Save overwrites active workspace file
 - Editor/Journal/Slides context switching works
 
-
 ---
 
 ## Milestone 5 — OKF Journal System
@@ -675,22 +716,22 @@ Estimated time:
 # Recommended Branches
 
 main
-  Stable baseline.
+Stable baseline.
 
 dev/release-40-okf-workspace
-  Development integration branch.
+Development integration branch.
 
 feature/app-contexts
-  Add Editor / Journal / Slides context selector.
+Add Editor / Journal / Slides context selector.
 
 feature/workspace-alpha
-  Add Journal workspace sidebar and scanner.
+Add Journal workspace sidebar and scanner.
 
 feature/okf-frontmatter
-  Add hidden frontmatter and visible tags.
+Add hidden frontmatter and visible tags.
 
 feature/aggregations
-  Add Open Tasks aggregation and click-to-source.
+Add Open Tasks aggregation and click-to-source.
 
 Recommended first branch:
 
@@ -739,3 +780,154 @@ Shared file/export system.
 Context-specific templates, starter content, labels, and controls.
 
 This preserves existing work and creates a flexible future path.
+
+---
+
+# Diagram Support Track
+
+## Purpose
+
+Improve MarkmapEditor / MarkMapJournal / MarkMapSlides with text-based and editable diagram support.
+
+This track should support:
+
+- Mermaid diagrams directly in Markdown.
+- Draw.io editable diagram assets.
+- Editable SVG diagrams with embedded Draw.io XML.
+- Optional PlantUML later.
+
+This track benefits all app modes:
+
+- Editor: standalone diagram-rich Markdown/mindmaps.
+- Journal: architecture notes, product notes, process notes, concept pages.
+- Slides: diagrams for Pandoc/presentation workflows.
+
+---
+
+## Priority Order
+
+Preferred implementation order:
+
+1. Mermaid Support
+2. Draw.io Asset Support (.drawio + .svg)
+3. Editable Draw.io SVG Support
+4. PlantUML Support, optional later
+
+---
+
+## Stage D1 — Mermaid Support
+
+### Priority: HIGH
+
+Goal:
+Allow Mermaid diagrams directly inside Markdown.
+
+Supported syntax:
+
+```mermaid
+flowchart LR
+A[Browser] --> B[API]
+B --> C[Database]
+```
+
+Required features:
+
+- Render Mermaid blocks in HTML Preview.
+- Export Mermaid diagrams correctly in HTML export.
+- Support dark/light mode.
+- Avoid external asset files.
+- Keep diagrams text-based and Git-friendly.
+- Keep diagrams AI-friendly.
+
+Optional features:
+
+- Export Mermaid diagram as SVG.
+- Render Mermaid diagram inside Markmap nodes if feasible.
+- Copy Mermaid SVG from preview.
+
+Implementation notes:
+
+- Detect fenced code blocks with language `mermaid`.
+- In HTML Preview, replace Mermaid code block output with a Mermaid-rendered diagram container.
+- In standalone HTML export, include Mermaid runtime or pre-rendered SVG.
+- Ensure dark/light theme is passed into Mermaid rendering.
+- Do not break existing Shiki code highlighting.
+- Do not rewrite Markmap rendering for initial Mermaid support.
+
+Acceptance tests:
+
+- A Markdown file containing a Mermaid block renders correctly in HTML Preview.
+- HTML export includes rendered Mermaid diagrams.
+- Dark mode and light mode are readable.
+- Non-Mermaid code blocks still use existing syntax highlighting.
+- Existing Markdown, Markmap, and HTML preview behavior remains stable.
+
+Benefits:
+
+- Text based.
+- Git friendly.
+- AI friendly.
+- No external asset files.
+- Good for flowcharts, architecture diagrams, process diagrams, and documentation.
+
+---
+
+## Stage D2 — Draw.io Asset Support
+
+### Priority: MEDIUM
+
+Goal:
+Support editable architecture and business diagrams using Draw.io-compatible assets.
+
+Recommended workspace structure:
+
+```
+assets/
+  network.drawio
+  network.svg
+```
+
+Markdown usage:
+
+```
+./assets/network.svg
+```
+
+Required features:
+
+- Display SVG in HTML Preview.
+- Display SVG in Markmap when referenced as an image.
+- Detect when an SVG has a matching `.drawio` source file.
+- Double-click diagram/image to open editing workflow.
+- Refresh SVG after save.
+
+Expected lookup behavior:
+
+- User references:
+
+  `./assets/network.svg`
+
+- App checks for matching source:
+
+  `./assets/network.drawio`
+
+- If matching .drawio exists:
+  - Open Draw.io editor or editing workflow.
+  - Allow user to update diagram.
+  - Refresh SVG output after save.
+
+Implementation notes:
+
+- Start with display support only.
+- Then add double-click detection.
+- Do not block normal image rendering.
+- Do not require every SVG to have a .drawio source.
+- Use assets/ as preferred folder.
+- Integrate with existing image workflow.
+- Keep Markdown reference simple.
+
+Acceptance tests:
+
+- Markdown image/reference to `./assets/network.svg` displays in HTML Preview.
+- Same SVG displays in Markmap if current image rendering supports SVG.
+- Double-clicking SVG attempts to locate `./assets/network.drawio`.

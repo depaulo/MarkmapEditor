@@ -413,8 +413,17 @@ function createConceptStarterMarkdown(fileName) {
 
 Tags:
 
+## Summary
+-
+
 ## Notes
 -
+
+## Related
+-
+
+## Tasks
+- [ ]
 `;
 }
 
@@ -534,22 +543,50 @@ function normalizeWorkspacePathForCompare(value) {
     .replace(/^\.?\//, '');
 }
 
+function normalizeWorkspaceKindForCompare(value) {
+  const kind = String(value || '')
+    .trim()
+    .toLowerCase();
+
+  if (kind === 'journal') return 'journals';
+  if (kind === 'journals') return 'journals';
+
+  if (kind === 'concept') return 'concepts';
+  if (kind === 'concepts') return 'concepts';
+
+  return kind;
+}
+
 function isSameWorkspaceFileButton(btn, active) {
   if (!btn || !active) return false;
 
-  const btnKind = String(btn.dataset.kind || '').trim();
+  const btnKind = normalizeWorkspaceKindForCompare(btn.dataset.kind || '');
   const btnPath = normalizeWorkspacePathForCompare(btn.dataset.path || '');
   const btnName = String(btn.dataset.name || '').trim();
 
-  const activeKind = String(active.kind || '').trim();
+  const activeKind = normalizeWorkspaceKindForCompare(active.kind || '');
   const activePath = normalizeWorkspacePathForCompare(active.path || '');
   const activeName = String(active.name || '').trim();
 
-  if (!btnKind || !activeKind) return false;
-  if (btnKind !== activeKind) return false;
+  /*
+    Prefer exact path match first.
+    If path matches, allow kind normalization to handle concept/concepts.
+  */
+  if (btnPath && activePath && btnPath === activePath) {
+    if (!btnKind || !activeKind) return true;
+    return btnKind === activeKind;
+  }
 
-  if (btnPath && activePath && btnPath === activePath) return true;
-  if (btnName && activeName && btnName === activeName) return true;
+  /*
+    Then fall back to kind + name.
+  */
+  if (btnKind && activeKind && btnKind !== activeKind) {
+    return false;
+  }
+
+  if (btnName && activeName && btnName === activeName) {
+    return true;
+  }
 
   return false;
 }
@@ -557,6 +594,10 @@ function isSameWorkspaceFileButton(btn, active) {
 function updateWorkspaceActiveFileHighlight() {
   try {
     const active = WORKSPACE_STATE?.activeFile || globalThis.WORKSPACE_STATE?.activeFile || null;
+
+    const activeKind = normalizeWorkspaceKindForCompare(active?.kind || '');
+    const activePath = normalizeWorkspacePathForCompare(active?.path || '');
+    const activeName = String(active?.name || '').trim();
 
     let total = 0;
     let matched = 0;
@@ -580,13 +621,23 @@ function updateWorkspaceActiveFileHighlight() {
     });
 
     log?.(
-      `Workspace: highlight updated active=${active?.path || active?.name || '(none)'} matched=${matched}/${total}`
+      `Workspace: highlight updated active=${
+        activePath || activeName || '(none)'
+      } kind=${activeKind || '(none)'} matched=${matched}/${total}`
     );
 
     if (active && total > 0 && matched === 0) {
+      log?.(
+        `Workspace: highlight active debug kind=${activeKind} path=${activePath} name=${activeName}`
+      );
+
       document.querySelectorAll('.workspaceFileItem[data-workspace-file="1"]').forEach((btn) => {
         log?.(
-          `Workspace: highlight miss btn kind=${btn.dataset.kind || ''} path=${btn.dataset.path || ''} name=${btn.dataset.name || ''}`
+          `Workspace: highlight miss btn kind=${normalizeWorkspaceKindForCompare(
+            btn.dataset.kind || ''
+          )} path=${normalizeWorkspacePathForCompare(
+            btn.dataset.path || ''
+          )} name=${btn.dataset.name || ''}`
         );
       });
     }
@@ -5135,6 +5186,7 @@ function updateHtmlPreviewButtons() {
   const pane = document.getElementById('htmlPane');
   const edge = document.getElementById('btnHtmlEdgeOpen');
   const close = document.getElementById('btnHtmlClose');
+  const overlay = document.getElementById('htmlOverlayControls');
 
   const isOpen = pane && pane.style.display === 'block';
 
@@ -5165,6 +5217,10 @@ function updateHtmlPreviewButtons() {
 
     close.style.display = isOpen ? 'inline-flex' : 'none';
   }
+
+  if (overlay) {
+    overlay.hidden = !isOpen;
+  }
 }
 
 updateHtmlPreviewButtons();
@@ -5172,6 +5228,116 @@ updateHtmlPreviewButtons();
 document.getElementById('btnHtmlEdgeOpen')?.addEventListener('click', toggleHtml);
 document.getElementById('btnHtmlClose')?.addEventListener('click', toggleHtml);
 document.getElementById('btnToggleEditor').addEventListener('click', toggleEditor);
+
+async function copyHtmlPreviewText() {
+  const pane = document.getElementById('htmlPane');
+
+  if (!pane) {
+    showToast?.('HTML preview not found', 'error', 1800);
+    return;
+  }
+
+  const text = pane.innerText || pane.textContent || '';
+
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast?.('HTML text copied', 'ok', 1400);
+    log?.('HTML Preview: rendered text copied');
+  } catch (e) {
+    showToast?.('Could not copy HTML text', 'error', 2200);
+    log?.(`HTML Preview: copy text failed: ${e?.message || e}`);
+  }
+}
+
+async function copyHtmlPreviewHtml() {
+  const pane = document.getElementById('htmlPane');
+
+  if (!pane) {
+    showToast?.('HTML preview not found', 'error', 1800);
+    return;
+  }
+
+  const html = pane.innerHTML || '';
+
+  try {
+    await navigator.clipboard.writeText(html);
+    showToast?.('HTML copied', 'ok', 1400);
+    log?.('HTML Preview: HTML copied');
+  } catch (e) {
+    showToast?.('Could not copy HTML', 'error', 2200);
+    log?.(`HTML Preview: copy HTML failed: ${e?.message || e}`);
+  }
+}
+
+function scrollHtmlPreviewToTop() {
+  const pane = document.getElementById('htmlPane');
+
+  if (!pane) return;
+
+  pane.scrollTo({
+    top: 0,
+    behavior: 'smooth',
+  });
+
+  log?.('HTML Preview: scrolled to top');
+}
+
+function wireHtmlOverlayControls() {
+  const btnCopyText = document.getElementById('htmlBtnCopyText');
+  const btnCopyHtml = document.getElementById('htmlBtnCopyHtml');
+  const btnExport = document.getElementById('htmlBtnExport');
+  const btnTop = document.getElementById('htmlBtnTop');
+
+  if (btnCopyText && !btnCopyText.__bound) {
+    btnCopyText.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await copyHtmlPreviewText();
+    });
+
+    btnCopyText.__bound = true;
+  }
+
+  if (btnCopyHtml && !btnCopyHtml.__bound) {
+    btnCopyHtml.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await copyHtmlPreviewHtml();
+    });
+
+    btnCopyHtml.__bound = true;
+  }
+
+  if (btnExport && !btnExport.__bound) {
+    btnExport.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (typeof exportHtmlPreview === 'function') {
+        await exportHtmlPreview();
+      } else {
+        showToast?.('HTML export is not available', 'error', 2200);
+        log?.('HTML Preview: exportHtmlPreview missing');
+      }
+    });
+
+    btnExport.__bound = true;
+  }
+
+  if (btnTop && !btnTop.__bound) {
+    btnTop.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      scrollHtmlPreviewToTop();
+    });
+
+    btnTop.__bound = true;
+  }
+
+  log?.('HTML Preview overlay controls wired');
+}
+
+wireHtmlOverlayControls();
 
 async function copyMarkdownToClipboard() {
   try {
