@@ -30,7 +30,11 @@
 
 - [ ] manifest loads
 - [ ] sw.js registers
-- [ ] css/app.css cached
-- [ ] js/main.js cached
-- [ ] js/render/html-preview.js cached
-- [ ] js/data/templates-data.js cached
+- [ ] css loaded/cached
+- [ ] js/main.js loaded/cached
+- [ ] js/editor/* loaded/cached
+- [ ] js/core/* loaded/cached
+- [ ] js/workspace/* loaded/cached
+- [ ] js/export/* loaded/cached
+
+

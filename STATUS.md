@@ -641,19 +641,15 @@ Estimated time:
 
 ---
 
-## Milestone 4 — Workspace Mode Alpha
+## Milestone 7 — Journal Workspace Alpha ✅
 
-Goal:
+- Journal sidebar visible in Journal mode
+- Open Workspace works
+- Required folders created
+- Today opens/creates journals/YYYY-MM-DD.md
+- Save overwrites active workspace file
+- Editor/Journal/Slides context switching works
 
-- Journal context gets Open Workspace.
-- Creates journals/concepts/assets/archive/system folders.
-- Scans journals and concepts.
-- Shows sidebar.
-- Opens files from sidebar.
-
-Estimated time:
-
-2 to 4 days.
 
 ---
 
