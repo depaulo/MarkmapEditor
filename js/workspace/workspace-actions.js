@@ -19,6 +19,11 @@ export function createWorkspaceActions({ onOpenWorkspace, onToday }) {
       event.preventDefault();
       event.stopPropagation();
 
+      if (btn.disabled) {
+        globalThis.MME_APP?.log?.(`Workspace: ${name} disabled click ignored`);
+        return;
+      }
+
       try {
         globalThis.MME_APP?.log?.(`Workspace: ${name} clicked`);
 
@@ -41,3 +46,4 @@ export function createWorkspaceActions({ onOpenWorkspace, onToday }) {
   bindOnce(btnOpenWorkspace, 'Open Workspace', onOpenWorkspace);
   bindOnce(btnJournalToday, 'Today', onToday);
 }
+

@@ -8,7 +8,8 @@ export function clearSidebar() {
   if (conceptsList) conceptsList.innerHTML = '<div class="workspaceEmpty">No concepts</div>';
 }
 
-export function renderSidebarFiles(files, containerId) {
+export function renderSidebarFiles(files, containerId, kind = '') {
+
   const container = document.getElementById(containerId);
 
   if (!container) return;
@@ -21,11 +22,25 @@ export function renderSidebarFiles(files, containerId) {
   container.innerHTML = files
     .map((file) => {
       const name = escapeHtml(file.name || '');
-      const path = escapeHtml(file.path || '');
-      return `<button type="button" class="workspaceFileItem" data-path="${path}" data-name="${name}">${name}</button>`;
+      const path = escapeHtml(file.path || file.name || '');
+      const fileKind = escapeHtml(kind || file.kind || '');
+
+      return `
+        <button
+          type="button"
+          class="workspaceFileItem"
+          data-workspace-file="1"
+          data-kind="${fileKind}"
+          data-path="${path}"
+          data-name="${name}"
+        >
+          ${name}
+        </button>
+      `;
     })
     .join('');
 }
+
 
 export function escapeHtml(text) {
   return String(text || '')

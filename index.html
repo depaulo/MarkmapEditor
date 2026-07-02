@@ -111,21 +111,42 @@
     <div id="layout">
       <aside id="workspaceSidebar" aria-label="Journal workspace">
         <div class="workspaceHeader">
-          <div id="workspaceTitle">Journal Workspace</div>
-          <button id="btnOpenWorkspace" type="button">Open Workspace</button>
-          <button id="btnJournalToday" type="button">Today</button>
+          <div class="workspaceHeaderTop">
+            <div id="workspaceTitle">Journal Workspace</div>
+            <button id="btnWorkspaceCollapse" type="button" title="Collapse sidebar">
+              ◀
+            </button>
+          </div>
+
+          <button id="btnOpenWorkspace" type="button">
+            <span class="workspaceIcon">📁</span>
+            <span class="workspaceLabel">Open Workspace</span>
+          </button>
+
+          <button id="btnJournalToday" type="button">
+            <span class="workspaceIcon">📅</span>
+            <span class="workspaceLabel">Today</span>
+          </button>
         </div>
 
-        <div class="workspaceSection">
+        <div id="workspaceEmptyState" class="workspaceEmptyState">
+          <div class="workspaceEmptyTitle">No workspace opened</div>
+          <div class="workspaceEmptyText">
+            Open a workspace folder to use Today, Journals and Concepts.
+          </div>
+        </div>
+
+        <div class="workspaceSection workspaceFilesSection">
           <div class="workspaceSectionTitle">Journals</div>
           <div id="workspaceJournalsList"></div>
         </div>
 
-        <div class="workspaceSection">
+        <div class="workspaceSection workspaceFilesSection">
           <div class="workspaceSectionTitle">Concepts</div>
           <div id="workspaceConceptsList"></div>
         </div>
       </aside>
+
       <div id="editor">
         <div id="editorOverlayControls" aria-label="Editor controls">
           <button id="editorBtnSearch" type="button" title="Search & Replace: Ctrl+F / Ctrl+H">
@@ -1209,6 +1230,14 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
       </div>
       <div class="splitter" id="splitEditor"></div>
       <div id="viewer">
+<button
+        id="btnHtmlEdgeOpen"
+        type="button"
+        title="Open HTML Preview"
+        aria-label="Open HTML Preview"
+      >
+        </>
+      </button>
         <div id="mapPane">
           <div id="mapOverlayControls" aria-label="Mindmap controls">
             <button id="mapBtnLevelUp" type="button" title="Expand one level">➕</button>
@@ -1224,7 +1253,9 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         </div>
 
         <div class="splitter" id="splitHtml"></div>
-        <div id="htmlPane"></div>
+        <div id="htmlPane">
+          <button id="btnHtmlClose" type="button" title="Close HTML Preview" aria-label="Close HTML Preview">×</button>
+        </div>
       </div>
     </div>
     <div id="logs">
@@ -1292,6 +1323,36 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
       const ctx = applyAppContextDataset(getStoredAppContextId());
 
+      // workspace UI empty/ready state (Stage 7.5)
+      document.documentElement.classList.add('workspace-empty');
+
+      // ================================
+      // Stage 7.5E — Active File Highlight
+      // ================================
+      function isSameWorkspaceFileButton(btn, active) {
+        if (!btn || !active) return false;
+        const btnKind = btn.dataset.kind || '';
+        const btnPath = btn.dataset.path || '';
+        const btnName = btn.dataset.name || '';
+        const activeKind = active.kind || '';
+        const activePath = active.path || '';
+        const activeName = active.name || '';
+        if (!btnKind || !activeKind) return false;
+        if (btnKind !== activeKind) return false;
+        if (btnPath && activePath && btnPath === activePath) return true;
+        if (btnName && activeName && btnName === activeName) return true;
+        return false;
+      }
+
+      function updateWorkspaceActiveFileHighlight() {
+        const active = WORKSPACE_STATE.activeFile || null;
+        document.querySelectorAll('.workspaceFileItem[data-workspace-file="1"]').forEach((btn) => {
+          btn.classList.toggle('__active', isSameWorkspaceFileButton(btn, active));
+        });
+      }
+
+
+
       globalThis.APP_CONTEXT_API = {
         getStoredAppContextId,
         getAppContext,
@@ -1343,8 +1404,38 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
           }))
           .sort((a, b) => a.name.localeCompare(b.name));
 
-        renderSidebarFiles(WORKSPACE_STATE.files.journals, 'workspaceJournalsList');
-        renderSidebarFiles(WORKSPACE_STATE.files.concepts, 'workspaceConceptsList');
+        renderSidebarFiles(
+          WORKSPACE_STATE.files.journals,
+          'workspaceJournalsList',
+          'journals'
+        );
+        renderSidebarFiles(
+          WORKSPACE_STATE.files.concepts,
+          'workspaceConceptsList',
+          'concepts'
+        );
+
+        updateWorkspaceActiveFileHighlight();
+      }
+
+      function updateWorkspaceUiState() {
+        const hasWorkspace = Boolean(WORKSPACE_STATE.rootHandle);
+
+        document.documentElement.classList.toggle('workspace-ready', hasWorkspace);
+        document.documentElement.classList.toggle('workspace-empty', !hasWorkspace);
+
+        const btnToday = document.getElementById('btnJournalToday');
+        if (btnToday) {
+          btnToday.disabled = !hasWorkspace;
+          btnToday.title = hasWorkspace ? 'Open today journal' : 'Open a workspace first';
+        }
+
+        const title = document.getElementById('workspaceTitle');
+        if (title) {
+          title.textContent = hasWorkspace
+            ? WORKSPACE_STATE.rootName || 'Workspace'
+            : 'Journal Workspace';
+        }
       }
 
       async function openWorkspace() {
@@ -1353,22 +1444,27 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         WORKSPACE_STATE.rootHandle = root;
         WORKSPACE_STATE.rootName = root.name || 'Workspace';
 
+
         WORKSPACE_STATE.folders.journals = await ensureSubfolder(root, 'journals');
         WORKSPACE_STATE.folders.concepts = await ensureSubfolder(root, 'concepts');
         WORKSPACE_STATE.folders.assets = await ensureSubfolder(root, 'assets');
         WORKSPACE_STATE.folders.archive = await ensureSubfolder(root, 'archive');
         WORKSPACE_STATE.folders.system = await ensureSubfolder(root, 'system');
 
-        const title = document.getElementById('workspaceTitle');
-        if (title) title.textContent = WORKSPACE_STATE.rootName;
-
+        updateWorkspaceUiState();
         await refreshWorkspaceSidebar();
+
 
         globalThis.MME_APP?.showToast?.(`Workspace opened ✓ ${WORKSPACE_STATE.rootName}`, 'ok');
         globalThis.MME_APP?.log?.(`Workspace opened: ${WORKSPACE_STATE.rootName}`);
       }
 
       async function openToday() {
+        if (!WORKSPACE_STATE.rootHandle) {
+          globalThis.MME_APP?.showToast?.('Open a workspace first', 'error', 3000);
+          return;
+        }
+
         if (!WORKSPACE_STATE.folders.journals) {
           await openWorkspace();
         }
@@ -1429,6 +1525,7 @@ Tags:
         };
 
         await refreshWorkspaceSidebar();
+        updateWorkspaceActiveFileHighlight();
         globalThis.MME_APP?.showToast?.(`Today opened ✓ ${fileName}`, 'ok');
         globalThis.MME_APP?.log?.(`Today opened: ${fileName}`);
       }
@@ -1449,6 +1546,7 @@ Tags:
         });
 
         WORKSPACE_STATE.activeFile = fileRecord;
+        updateWorkspaceActiveFileHighlight();
         globalThis.MME_APP?.showToast?.(`Opened ✓ ${file.name}`, 'ok');
       }
 
@@ -1474,9 +1572,56 @@ Tags:
         });
       }
 
+      const JOURNAL_SIDEBAR_COLLAPSED_KEY = 'markmap:journalSidebarCollapsed';
+
+      function applyJournalSidebarCollapsed(collapsed) {
+        document.documentElement.classList.toggle('journal-sidebar-collapsed', !!collapsed);
+
+        const btn = document.getElementById('btnWorkspaceCollapse');
+        if (btn) {
+          btn.textContent = collapsed ? '▶' : '◀';
+          btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+          btn.setAttribute('aria-label', btn.title);
+        }
+
+        try {
+          localStorage.setItem(
+            JOURNAL_SIDEBAR_COLLAPSED_KEY,
+            collapsed ? '1' : '0'
+          );
+        } catch {}
+      }
+
+      function initJournalSidebarCollapse() {
+        const btn = document.getElementById('btnWorkspaceCollapse');
+        if (!btn || btn.__bound) return;
+
+        let saved = false;
+        try {
+          saved = localStorage.getItem(JOURNAL_SIDEBAR_COLLAPSED_KEY) === '1';
+        } catch {}
+
+        applyJournalSidebarCollapsed(saved);
+
+        btn.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          const next = !document.documentElement.classList.contains('journal-sidebar-collapsed');
+          applyJournalSidebarCollapsed(next);
+        });
+
+        btn.__bound = true;
+      }
+
       function initWorkspace() {
         if (initWorkspace.__done) return;
         initWorkspace.__done = true;
+
+        updateWorkspaceUiState();
+        initJournalSidebarCollapse();
+
+
 
         createWorkspaceActions({
           onOpenWorkspace: openWorkspace,

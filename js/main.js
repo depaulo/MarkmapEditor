@@ -4909,6 +4909,25 @@ let currentSaveHandle = null;
 
       document.getElementById('btnHtml').addEventListener('click', toggleHtml);
       document.getElementById('btnLogs').addEventListener('click', toggleLogs);
+
+      // HTML preview local panel buttons
+      function updateHtmlPreviewButtons() {
+        const pane = document.getElementById('htmlPane');
+        const edge = document.getElementById('btnHtmlEdgeOpen');
+        const close = document.getElementById('btnHtmlClose');
+
+        if (!pane || !edge || !close) return;
+
+        const isOpen = pane.style.display === 'block';
+
+        edge.style.display = isOpen ? 'none' : 'block';
+        close.style.display = isOpen ? 'block' : 'none';
+      }
+
+      updateHtmlPreviewButtons();
+
+      document.getElementById('btnHtmlEdgeOpen')?.addEventListener('click', toggleHtml);
+      document.getElementById('btnHtmlClose')?.addEventListener('click', toggleHtml);
       document.getElementById('btnToggleEditor').addEventListener('click', toggleEditor);
 
       async function copyMarkdownToClipboard() {
