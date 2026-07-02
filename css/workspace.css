@@ -114,9 +114,44 @@ html.workspace-ready #btnJournalToday {
   cursor: pointer;
 }
 
+#btnArchiveActive {
+  font-weight: 600;
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+html.workspace-empty #btnArchiveActive {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+html.workspace-ready #btnArchiveActive {
+  opacity: 1;
+  cursor: pointer;
+}
+
+#btnArchiveActive:hover {
+  background: rgba(245, 158, 11, 0.12);
+}
+
+#btnNewConcept {
+  font-weight: 600;
+}
+
+html.workspace-empty #btnNewConcept {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+html.workspace-ready #btnNewConcept {
+  opacity: 1;
+  cursor: pointer;
+}
 
 .workspaceFileItem {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
   width: 100%;
   text-align: left;
   padding: 6px 8px;
@@ -126,6 +161,22 @@ html.workspace-ready #btnJournalToday {
   color: var(--text);
   cursor: pointer;
   font-size: 13px;
+
+  overflow: hidden;
+}
+
+.workspaceFileIcon {
+  flex: 0 0 auto;
+  width: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.9;
+}
+
+.workspaceFileName {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -136,40 +187,40 @@ html.workspace-ready #btnJournalToday {
   border-color: var(--menu-border);
 }
 
-.workspaceFileItem.__active {
-  background: rgba(34, 197, 94, 0.14);
-  border-color: #22c55e;
+.workspaceFileItem.__active,
+.workspaceFileItem[data-active='1'] {
+  background: rgba(34, 197, 94, 0.18) !important;
+  border-color: #22c55e !important;
+  color: var(--text) !important;
+  font-weight: 700 !important;
+}
+
+.workspaceFileItem.__active:hover,
+.workspaceFileItem[data-active='1']:hover {
+  background: rgba(34, 197, 94, 0.26) !important;
+  border-color: #22c55e !important;
+}
+
+.workspaceFileItem.__active .workspaceFileIcon,
+.workspaceFileItem[data-active='1'] .workspaceFileIcon {
+  opacity: 1;
+}
+
+.workspaceFileItem.__active .workspaceFileName,
+.workspaceFileItem[data-active='1'] .workspaceFileName {
   font-weight: 700;
 }
 
-.workspaceFileItem.__active:hover {
-  background: rgba(34, 197, 94, 0.2);
-  border-color: #22c55e;
+html.dark .workspaceFileItem.__active,
+html.dark .workspaceFileItem[data-active='1'] {
+  background: rgba(34, 197, 94, 0.22) !important;
+  border-color: #22c55e !important;
 }
 
-.workspaceFileItem.__active::before {
-  content: "●";
-  margin-right: 6px;
-  color: #22c55e;
-  font-size: 10px;
-  vertical-align: middle;
+html.dark .workspaceFileItem.__active:hover,
+html.dark .workspaceFileItem[data-active='1']:hover {
+  background: rgba(34, 197, 94, 0.3) !important;
 }
-
-html.dark .workspaceHeader button,
-html.dark .workspaceFileItem {
-  color: var(--text);
-}
-
-html.dark .workspaceFileItem.__active {
-  background: rgba(34, 197, 94, 0.18);
-  border-color: #22c55e;
-}
-
-html.dark .workspaceFileItem.__active:hover {
-  background: rgba(34, 197, 94, 0.26);
-  border-color: #22c55e;
-}
-
 
 /* Collapsible Journal Sidebar (Stage 7.5B) */
 .workspaceHeaderTop {
@@ -234,4 +285,3 @@ html.journal-sidebar-collapsed .workspaceHeader button {
 html.journal-sidebar-collapsed .workspaceIcon {
   margin-right: 0;
 }
-

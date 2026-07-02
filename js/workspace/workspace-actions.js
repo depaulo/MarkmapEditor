@@ -1,8 +1,15 @@
 // @ts-check
 
-export function createWorkspaceActions({ onOpenWorkspace, onToday }) {
+export function createWorkspaceActions({
+  onOpenWorkspace,
+  onToday,
+  onNewConcept,
+  onArchiveActive,
+}) {
   const btnOpenWorkspace = document.getElementById('btnOpenWorkspace');
   const btnJournalToday = document.getElementById('btnJournalToday');
+  const btnNewConcept = document.getElementById('btnNewConcept');
+  const btnArchiveActive = document.getElementById('btnArchiveActive');
 
   function bindOnce(btn, name, handler) {
     if (!btn) {
@@ -45,5 +52,7 @@ export function createWorkspaceActions({ onOpenWorkspace, onToday }) {
 
   bindOnce(btnOpenWorkspace, 'Open Workspace', onOpenWorkspace);
   bindOnce(btnJournalToday, 'Today', onToday);
+  bindOnce(btnNewConcept, 'New Concept', onNewConcept);
+  bindOnce(btnArchiveActive, 'Archive Active', onArchiveActive);
 }
 

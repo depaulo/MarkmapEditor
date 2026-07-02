@@ -25,6 +25,13 @@ export function renderSidebarFiles(files, containerId, kind = '') {
       const path = escapeHtml(file.path || file.name || '');
       const fileKind = escapeHtml(kind || file.kind || '');
 
+      const icon =
+        fileKind === 'journals'
+          ? '📝'
+          : fileKind === 'concepts'
+            ? '🧠'
+            : '📄';
+
       return `
         <button
           type="button"
@@ -33,8 +40,10 @@ export function renderSidebarFiles(files, containerId, kind = '') {
           data-kind="${fileKind}"
           data-path="${path}"
           data-name="${name}"
+          title="${path}"
         >
-          ${name}
+          <span class="workspaceFileIcon" aria-hidden="true">${icon}</span>
+          <span class="workspaceFileName">${name}</span>
         </button>
       `;
     })

@@ -1,4 +1,76 @@
 /* =========================== */
+/* Logs Panel                  */
+/* =========================== */
+
+#logs {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  width: 600px;
+  height: 280px;
+  background: var(--log-bg);
+  color: var(--log-color);
+  display: none;
+  padding: 0;
+  font: 12px ui-monospace;
+  overflow: hidden;
+  resize: both;
+  z-index: 9999;
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--menu-border);
+}
+
+#logsHeader {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px;
+  background: rgba(127, 127, 127, 0.16);
+  border-bottom: 1px solid var(--menu-border);
+  color: var(--text);
+  font-family: system-ui;
+}
+
+#logsTitle {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#logsActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#logsActions button {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--toolbar-border);
+  background: var(--toolbar-bg);
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#logsActions button:hover {
+  background: var(--menu-hover);
+}
+
+#logs pre {
+  margin: 0;
+  height: calc(100% - 32px);
+  padding: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  overflow: auto;
+}
+
+/* =========================== */
 /* Map Overlay Controls        */
 /* =========================== */
 

@@ -113,9 +113,7 @@
         <div class="workspaceHeader">
           <div class="workspaceHeaderTop">
             <div id="workspaceTitle">Journal Workspace</div>
-            <button id="btnWorkspaceCollapse" type="button" title="Collapse sidebar">
-              ◀
-            </button>
+            <button id="btnWorkspaceCollapse" type="button" title="Collapse sidebar">◀</button>
           </div>
 
           <button id="btnOpenWorkspace" type="button">
@@ -126,6 +124,26 @@
           <button id="btnJournalToday" type="button">
             <span class="workspaceIcon">📅</span>
             <span class="workspaceLabel">Today</span>
+          </button>
+
+          <button
+            id="btnNewConcept"
+            type="button"
+            title="Create new concept"
+            aria-label="Create new concept"
+          >
+            <span class="workspaceIcon">🧠</span>
+            <span class="workspaceLabel">New Concept</span>
+          </button>
+
+          <button
+            id="btnArchiveActive"
+            type="button"
+            title="Archive active workspace file"
+            aria-label="Archive active workspace file"
+          >
+            <span class="workspaceIcon">📦</span>
+            <span class="workspaceLabel">Archive Active</span>
           </button>
         </div>
 
@@ -1225,19 +1243,20 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
 
 
-    </textarea>
+    </textarea
+        >
         >
       </div>
       <div class="splitter" id="splitEditor"></div>
       <div id="viewer">
-<button
-        id="btnHtmlEdgeOpen"
-        type="button"
-        title="Open HTML Preview"
-        aria-label="Open HTML Preview"
-      >
-        </>
-      </button>
+        <button
+          id="btnHtmlEdgeOpen"
+          type="button"
+          title="Open HTML Preview"
+          aria-label="Open HTML Preview"
+        >
+          &#60;/&#62;
+        </button>
         <div id="mapPane">
           <div id="mapOverlayControls" aria-label="Mindmap controls">
             <button id="mapBtnLevelUp" type="button" title="Expand one level">➕</button>
@@ -1254,11 +1273,36 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
         <div class="splitter" id="splitHtml"></div>
         <div id="htmlPane">
-          <button id="btnHtmlClose" type="button" title="Close HTML Preview" aria-label="Close HTML Preview">×</button>
+          <button
+            id="btnHtmlClose"
+            type="button"
+            title="Close HTML Preview"
+            aria-label="Close HTML Preview"
+          >
+            &times;
+          </button>
         </div>
       </div>
     </div>
     <div id="logs">
+      <div id="logsHeader">
+        <span id="logsTitle">Logs</span>
+
+        <div id="logsActions">
+          <button id="btnCopyLogs" type="button" title="Copy logs" aria-label="Copy logs">
+            Copy
+          </button>
+
+          <button id="btnClearLogs" type="button" title="Clear logs" aria-label="Clear logs">
+            Clear
+          </button>
+
+          <button id="btnCloseLogs" type="button" title="Close logs" aria-label="Close logs">
+            ×
+          </button>
+        </div>
+      </div>
+
       <pre id="log"></pre>
     </div>
     <div id="toast" role="status" aria-live="polite"></div>
@@ -1318,7 +1362,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         getStoredAppContextId,
         getAppContext,
         storeAppContextId,
-        applyAppContextDataset
+        applyAppContextDataset,
       } from './js/core/context.js';
 
       const ctx = applyAppContextDataset(getStoredAppContextId());
@@ -1329,35 +1373,81 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
       // ================================
       // Stage 7.5E — Active File Highlight
       // ================================
+      function normalizeWorkspacePathForCompare(value) {
+        return String(value || '')
+          .trim()
+          .replace(/\\/g, '/')
+          .replace(/^\.?\//, '');
+      }
+
       function isSameWorkspaceFileButton(btn, active) {
         if (!btn || !active) return false;
-        const btnKind = btn.dataset.kind || '';
-        const btnPath = btn.dataset.path || '';
-        const btnName = btn.dataset.name || '';
-        const activeKind = active.kind || '';
-        const activePath = active.path || '';
-        const activeName = active.name || '';
+
+        const btnKind = String(btn.dataset.kind || '').trim();
+        const btnPath = normalizeWorkspacePathForCompare(btn.dataset.path || '');
+        const btnName = String(btn.dataset.name || '').trim();
+
+        const activeKind = String(active.kind || '').trim();
+        const activePath = normalizeWorkspacePathForCompare(active.path || '');
+        const activeName = String(active.name || '').trim();
+
         if (!btnKind || !activeKind) return false;
         if (btnKind !== activeKind) return false;
+
         if (btnPath && activePath && btnPath === activePath) return true;
         if (btnName && activeName && btnName === activeName) return true;
+
         return false;
       }
 
       function updateWorkspaceActiveFileHighlight() {
         const active = WORKSPACE_STATE.activeFile || null;
+
+        let total = 0;
+        let matched = 0;
+
         document.querySelectorAll('.workspaceFileItem[data-workspace-file="1"]').forEach((btn) => {
-          btn.classList.toggle('__active', isSameWorkspaceFileButton(btn, active));
+          total += 1;
+
+          const isActive = isSameWorkspaceFileButton(btn, active);
+
+          if (isActive) matched += 1;
+
+          btn.classList.toggle('__active', isActive);
+
+          if (isActive) {
+            btn.dataset.active = '1';
+            btn.setAttribute('aria-current', 'true');
+          } else {
+            delete btn.dataset.active;
+            btn.removeAttribute('aria-current');
+          }
         });
+
+        globalThis.MME_APP?.log?.(
+          `Workspace: highlight updated active=${
+            active?.path || active?.name || '(none)'
+          } matched=${matched}/${total}`
+        );
+
+        if (active && total > 0 && matched === 0) {
+          document
+            .querySelectorAll('.workspaceFileItem[data-workspace-file="1"]')
+            .forEach((btn) => {
+              globalThis.MME_APP?.log?.(
+                `Workspace: highlight miss btn kind=${btn.dataset.kind || ''} path=${
+                  btn.dataset.path || ''
+                } name=${btn.dataset.name || ''}`
+              );
+            });
+        }
       }
-
-
 
       globalThis.APP_CONTEXT_API = {
         getStoredAppContextId,
         getAppContext,
         storeAppContextId,
-        applyAppContextDataset
+        applyAppContextDataset,
       };
 
       globalThis.currentAppContextId = ctx.id;
@@ -1365,7 +1455,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
     <script type="module">
       const mainScript = document.createElement('script');
       mainScript.src = './js/main.js';
-      mainScript.onload = function() {
+      mainScript.onload = function () {
         window.dispatchEvent(new Event('mme-main-ready'));
       };
       document.body.appendChild(mainScript);
@@ -1404,18 +1494,14 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
           }))
           .sort((a, b) => a.name.localeCompare(b.name));
 
-        renderSidebarFiles(
-          WORKSPACE_STATE.files.journals,
-          'workspaceJournalsList',
-          'journals'
-        );
-        renderSidebarFiles(
-          WORKSPACE_STATE.files.concepts,
-          'workspaceConceptsList',
-          'concepts'
+        log?.(
+          `Workspace: sidebar scan journals=${WORKSPACE_STATE.files.journals.length} concepts=${WORKSPACE_STATE.files.concepts.length}`
         );
 
-        updateWorkspaceActiveFileHighlight();
+        renderSidebarFiles(WORKSPACE_STATE.files.journals, 'workspaceJournalsList', 'journals');
+        renderSidebarFiles(WORKSPACE_STATE.files.concepts, 'workspaceConceptsList', 'concepts');
+
+        window.updateWorkspaceActiveFileHighlight?.();
       }
 
       function updateWorkspaceUiState() {
@@ -1430,6 +1516,11 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
           btnToday.title = hasWorkspace ? 'Open today journal' : 'Open a workspace first';
         }
 
+        const btnArchiveActive = document.getElementById('btnArchiveActive');
+        if (btnArchiveActive) {
+          btnArchiveActive.disabled = !hasWorkspace || !WORKSPACE_STATE.activeFile;
+        }
+
         const title = document.getElementById('workspaceTitle');
         if (title) {
           title.textContent = hasWorkspace
@@ -1438,12 +1529,77 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         }
       }
 
+      function getLastActiveWorkspacePath() {
+        return getLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath, '').trim();
+      }
+
+      function findWorkspaceFileByPath(path) {
+        const target = String(path || '').trim();
+
+        if (!target) return null;
+
+        const journals = WORKSPACE_STATE.files?.journals || [];
+        const concepts = WORKSPACE_STATE.files?.concepts || [];
+
+        return (
+          journals.find((file) => file.path === target) ||
+          concepts.find((file) => file.path === target) ||
+          null
+        );
+      }
+
+      async function reopenLastActiveWorkspaceFileIfPossible() {
+        const lastPath = getLastActiveWorkspacePath();
+
+        if (!lastPath) {
+          globalThis.MME_APP?.log?.('Workspace: no last active file to reopen');
+          return false;
+        }
+
+        const file = findWorkspaceFileByPath(lastPath);
+
+        if (!file || !file.handle) {
+          globalThis.MME_APP?.log?.(`Workspace: last active file not found: ${lastPath}`);
+          return false;
+        }
+
+        try {
+          const blob = await file.handle.getFile();
+          const text = await blob.text();
+
+          WORKSPACE_STATE.activeFile = {
+            kind: file.kind,
+            name: file.name,
+            path: file.path,
+            handle: file.handle,
+          };
+
+          globalThis.MME_APP.openTextDocument({
+            text,
+            fileName: file.name,
+            fileHandle: file.handle,
+            reason: `workspace reopen last active file: ${file.path}`,
+          });
+
+          window.updateWorkspaceActiveFileHighlight?.();
+
+          globalThis.MME_APP?.showToast?.(`Reopened ${file.name}`, 'ok', 1600);
+          globalThis.MME_APP?.log?.(`Workspace: reopened last active file ${file.path}`);
+
+          return true;
+        } catch (e) {
+          globalThis.MME_APP?.log?.(
+            `Workspace: failed to reopen last active file: ${e?.message || e}`
+          );
+          return false;
+        }
+      }
+
       async function openWorkspace() {
         const root = await openWorkspaceDirectory();
 
         WORKSPACE_STATE.rootHandle = root;
         WORKSPACE_STATE.rootName = root.name || 'Workspace';
-
 
         WORKSPACE_STATE.folders.journals = await ensureSubfolder(root, 'journals');
         WORKSPACE_STATE.folders.concepts = await ensureSubfolder(root, 'concepts');
@@ -1454,9 +1610,85 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         updateWorkspaceUiState();
         await refreshWorkspaceSidebar();
 
+        await reopenLastActiveWorkspaceFileIfPossible();
 
         globalThis.MME_APP?.showToast?.(`Workspace opened ✓ ${WORKSPACE_STATE.rootName}`, 'ok');
         globalThis.MME_APP?.log?.(`Workspace opened: ${WORKSPACE_STATE.rootName}`);
+      }
+
+      function persistActiveWorkspaceFile() {
+        const active = WORKSPACE_STATE.activeFile;
+
+        if (!active || !active.path) {
+          removeLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath);
+          return;
+        }
+
+        setLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath, active.path);
+
+        globalThis.MME_APP?.log?.(`Workspace: persisted active file ${active.path}`);
+      }
+
+      globalThis.persistActiveWorkspaceFile = persistActiveWorkspaceFile;
+      globalThis.refreshWorkspaceSidebar = refreshWorkspaceSidebar;
+
+      function buildArchiveFileName(activeFile) {
+        const name = String(activeFile?.name || 'archived.md').trim();
+        const kind = String(activeFile?.kind || 'workspace').trim();
+        const stamp = new Date().toISOString().slice(0, 10);
+
+        return `${stamp}-${kind}-${name}`;
+      }
+
+      async function readActiveWorkspaceFileText() {
+        const active = WORKSPACE_STATE.activeFile;
+
+        if (!active || !active.handle) {
+          throw new Error('No active workspace file');
+        }
+
+        const file = await active.handle.getFile();
+        return await file.text();
+      }
+
+      async function removeArchivedOriginalFile(activeFile) {
+        if (!activeFile || !activeFile.kind || !activeFile.name) {
+          return false;
+        }
+
+        const folder = WORKSPACE_STATE.folders?.[activeFile.kind];
+
+        if (!folder || typeof folder.removeEntry !== 'function') {
+          globalThis.MME_APP?.log?.(
+            'Workspace: removeEntry unavailable; archive copy created but original not removed'
+          );
+          return false;
+        }
+
+        await folder.removeEntry(activeFile.name);
+
+        return true;
+      }
+
+      function clearActiveWorkspaceFileAfterArchive() {
+        WORKSPACE_STATE.activeFile = null;
+
+        if (typeof globalThis.MME_APP?.setWritableHandleForCurrentFile === 'function') {
+          globalThis.MME_APP.setWritableHandleForCurrentFile(null);
+        }
+
+        if (typeof currentSaveHandle !== 'undefined') {
+          currentSaveHandle = null;
+        }
+
+        if (
+          typeof removeLocalStorageValue === 'function' &&
+          typeof WORKSPACE_UI_STORAGE_KEYS !== 'undefined'
+        ) {
+          removeLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath);
+        }
+
+        window.updateWorkspaceActiveFileHighlight?.();
       }
 
       async function openToday() {
@@ -1518,14 +1750,15 @@ Tags:
         });
 
         WORKSPACE_STATE.activeFile = {
-          kind: 'journal',
+          kind: 'journals',
           name: fileName,
           path: `journals/${fileName}`,
           handle: fileHandle,
         };
 
+        persistActiveWorkspaceFile();
         await refreshWorkspaceSidebar();
-        updateWorkspaceActiveFileHighlight();
+        window.updateWorkspaceActiveFileHighlight?.();
         globalThis.MME_APP?.showToast?.(`Today opened ✓ ${fileName}`, 'ok');
         globalThis.MME_APP?.log?.(`Today opened: ${fileName}`);
       }
@@ -1545,8 +1778,15 @@ Tags:
           reason: 'workspace open file',
         });
 
-        WORKSPACE_STATE.activeFile = fileRecord;
-        updateWorkspaceActiveFileHighlight();
+        WORKSPACE_STATE.activeFile = {
+          kind: fileRecord.kind || 'journals',
+          name: fileRecord.name,
+          path: fileRecord.path,
+          handle: fileRecord.handle,
+        };
+
+        persistActiveWorkspaceFile();
+        window.updateWorkspaceActiveFileHighlight?.();
         globalThis.MME_APP?.showToast?.(`Opened ✓ ${file.name}`, 'ok');
       }
 
@@ -1555,10 +1795,7 @@ Tags:
         if (!item) return;
 
         const path = item.dataset.path || '';
-        const allFiles = [
-          ...WORKSPACE_STATE.files.journals,
-          ...WORKSPACE_STATE.files.concepts,
-        ];
+        const allFiles = [...WORKSPACE_STATE.files.journals, ...WORKSPACE_STATE.files.concepts];
 
         const fileRecord = allFiles.find((file) => file.path === path);
         if (!fileRecord) {
@@ -1572,7 +1809,36 @@ Tags:
         });
       }
 
+      const WORKSPACE_UI_STORAGE_KEYS = {
+        lastActivePath: 'markmap:workspace:lastActivePath',
+        sidebarCollapsed: 'markmap:workspace:sidebarCollapsed',
+      };
+
       const JOURNAL_SIDEBAR_COLLAPSED_KEY = 'markmap:journalSidebarCollapsed';
+
+      function getLocalStorageValue(key, fallback = '') {
+        try {
+          return localStorage.getItem(key) ?? fallback;
+        } catch {
+          return fallback;
+        }
+      }
+
+      function setLocalStorageValue(key, value) {
+        try {
+          localStorage.setItem(key, String(value ?? ''));
+        } catch {
+          // Ignore storage errors.
+        }
+      }
+
+      function removeLocalStorageValue(key) {
+        try {
+          localStorage.removeItem(key);
+        } catch {
+          // Ignore storage errors.
+        }
+      }
 
       function applyJournalSidebarCollapsed(collapsed) {
         document.documentElement.classList.toggle('journal-sidebar-collapsed', !!collapsed);
@@ -1584,12 +1850,7 @@ Tags:
           btn.setAttribute('aria-label', btn.title);
         }
 
-        try {
-          localStorage.setItem(
-            JOURNAL_SIDEBAR_COLLAPSED_KEY,
-            collapsed ? '1' : '0'
-          );
-        } catch {}
+        setLocalStorageValue(JOURNAL_SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
       }
 
       function initJournalSidebarCollapse() {
@@ -1614,6 +1875,85 @@ Tags:
         btn.__bound = true;
       }
 
+      async function archiveActiveWorkspaceFile() {
+        globalThis.MME_APP?.log?.('Workspace: archiveActiveWorkspaceFile() begin');
+
+        if (!WORKSPACE_STATE.rootHandle || !WORKSPACE_STATE.folders?.archive) {
+          globalThis.MME_APP?.showToast?.('Open a workspace first', 'error', 2600);
+          globalThis.MME_APP?.log?.('Workspace: Archive blocked because workspace is not ready');
+          return;
+        }
+
+        const active = WORKSPACE_STATE.activeFile;
+
+        if (!active || !active.handle || !active.kind || !active.name) {
+          globalThis.MME_APP?.showToast?.('No active workspace file to archive', 'error', 2600);
+          globalThis.MME_APP?.log?.(
+            'Workspace: Archive blocked because no active workspace file exists'
+          );
+          return;
+        }
+
+        const activePath = active.path || `${active.kind}/${active.name}`;
+
+        const ok = confirm(`Archive ${activePath}?`);
+
+        if (!ok) {
+          globalThis.MME_APP?.log?.(`Workspace: archive cancelled for ${activePath}`);
+          return;
+        }
+
+        const text = await readActiveWorkspaceFileText();
+
+        const archiveFileName = buildArchiveFileName(active);
+
+        const archiveHandle = await WORKSPACE_STATE.folders.archive.getFileHandle(archiveFileName, {
+          create: true,
+        });
+
+        const writable = await archiveHandle.createWritable();
+        await writable.write(text);
+        await writable.close();
+
+        let removedOriginal = false;
+
+        try {
+          removedOriginal = await removeArchivedOriginalFile(active);
+        } catch (e) {
+          globalThis.MME_APP?.log?.(
+            `Workspace: original remove failed after archive copy: ${e?.message || e}`
+          );
+          removedOriginal = false;
+        }
+
+        clearActiveWorkspaceFileAfterArchive();
+
+        if (typeof refreshWorkspaceSidebar === 'function') {
+          await refreshWorkspaceSidebar();
+        }
+
+        const archivedMessage = removedOriginal
+          ? `Archived ${active.name}`
+          : `Archive copy created: ${archiveFileName}`;
+
+        globalThis.MME_APP?.showToast?.(archivedMessage, removedOriginal ? 'ok' : 'download', 2600);
+
+        globalThis.MME_APP?.log?.(
+          removedOriginal
+            ? `Workspace: archived and removed original ${activePath} -> archive/${archiveFileName}`
+            : `Workspace: archive copy created but original kept ${activePath} -> archive/${archiveFileName}`
+        );
+
+        globalThis.MME_APP.openTextDocument({
+          text: `# Archived\n\nArchived: ${activePath}\n\nArchive copy: archive/${archiveFileName}\n`,
+          fileName: 'archived.md',
+          fileHandle: null,
+          reason: 'workspace archive active file',
+        });
+
+        globalThis.MME_APP?.log?.('Workspace: archiveActiveWorkspaceFile() end');
+      }
+
       function initWorkspace() {
         if (initWorkspace.__done) return;
         initWorkspace.__done = true;
@@ -1621,11 +1961,11 @@ Tags:
         updateWorkspaceUiState();
         initJournalSidebarCollapse();
 
-
-
         createWorkspaceActions({
           onOpenWorkspace: openWorkspace,
           onToday: openToday,
+          onNewConcept: createNewConcept,
+          onArchiveActive: archiveActiveWorkspaceFile,
         });
 
         clearSidebar();
@@ -1654,6 +1994,10 @@ Tags:
         openToday,
         initWorkspace,
       };
+
+      globalThis.MME_APP?.log?.(
+        `Workspace: stored last active file = ${getLastActiveWorkspacePath() || '(none)'}`
+      );
 
       if (globalThis.MME_APP) {
         initWorkspace();

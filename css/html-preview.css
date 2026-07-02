@@ -102,7 +102,12 @@
   background: var(--toolbar-bg);
   color: var(--text);
 
-  font-size: 13px;
+  /*
+    Hide direct text so CSS ::before is the visual source.
+    The real text still exists in the DOM for fallback/accessibility.
+  */
+  font-size: 0;
+
   font-weight: 700;
   line-height: 1;
 
@@ -110,6 +115,21 @@
   user-select: none;
 
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+#btnHtmlEdgeOpen::before {
+  content: "\003C/\003E";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  color: var(--text);
+
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 #btnHtmlEdgeOpen:hover {
@@ -121,12 +141,12 @@
 }
 
 #btnHtmlClose {
-  position: sticky;
+  position: absolute;
 
-  top: 0;
-  float: right;
+  top: 14px;
+  right: 10px;
 
-  z-index: 30;
+  z-index: 45;
 
   width: 32px;
   height: 30px;
@@ -135,11 +155,7 @@
   align-items: center;
   justify-content: center;
 
-  margin-left: 8px;
-  margin-bottom: 8px;
-
   border-radius: 8px;
-
   border: 1px solid var(--toolbar-border);
 
   background: var(--toolbar-bg);
@@ -151,13 +167,10 @@
 
   cursor: pointer;
   user-select: none;
-}
 
-#btnHtmlClose:hover {
-  background: var(--menu-hover);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
 }
 
 #btnHtmlClose:active {
   transform: translateY(1px);
 }
-
