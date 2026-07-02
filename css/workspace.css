@@ -2,12 +2,63 @@
 /* Workspace / Journal Sidebar */
 /* =========================== */
 
-#workspaceSidebar {
+#workspaceSidebarResizeHandle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+
+  width: 6px;
+
+  cursor: col-resize;
+  z-index: 20;
+
+  background: transparent;
+}
+
+#workspaceSidebarResizeHandle::before {
+  content: "⋮";
+
+  position: absolute;
+  top: 50%;
+  left: 50%;
+
+  transform: translate(-50%, -50%);
+
+  color: var(--text);
+  opacity: 0.32;
+
+  font-size: 18px;
+  line-height: 1;
+
+  pointer-events: none;
+  user-select: none;
+}
+
+#workspaceSidebarResizeHandle:hover::before {
+  opacity: 0.65;
+}
+
+html.dark #workspaceSidebarResizeHandle::before {
+  opacity: 0.45;
+}
+
+html.dark #workspaceSidebarResizeHandle:hover::before {
+  opacity: 0.75;
+}
+
+html.journal-sidebar-collapsed #workspaceSidebarResizeHandle {
   display: none;
-  flex: 0 0 280px;
-  width: 280px;
-  min-width: 240px;
-  max-width: 360px;
+}
+
+#workspaceSidebar {
+
+
+  display: none;
+  flex: 0 0 var(--workspace-sidebar-width, 280px);
+  width: var(--workspace-sidebar-width, 280px);
+  min-width: 220px;
+  max-width: 420px;
 
   flex-direction: column;
   background: var(--menu-bg);
@@ -19,6 +70,7 @@
   z-index: 1;
   pointer-events: auto;
 }
+
 
 html[data-app-context='journal'] #workspaceSidebar {
   display: flex;
@@ -119,6 +171,12 @@ html.workspace-ready #btnJournalToday {
   border-color: rgba(245, 158, 11, 0.45);
 }
 
+#btnArchiveActive.__disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+
 html.workspace-empty #btnArchiveActive {
   opacity: 0.45;
   cursor: not-allowed;
@@ -128,6 +186,12 @@ html.workspace-ready #btnArchiveActive {
   opacity: 1;
   cursor: pointer;
 }
+
+#btnArchiveActive.__disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 
 #btnArchiveActive:hover {
   background: rgba(245, 158, 11, 0.12);
@@ -257,11 +321,12 @@ html.dark .workspaceFileItem[data-active='1']:hover {
 }
 
 html.journal-sidebar-collapsed #workspaceSidebar {
-  flex-basis: 52px;
-  width: 52px;
-  min-width: 52px;
-  max-width: 52px;
+  flex-basis: 52px !important;
+  width: 52px !important;
+  min-width: 52px !important;
+  max-width: 52px !important;
 }
+
 
 html.journal-sidebar-collapsed #workspaceTitle,
 html.journal-sidebar-collapsed .workspaceLabel,

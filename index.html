@@ -163,7 +163,10 @@
           <div class="workspaceSectionTitle">Concepts</div>
           <div id="workspaceConceptsList"></div>
         </div>
+
+        <div id="workspaceSidebarResizeHandle" aria-hidden="true"></div>
       </aside>
+
 
       <div id="editor">
         <div id="editorOverlayControls" aria-label="Editor controls">
@@ -1764,22 +1767,22 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
         if (!text.trim()) {
           text = `---
-type: journal
-date: ${yyyy}-${mm}-${dd}
-tags: []
----
+      type: journal
+      date: ${yyyy}-${mm}-${dd}
+      tags: []
+      ---
 
-# Today
-Tags:
+      # Today
+      Tags:
 
-## Capture
--
+      ## Capture
+      -
 
-## Tasks
-- [ ]
+      ## Tasks
+      - [ ]
 
-## Notes
-`;
+      ## Notes
+      `;
 
           const writable = await fileHandle.createWritable();
           await writable.write(text);
@@ -2063,48 +2066,61 @@ Tags:
           return;
         }
 
-        btn.addEventListener(
-          'click',
-          async (event) => {
-            event.preventDefault();
-            event.stopPropagation();
+        let __archiveActiveLastEvent = 0;
+        const archiveActiveHandler = async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
 
+          const now = performance.now();
+          if (now - __archiveActiveLastEvent < 120) {
             globalThis.MME_APP?.log?.(
-              `Workspace: Archive Active direct clicked disabled=${Boolean(
-                btn.disabled
-              )} active=${WORKSPACE_STATE.activeFile?.path || '(none)'}`
+              `Workspace: Archive Active direct duplicate event ignored (${event.type})`
             );
+            return;
+          }
+          __archiveActiveLastEvent = now;
 
-            if (__archiveActiveInProgress) {
-              globalThis.MME_APP?.log?.(
-                'Workspace: Archive Active ignored because archive is already in progress'
-              );
-              return;
+          globalThis.MME_APP?.log?.(
+            `Workspace: Archive Active direct ${event.type} clicked disabled=${Boolean(
+              btn.disabled
+            )} active=${WORKSPACE_STATE.activeFile?.path || '(none)'}`
+          );
+
+          if (__archiveActiveInProgress) {
+            globalThis.MME_APP?.log?.(
+              'Workspace: Archive Active ignored because archive is already in progress'
+            );
+            return;
+          }
+
+          try {
+            __archiveActiveInProgress = true;
+
+            if (btn.disabled) {
+              globalThis.MME_APP?.log?.('Workspace: Archive Active direct forced disabled=false');
+              btn.disabled = false;
             }
 
-            try {
-              __archiveActiveInProgress = true;
-
-              if (btn.disabled) {
-                globalThis.MME_APP?.log?.('Workspace: Archive Active direct forced disabled=false');
-                btn.disabled = false;
-              }
-
-              if (typeof archiveActiveWorkspaceFile !== 'function') {
-                throw new Error('archiveActiveWorkspaceFile missing');
-              }
-
-              await archiveActiveWorkspaceFile();
-            } catch (e) {
-              const msg = e?.message || String(e);
-              globalThis.MME_APP?.log?.(`Workspace: Archive Active direct failed: ${msg}`);
-              globalThis.MME_APP?.showToast?.(`Archive failed: ${msg}`, 'error', 3500);
-            } finally {
-              __archiveActiveInProgress = false;
+            if (typeof archiveActiveWorkspaceFile !== 'function') {
+              throw new Error('archiveActiveWorkspaceFile missing');
             }
-          },
-          true
-        );
+
+            await archiveActiveWorkspaceFile();
+          } catch (e) {
+            const msg = e?.message || String(e);
+            globalThis.MME_APP?.log?.(`Workspace: Archive Active direct failed: ${msg}`);
+            globalThis.MME_APP?.showToast?.(`Archive failed: ${msg}`, 'error', 3500);
+          } finally {
+            __archiveActiveInProgress = false;
+          }
+        };
+
+        ['click', 'pointerup'].forEach((evt) => {
+          btn.addEventListener(evt, archiveActiveHandler, {
+            capture: true,
+            passive: false,
+          });
+        });
 
         btn.__archiveDirectBound = true;
         globalThis.MME_APP?.log?.('Workspace: Archive Active direct bound');

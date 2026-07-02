@@ -181,6 +181,7 @@
   bottom: 14px;
   z-index: 44;
 
+
   display: flex;
   align-items: center;
   gap: 6px;
@@ -198,6 +199,11 @@
 #htmlOverlayControls[hidden] {
   display: none !important;
 }
+
+html.html-preview-open #htmlOverlayControls {
+  display: flex;
+}
+
 
 #htmlOverlayControls button {
   height: 28px;

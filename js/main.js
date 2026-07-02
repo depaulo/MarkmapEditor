@@ -3435,13 +3435,16 @@ async function toggleHtml() {
     buildHtmlHeadingIndex();
     log('HTML pane refreshed');
     syncHtmlScrollToEditor('toggleHtml show');
+    updateHtmlPreviewButtons();
   } else {
     mapPane.style.width = '';
     mapPane.style.flex = '1 1 auto';
+    updateHtmlPreviewButtons();
   }
   setShowHideLabel('btnHtml', willShow, 'HTML');
   syncToolbarHeight();
 }
+
 
 // ================================
 // Scroll sync (Editor → HTML) – FIXED (single version)
@@ -5190,6 +5193,8 @@ function updateHtmlPreviewButtons() {
 
   const isOpen = pane && pane.style.display === 'block';
 
+  setHtmlPreviewOpenClass(isOpen);
+
   if (edge) {
     edge.setAttribute('aria-label', 'Open HTML Preview');
     edge.setAttribute('title', 'Open HTML Preview');
@@ -5221,6 +5226,97 @@ function updateHtmlPreviewButtons() {
   if (overlay) {
     overlay.hidden = !isOpen;
   }
+}
+
+function ensureHtmlOverlayControls() {
+  let overlay = document.getElementById('htmlOverlayControls');
+
+  const viewer = document.getElementById('viewer');
+
+  if (overlay) {
+    if (viewer && overlay.parentElement?.id === 'htmlPane') {
+      viewer.appendChild(overlay);
+      log?.('HTML Preview overlay moved out of htmlPane into viewer');
+    }
+
+    return overlay;
+  }
+
+  if (!viewer) {
+    log?.('HTML Preview overlay ensure failed: #viewer missing');
+    return null;
+  }
+
+  overlay = document.createElement('div');
+  overlay.id = 'htmlOverlayControls';
+  overlay.hidden = true;
+
+  overlay.innerHTML = `
+    <button
+      id="htmlBtnCopyText"
+      type="button"
+      title="Copy rendered text"
+      aria-label="Copy rendered text"
+    >
+      Text
+    </button>
+
+    <button
+      id="htmlBtnCopyHtml"
+      type="button"
+      title="Copy HTML"
+      aria-label="Copy HTML"
+    >
+      HTML
+    </button>
+
+    <button
+      id="htmlBtnExport"
+      type="button"
+      title="Export HTML"
+      aria-label="Export HTML"
+    >
+      Export
+    </button>
+
+    <button
+      id="htmlBtnTop"
+      type="button"
+      title="Scroll HTML preview to top"
+      aria-label="Scroll HTML preview to top"
+    >
+      ↑
+    </button>
+  `;
+
+  viewer.appendChild(overlay);
+  log?.('HTML Preview overlay recreated inside viewer');
+
+  // Re-wire newly created buttons
+  if (typeof wireHtmlOverlayControls === 'function') {
+    wireHtmlOverlayControls();
+  }
+
+  return overlay;
+}
+
+function setHtmlPreviewOpenClass(isOpen) {
+  document.documentElement.classList.toggle('html-preview-open', Boolean(isOpen));
+
+  const overlay = ensureHtmlOverlayControls();
+
+  if (overlay) {
+    overlay.hidden = !isOpen;
+    overlay.style.display = isOpen ? 'flex' : 'none';
+  }
+
+  log?.(
+    `HTML Preview open class set open=${Boolean(isOpen)} overlay=${Boolean(
+      overlay
+    )} hidden=${overlay ? overlay.hidden : '(missing)'} display=${
+      overlay ? overlay.style.display || '(css)' : '(missing)'
+    }`
+  );
 }
 
 updateHtmlPreviewButtons();
