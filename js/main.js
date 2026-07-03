@@ -702,6 +702,7 @@ async function buildWorkspaceIndex() {
 
   renderWorkspaceIndexSummary();
   renderWorkspaceTasksPanel();
+  renderWorkspaceTagsPanel?.();
 
   const openTasks = tasks.filter((task) => !task.done).length;
   const doneTasks = tasks.filter((task) => task.done).length;
@@ -727,6 +728,7 @@ function scheduleWorkspaceIndexRebuild(reason = 'scheduled') {
       await buildWorkspaceIndex();
       renderWorkspaceTasksPanel?.();
       renderWorkspaceRelatedPanel?.();
+      renderWorkspaceTagsPanel?.();
       log?.(`Workspace Index: rebuild complete (${reason})`);
     } catch (e) {
       log?.(`Workspace Index: rebuild failed (${reason}): ${e?.message || e}`);
@@ -919,6 +921,7 @@ const WORKSPACE_PANEL_DEFAULT_COLLAPSED = {
   index: true,
   related: false,
   tasks: true,
+  tags: true,
 };
 
 function getWorkspacePanelCollapsedState() {
@@ -1066,15 +1069,18 @@ function ensureWorkspaceIndexPanel() {
         title="Refresh workspace index"
         aria-label="Refresh workspace index"
       >
-        Refresh
+        ↻
       </button>
     </div>
 
     <div class="workspacePanelBody">
       <div id="workspaceIndexUpdated" class="workspaceIndexUpdated"></div>
+
       <div id="workspaceIndexSummary" class="workspaceIndexSummary">
         Index not ready
       </div>
+
+      <div id="workspaceIndexMetrics" class="workspaceIndexMetrics"></div>
     </div>
   `;
 
@@ -1113,7 +1119,9 @@ function toggleWorkspacePanel(panelId) {
         ? document.getElementById('workspaceRelatedPanel')
         : panelId === 'tasks'
           ? document.getElementById('workspaceTasksPanel')
-          : null;
+          : panelId === 'tags'
+            ? document.getElementById('workspaceTagsPanel')
+            : null;
 
   if (!panelEl) return;
 
@@ -1606,20 +1614,440 @@ function forceUpgradeWorkspacePanelMarkup(panelId) {
   }
 }
 
+function wireWorkspaceIndexRefreshButton() {
+  const btn = document.getElementById('btnRefreshWorkspaceIndex');
+
+  if (!btn) {
+    log?.('Workspace Index: refresh button missing');
+    return;
+  }
+
+  if (btn.__workspaceIndexRefreshBound) {
+    return;
+  }
+
+  btn.addEventListener('click', async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    try {
+      log?.('Workspace Index: manual refresh clicked');
+
+      if (typeof buildWorkspaceIndex === 'function') {
+        await buildWorkspaceIndex();
+
+        renderWorkspaceIndexSummary?.();
+        renderWorkspaceRelatedPanel?.();
+        renderWorkspaceTasksPanel?.();
+        renderWorkspaceTagsPanel?.();
+
+        showToast?.('Workspace index refreshed', 'ok', 1400);
+        log?.('Workspace Index: manual refresh complete');
+      } else {
+        showToast?.('Workspace index builder missing', 'error', 2200);
+        log?.('Workspace Index: buildWorkspaceIndex missing');
+      }
+    } catch (e) {
+      const msg = e?.message || String(e);
+      showToast?.(`Index refresh failed: ${msg}`, 'error', 3000);
+      log?.(`Workspace Index: manual refresh failed: ${msg}`);
+    }
+  });
+
+  btn.__workspaceIndexRefreshBound = true;
+  log?.('Workspace Index: refresh button wired');
+}
+
+function ensureWorkspaceTagsPanel() {
+  const sidebar = document.getElementById('workspaceSidebar');
+
+  if (!sidebar) {
+    log?.('Workspace Tags: ensure failed; sidebar missing');
+    return null;
+  }
+
+  let panel = document.getElementById('workspaceTagsPanel');
+
+  if (panel) {
+    return panel;
+  }
+
+  panel = document.createElement('div');
+  panel.id = 'workspaceTagsPanel';
+  panel.hidden = true;
+
+  panel.innerHTML = `
+    <div class="workspaceTagsHeader">
+      <button
+        type="button"
+        class="workspacePanelHeaderButton"
+        data-workspace-panel-toggle="tags"
+        aria-expanded="false"
+      >
+        <span class="workspacePanelHeaderLeft">
+          <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+          <span class="workspaceTagsTitle">Tags</span>
+        </span>
+
+        <span id="workspaceTagsBadge" class="workspacePanelBadge">
+          0 tags
+        </span>
+      </button>
+    </div>
+
+    <div class="workspacePanelBody">
+      <div id="workspaceTagsSummary" class="workspaceTagsSummary">
+        No tags
+      </div>
+
+      <div id="workspaceTagsList" class="workspaceTagsList"></div>
+
+      <div id="workspaceTagResults" class="workspaceTagResults" hidden></div>
+    </div>
+  `;
+
+  const tasksPanel = document.getElementById('workspaceTasksPanel');
+  const filesSection = sidebar.querySelector('.workspaceFilesSection');
+
+  if (tasksPanel && tasksPanel.nextSibling) {
+    sidebar.insertBefore(panel, tasksPanel.nextSibling);
+  } else if (filesSection) {
+    sidebar.insertBefore(panel, filesSection);
+  } else {
+    sidebar.appendChild(panel);
+  }
+
+  log?.('Workspace Tags: panel created');
+
+  return panel;
+}
+
+function getWorkspaceTagsSummary() {
+  if (!WORKSPACE_INDEX_STATE?.ready || !WORKSPACE_INDEX_STATE.tags) {
+    return [];
+  }
+
+  const rows = [];
+
+  for (const [tag, paths] of WORKSPACE_INDEX_STATE.tags.entries()) {
+    const uniquePaths = Array.from(new Set(paths || []));
+
+    rows.push({
+      tag,
+      count: uniquePaths.length,
+      paths: uniquePaths,
+    });
+  }
+
+  rows.sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    return String(a.tag || '').localeCompare(String(b.tag || ''));
+  });
+
+  return rows;
+}
+
+function getWorkspaceTagFiles(tag) {
+  if (!WORKSPACE_INDEX_STATE?.ready) {
+    return [];
+  }
+
+  const tagKey = String(tag || '').trim();
+
+  if (!tagKey) return [];
+
+  const paths = Array.from(
+    new Set(WORKSPACE_INDEX_STATE.tags?.get(tagKey) || [])
+  );
+
+  return paths
+    .map((path) => WORKSPACE_INDEX_STATE.byPath?.get(path))
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (a.kind !== b.kind) {
+        if (a.kind === 'journals') return -1;
+        if (b.kind === 'journals') return 1;
+      }
+
+      const dateA = String(a.date || '');
+      const dateB = String(b.date || '');
+
+      if (dateA !== dateB) {
+        return dateB.localeCompare(dateA);
+      }
+
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+}
+
+let __workspaceActiveTag = '';
+
+function renderWorkspaceTagsPanel() {
+  const panel = ensureWorkspaceTagsPanel();
+  const badge = document.getElementById('workspaceTagsBadge');
+  const summary = document.getElementById('workspaceTagsSummary');
+  const list = document.getElementById('workspaceTagsList');
+  const results = document.getElementById('workspaceTagResults');
+
+  if (!panel || !badge || !summary || !list || !results) {
+    log?.(
+      `Workspace Tags: render skipped panel=${Boolean(panel)} badge=${Boolean(
+        badge
+      )} summary=${Boolean(summary)} list=${Boolean(list)} results=${Boolean(
+        results
+      )}`
+    );
+    return;
+  }
+
+  if (!WORKSPACE_STATE?.rootHandle) {
+    panel.hidden = true;
+    badge.textContent = '0 tags';
+    summary.textContent = 'Open a workspace first';
+    list.innerHTML = '';
+    results.hidden = true;
+    results.innerHTML = '';
+    return;
+  }
+
+  panel.hidden = false;
+
+  if (!WORKSPACE_INDEX_STATE?.ready) {
+    badge.textContent = '0 tags';
+    summary.textContent = 'Index not ready';
+    list.innerHTML = '<div class="workspaceTagsEmpty">Index not ready</div>';
+    results.hidden = true;
+    results.innerHTML = '';
+
+    applyWorkspacePanelCollapsed(
+      panel,
+      'tags',
+      isWorkspacePanelCollapsed('tags')
+    );
+
+    return;
+  }
+
+  const tags = getWorkspaceTagsSummary();
+
+  badge.textContent = `${tags.length} tags`;
+
+  const totalTaggedFiles = new Set(
+    tags.flatMap((row) => row.paths || [])
+  ).size;
+
+  summary.textContent = tags.length
+    ? `${tags.length} tags across ${totalTaggedFiles} files`
+    : 'No tags';
+
+  if (!tags.length) {
+    list.innerHTML = '<div class="workspaceTagsEmpty">No tags found</div>';
+    results.hidden = true;
+    results.innerHTML = '';
+
+    applyWorkspacePanelCollapsed(
+      panel,
+      'tags',
+      isWorkspacePanelCollapsed('tags')
+    );
+
+    return;
+  }
+
+  list.innerHTML = tags
+    .map((row) => {
+      const tag = escapeHtml(row.tag || '');
+      const activeClass =
+        String(row.tag || '') === __workspaceActiveTag ? ' __active' : '';
+
+      return `
+        <button
+          type="button"
+          class="workspaceTagItem${activeClass}"
+          data-workspace-tag-item="1"
+          data-tag="${tag}"
+          title="#${tag}"
+        >
+          <span class="workspaceTagName">#${tag}</span>
+          <span class="workspaceTagCount">${row.count}</span>
+        </button>
+      `;
+    })
+    .join('');
+
+  renderWorkspaceTagResults(__workspaceActiveTag);
+
+  applyWorkspacePanelCollapsed(
+    panel,
+    'tags',
+    isWorkspacePanelCollapsed('tags')
+  );
+}
+
+function renderWorkspaceTagResults(tag) {
+  const results = document.getElementById('workspaceTagResults');
+
+  if (!results) return;
+
+  const tagKey = String(tag || '').trim();
+
+  if (!tagKey || !WORKSPACE_INDEX_STATE?.ready) {
+    results.hidden = true;
+    results.innerHTML = '';
+    return;
+  }
+
+  const files = getWorkspaceTagFiles(tagKey);
+
+  results.hidden = false;
+
+  if (!files.length) {
+    results.innerHTML = `
+      <div class="workspaceTagResultHeader">#${escapeHtml(tagKey)}</div>
+      <div class="workspaceTagsEmpty">No files for this tag</div>
+    `;
+    return;
+  }
+
+  results.innerHTML = `
+    <div class="workspaceTagResultHeader">
+      #${escapeHtml(tagKey)} · ${files.length} file${files.length !== 1 ? 's' : ''}
+    </div>
+
+    ${files
+      .map((file) => {
+        const kind = String(file.kind || '');
+        const icon =
+          kind === 'journals' ? '📝' : kind === 'concepts' ? '🧠' : '📄';
+
+        const name = escapeHtml(file.name || file.title || file.path || '');
+        const path = escapeHtml(file.path || '');
+        const meta = escapeHtml(
+          [
+            kind === 'journals'
+              ? 'Journal'
+              : kind === 'concepts'
+                ? 'Concept'
+                : 'File',
+            file.date || '',
+            file.title || '',
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        );
+
+        return `
+          <button
+            type="button"
+            class="workspaceTagResultItem"
+            data-workspace-tag-result="1"
+            data-path="${path}"
+            data-kind="${escapeHtml(kind)}"
+            title="${path}"
+          >
+            <span class="workspaceTagResultIcon" aria-hidden="true">${icon}</span>
+            <span class="workspaceTagResultBody">
+              <span class="workspaceTagResultName">${name}</span>
+              <span class="workspaceTagResultMeta">${meta}</span>
+            </span>
+          </button>
+        `;
+      })
+      .join('')}
+  `;
+}
+
+function wireWorkspaceTagsPanel() {
+  ensureWorkspaceTagsPanel();
+
+  const panel = document.getElementById('workspaceTagsPanel');
+
+  if (!panel) {
+    log?.('Workspace Tags: panel missing');
+    return;
+  }
+
+  if (panel.__workspaceTagsBound) {
+    return;
+  }
+
+  panel.addEventListener('click', async (event) => {
+    const tagBtn = event.target?.closest?.('[data-workspace-tag-item="1"]');
+
+    if (tagBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const tag = tagBtn.dataset.tag || '';
+
+      __workspaceActiveTag =
+        __workspaceActiveTag === tag ? '' : tag;
+
+      renderWorkspaceTagsPanel();
+
+      log?.(
+        __workspaceActiveTag
+          ? `Workspace Tags: selected #${__workspaceActiveTag}`
+          : 'Workspace Tags: cleared selected tag'
+      );
+
+      return;
+    }
+
+    const fileBtn = event.target?.closest?.('[data-workspace-tag-result="1"]');
+
+    if (!fileBtn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const path = fileBtn.dataset.path || '';
+    const kind = fileBtn.dataset.kind || '';
+
+    const file =
+      typeof findWorkspaceFileByPath === 'function'
+        ? findWorkspaceFileByPath(path, kind)
+        : null;
+
+    if (!file) {
+      showToast?.('Tagged file not found', 'error', 2200);
+      log?.(`Workspace Tags: file not found path=${path} kind=${kind}`);
+      return;
+    }
+
+    log?.(`Workspace Tags: opening ${path}`);
+
+    if (typeof openWorkspaceFile === 'function') {
+      await openWorkspaceFile(file, kind || file.kind, 'workspace tag open');
+    } else {
+      showToast?.('Workspace open helper missing', 'error', 2200);
+      log?.('Workspace Tags: openWorkspaceFile missing');
+    }
+  });
+
+  panel.__workspaceTagsBound = true;
+
+  log?.('Workspace Tags: panel wired');
+}
+
 function setupWorkspacePanels() {
   try {
     forceUpgradeWorkspacePanelMarkup('index');
     forceUpgradeWorkspacePanelMarkup('related');
     forceUpgradeWorkspacePanelMarkup('tasks');
     ensureWorkspaceIndexPanel();
+    wireWorkspaceIndexRefreshButton?.();
     ensureWorkspaceRelatedPanel();
     ensureWorkspaceTasksPanel();
+    ensureWorkspaceTagsPanel?.();
     wireWorkspaceRelatedPanel();
     wireWorkspaceTasksPanel();
+    wireWorkspaceTagsPanel?.();
     wireWorkspacePanelCollapses();
     renderWorkspaceIndexSummary();
     renderWorkspaceTasksPanel();
     renderWorkspaceRelatedPanel();
+    renderWorkspaceTagsPanel?.();
     log?.('Workspace: panels setup complete');
   } catch (e) {
     log?.(`Workspace: panels setup failed: ${e?.message || e}`);
@@ -1968,16 +2396,6 @@ function wireWorkspaceSearch() {
   });
 
   input.__workspaceSearchBound = true;
-
-  const refreshBtn = document.getElementById('btnRefreshWorkspaceIndex');
-  if (refreshBtn && !refreshBtn.__bound) {
-    refreshBtn.addEventListener('click', async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      await scheduleWorkspaceIndexRebuild('manual refresh');
-    });
-    refreshBtn.__bound = true;
-  }
 
   setupWorkspacePanels();
 
@@ -2601,6 +3019,16 @@ function positionRecentMenu() {
     recentMenu.style.left = left + 'px';
   } catch {}
 }
+
+try {
+  window.renderWorkspaceTagsPanel = renderWorkspaceTagsPanel;
+  window.wireWorkspaceTagsPanel = wireWorkspaceTagsPanel;
+  window.ensureWorkspaceTagsPanel = ensureWorkspaceTagsPanel;
+
+  globalThis.renderWorkspaceTagsPanel = renderWorkspaceTagsPanel;
+  globalThis.wireWorkspaceTagsPanel = wireWorkspaceTagsPanel;
+  globalThis.ensureWorkspaceTagsPanel = ensureWorkspaceTagsPanel;
+} catch {}
 
 async function openFromRecent(item) {
   if (!item?.handle) throw new Error('Recent item has no handle');

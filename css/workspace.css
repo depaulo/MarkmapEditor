@@ -773,3 +773,229 @@ html.journal-sidebar-collapsed .workspaceHeader button {
 html.journal-sidebar-collapsed .workspaceIcon {
   margin-right: 0;
 }
+
+#btnRefreshWorkspaceIndex {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 6px;
+  border: 1px solid var(--toolbar-border);
+
+  background: var(--toolbar-bg);
+  color: var(--text);
+
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#btnRefreshWorkspaceIndex:hover {
+  background: var(--menu-hover);
+}
+
+#workspaceIndexPanel.workspacePanelCollapsed #btnRefreshWorkspaceIndex {
+  display: none;
+}
+
+/* =========================== */
+/* Workspace Tags Panel        */
+/* =========================== */
+
+#workspaceTagsPanel {
+  padding: 10px;
+  border-bottom: 1px solid var(--menu-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#workspaceTagsPanel[hidden] {
+  display: none !important;
+}
+
+.workspaceTagsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workspaceTagsTitle {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.72;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.workspaceTagsSummary {
+  font-size: 12px;
+  opacity: 0.75;
+  line-height: 1.35;
+}
+
+.workspaceTagsList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  max-height: 220px;
+  overflow: auto;
+}
+
+.workspaceTagItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  width: 100%;
+  text-align: left;
+
+  padding: 6px 8px;
+
+  border-radius: 6px;
+  border: 1px solid transparent;
+
+  background: transparent;
+  color: var(--text);
+
+  cursor: pointer;
+  font-size: 13px;
+
+  overflow: hidden;
+}
+
+.workspaceTagItem:hover {
+  background: var(--menu-hover);
+  border-color: var(--menu-border);
+}
+
+.workspaceTagItem.__active {
+  background: rgba(34, 197, 94, 0.11);
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
+.workspaceTagName {
+  flex: 1 1 auto;
+  min-width: 0;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  font-weight: 650;
+}
+
+.workspaceTagCount {
+  flex: 0 0 auto;
+
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 999px;
+  border: 1px solid var(--menu-border);
+
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.workspaceTagResults {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  padding-top: 8px;
+  border-top: 1px solid var(--menu-border);
+}
+
+.workspaceTagResults[hidden] {
+  display: none !important;
+}
+
+.workspaceTagResultHeader {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.75;
+  padding: 2px 0 4px;
+}
+
+.workspaceTagResultItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  width: 100%;
+  text-align: left;
+
+  padding: 6px 8px;
+
+  border-radius: 6px;
+  border: 1px solid transparent;
+
+  background: transparent;
+  color: var(--text);
+
+  cursor: pointer;
+  font-size: 13px;
+
+  overflow: hidden;
+}
+
+.workspaceTagResultItem:hover {
+  background: var(--menu-hover);
+  border-color: var(--menu-border);
+}
+
+.workspaceTagResultIcon {
+  flex: 0 0 auto;
+  width: 18px;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.workspaceTagResultBody {
+  flex: 1 1 auto;
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.workspaceTagResultName {
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceTagResultMeta {
+  font-size: 11px;
+  opacity: 0.65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceTagsEmpty {
+  font-size: 12px;
+  opacity: 0.6;
+  padding: 4px 2px;
+}
+
+html.journal-sidebar-collapsed #workspaceTagsPanel {
+  display: none !important;
+}
