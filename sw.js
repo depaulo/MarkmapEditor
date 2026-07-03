@@ -9,8 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-
-const APP_VERSION = 'markmap-journal-pwa-v10-sidebar-menu-layering';
+const APP_VERSION = 'markmap-journal-pwa-v11-sidebar-menu-layering';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -97,6 +96,70 @@ async function putInCache(cacheName, request, response) {
     await cache.put(request, responseCopy);
   } catch (err) {
     console.debug('Cache put skipped:', request.url, err);
+  }
+}
+
+function isExternalRequest(request) {
+  try {
+    const url = new URL(request.url);
+    return url.origin !== self.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+function isLikelyEssentialExternalModule(request) {
+  try {
+    const url = new URL(request.url);
+    const href = url.href;
+
+    return (
+      href.includes('codemirror') ||
+      href.includes('@codemirror') ||
+      href.includes('markmap') ||
+      href.includes('d3') ||
+      href.includes('shiki') ||
+      href.includes('esm.sh') ||
+      href.includes('cdn.jsdelivr.net') ||
+      href.includes('unpkg.com') ||
+      href.includes('deno.land')
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function handleExternalRequest(request) {
+  const cache = await caches.open(RUNTIME_CACHE);
+
+  try {
+    const response = await fetch(request);
+
+    if (response && response.ok) {
+      try {
+        await cache.put(request, response.clone());
+      } catch (err) {
+        console.debug('External cache put skipped:', request.url, err);
+      }
+    }
+
+    return response;
+  } catch (error) {
+    const cached = await cache.match(request);
+
+    if (cached) {
+      return cached;
+    }
+
+    console.warn('External resource unavailable and not cached:', request.url, error);
+
+    return new Response(`Offline external resource unavailable: ${request.url}`, {
+      status: 504,
+      statusText: 'Offline external resource unavailable',
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+    });
   }
 }
 
@@ -234,23 +297,26 @@ sw.addEventListener('fetch', (event) => {
     return;
   }
 
-  // External/CDN files: cache first, then network.
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
+  if (isExternalRequest(request)) {
+    event.respondWith(handleExternalRequest(request));
+    return;
+  }
 
-      return fetch(request)
-        .then((response) => {
-          putInCache(RUNTIME_CACHE, request, response);
-          return response;
-        })
-        .catch(() => {
-          // Avoid uncaught promise rejection.
-          return new Response('', {
-            status: 504,
-            statusText: 'Offline external resource unavailable',
-          });
-        });
-    })
+  // Fallback for other requests.
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        putInCache(RUNTIME_CACHE, request, response);
+        return response;
+      })
+      .catch(async () => {
+        return (
+          (await caches.match(request)) ||
+          new Response('Resource unavailable offline.', {
+            status: 503,
+            headers: { 'Content-Type': 'text/plain' },
+          })
+        );
+      })
   );
 });

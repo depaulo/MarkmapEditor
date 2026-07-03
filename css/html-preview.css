@@ -146,10 +146,10 @@
   top: 14px;
   right: 10px;
 
-  z-index: 45;
+  z-index: 120;
 
-  width: 32px;
-  height: 30px;
+  width: 34px;
+  height: 32px;
 
   display: none;
   align-items: center;
@@ -161,15 +161,35 @@
   background: var(--toolbar-bg);
   color: var(--text);
 
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1;
 
   cursor: pointer;
   user-select: none;
+  pointer-events: auto;
 
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
 }
+
+#btnHtmlClose:hover {
+  background: var(--menu-hover);
+}
+
+#btnHtmlClose:active {
+  transform: translateY(1px);
+}
+
+html.dark #btnHtmlClose {
+  background: var(--btn-bg);
+  border-color: var(--btn-border);
+  color: var(--text);
+}
+
+html.dark #btnHtmlClose:hover {
+  background: var(--btn-hover);
+}
+
 
 #btnHtmlClose:active {
   transform: translateY(1px);

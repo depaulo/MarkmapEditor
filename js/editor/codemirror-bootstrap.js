@@ -44,8 +44,17 @@ const host = document.getElementById('cmHost');
 function fallbackToTextarea(err) {
   console.error('CodeMirror init failed:', err);
   document.body.classList.add('cmFailed');
+
   try {
     window.log?.(`❌ CodeMirror init failed: ${err?.message || err}`);
+  } catch {}
+
+  try {
+    const md = document.getElementById('md');
+    const host = document.getElementById('cmHost');
+
+    if (md) md.style.display = 'block';
+    if (host) host.style.display = 'none';
   } catch {}
 }
 

@@ -5,19 +5,21 @@
 #workspaceSidebarResizeHandle {
   position: absolute;
   top: 0;
-  right: -3px;
+  right: -5px;
   bottom: 0;
 
-  width: 6px;
+  width: 10px;
 
   cursor: col-resize;
-  z-index: 20;
+  z-index: 80;
 
   background: transparent;
+  pointer-events: auto;
+  touch-action: none;
 }
 
 #workspaceSidebarResizeHandle::before {
-  content: "⋮";
+  content: '⋮';
 
   position: absolute;
   top: 50%;
@@ -26,7 +28,7 @@
   transform: translate(-50%, -50%);
 
   color: var(--text);
-  opacity: 0.32;
+  opacity: 0.35;
 
   font-size: 18px;
   line-height: 1;
@@ -36,7 +38,7 @@
 }
 
 #workspaceSidebarResizeHandle:hover::before {
-  opacity: 0.65;
+  opacity: 0.7;
 }
 
 html.dark #workspaceSidebarResizeHandle::before {
@@ -44,7 +46,7 @@ html.dark #workspaceSidebarResizeHandle::before {
 }
 
 html.dark #workspaceSidebarResizeHandle:hover::before {
-  opacity: 0.75;
+  opacity: 0.8;
 }
 
 html.journal-sidebar-collapsed #workspaceSidebarResizeHandle {
@@ -52,8 +54,6 @@ html.journal-sidebar-collapsed #workspaceSidebarResizeHandle {
 }
 
 #workspaceSidebar {
-
-
   display: none;
   flex: 0 0 var(--workspace-sidebar-width, 280px);
   width: var(--workspace-sidebar-width, 280px);
@@ -71,9 +71,431 @@ html.journal-sidebar-collapsed #workspaceSidebarResizeHandle {
   pointer-events: auto;
 }
 
+html.journal-sidebar-collapsed #workspaceSidebar {
+  flex-basis: 52px !important;
+  width: 52px !important;
+  min-width: 52px !important;
+  max-width: 52px !important;
+}
+
+body.workspace-sidebar-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.workspace-sidebar-resizing * {
+  cursor: col-resize !important;
+}
 
 html[data-app-context='journal'] #workspaceSidebar {
   display: flex;
+}
+
+#workspaceSearchPanel {
+  padding: 10px;
+  border-bottom: 1px solid var(--menu-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#workspaceSearchLabel {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.72;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+#workspaceSearchInput {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+
+  border-radius: 6px;
+  border: 1px solid var(--toolbar-border);
+
+  background: var(--toolbar-bg);
+  color: var(--text);
+
+  font-size: 13px;
+}
+
+#workspaceSearchInput:focus {
+  outline: 2px solid rgba(34, 197, 94, 0.45);
+  outline-offset: 1px;
+}
+
+#workspaceSearchResults {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow: auto;
+  padding-top: 4px;
+}
+
+#workspaceSearchResults[hidden] {
+  display: none !important;
+}
+
+#workspaceIndexPanel {
+  padding: 10px;
+  border-bottom: 1px solid var(--menu-border);
+}
+
+#workspaceRelatedPanel {
+  padding: 10px;
+  border-bottom: 1px solid var(--menu-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#workspaceRelatedPanel[hidden] {
+  display: none !important;
+}
+
+.workspaceRelatedHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workspaceRelatedTitle {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.72;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.workspaceRelatedSummary {
+  font-size: 12px;
+  opacity: 0.75;
+  line-height: 1.35;
+}
+
+.workspaceRelatedList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workspaceRelatedItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  width: 100%;
+  text-align: left;
+
+  padding: 6px 8px;
+
+  border-radius: 6px;
+  border: 1px solid transparent;
+
+  background: transparent;
+  color: var(--text);
+
+  cursor: pointer;
+  font-size: 13px;
+
+  overflow: hidden;
+}
+
+.workspaceRelatedItem:hover {
+  background: var(--menu-hover);
+  border-color: var(--menu-border);
+}
+
+.workspaceRelatedIcon {
+  flex: 0 0 auto;
+  width: 18px;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.workspaceRelatedBody {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.workspaceRelatedName {
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceRelatedMeta {
+  font-size: 11px;
+  opacity: 0.65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceRelatedEmpty {
+  font-size: 12px;
+  opacity: 0.6;
+  padding: 4px 2px;
+}
+
+.workspacePanelHeaderButton {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+
+  cursor: pointer;
+  text-align: left;
+}
+
+.workspacePanelHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.workspacePanelChevron {
+  width: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 11px;
+  opacity: 0.65;
+  transform: rotate(90deg);
+  transition: transform 0.12s ease;
+}
+
+.workspacePanelCollapsed .workspacePanelChevron {
+  transform: rotate(0deg);
+}
+
+.workspacePanelBadge {
+  flex: 0 0 auto;
+
+  max-width: 145px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.72;
+
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--menu-border);
+  background: rgba(127, 127, 127, 0.06);
+}
+
+.workspacePanelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workspacePanelCollapsed .workspacePanelBody {
+  display: none !important;
+}
+
+.workspaceIndexHeader,
+.workspaceRelatedHeader,
+.workspaceTasksHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workspaceTasksPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#workspaceTasksPanel[hidden] {
+  display: none !important;
+}
+
+.workspaceTasksSummary {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.workspaceTasksList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workspaceTasksItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--toolbar-bg);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspaceTasksItem:hover {
+  background: var(--menu-hover);
+  border-color: var(--menu-border);
+}
+
+.workspaceTasksIcon {
+  flex: 0 0 auto;
+  width: 20px;
+  display: inline-flex;
+  justify-content: center;
+  line-height: 1;
+}
+
+.workspaceTasksBody {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.workspaceTasksText {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceTasksMeta {
+  font-size: 11px;
+  opacity: 0.65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceTasksEmpty {
+  font-size: 12px;
+  opacity: 0.6;
+  padding: 4px 2px;
+}
+
+html.journal-sidebar-collapsed #workspaceRelatedPanel,
+html.journal-sidebar-collapsed #workspaceTasksPanel {
+  display: none !important;
+}
+
+.workspaceIndexSummary {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-bottom: 10px;
+}
+
+.workspaceIndexMetrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workspaceIndexMetricItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--menu-border);
+  background: var(--toolbar-bg);
+}
+
+.workspaceIndexMetricValue {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.workspaceIndexMetricLabel {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+html.journal-sidebar-collapsed #workspaceIndexPanel {
+  display: none;
+}
+
+.workspaceSearchResultItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--toolbar-bg);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspaceSearchResultItem:hover {
+  background: var(--menu-hover);
+  border-color: var(--menu-border);
+}
+
+.workspaceSearchResultIcon {
+  flex: 0 0 auto;
+}
+
+.workspaceSearchResultMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.workspaceSearchResultName {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspaceSearchResultKind {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.workspaceSearchResultPath {
+  font-size: 11px;
+  opacity: 0.65;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html.journal-sidebar-collapsed #workspaceSearchPanel {
+  display: none;
 }
 
 .workspaceHeader {
@@ -176,7 +598,6 @@ html.workspace-ready #btnJournalToday {
   cursor: not-allowed;
 }
 
-
 html.workspace-empty #btnArchiveActive {
   opacity: 0.45;
   cursor: not-allowed;
@@ -191,7 +612,6 @@ html.workspace-ready #btnArchiveActive {
   opacity: 0.45;
   cursor: not-allowed;
 }
-
 
 #btnArchiveActive:hover {
   background: rgba(245, 158, 11, 0.12);
@@ -326,7 +746,6 @@ html.journal-sidebar-collapsed #workspaceSidebar {
   min-width: 52px !important;
   max-width: 52px !important;
 }
-
 
 html.journal-sidebar-collapsed #workspaceTitle,
 html.journal-sidebar-collapsed .workspaceLabel,

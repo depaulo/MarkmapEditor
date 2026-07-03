@@ -283,6 +283,1738 @@ function pwaDebugLog(msg, data = null) {
   }
 }
 
+const WORKSPACE_SIDEBAR_WIDTH_STORAGE_KEY = 'markmap:workspace:sidebarWidth';
+const WORKSPACE_SIDEBAR_WIDTH_DEFAULT = 280;
+const WORKSPACE_SIDEBAR_WIDTH_MIN = 220;
+const WORKSPACE_SIDEBAR_WIDTH_MAX = 420;
+const DEBUG_WORKSPACE_RESIZE = false;
+
+function clampWorkspaceSidebarWidth(value) {
+  const n = Number(value);
+
+  if (!Number.isFinite(n)) {
+    return WORKSPACE_SIDEBAR_WIDTH_DEFAULT;
+  }
+
+  return Math.max(
+    WORKSPACE_SIDEBAR_WIDTH_MIN,
+    Math.min(WORKSPACE_SIDEBAR_WIDTH_MAX, Math.round(n))
+  );
+}
+
+function getStoredWorkspaceSidebarWidth() {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_SIDEBAR_WIDTH_STORAGE_KEY);
+    return clampWorkspaceSidebarWidth(raw || WORKSPACE_SIDEBAR_WIDTH_DEFAULT);
+  } catch {
+    return WORKSPACE_SIDEBAR_WIDTH_DEFAULT;
+  }
+}
+
+function storeWorkspaceSidebarWidth(width) {
+  try {
+    localStorage.setItem(
+      WORKSPACE_SIDEBAR_WIDTH_STORAGE_KEY,
+      String(clampWorkspaceSidebarWidth(width))
+    );
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+function applyWorkspaceSidebarWidth(width, options = {}) {
+  const sidebar = document.getElementById('workspaceSidebar');
+
+  if (!sidebar) {
+    log?.('Workspace: sidebar width apply failed; sidebar missing');
+    return;
+  }
+
+  const safeWidth = clampWorkspaceSidebarWidth(width);
+
+  document.documentElement.style.setProperty('--workspace-sidebar-width', `${safeWidth}px`);
+
+  sidebar.style.flexBasis = `${safeWidth}px`;
+  sidebar.style.width = `${safeWidth}px`;
+
+  /*
+    Important:
+    Do not set minWidth/maxWidth inline to the same value.
+    Let CSS min/max remain 220/420.
+    Collapsed CSS uses !important overrides.
+  */
+
+  if (options.log) {
+    log?.(`Workspace: sidebar width applied ${safeWidth}px`);
+  }
+}
+
+const WORKSPACE_INDEX_STATE = {
+  ready: false,
+  lastBuiltAt: 0,
+  files: [],
+  byPath: new Map(),
+  byKind: {
+    journals: [],
+    concepts: [],
+  },
+  tags: new Map(),
+  tasks: [],
+  links: new Map(),
+};
+
+try {
+  window.WORKSPACE_INDEX_STATE = WORKSPACE_INDEX_STATE;
+  globalThis.WORKSPACE_INDEX_STATE = WORKSPACE_INDEX_STATE;
+} catch {}
+
+function restoreWorkspaceSidebarWidth() {
+  const width = getStoredWorkspaceSidebarWidth();
+  applyWorkspaceSidebarWidth(width);
+  log?.(`Workspace: sidebar width restored ${width}px`);
+}
+
+function normalizeParserText(value) {
+  return String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
+}
+
+function stripMarkdownHeadingPrefix(line) {
+  return String(line || '')
+    .replace(/^#{1,6}\s+/, '')
+    .trim();
+}
+
+function countWords(text) {
+  const words = String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return words.length;
+}
+
+function inferDateFromWorkspacePath(path, text = '') {
+  const p = String(path || '');
+
+  const pathDate = p.match(/(\d{4}-\d{2}-\d{2})/);
+  if (pathDate) return pathDate[1];
+
+  const textDate = String(text || '').match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (textDate) return textDate[1];
+
+  return '';
+}
+
+function normalizeTagValue(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^#/, '')
+    .replace(/[\,\.;:]+$/, '')
+    .toLowerCase();
+}
+
+function parseMarkdownHeadings(text) {
+  const lines = normalizeParserText(text).split('\n');
+  const headings = [];
+
+  lines.forEach((line, index) => {
+    const match = line.match(/^(#{1,6})\s+(.+?)\s*$/);
+
+    if (!match) return;
+
+    headings.push({
+      level: match[1].length,
+      text: stripMarkdownHeadingPrefix(line),
+      line: index + 1,
+    });
+  });
+
+  return headings;
+}
+
+function getMarkdownTitle(text, fallback = '') {
+  const headings = parseMarkdownHeadings(text);
+  const h1 = headings.find((h) => h.level === 1);
+
+  if (h1?.text) return h1.text;
+
+  return fallback;
+}
+
+function parseMarkdownTags(text) {
+  const source = normalizeParserText(text);
+  const tags = new Set();
+
+  const lines = source.split('\n');
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] || '';
+    const trimmed = line.trim();
+
+    if (/^tags\s*:/i.test(trimmed)) {
+      const after = trimmed.replace(/^tags\s*:/i, '').trim();
+
+      if (after) {
+        after
+          .split(/[\s,]+/)
+          .map(normalizeTagValue)
+          .filter(Boolean)
+          .forEach((tag) => tags.add(tag));
+      }
+
+      const next = lines[i + 1]?.trim() || '';
+
+      if (next && !next.startsWith('#') && !/^#{1,6}\s/.test(next)) {
+        next
+          .split(/[\s,]+/)
+          .map(normalizeTagValue)
+          .filter(Boolean)
+          .forEach((tag) => tags.add(tag));
+      }
+    }
+
+    if (/^#{1,6}\s/.test(trimmed)) {
+      continue;
+    }
+
+    const inlineMatches = trimmed.match(/(^|\s)#([a-zA-Z0-9_-]{2,})\b/g);
+
+    if (inlineMatches) {
+      inlineMatches
+        .map((m) => m.replace(/^\s*#/, ''))
+        .map(normalizeTagValue)
+        .filter(Boolean)
+        .filter((tag) => !/^[0-9a-fA-F]{3,6}$/.test(tag))
+        .forEach((tag) => tags.add(tag));
+    }
+  }
+
+  return Array.from(tags).sort();
+}
+
+function parseMarkdownTasks(text) {
+  const lines = normalizeParserText(text).split('\n');
+  const tasks = [];
+
+  lines.forEach((line, index) => {
+    const match = line.match(/^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/);
+
+    if (!match) return;
+
+    tasks.push({
+      line: index + 1,
+      done: String(match[2] || '').toLowerCase() === 'x',
+      text: String(match[3] || '').trim(),
+      raw: line,
+    });
+  });
+
+  return tasks;
+}
+
+function normalizeConceptName(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^\.?\//, '')
+    .replace(/^concepts\//i, '')
+    .replace(/\.md$/i, '')
+    .replace(/\|.*$/, '')
+    .trim();
+}
+
+function parseConceptLinks(text) {
+  const source = normalizeParserText(text);
+  const links = new Set();
+
+  const wikiRe = /\[\[([^\]]+)\]\]/g;
+  let match;
+
+  while ((match = wikiRe.exec(source))) {
+    const name = normalizeConceptName(match[1]);
+
+    if (name) links.add(name);
+  }
+
+  const pathRe = /(?:^|\s)(?:\.\/)?concepts\/([^\s)\]]+?\.md)\b/g;
+
+  while ((match = pathRe.exec(source))) {
+    const name = normalizeConceptName(match[1]);
+
+    if (name) links.add(name);
+  }
+
+  return Array.from(links).sort();
+}
+
+function parseVisibleHeaderFields(text) {
+  const fields = {};
+  const lines = normalizeParserText(text).split('\n').slice(0, 30);
+
+  for (const line of lines) {
+    const match = line.match(/^([A-Za-z][A-Za-z0-9 _-]{1,30})\s*:\s*(.*)$/);
+
+    if (!match) continue;
+
+    const key = String(match[1] || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_');
+
+    const value = String(match[2] || '').trim();
+
+    fields[key] = value;
+  }
+
+  return fields;
+}
+
+function parseWorkspaceDocument({ kind, name, path, text }) {
+  const normalizedText = normalizeParserText(text);
+  const headings = parseMarkdownHeadings(normalizedText);
+  const tasks = parseMarkdownTasks(normalizedText);
+  const tags = parseMarkdownTags(normalizedText);
+  const conceptLinks = parseConceptLinks(normalizedText);
+  const header = parseVisibleHeaderFields(normalizedText);
+
+  const title = getMarkdownTitle(normalizedText, String(name || '').replace(/\.md$/i, ''));
+
+  const date = header.date || header.created || inferDateFromWorkspacePath(path, normalizedText);
+
+  return {
+    kind,
+    name,
+    path,
+    title,
+    date,
+    tags,
+    headings,
+    tasks,
+    conceptLinks,
+    header,
+    wordCount: countWords(normalizedText),
+    textLength: normalizedText.length,
+  };
+}
+
+async function readWorkspaceFileText(file) {
+  if (!file?.handle) return '';
+
+  const blob = await file.handle.getFile();
+  return await blob.text();
+}
+
+async function buildWorkspaceIndex() {
+  if (!WORKSPACE_STATE?.rootHandle) {
+    WORKSPACE_INDEX_STATE.ready = false;
+    WORKSPACE_INDEX_STATE.files = [];
+    WORKSPACE_INDEX_STATE.byPath = new Map();
+    WORKSPACE_INDEX_STATE.byKind = {
+      journals: [],
+      concepts: [],
+    };
+    WORKSPACE_INDEX_STATE.tags = new Map();
+    WORKSPACE_INDEX_STATE.tasks = [];
+    WORKSPACE_INDEX_STATE.links = new Map();
+
+    log?.('Workspace Index: skipped; workspace not open');
+    return WORKSPACE_INDEX_STATE;
+  }
+
+  const allFiles = [
+    ...(WORKSPACE_STATE.files?.journals || []),
+    ...(WORKSPACE_STATE.files?.concepts || []),
+  ];
+
+  const parsedFiles = [];
+
+  for (const file of allFiles) {
+    try {
+      const kind =
+        typeof normalizeWorkspaceKindForCompare === 'function'
+          ? normalizeWorkspaceKindForCompare(file.kind || '')
+          : String(file.kind || '').trim();
+
+      const name = file.name || '';
+      const path = file.path || `${kind}/${name}`;
+      const text = await readWorkspaceFileText(file);
+
+      const parsed = parseWorkspaceDocument({
+        kind,
+        name,
+        path,
+        text,
+      });
+
+      parsedFiles.push(parsed);
+    } catch (e) {
+      log?.(`Workspace Index: failed parsing ${file.path || file.name}: ${e?.message || e}`);
+    }
+  }
+
+  const byPath = new Map();
+  const byKind = {
+    journals: [],
+    concepts: [],
+  };
+  const tags = new Map();
+  const tasks = [];
+  const links = new Map();
+
+  for (const parsed of parsedFiles) {
+    byPath.set(parsed.path, parsed);
+
+    if (!byKind[parsed.kind]) {
+      byKind[parsed.kind] = [];
+    }
+
+    byKind[parsed.kind].push(parsed);
+
+    for (const tag of parsed.tags) {
+      if (!tags.has(tag)) tags.set(tag, []);
+      tags.get(tag).push(parsed.path);
+    }
+
+    for (const task of parsed.tasks) {
+      tasks.push({
+        ...task,
+        filePath: parsed.path,
+        fileName: parsed.name,
+        fileKind: parsed.kind,
+      });
+    }
+
+    for (const concept of parsed.conceptLinks) {
+      if (!links.has(concept)) links.set(concept, []);
+      links.get(concept).push(parsed.path);
+    }
+  }
+
+  WORKSPACE_INDEX_STATE.ready = true;
+  WORKSPACE_INDEX_STATE.lastBuiltAt = Date.now();
+  WORKSPACE_INDEX_STATE.files = parsedFiles;
+  WORKSPACE_INDEX_STATE.byPath = byPath;
+  WORKSPACE_INDEX_STATE.byKind = byKind;
+  WORKSPACE_INDEX_STATE.tags = tags;
+  WORKSPACE_INDEX_STATE.tasks = tasks;
+  WORKSPACE_INDEX_STATE.links = links;
+
+  renderWorkspaceIndexSummary();
+  renderWorkspaceTasksPanel();
+
+  const openTasks = tasks.filter((task) => !task.done).length;
+  const doneTasks = tasks.filter((task) => task.done).length;
+
+  log?.(
+    `Workspace Index: built files=${parsedFiles.length} journals=${
+      byKind.journals.length
+    } concepts=${byKind.concepts.length} tags=${tags.size} tasks=${
+      tasks.length
+    } openTasks=${openTasks} doneTasks=${doneTasks} links=${links.size}`
+  );
+
+  return WORKSPACE_INDEX_STATE;
+}
+
+let __workspaceIndexTimer = null;
+
+function scheduleWorkspaceIndexRebuild(reason = 'scheduled') {
+  clearTimeout(__workspaceIndexTimer);
+
+  __workspaceIndexTimer = setTimeout(async () => {
+    try {
+      await buildWorkspaceIndex();
+      renderWorkspaceTasksPanel?.();
+      renderWorkspaceRelatedPanel?.();
+      log?.(`Workspace Index: rebuild complete (${reason})`);
+    } catch (e) {
+      log?.(`Workspace Index: rebuild failed (${reason}): ${e?.message || e}`);
+    }
+  }, 350);
+}
+
+function logWorkspaceIndexSummary() {
+  const index = WORKSPACE_INDEX_STATE;
+
+  if (!index.ready) {
+    log?.('Workspace Index: not ready');
+    return;
+  }
+
+  const openTasks = index.tasks.filter((task) => !task.done).length;
+  const doneTasks = index.tasks.filter((task) => task.done).length;
+
+  log?.(
+    `Workspace Index Summary: files=${index.files.length} journals=${
+      index.byKind.journals.length
+    } concepts=${index.byKind.concepts.length} tags=${index.tags.size} tasks=${
+      index.tasks.length
+    } openTasks=${openTasks} doneTasks=${doneTasks} links=${index.links.size}`
+  );
+}
+
+try {
+  window.buildWorkspaceIndex = buildWorkspaceIndex;
+  window.scheduleWorkspaceIndexRebuild = scheduleWorkspaceIndexRebuild;
+  window.logWorkspaceIndexSummary = logWorkspaceIndexSummary;
+  globalThis.buildWorkspaceIndex = buildWorkspaceIndex;
+  globalThis.scheduleWorkspaceIndexRebuild = scheduleWorkspaceIndexRebuild;
+  globalThis.logWorkspaceIndexSummary = logWorkspaceIndexSummary;
+} catch {}
+
+function ensureWorkspaceSidebarResizeHandle() {
+  const sidebar = document.getElementById('workspaceSidebar');
+
+  if (!sidebar) {
+    log?.('Workspace: sidebar resize handle ensure failed; sidebar missing');
+    return null;
+  }
+
+  let handle = document.getElementById('workspaceSidebarResizeHandle');
+
+  if (!handle) {
+    handle = document.createElement('div');
+    handle.id = 'workspaceSidebarResizeHandle';
+    handle.setAttribute('aria-hidden', 'true');
+    sidebar.appendChild(handle);
+
+    log?.('Workspace: sidebar resize handle recreated');
+  }
+
+  return handle;
+}
+
+function wireWorkspaceSidebarResize() {
+  const sidebar = document.getElementById('workspaceSidebar');
+  const handle = ensureWorkspaceSidebarResizeHandle();
+
+  if (!sidebar || !handle) {
+    log?.(
+      `Workspace: sidebar resize not wired sidebar=${Boolean(sidebar)} handle=${Boolean(handle)}`
+    );
+    return;
+  }
+
+  if (handle.__workspaceSidebarResizeBound) {
+    log?.('Workspace: sidebar resize already wired');
+    return;
+  }
+
+  let startX = 0;
+  let startWidth = 0;
+  let dragging = false;
+
+  function isSidebarCollapsed() {
+    return document.documentElement.classList.contains('journal-sidebar-collapsed');
+  }
+
+  function onPointerMove(event) {
+    if (!dragging) return;
+
+    event.preventDefault();
+
+    const delta = event.clientX - startX;
+    const nextWidth = clampWorkspaceSidebarWidth(startWidth + delta);
+
+    if (DEBUG_WORKSPACE_RESIZE) {
+      log?.(`Workspace: sidebar width live ${nextWidth}px`);
+    }
+
+    applyWorkspaceSidebarWidth(nextWidth);
+  }
+
+  function onPointerUp(event) {
+    if (!dragging) return;
+
+    event.preventDefault();
+
+    dragging = false;
+
+    document.removeEventListener('pointermove', onPointerMove, true);
+    document.removeEventListener('pointerup', onPointerUp, true);
+    document.body.classList.remove('workspace-sidebar-resizing');
+
+    const rect = sidebar.getBoundingClientRect();
+    const finalWidth = clampWorkspaceSidebarWidth(rect.width);
+
+    storeWorkspaceSidebarWidth(finalWidth);
+    applyWorkspaceSidebarWidth(finalWidth);
+
+    log?.(`Workspace: sidebar resize end ${finalWidth}px`);
+  }
+
+  handle.addEventListener(
+    'pointerdown',
+    (event) => {
+      if (isSidebarCollapsed()) {
+        log?.('Workspace: sidebar resize ignored while collapsed');
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const rect = sidebar.getBoundingClientRect();
+
+      startX = event.clientX;
+      startWidth = rect.width;
+      dragging = true;
+
+      document.body.classList.add('workspace-sidebar-resizing');
+
+      document.addEventListener('pointermove', onPointerMove, true);
+      document.addEventListener('pointerup', onPointerUp, true);
+
+      try {
+        handle.setPointerCapture?.(event.pointerId);
+      } catch {}
+
+      log?.(`Workspace: sidebar resize start ${Math.round(startWidth)}px`);
+    },
+    true
+  );
+
+  handle.__workspaceSidebarResizeBound = true;
+  log?.('Workspace: sidebar resize wired');
+}
+
+const WORKSPACE_SEARCH_MIN_CHARS = 2;
+let __workspaceSearchTimer = null;
+let __workspaceSearchLastQuery = '';
+
+function normalizeWorkspaceSearchQuery(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase();
+}
+
+function getWorkspaceSearchIcon(kind) {
+  const normalized =
+    typeof normalizeWorkspaceKindForCompare === 'function'
+      ? normalizeWorkspaceKindForCompare(kind)
+      : String(kind || '').trim();
+
+  if (normalized === 'journals') return '📝';
+  if (normalized === 'concepts') return '🧠';
+
+  return '📄';
+}
+
+function getWorkspaceSearchKindLabel(kind) {
+  const normalized =
+    typeof normalizeWorkspaceKindForCompare === 'function'
+      ? normalizeWorkspaceKindForCompare(kind)
+      : String(kind || '').trim();
+
+  if (normalized === 'journals') return 'Journal';
+  if (normalized === 'concepts') return 'Concept';
+
+  return 'File';
+}
+
+const WORKSPACE_PANEL_COLLAPSE_STORAGE_KEY = 'markmap:workspace:panelCollapsed';
+
+const WORKSPACE_PANEL_DEFAULT_COLLAPSED = {
+  index: true,
+  related: false,
+  tasks: true,
+};
+
+function getWorkspacePanelCollapsedState() {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_PANEL_COLLAPSE_STORAGE_KEY);
+    if (!raw) return { ...WORKSPACE_PANEL_DEFAULT_COLLAPSED };
+
+    return {
+      ...WORKSPACE_PANEL_DEFAULT_COLLAPSED,
+      ...JSON.parse(raw),
+    };
+  } catch {
+    return { ...WORKSPACE_PANEL_DEFAULT_COLLAPSED };
+  }
+}
+
+function setWorkspacePanelCollapsedState(panelId, collapsed) {
+  const state = getWorkspacePanelCollapsedState();
+  state[panelId] = Boolean(collapsed);
+
+  try {
+    localStorage.setItem(WORKSPACE_PANEL_COLLAPSE_STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+
+  return state;
+}
+
+function isWorkspacePanelCollapsed(panelId) {
+  return Boolean(getWorkspacePanelCollapsedState()[panelId]);
+}
+
+function hasWorkspacePanelMarkup(panelId) {
+  if (panelId === 'index') {
+    return !!(
+      document.getElementById('workspaceIndexPanel')?.querySelector?.('#workspaceIndexSummary') &&
+      document.getElementById('workspaceIndexPanel')?.querySelector?.('#workspaceIndexMetrics') &&
+      document.getElementById('workspaceIndexPanel')?.querySelector?.('#workspaceIndexUpdated')
+    );
+  }
+
+  if (panelId === 'related') {
+    return !!(
+      document.getElementById('workspaceRelatedPanel')?.querySelector?.('#workspaceRelatedSummary') &&
+      document.getElementById('workspaceRelatedPanel')?.querySelector?.('#workspaceRelatedList') &&
+      document.getElementById('workspaceRelatedPanel')?.querySelector?.('#workspaceRelatedBadge')
+    );
+  }
+
+  if (panelId === 'tasks') {
+    return !!(
+      document.getElementById('workspaceTasksPanel')?.querySelector?.('#workspaceTasksSummary') &&
+      document.getElementById('workspaceTasksPanel')?.querySelector?.('#workspaceTasksList') &&
+      document.getElementById('workspaceTasksPanel')?.querySelector?.('#workspaceTasksBadge')
+    );
+  }
+
+  return false;
+}
+
+function ensureWorkspaceSearchPanel() {
+  const sidebar = document.getElementById('workspaceSidebar');
+
+  if (!sidebar) {
+    log?.('Workspace Search: ensure failed; sidebar missing');
+    return null;
+  }
+
+  let panel = document.getElementById('workspaceSearchPanel');
+
+  if (panel) {
+    return panel;
+  }
+
+  panel = document.createElement('div');
+  panel.id = 'workspaceSearchPanel';
+
+  panel.innerHTML = `
+    <label id="workspaceSearchLabel" for="workspaceSearchInput">
+      Search
+    </label>
+
+    <input
+      id="workspaceSearchInput"
+      type="search"
+      placeholder="Search journals and concepts..."
+      autocomplete="off"
+      spellcheck="false"
+    />
+
+    <div id="workspaceSearchResults" hidden></div>
+  `;
+
+  const header = sidebar.querySelector('.workspaceHeader');
+  const filesSection = sidebar.querySelector('.workspaceFilesSection');
+
+  if (header && header.nextSibling) {
+    sidebar.insertBefore(panel, header.nextSibling);
+  } else if (filesSection) {
+    sidebar.insertBefore(panel, filesSection);
+  } else {
+    sidebar.appendChild(panel);
+  }
+
+  log?.('Workspace Search: panel created');
+
+  return panel;
+}
+
+function ensureWorkspaceIndexPanel() {
+  const sidebar = document.getElementById('workspaceSidebar');
+
+  if (!sidebar) {
+    log?.('Workspace Index: ensure failed; sidebar missing');
+    return null;
+  }
+
+  let panel = document.getElementById('workspaceIndexPanel');
+  if (panel) return panel;
+
+  panel = document.createElement('div');
+  panel.id = 'workspaceIndexPanel';
+  panel.className = 'workspaceSection workspaceIndexPanel';
+
+  panel.innerHTML = `
+    <div class="workspaceIndexHeader">
+      <button
+        type="button"
+        class="workspacePanelHeaderButton"
+        data-workspace-panel-toggle="index"
+        aria-expanded="false"
+      >
+        <span class="workspacePanelHeaderLeft">
+          <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+          <span class="workspaceIndexTitle">Workspace Index</span>
+        </span>
+
+        <span id="workspaceIndexBadge" class="workspacePanelBadge">
+          Not ready
+        </span>
+      </button>
+
+      <button
+        id="btnRefreshWorkspaceIndex"
+        type="button"
+        title="Refresh workspace index"
+        aria-label="Refresh workspace index"
+      >
+        Refresh
+      </button>
+    </div>
+
+    <div class="workspacePanelBody">
+      <div id="workspaceIndexUpdated" class="workspaceIndexUpdated"></div>
+      <div id="workspaceIndexSummary" class="workspaceIndexSummary">
+        Index not ready
+      </div>
+    </div>
+  `;
+
+  const searchPanel = document.getElementById('workspaceSearchPanel');
+  const filesSection = sidebar.querySelector('.workspaceFilesSection');
+
+  if (searchPanel && searchPanel.nextSibling) {
+    sidebar.insertBefore(panel, searchPanel.nextSibling);
+  } else if (filesSection) {
+    sidebar.insertBefore(panel, filesSection);
+  } else {
+    sidebar.appendChild(panel);
+  }
+
+  log?.('Workspace Index: panel created');
+  return panel;
+}
+
+function applyWorkspacePanelCollapsed(panelEl, panelId, collapsed) {
+  if (!panelEl) return;
+
+  panelEl.classList.toggle('workspacePanelCollapsed', Boolean(collapsed));
+  panelEl.dataset.collapsed = collapsed ? '1' : '0';
+
+  const btn = panelEl.querySelector('[data-workspace-panel-toggle]');
+  if (btn) {
+    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  }
+}
+
+function toggleWorkspacePanel(panelId) {
+  const panelEl =
+    panelId === 'index'
+      ? document.getElementById('workspaceIndexPanel')
+      : panelId === 'related'
+        ? document.getElementById('workspaceRelatedPanel')
+        : panelId === 'tasks'
+          ? document.getElementById('workspaceTasksPanel')
+          : null;
+
+  if (!panelEl) return;
+
+  const nextCollapsed = !panelEl.classList.contains('workspacePanelCollapsed');
+
+  setWorkspacePanelCollapsedState(panelId, nextCollapsed);
+  applyWorkspacePanelCollapsed(panelEl, panelId, nextCollapsed);
+}
+
+function ensureWorkspaceRelatedPanel() {
+  const sidebar = document.getElementById('workspaceSidebar');
+
+  if (!sidebar) {
+    log?.('Workspace Related: ensure failed; sidebar missing');
+    return null;
+  }
+
+  let panel = document.getElementById('workspaceRelatedPanel');
+  if (panel) return panel;
+
+  panel = document.createElement('div');
+  panel.id = 'workspaceRelatedPanel';
+  panel.hidden = true;
+
+  panel.innerHTML = `
+    <div class="workspaceRelatedHeader">
+      <button
+        type="button"
+        class="workspacePanelHeaderButton"
+        data-workspace-panel-toggle="related"
+        aria-expanded="true"
+      >
+        <span class="workspacePanelHeaderLeft">
+          <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+          <span class="workspaceRelatedTitle">Related</span>
+        </span>
+
+        <span id="workspaceRelatedBadge" class="workspacePanelBadge">
+          0 related
+        </span>
+      </button>
+    </div>
+
+    <div class="workspacePanelBody">
+      <div id="workspaceRelatedSummary" class="workspaceRelatedSummary">
+        No active concept
+      </div>
+
+      <div id="workspaceRelatedList" class="workspaceRelatedList"></div>
+    </div>
+  `;
+
+  const indexPanel = document.getElementById('workspaceIndexPanel');
+  const filesSection = sidebar.querySelector('.workspaceFilesSection');
+
+  if (indexPanel && indexPanel.nextSibling) {
+    sidebar.insertBefore(panel, indexPanel.nextSibling);
+  } else if (filesSection) {
+    sidebar.insertBefore(panel, filesSection);
+  } else {
+    sidebar.appendChild(panel);
+  }
+
+  log?.('Workspace Related: panel created');
+  return panel;
+}
+
+function ensureWorkspaceTasksPanel() {
+  const sidebar = document.getElementById('workspaceSidebar');
+
+  if (!sidebar) {
+    log?.('Workspace Tasks: ensure failed; sidebar missing');
+    return null;
+  }
+
+  let panel = document.getElementById('workspaceTasksPanel');
+  if (panel) return panel;
+
+  panel = document.createElement('div');
+  panel.id = 'workspaceTasksPanel';
+  panel.className = 'workspaceSection workspaceTasksPanel';
+  panel.hidden = true;
+
+  panel.innerHTML = `
+    <div class="workspaceTasksHeader">
+      <button
+        type="button"
+        class="workspacePanelHeaderButton"
+        data-workspace-panel-toggle="tasks"
+        aria-expanded="false"
+      >
+        <span class="workspacePanelHeaderLeft">
+          <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+          <span class="workspaceTasksTitle">Open Tasks</span>
+        </span>
+
+        <span id="workspaceTasksBadge" class="workspacePanelBadge">
+          0 open
+        </span>
+      </button>
+    </div>
+
+    <div class="workspacePanelBody">
+      <div id="workspaceTasksSummary" class="workspaceRelatedSummary">
+        No open tasks
+      </div>
+
+      <div id="workspaceTasksList" class="workspaceTasksList">
+        <div class="workspaceTasksEmpty">No open tasks</div>
+      </div>
+    </div>
+  `;
+
+  const relatedPanel = document.getElementById('workspaceRelatedPanel');
+  const filesSection = sidebar.querySelector('.workspaceFilesSection');
+
+  if (relatedPanel && relatedPanel.nextSibling) {
+    sidebar.insertBefore(panel, relatedPanel.nextSibling);
+  } else if (filesSection) {
+    sidebar.insertBefore(panel, filesSection);
+  } else {
+    sidebar.appendChild(panel);
+  }
+
+  log?.('Workspace Tasks: panel created');
+  return panel;
+}
+
+function getOpenWorkspaceTasks() {
+  if (!WORKSPACE_INDEX_STATE?.ready) {
+    return [];
+  }
+
+  return (WORKSPACE_INDEX_STATE.tasks || [])
+    .filter((task) => !task.done)
+    .map((task) => ({
+      ...task,
+      filePath: task.filePath || task.path || '',
+      fileKind: task.fileKind || task.kind || '',
+      fileName: task.fileName || task.name || task.filePath || '',
+    }));
+}
+
+function renderWorkspaceTasksPanel() {
+  const panel = ensureWorkspaceTasksPanel();
+  const badge = document.getElementById('workspaceTasksBadge');
+  const summary = document.getElementById('workspaceTasksSummary');
+  const list = document.getElementById('workspaceTasksList');
+
+  if (!panel || !badge || !summary || !list) {
+    forceUpgradeWorkspacePanelMarkup('tasks');
+    log?.('Workspace Tasks: render skipped; panel elements missing');
+    return;
+  }
+
+  panel.hidden = false;
+
+  if (!WORKSPACE_STATE?.rootHandle) {
+    badge.textContent = '0 open';
+    summary.textContent = 'Open a workspace first';
+    list.innerHTML = '<div class="workspaceTasksEmpty">Open a workspace first</div>';
+    applyWorkspacePanelCollapsed(panel, 'tasks', isWorkspacePanelCollapsed('tasks'));
+    return;
+  }
+
+  if (!WORKSPACE_INDEX_STATE?.ready) {
+    badge.textContent = '0 open';
+    summary.textContent = 'Index not ready';
+    list.innerHTML = '<div class="workspaceTasksEmpty">Index not ready</div>';
+    applyWorkspacePanelCollapsed(panel, 'tasks', isWorkspacePanelCollapsed('tasks'));
+    return;
+  }
+
+  const openTasks = getOpenWorkspaceTasks();
+  const fileCount = new Set(openTasks.map((task) => task.filePath)).size;
+
+  badge.textContent = `${openTasks.length} open`;
+  summary.textContent = openTasks.length
+    ? `${openTasks.length} open tasks across ${fileCount} files`
+    : 'No open tasks';
+
+  if (!openTasks.length) {
+    list.innerHTML = '<div class="workspaceTasksEmpty">No open tasks</div>';
+    applyWorkspacePanelCollapsed(panel, 'tasks', isWorkspacePanelCollapsed('tasks'));
+    return;
+  }
+
+  list.innerHTML = openTasks
+    .slice(0, 50)
+    .map((task) => {
+      const title = escapeHtml(task.text || '');
+      const fileName = escapeHtml(task.fileName || task.filePath || '');
+      const path = escapeHtml(task.filePath || '');
+      const kind = escapeHtml(task.fileKind || '');
+
+      return `
+        <button
+          type="button"
+          class="workspaceTasksItem"
+          data-workspace-task-item="1"
+          data-path="${path}"
+          data-kind="${kind}"
+          title="${fileName}: ${title}"
+        >
+          <span class="workspaceTasksIcon" aria-hidden="true">☐</span>
+          <span class="workspaceTasksBody">
+            <span class="workspaceTasksText">${title}</span>
+            <span class="workspaceTasksMeta">${fileName}</span>
+          </span>
+        </button>
+      `;
+    })
+    .join('');
+}
+
+function wireWorkspaceTasksPanel() {
+  ensureWorkspaceTasksPanel();
+
+  const panel = document.getElementById('workspaceTasksPanel');
+  if (!panel) {
+    log?.('Workspace Tasks: panel missing');
+    return;
+  }
+
+  if (panel.__workspaceTasksBound) {
+    return;
+  }
+
+  panel.addEventListener('click', async (event) => {
+    const btn = event.target?.closest?.('[data-workspace-task-item="1"]');
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const path = btn.dataset.path || '';
+    const kind = btn.dataset.kind || '';
+    const file = findWorkspaceFileByPath(path, kind);
+
+    if (!file) {
+      showToast?.('Task file not found', 'error', 2200);
+      log?.(`Workspace Tasks: file not found path=${path} kind=${kind}`);
+      return;
+    }
+
+    log?.(`Workspace Tasks: opening ${path}`);
+
+    if (typeof openWorkspaceFile === 'function') {
+      await openWorkspaceFile(file);
+      return;
+    }
+
+    const opened = await openWorkspaceSearchResultFile(path, kind);
+    if (!opened) {
+      showToast?.('Workspace open helper missing', 'error', 2200);
+      log?.('Workspace Tasks: open helper missing');
+    }
+  });
+
+  panel.__workspaceTasksBound = true;
+  log?.('Workspace Tasks: panel wired');
+}
+
+function getActiveConceptName() {
+  const active = WORKSPACE_STATE.activeFile;
+
+  if (!active) return '';
+
+  const kind =
+    typeof normalizeWorkspaceKindForCompare === 'function'
+      ? normalizeWorkspaceKindForCompare(active.kind || '')
+      : String(active.kind || '').trim();
+
+  if (kind !== 'concepts') return '';
+
+  return normalizeConceptName
+    ? normalizeConceptName(active.name || active.path || '')
+    : String(active.name || active.path || '')
+        .replace(/^concepts\//i, '')
+        .replace(/\.md$/i, '')
+        .trim();
+}
+
+function normalizeBacklinkConceptKey(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^\.?\//, '')
+    .replace(/^concepts\//i, '')
+    .replace(/\.md$/i, '')
+    .replace(/\|.*$/, '')
+    .trim()
+    .toLowerCase();
+}
+
+function findBacklinksForConcept(conceptName) {
+  if (!WORKSPACE_INDEX_STATE?.ready) {
+    return [];
+  }
+
+  const targetKey = normalizeBacklinkConceptKey(conceptName);
+  if (!targetKey) return [];
+
+  const results = [];
+
+  for (const parsed of WORKSPACE_INDEX_STATE.files || []) {
+    const parsedConceptName = normalizeBacklinkConceptKey(parsed.name || parsed.path || '');
+    const links = parsed.conceptLinks || [];
+
+    const hasLink = links.some((link) => normalizeBacklinkConceptKey(link) === targetKey);
+    if (!hasLink) continue;
+
+    if (parsed.kind === 'concepts' && parsedConceptName === targetKey) {
+      continue;
+    }
+
+    results.push(parsed);
+  }
+
+  results.sort((a, b) => {
+    if (a.kind !== b.kind) {
+      if (a.kind === 'journals') return -1;
+      if (b.kind === 'journals') return 1;
+    }
+
+    const dateA = String(a.date || '');
+    const dateB = String(b.date || '');
+
+    if (dateA !== dateB) {
+      return dateB.localeCompare(dateA);
+    }
+
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+
+  return results;
+}
+
+function renderWorkspaceRelatedPanel() {
+  const panel = ensureWorkspaceRelatedPanel();
+  const badge = document.getElementById('workspaceRelatedBadge');
+  const summary = document.getElementById('workspaceRelatedSummary');
+  const list = document.getElementById('workspaceRelatedList');
+
+  if (!panel || !badge || !summary || !list) {
+    forceUpgradeWorkspacePanelMarkup('related');
+    log?.(
+      `Workspace Related: render skipped panel=${Boolean(panel)} summary=${Boolean(summary)} list=${Boolean(list)} badge=${Boolean(badge)}`
+    );
+    return;
+  }
+
+  const activeConcept = getActiveConceptName();
+
+  if (!activeConcept) {
+    panel.hidden = true;
+    badge.textContent = '0 related';
+    summary.textContent = 'No active concept';
+    list.innerHTML = '';
+    applyWorkspacePanelCollapsed(panel, 'related', isWorkspacePanelCollapsed('related'));
+    return;
+  }
+
+  panel.hidden = false;
+  summary.textContent = `Current concept: ${activeConcept}`;
+
+  if (!WORKSPACE_INDEX_STATE?.ready) {
+    badge.textContent = '0 related';
+    list.innerHTML = '<div class="workspaceRelatedEmpty">Index not ready</div>';
+    applyWorkspacePanelCollapsed(panel, 'related', isWorkspacePanelCollapsed('related'));
+    return;
+  }
+
+  const backlinks = findBacklinksForConcept(activeConcept);
+  badge.textContent = `${backlinks.length} related`;
+
+  if (!backlinks.length) {
+    list.innerHTML = '<div class="workspaceRelatedEmpty">No backlinks yet</div>';
+    applyWorkspacePanelCollapsed(panel, 'related', isWorkspacePanelCollapsed('related'));
+    return;
+  }
+
+  list.innerHTML = backlinks
+    .map((file) => {
+      const kind = String(file.kind || '');
+      const icon = kind === 'journals' ? '📝' : kind === 'concepts' ? '🧠' : '📄';
+      const name = escapeHtml(file.name || file.title || file.path || '');
+      const path = escapeHtml(file.path || '');
+      const meta = escapeHtml(
+        [
+          kind === 'journals' ? 'Journal' : kind === 'concepts' ? 'Concept' : 'File',
+          file.date || '',
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      );
+
+      return `
+        <button
+          type="button"
+          class="workspaceRelatedItem"
+          data-workspace-related-item="1"
+          data-path="${path}"
+          data-kind="${escapeHtml(kind)}"
+          title="${path}"
+        >
+          <span class="workspaceRelatedIcon" aria-hidden="true">${icon}</span>
+          <span class="workspaceRelatedBody">
+            <span class="workspaceRelatedName">${name}</span>
+            <span class="workspaceRelatedMeta">${meta}</span>
+          </span>
+        </button>
+      `;
+    })
+    .join('');
+
+  applyWorkspacePanelCollapsed(panel, 'related', isWorkspacePanelCollapsed('related'));
+}
+
+function wireWorkspaceRelatedPanel() {
+  ensureWorkspaceRelatedPanel();
+
+  const panel = document.getElementById('workspaceRelatedPanel');
+  if (!panel) {
+    log?.('Workspace Related: panel missing');
+    return;
+  }
+
+  if (panel.__workspaceRelatedBound) {
+    return;
+  }
+
+  panel.addEventListener('click', async (event) => {
+    const btn = event.target?.closest?.('[data-workspace-related-item="1"]');
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const path = btn.dataset.path || '';
+    const kind = btn.dataset.kind || '';
+
+    log?.(`Workspace Related: clicked path=${path} kind=${kind}`);
+
+    const file =
+      typeof findWorkspaceFileByPath === 'function' ? findWorkspaceFileByPath(path, kind) : null;
+
+    if (!file) {
+      const known = [
+        ...(WORKSPACE_STATE.files?.journals || []),
+        ...(WORKSPACE_STATE.files?.concepts || []),
+      ]
+        .map((f) => `${f.kind || '?'}:${f.path || f.name || '?'}`)
+        .join(', ');
+
+      showToast?.('Related file not found', 'error', 2200);
+      log?.(`Workspace Related: file not found path=${path} kind=${kind} known=${known}`);
+      return;
+    }
+
+    log?.(`Workspace Related: opening ${path}`);
+
+    if (typeof openWorkspaceFile === 'function') {
+      await openWorkspaceFile(file, kind || file.kind, 'workspace related open');
+      return;
+    }
+
+    showToast?.('Workspace open helper missing', 'error', 2200);
+    log?.('Workspace Related: openWorkspaceFile missing');
+  });
+
+  panel.__workspaceRelatedBound = true;
+  log?.('Workspace Related: panel wired');
+}
+
+function forceUpgradeWorkspacePanelMarkup(panelId) {
+  if (!hasWorkspacePanelMarkup(panelId)) {
+    const panel =
+      panelId === 'index'
+        ? document.getElementById('workspaceIndexPanel')
+        : panelId === 'related'
+          ? document.getElementById('workspaceRelatedPanel')
+          : panelId === 'tasks'
+            ? document.getElementById('workspaceTasksPanel')
+            : null;
+
+    if (panel) {
+      log?.(`Workspace: upgrading ${panelId} panel markup`);
+      panel.outerHTML = '';
+    }
+  }
+}
+
+function setupWorkspacePanels() {
+  try {
+    forceUpgradeWorkspacePanelMarkup('index');
+    forceUpgradeWorkspacePanelMarkup('related');
+    forceUpgradeWorkspacePanelMarkup('tasks');
+    ensureWorkspaceIndexPanel();
+    ensureWorkspaceRelatedPanel();
+    ensureWorkspaceTasksPanel();
+    wireWorkspaceRelatedPanel();
+    wireWorkspaceTasksPanel();
+    wireWorkspacePanelCollapses();
+    renderWorkspaceIndexSummary();
+    renderWorkspaceTasksPanel();
+    renderWorkspaceRelatedPanel();
+    log?.('Workspace: panels setup complete');
+  } catch (e) {
+    log?.(`Workspace: panels setup failed: ${e?.message || e}`);
+  }
+}
+
+function renderWorkspaceIndexSummary() {
+  const panel = ensureWorkspaceIndexPanel();
+  if (!panel) return;
+
+  const summaryEl = panel.querySelector('#workspaceIndexSummary');
+  const metricsEl = panel.querySelector('#workspaceIndexMetrics');
+  const index = WORKSPACE_INDEX_STATE;
+
+  if (!summaryEl || !metricsEl) {
+    forceUpgradeWorkspacePanelMarkup('index');
+    log?.('Workspace Index: render failed; summary elements missing');
+    return;
+  }
+
+  if (!index?.ready) {
+    summaryEl.textContent = WORKSPACE_STATE?.rootHandle ? 'Index building...' : 'No workspace open';
+    metricsEl.innerHTML = '';
+
+    const badge = document.getElementById('workspaceIndexBadge');
+    if (badge) badge.textContent = 'Not ready';
+
+    applyWorkspacePanelCollapsed(panel, 'index', isWorkspacePanelCollapsed('index'));
+    return;
+  }
+
+  const openTasks = index.tasks.filter((task) => !task.done).length;
+  const doneTasks = index.tasks.filter((task) => task.done).length;
+  const updatedAt = index.lastBuiltAt
+    ? new Date(index.lastBuiltAt).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
+
+  if (updatedAt) {
+    summaryEl.innerHTML = `Updated ${escapeHtml(updatedAt)}`;
+  } else {
+    summaryEl.innerHTML = '';
+  }
+
+  const badge = document.getElementById('workspaceIndexBadge');
+  if (badge) {
+    badge.textContent = `${index.files.length} files · ${openTasks} open`;
+  }
+
+  const updated = document.getElementById('workspaceIndexUpdated');
+  if (updated) {
+    updated.textContent = updatedAt ? `Updated ${updatedAt}` : '';
+  }
+
+  const metrics = [
+    { label: 'Files', value: index.files.length },
+    { label: 'Journals', value: (index.byKind.journals || []).length },
+    { label: 'Concepts', value: (index.byKind.concepts || []).length },
+    { label: 'Tags', value: index.tags.size },
+    { label: 'Tasks', value: index.tasks.length },
+    { label: 'Open', value: openTasks },
+    { label: 'Done', value: doneTasks },
+    { label: 'Links', value: index.links.size },
+  ];
+
+  metricsEl.innerHTML = metrics
+    .map(
+      (metric) => `
+        <div class="workspaceIndexMetricItem">
+          <div class="workspaceIndexMetricValue">${escapeHtml(String(metric.value))}</div>
+          <div class="workspaceIndexMetricLabel">${escapeHtml(metric.label)}</div>
+        </div>
+      `
+    )
+    .join('');
+
+  applyWorkspacePanelCollapsed(panel, 'index', isWorkspacePanelCollapsed('index'));
+}
+
+function runWorkspaceSearch(query) {
+  const normalized = normalizeWorkspaceSearchQuery(query);
+  const input = document.getElementById('workspaceSearchInput');
+  const resultsEl = document.getElementById('workspaceSearchResults');
+
+  if (!input || !resultsEl) {
+    log?.(`Workspace Search: run failed input=${Boolean(input)} results=${Boolean(resultsEl)}`);
+    return;
+  }
+
+  if (!normalized || normalized.length < WORKSPACE_SEARCH_MIN_CHARS) {
+    resultsEl.hidden = true;
+    resultsEl.innerHTML = '';
+    __workspaceSearchLastQuery = '';
+    return;
+  }
+
+  if (normalized === __workspaceSearchLastQuery) {
+    return;
+  }
+
+  __workspaceSearchLastQuery = normalized;
+
+  const state = globalThis.WORKSPACE_STATE || {
+    files: {
+      journals: [],
+      concepts: [],
+    },
+  };
+
+  const files = [...(state.files?.journals || []), ...(state.files?.concepts || [])];
+
+  const matches = files.filter((file) => {
+    const name = String(file.name || '').toLowerCase();
+    const path = String(file.path || '').toLowerCase();
+    return name.includes(normalized) || path.includes(normalized);
+  });
+
+  if (!matches.length) {
+    resultsEl.hidden = true;
+    resultsEl.innerHTML = '';
+    return;
+  }
+
+  const rows = matches
+    .slice(0, 20)
+    .map((file) => {
+      const path = String(file.path || '');
+      const kind = String(file.kind || '');
+      const name = String(file.name || '');
+      return `
+        <button
+          type="button"
+          data-workspace-search-result="1"
+          data-path="${escapeHtml(path)}"
+          data-kind="${escapeHtml(kind)}"
+          class="workspaceSearchResultItem"
+        >
+          <span class="workspaceSearchResultIcon">${getWorkspaceSearchIcon(kind)}</span>
+          <span class="workspaceSearchResultMeta">
+            <span class="workspaceSearchResultName">${escapeHtml(name)}</span>
+            <span class="workspaceSearchResultKind">${escapeHtml(getWorkspaceSearchKindLabel(kind))}</span>
+          </span>
+          <span class="workspaceSearchResultPath">${escapeHtml(path)}</span>
+        </button>
+      `;
+    })
+    .join('');
+
+  resultsEl.innerHTML = rows;
+  resultsEl.hidden = false;
+}
+
+function normalizeWorkspaceSearchPath(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\\.?\//, '');
+}
+
+function findWorkspaceFileByPath(path, preferredKind = '') {
+  const target = normalizeWorkspaceSearchPath(path);
+  if (!target) return null;
+
+  const state = globalThis.WORKSPACE_STATE || {};
+  const allFiles = [...(state.files?.journals || []), ...(state.files?.concepts || [])];
+  const kind = normalizeWorkspaceKindForCompare(preferredKind || '');
+
+  if (kind) {
+    const byKind = allFiles.filter(
+      (file) => normalizeWorkspaceKindForCompare(file.kind || '') === kind
+    );
+
+    const exactMatch = byKind.find((file) => normalizeWorkspaceSearchPath(file.path) === target);
+
+    if (exactMatch) return exactMatch;
+  }
+
+  return allFiles.find((file) => normalizeWorkspaceSearchPath(file.path) === target) || null;
+}
+
+async function openWorkspaceSearchResultFile(path, preferredKind = '') {
+  const fileRecord = findWorkspaceFileByPath(path, preferredKind);
+  if (!fileRecord || !fileRecord.handle) {
+    return null;
+  }
+
+  if (!globalThis.MME_APP?.confirmDiscardIfDirty?.()) {
+    return null;
+  }
+
+  const file = await fileRecord.handle.getFile();
+  const text = await file.text();
+
+  globalThis.MME_APP.openTextDocument({
+    text,
+    fileName: file.name,
+    fileHandle: fileRecord.handle,
+    reason: 'workspace search result open',
+  });
+
+  WORKSPACE_STATE.activeFile = {
+    kind: fileRecord.kind || 'journals',
+    name: fileRecord.name,
+    path: fileRecord.path,
+    handle: fileRecord.handle,
+  };
+
+  globalThis.persistActiveWorkspaceFile?.();
+  window.updateWorkspaceActiveFileHighlight?.();
+  renderWorkspaceRelatedPanel?.();
+
+  return fileRecord;
+}
+
+async function openWorkspaceFile(file, kind = '', reason = 'workspace open file') {
+  if (!file || !file.handle) {
+    throw new Error('Workspace file handle missing');
+  }
+
+  const fileKind =
+    typeof normalizeWorkspaceKindForCompare === 'function'
+      ? normalizeWorkspaceKindForCompare(kind || file.kind || '')
+      : String(kind || file.kind || '').trim();
+
+  const fileName =
+    file.name ||
+    (typeof getWorkspaceFileNameFromPath === 'function'
+      ? getWorkspaceFileNameFromPath(file.path)
+      : String(file.path || '')
+          .split('/')
+          .pop());
+
+  const filePath = file.path || `${fileKind}/${fileName}`;
+
+  const blob = await file.handle.getFile();
+  const text = await blob.text();
+
+  if (!globalThis.MME_APP?.confirmDiscardIfDirty?.()) {
+    return null;
+  }
+
+  openTextDocument({
+    text,
+    fileName,
+    fileHandle: file.handle,
+    reason,
+  });
+
+  WORKSPACE_STATE.activeFile = {
+    kind: fileKind || 'journals',
+    name: fileName,
+    path: filePath,
+    handle: file.handle,
+  };
+
+  globalThis.persistActiveWorkspaceFile?.();
+  window.updateWorkspaceActiveFileHighlight?.();
+  renderWorkspaceRelatedPanel?.();
+  renderWorkspaceTasksPanel?.();
+  scheduleWorkspaceIndexRebuild?.('workspace file opened');
+
+  log?.(`Workspace: opened ${filePath}`);
+
+  return file;
+}
+
+try {
+  window.openWorkspaceFile = openWorkspaceFile;
+  globalThis.openWorkspaceFile = openWorkspaceFile;
+} catch {}
+
+try {
+  globalThis.findWorkspaceFileByPath = findWorkspaceFileByPath;
+} catch {}
+
+function wireWorkspaceSearch() {
+  ensureWorkspaceSearchPanel();
+
+  const input = document.getElementById('workspaceSearchInput');
+  const resultsEl = document.getElementById('workspaceSearchResults');
+
+  if (!input || !resultsEl) {
+    log?.(`Workspace Search: not wired input=${Boolean(input)} results=${Boolean(resultsEl)}`);
+    return;
+  }
+
+  if (input.__workspaceSearchBound) {
+    log?.('Workspace Search: already wired');
+    return;
+  }
+
+  input.addEventListener('input', () => {
+    const query = input.value || '';
+
+    clearTimeout(__workspaceSearchTimer);
+
+    __workspaceSearchTimer = setTimeout(() => {
+      runWorkspaceSearch(query);
+    }, 180);
+  });
+
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      input.value = '';
+      clearTimeout(__workspaceSearchTimer);
+      resultsEl.hidden = true;
+      resultsEl.innerHTML = '';
+      __workspaceSearchLastQuery = '';
+      log?.('Workspace Search: cleared');
+    }
+  });
+
+  resultsEl.addEventListener('click', async (event) => {
+    const btn = event.target?.closest?.('[data-workspace-search-result="1"]');
+
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const path = btn.dataset.path || '';
+    const kind = btn.dataset.kind || '';
+    const file = findWorkspaceFileByPath(path, kind);
+
+    if (!file) {
+      showToast?.('Search result file not found', 'error', 2200);
+      log?.(`Workspace Search: result file not found path=${path} kind=${kind}`);
+      return;
+    }
+
+    log?.(`Workspace Search: opening result ${path} kind=${kind}`);
+
+    if (typeof globalThis.openWorkspaceFile === 'function') {
+      await globalThis.openWorkspaceFile(file);
+      return;
+    }
+
+    const opened = await openWorkspaceSearchResultFile(path, kind);
+
+    if (!opened) {
+      showToast?.('Workspace open helper missing', 'error', 2200);
+      log?.('Workspace Search: open helper missing');
+    }
+  });
+
+  input.__workspaceSearchBound = true;
+
+  const refreshBtn = document.getElementById('btnRefreshWorkspaceIndex');
+  if (refreshBtn && !refreshBtn.__bound) {
+    refreshBtn.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await scheduleWorkspaceIndexRebuild('manual refresh');
+    });
+    refreshBtn.__bound = true;
+  }
+
+  setupWorkspacePanels();
+
+  log?.('Workspace Search: wired');
+}
+
+function wireWorkspacePanelCollapses() {
+  const sidebar = document.getElementById('workspaceSidebar');
+
+  if (!sidebar) {
+    log?.('Workspace Panels: collapse wiring skipped; sidebar missing');
+    return;
+  }
+
+  if (sidebar.__workspacePanelCollapseBound) {
+    return;
+  }
+
+  sidebar.addEventListener('click', (event) => {
+    const btn = event.target?.closest?.('[data-workspace-panel-toggle]');
+
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const panelId = btn.dataset.workspacePanelToggle || '';
+
+    if (!panelId) return;
+
+    toggleWorkspacePanel(panelId);
+  });
+
+  sidebar.__workspacePanelCollapseBound = true;
+  log?.('Workspace Panels: collapse controls wired');
+}
+
 function setStatus(s) {
   saveStatus.textContent = s || '';
 }
@@ -381,6 +2113,39 @@ globalThis.MME_APP = {
   showToast,
   log,
 };
+
+async function resetServiceWorkerAndCaches() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) {
+        await reg.unregister();
+      }
+    }
+
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      for (const key of keys) {
+        await caches.delete(key);
+      }
+    }
+
+    showToast?.('Cache cleared. Reloading...', 'ok', 1600);
+    log?.('PWA: service workers unregistered and caches cleared');
+
+    setTimeout(() => {
+      location.reload();
+    }, 500);
+  } catch (e) {
+    showToast?.('Could not clear cache', 'error', 2600);
+    log?.(`PWA: cache reset failed: ${e?.message || e}`);
+  }
+}
+
+try {
+  window.resetServiceWorkerAndCaches = resetServiceWorkerAndCaches;
+  globalThis.resetServiceWorkerAndCaches = resetServiceWorkerAndCaches;
+} catch {}
 
 wireLogsPanelControls();
 
@@ -493,6 +2258,8 @@ async function createNewConcept() {
   }
 
   window.updateWorkspaceActiveFileHighlight?.();
+  renderWorkspaceTasksPanel?.();
+  renderWorkspaceRelatedPanel?.();
 
   showToast?.(wasEmpty ? `Created ${fileName}` : `Opened ${fileName}`, 'ok', 1800);
 
@@ -3435,16 +5202,18 @@ async function toggleHtml() {
     buildHtmlHeadingIndex();
     log('HTML pane refreshed');
     syncHtmlScrollToEditor('toggleHtml show');
+    wireHtmlCloseButton();
     updateHtmlPreviewButtons();
   } else {
     mapPane.style.width = '';
     mapPane.style.flex = '1 1 auto';
+    wireHtmlCloseButton();
     updateHtmlPreviewButtons();
   }
+
   setShowHideLabel('btnHtml', willShow, 'HTML');
   syncToolbarHeight();
 }
-
 
 // ================================
 // Scroll sync (Editor → HTML) – FIXED (single version)
@@ -4898,6 +6667,10 @@ async function saveToHandle(handle, text) {
   showToast(`Saved ✓ ${currentFileName}`, 'ok');
   updateDocumentTitle();
   clearDraft(currentFileName); // successful save clears draft
+
+  if (globalThis.WORKSPACE_STATE?.activeFile) {
+    globalThis.scheduleWorkspaceIndexRebuild?.('save');
+  }
 }
 
 async function openSmart() {
@@ -5185,47 +6958,109 @@ document.getElementById('btnHtml').addEventListener('click', toggleHtml);
 document.getElementById('btnLogs').addEventListener('click', toggleLogs);
 
 // HTML preview local panel buttons
-function updateHtmlPreviewButtons() {
+function isHtmlPreviewOpen() {
   const pane = document.getElementById('htmlPane');
+  return Boolean(pane && pane.style.display === 'block');
+}
+
+function ensureHtmlCloseButton() {
+  let close = document.getElementById('btnHtmlClose');
+  const viewer = document.getElementById('viewer');
+
+  if (!viewer) {
+    log?.('HTML Preview close ensure failed: #viewer missing');
+    return null;
+  }
+
+  if (close) {
+    // If close exists inside htmlPane, move it out.
+    if (close.parentElement?.id === 'htmlPane') {
+      viewer.appendChild(close);
+      log?.('HTML Preview close button moved out of htmlPane into viewer');
+    }
+    return close;
+  }
+
+  close = document.createElement('button');
+  close.id = 'btnHtmlClose';
+  close.type = 'button';
+  close.textContent = '\u00d7';
+  close.title = 'Close HTML Preview';
+  close.setAttribute('aria-label', 'Close HTML Preview');
+
+  // Put close button inside viewer, outside htmlPane.
+  viewer.appendChild(close);
+
+  log?.('HTML Preview close button recreated inside viewer');
+
+  return close;
+}
+
+function wireHtmlCloseButton() {
+  const close = ensureHtmlCloseButton();
+  if (!close) return;
+
+  if (close.__htmlCloseBound) return;
+
+  close.addEventListener(
+    'click',
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      log?.('HTML Preview close button clicked');
+
+      if (typeof toggleHtml === 'function') {
+        toggleHtml();
+      } else {
+        log?.('HTML Preview close failed: toggleHtml missing');
+      }
+    },
+    true
+  );
+
+  close.__htmlCloseBound = true;
+  log?.('HTML Preview close button wired');
+}
+
+function updateHtmlPreviewButtons() {
   const edge = document.getElementById('btnHtmlEdgeOpen');
-  const close = document.getElementById('btnHtmlClose');
-  const overlay = document.getElementById('htmlOverlayControls');
+  const close = ensureHtmlCloseButton();
 
-  const isOpen = pane && pane.style.display === 'block';
-
-  setHtmlPreviewOpenClass(isOpen);
+  const isOpen = isHtmlPreviewOpen();
 
   if (edge) {
+    edge.textContent = '\u003c/\u003e';
     edge.setAttribute('aria-label', 'Open HTML Preview');
     edge.setAttribute('title', 'Open HTML Preview');
 
-    /*
-      IMPORTANT:
-      Use textContent, not innerHTML.
-      \u003c is <
-      \u003e is >
-      This safely displays </>
-    */
-    edge.textContent = '\u003c/\u003e';
-
+    edge.hidden = isOpen;
     edge.style.display = isOpen ? 'none' : 'inline-flex';
   }
 
   if (close) {
-    /*
-      Use Unicode multiplication sign for ×.
-    */
     close.textContent = '\u00d7';
-
     close.setAttribute('aria-label', 'Close HTML Preview');
     close.setAttribute('title', 'Close HTML Preview');
 
+    close.hidden = !isOpen;
     close.style.display = isOpen ? 'inline-flex' : 'none';
+
+    // Force enough inline style for diagnostics.
+    if (isOpen) {
+      close.style.visibility = 'visible';
+      close.style.opacity = '1';
+      close.style.pointerEvents = 'auto';
+    }
   }
 
-  if (overlay) {
-    overlay.hidden = !isOpen;
+  if (typeof setHtmlPreviewOpenClass === 'function') {
+    setHtmlPreviewOpenClass(isOpen);
   }
+
+  log?.(
+    `HTML Preview controls updated open=${isOpen} edge=${Boolean(edge)} close=${Boolean(close)} closeHidden=${close ? close.hidden : '(missing)'} closeDisplay=${close ? close.style.display || '(css)' : '(missing)'}`
+  );
 }
 
 function ensureHtmlOverlayControls() {
@@ -5320,9 +7155,9 @@ function setHtmlPreviewOpenClass(isOpen) {
 }
 
 updateHtmlPreviewButtons();
+wireHtmlCloseButton();
 
 document.getElementById('btnHtmlEdgeOpen')?.addEventListener('click', toggleHtml);
-document.getElementById('btnHtmlClose')?.addEventListener('click', toggleHtml);
 document.getElementById('btnToggleEditor').addEventListener('click', toggleEditor);
 
 async function copyHtmlPreviewText() {
@@ -7141,6 +8976,16 @@ function applyAppContextUi(contextId, reason = 'applyAppContextUi') {
   }
 
   logContextState(reason);
+
+  try {
+    restoreWorkspaceSidebarWidth?.();
+    wireWorkspaceSidebarResize?.();
+    ensureWorkspaceSearchPanel?.();
+    wireWorkspaceSearch?.();
+    setupWorkspacePanels?.();
+  } catch (e) {
+    log?.(`Workspace: sidebar resize restore/wire failed: ${e?.message || e}`);
+  }
 }
 
 function wireAppContextSelector() {

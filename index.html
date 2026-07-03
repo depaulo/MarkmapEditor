@@ -154,6 +154,22 @@
           </div>
         </div>
 
+        <div id="workspaceRelatedPanel" hidden>
+          <div class="workspaceRelatedHeader">
+            <span class="workspaceRelatedTitle">Related</span>
+          </div>
+
+          <div id="workspaceRelatedSummary" class="workspaceRelatedSummary">No active concept</div>
+
+          <div id="workspaceRelatedList" class="workspaceRelatedList"></div>
+        </div>
+
+        <div id="workspaceTasksPanel" class="workspaceSection workspaceTasksPanel" hidden>
+          <div class="workspaceSectionTitle">Open Tasks</div>
+          <div id="workspaceTasksSummary" class="workspaceIndexSummary">No open tasks</div>
+          <div id="workspaceTasksList" class="workspaceTasksList"></div>
+        </div>
+
         <div class="workspaceSection workspaceFilesSection">
           <div class="workspaceSectionTitle">Journals</div>
           <div id="workspaceJournalsList"></div>
@@ -166,7 +182,6 @@
 
         <div id="workspaceSidebarResizeHandle" aria-hidden="true"></div>
       </aside>
-
 
       <div id="editor">
         <div id="editorOverlayControls" aria-label="Editor controls">
@@ -1535,6 +1550,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         renderSidebarFiles(WORKSPACE_STATE.files.concepts, 'workspaceConceptsList', 'concepts');
 
         window.updateWorkspaceActiveFileHighlight?.();
+        window.scheduleWorkspaceIndexRebuild?.('sidebar refreshed');
       }
 
       function updateWorkspaceUiState() {
@@ -1615,6 +1631,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
           });
 
           window.updateWorkspaceActiveFileHighlight?.();
+          renderWorkspaceRelatedPanel?.();
 
           globalThis.MME_APP?.showToast?.(`Reopened ${file.name}`, 'ok', 1600);
           globalThis.MME_APP?.log?.(`Workspace: reopened last active file ${file.path}`);
@@ -1644,6 +1661,20 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         await refreshWorkspaceSidebar();
 
         await reopenLastActiveWorkspaceFileIfPossible();
+
+        try {
+          restoreWorkspaceSidebarWidth?.();
+          wireWorkspaceSidebarResize?.();
+          ensureWorkspaceSearchPanel?.();
+          wireWorkspaceSearch?.();
+          ensureWorkspaceRelatedPanel?.();
+          wireWorkspaceRelatedPanel?.();
+          renderWorkspaceRelatedPanel?.();
+        } catch (e) {
+          globalThis.MME_APP?.log?.(
+            `Workspace: sidebar resize restore/wire failed after openWorkspace: ${e?.message || e}`
+          );
+        }
 
         globalThis.MME_APP?.showToast?.(`Workspace opened ✓ ${WORKSPACE_STATE.rootName}`, 'ok');
         globalThis.MME_APP?.log?.(`Workspace opened: ${WORKSPACE_STATE.rootName}`);
@@ -1808,6 +1839,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         persistActiveWorkspaceFile();
         await refreshWorkspaceSidebar();
         window.updateWorkspaceActiveFileHighlight?.();
+        window.scheduleWorkspaceIndexRebuild?.('today');
         globalThis.MME_APP?.showToast?.(`Today opened ✓ ${fileName}`, 'ok');
         globalThis.MME_APP?.log?.(`Today opened: ${fileName}`);
       }
@@ -1836,6 +1868,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
         persistActiveWorkspaceFile();
         window.updateWorkspaceActiveFileHighlight?.();
+        window.scheduleWorkspaceIndexRebuild?.('workspace file opened');
         globalThis.MME_APP?.showToast?.(`Opened ✓ ${file.name}`, 'ok');
       }
 
@@ -1919,6 +1952,17 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
           const next = !document.documentElement.classList.contains('journal-sidebar-collapsed');
           applyJournalSidebarCollapsed(next);
+
+          if (!next) {
+            try {
+              restoreWorkspaceSidebarWidth?.();
+              wireWorkspaceSidebarResize?.();
+            } catch (e) {
+              globalThis.MME_APP?.log?.(
+                `Workspace: sidebar resize restore/wire failed after expand: ${e?.message || e}`
+              );
+            }
+          }
         });
 
         btn.__bound = true;
@@ -2029,6 +2073,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         }
 
         window.updateWorkspaceActiveFileHighlight?.();
+        window.scheduleWorkspaceIndexRebuild?.('archive active');
 
         globalThis.MME_APP.openTextDocument({
           text: `# Archived\n\nArchived: ${activePath}\n\nArchive copy: archive/${archiveFileName}\n`,
@@ -2149,6 +2194,8 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         bindArchiveActiveDirect();
 
         clearSidebar();
+        ensureWorkspaceSearchPanel?.();
+        wireWorkspaceSearch?.();
 
         document
           .getElementById('workspaceJournalsList')
