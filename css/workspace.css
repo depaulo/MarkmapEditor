@@ -428,6 +428,14 @@ html.journal-sidebar-collapsed #workspaceTasksPanel {
   color: var(--text);
 }
 
+/* Safety: ensure Tags header matches the other panel headers (non-uppercase, same color). */
+#workspaceTagsPanel .workspaceTagsTitle {
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  opacity: 1 !important;
+  color: var(--text) !important;
+}
+
 #workspaceIndexSummary:empty {
   display: none;
 }
@@ -847,11 +855,12 @@ html.journal-sidebar-collapsed .workspaceIcon {
 }
 
 .workspaceTagsTitle {
-  font-size: 12px;
-  font-weight: 700;
-  opacity: 0.72;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 1;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  color: var(--text);
 }
 
 .workspaceTagsSummary {

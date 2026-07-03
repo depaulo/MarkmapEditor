@@ -703,6 +703,8 @@ async function buildWorkspaceIndex() {
   renderWorkspaceIndexSummary();
   renderWorkspaceTasksPanel();
   renderWorkspaceTagsPanel?.();
+  updateWorkspaceJournalSidebarTitlesFromIndex?.();
+
 
   const openTasks = tasks.filter((task) => !task.done).length;
   const doneTasks = tasks.filter((task) => task.done).length;
@@ -918,6 +920,7 @@ function getWorkspaceSearchKindLabel(kind) {
 const WORKSPACE_PANEL_COLLAPSE_STORAGE_KEY = 'markmap:workspace:panelCollapsed';
 
 const WORKSPACE_PANEL_DEFAULT_COLLAPSED = {
+  active: false,
   index: true,
   related: false,
   tasks: true,
@@ -954,6 +957,13 @@ function isWorkspacePanelCollapsed(panelId) {
 }
 
 function hasWorkspacePanelMarkup(panelId) {
+  if (panelId === 'active') {
+    return !!(
+      document.getElementById('workspaceActivePanel')?.querySelector?.('#workspaceActiveBadge') &&
+      document.getElementById('workspaceActivePanel')?.querySelector?.('#workspaceActiveBody')
+    );
+  }
+
   if (panelId === 'index') {
     return !!(
       document.getElementById('workspaceIndexPanel')?.querySelector?.('#workspaceIndexSummary') &&
@@ -1113,15 +1123,17 @@ function applyWorkspacePanelCollapsed(panelEl, panelId, collapsed) {
 
 function toggleWorkspacePanel(panelId) {
   const panelEl =
-    panelId === 'index'
-      ? document.getElementById('workspaceIndexPanel')
-      : panelId === 'related'
-        ? document.getElementById('workspaceRelatedPanel')
-        : panelId === 'tasks'
-          ? document.getElementById('workspaceTasksPanel')
-          : panelId === 'tags'
-            ? document.getElementById('workspaceTagsPanel')
-            : null;
+    panelId === 'active'
+      ? document.getElementById('workspaceActivePanel')
+      : panelId === 'index'
+        ? document.getElementById('workspaceIndexPanel')
+        : panelId === 'related'
+          ? document.getElementById('workspaceRelatedPanel')
+          : panelId === 'tasks'
+            ? document.getElementById('workspaceTasksPanel')
+            : panelId === 'tags'
+              ? document.getElementById('workspaceTagsPanel')
+              : null;
 
   if (!panelEl) return;
 
@@ -2088,11 +2100,13 @@ function renderWorkspaceIndexSummary() {
       })
     : null;
 
-  if (updatedAt) {
-    summaryEl.innerHTML = `Updated ${escapeHtml(updatedAt)}`;
-  } else {
-    summaryEl.innerHTML = '';
-  }
+  /*
+    Expanded Workspace Index should show ONLY one line:
+    - keep #workspaceIndexUpdated
+    - hide/clear #workspaceIndexSummary to avoid duplicate Updated row
+  */
+  summaryEl.innerHTML = '';
+
 
   const badge = document.getElementById('workspaceIndexBadge');
   if (badge) {
@@ -2617,6 +2631,48 @@ Updated: ${today}
 ## Sources
 -
 `;
+}
+
+
+function updateWorkspaceJournalSidebarTitlesFromIndex() {
+  try {
+    if (!WORKSPACE_INDEX_STATE?.ready) return;
+
+    document
+      .querySelectorAll(
+        '.workspaceFileItem[data-workspace-file="1"][data-kind="journals"]'
+      )
+      .forEach((btn) => {
+        const path = btn.dataset.path || '';
+        const nameEl = btn.querySelector('.workspaceFileName');
+
+        if (!path || !nameEl) return;
+
+        const parsed = WORKSPACE_INDEX_STATE.byPath?.get(path);
+        if (!parsed) return;
+
+        const title = String(parsed.title || '').trim();
+        const fallback = String(btn.dataset.name || '').trim();
+        const display = title || fallback;
+
+        nameEl.textContent = display;
+        btn.title = `${path}${title ? ` — ${title}` : ''}`;
+        btn.dataset.displayTitle = display;
+      });
+  } catch (e) {
+    log?.(`Workspace: journal sidebar title update failed: ${e?.message || e}`);
+  }
+}
+
+try {
+  window.updateWorkspaceJournalSidebarTitlesFromIndex = updateWorkspaceJournalSidebarTitlesFromIndex;
+  globalThis.updateWorkspaceJournalSidebarTitlesFromIndex = updateWorkspaceJournalSidebarTitlesFromIndex;
+} catch {}
+
+function updateWorkspaceJournalSidebarTitlesFromIndexSafe() {
+  try {
+    updateWorkspaceJournalSidebarTitlesFromIndex();
+  } catch {}
 }
 
 async function createNewConcept() {
