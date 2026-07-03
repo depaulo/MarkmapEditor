@@ -2592,9 +2592,15 @@ function createConceptStarterMarkdown(fileName) {
     .replace(/\.md$/i, '')
     .trim();
 
+  const today = new Date().toISOString().slice(0, 10);
+
   return `# ${title}
 
+Type: Concept
+Status: active
 Tags:
+Created: ${today}
+Updated: ${today}
 
 ## Summary
 -
@@ -2602,11 +2608,14 @@ Tags:
 ## Notes
 -
 
-## Related
+## Related Concepts
 -
 
 ## Tasks
 - [ ]
+
+## Sources
+-
 `;
 }
 
