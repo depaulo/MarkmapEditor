@@ -3344,6 +3344,20 @@ function positionExportMenu() {
   } catch {}
 }
 
+function isSlidesContext() {
+  try {
+    const ctxId =
+      getSelectedAppContextId?.() ||
+      document.documentElement.dataset.appContext ||
+      localStorage.getItem('markmap:appContext') ||
+      'editor';
+
+    return ctxId === 'slides';
+  } catch {
+    return false;
+  }
+}
+
 function showExportMenu() {
   try {
     if (!exportMenu) return;
@@ -3352,17 +3366,6 @@ function showExportMenu() {
     exportMenu.innerHTML = '';
 
     exportMenu.appendChild(makeMenuHeader('Export'));
-
-    exportMenu.appendChild(
-      makeMenuItem(
-        'Markdown (Pandoc .md)',
-        () => {
-          hideExportMenu();
-          exportMarkdownDownload();
-        },
-        { icon: '📝' }
-      )
-    );
 
     exportMenu.appendChild(
       makeMenuItem(
@@ -3387,6 +3390,21 @@ function showExportMenu() {
     );
 
     exportMenu.appendChild(makeMenuSep());
+
+    if (isSlidesContext()) {
+      exportMenu.appendChild(
+        makeMenuItem(
+          'Pandoc Markdown (.md)',
+          () => {
+            hideExportMenu();
+            exportMarkdownDownload();
+          },
+          { icon: '📊' }
+        )
+      );
+
+      exportMenu.appendChild(makeMenuSep());
+    }
 
     exportMenu.appendChild(makeMenuHeader('SVG is static. HTML Preview is standalone.'));
 
@@ -3995,7 +4013,7 @@ function __tplShow() {
 
   __tplMenu.appendChild(
     makeMenuItem(
-      '➕ New My template…',
+      'New My template…',
       () => {
         __tplHide();
         __tplNewMy();
@@ -4005,7 +4023,7 @@ function __tplShow() {
   );
   __tplMenu.appendChild(
     makeMenuItem(
-      '📋 Duplicate Org → My…',
+      'Duplicate Org → My…',
       () => {
         __tplHide();
         __tplDupOrgPicker();
@@ -4015,7 +4033,7 @@ function __tplShow() {
   );
   __tplMenu.appendChild(
     makeMenuItem(
-      '✏️ Edit My template…',
+      'Edit My template…',
       () => {
         __tplHide();
         __tplEditMy();
@@ -4025,7 +4043,7 @@ function __tplShow() {
   );
   __tplMenu.appendChild(
     makeMenuItem(
-      '📝 Rename My template…',
+      'Rename My template…',
       () => {
         __tplHide();
         __tplRenameMy();
@@ -4035,7 +4053,7 @@ function __tplShow() {
   );
   __tplMenu.appendChild(
     makeMenuItem(
-      '🗑️ Delete My template…',
+      'Delete My template…',
       () => {
         __tplHide();
         __tplDeleteMy();
@@ -4046,7 +4064,7 @@ function __tplShow() {
   __tplMenu.appendChild(makeMenuSep());
   __tplMenu.appendChild(
     makeMenuItem(
-      '⬇️ Export My templates (JSON)…',
+      'Export My templates (JSON)…',
       () => {
         __tplHide();
         __tplExportMy();
@@ -4056,7 +4074,7 @@ function __tplShow() {
   );
   __tplMenu.appendChild(
     makeMenuItem(
-      '⬆️ Import My templates (JSON)…',
+      'Import My templates (JSON)…',
       () => {
         __tplHide();
         __tplImportMy();

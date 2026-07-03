@@ -333,6 +333,10 @@ html[data-app-context='journal'] #workspaceSidebar {
   display: none !important;
 }
 
+#workspaceTagsPanel {
+  border-top: 1px solid var(--menu-border);
+}
+
 .workspaceTasksSummary {
   font-size: 12px;
   opacity: 0.75;
@@ -410,6 +414,18 @@ html.journal-sidebar-collapsed #workspaceTasksPanel {
   font-size: 12px;
   opacity: 0.75;
   margin-bottom: 10px;
+}
+
+.workspaceIndexTitle,
+.workspaceRelatedTitle,
+.workspaceTasksTitle,
+.workspaceTagsTitle {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text);
 }
 
 .workspaceIndexMetrics {
@@ -836,54 +852,53 @@ html.journal-sidebar-collapsed .workspaceIcon {
 
 .workspaceTagsSummary {
   font-size: 12px;
-  opacity: 0.75;
+  opacity: 0.62;
   line-height: 1.35;
 }
 
 .workspaceTagsList {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
 
   max-height: 220px;
   overflow: auto;
 }
 
 .workspaceTagItem {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 
-  width: 100%;
-  text-align: left;
+  max-width: 100%;
 
-  padding: 6px 8px;
+  padding: 4px 6px 4px 8px;
 
-  border-radius: 6px;
-  border: 1px solid transparent;
+  border-radius: 999px;
+  border: 1px solid var(--menu-border);
 
-  background: transparent;
+  background: rgba(127, 127, 127, 0.08);
   color: var(--text);
 
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.2;
 
   overflow: hidden;
 }
 
 .workspaceTagItem:hover {
   background: var(--menu-hover);
-  border-color: var(--menu-border);
+  border-color: rgba(34, 197, 94, 0.42);
 }
 
 .workspaceTagItem.__active {
-  background: rgba(34, 197, 94, 0.11);
-  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(34, 197, 94, 0.58);
 }
 
 .workspaceTagName {
-  flex: 1 1 auto;
   min-width: 0;
 
   overflow: hidden;
@@ -891,25 +906,44 @@ html.journal-sidebar-collapsed .workspaceIcon {
   white-space: nowrap;
 
   font-weight: 650;
+  color: var(--text);
 }
 
 .workspaceTagCount {
   flex: 0 0 auto;
 
-  min-width: 22px;
-  height: 20px;
-  padding: 0 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
 
   display: inline-flex;
   align-items: center;
   justify-content: center;
 
   border-radius: 999px;
-  border: 1px solid var(--menu-border);
 
-  font-size: 11px;
-  font-weight: 700;
-  opacity: 0.85;
+  background: rgba(34, 197, 94, 0.16);
+  color: var(--text);
+
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+
+  opacity: 0.9;
+}
+
+html.dark .workspaceTagItem {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.13);
+}
+
+html.dark .workspaceTagItem:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(34, 197, 94, 0.5);
+}
+
+html.dark .workspaceTagCount {
+  background: rgba(34, 197, 94, 0.22);
 }
 
 .workspaceTagResults {
@@ -998,4 +1032,13 @@ html.journal-sidebar-collapsed .workspaceIcon {
 
 html.journal-sidebar-collapsed #workspaceTagsPanel {
   display: none !important;
+}
+
+/* Context-aware visibility */
+.contextSlidesOnly {
+  display: none !important;
+}
+
+html[data-app-context='slides'] .contextSlidesOnly {
+  display: inline-flex !important;
 }
