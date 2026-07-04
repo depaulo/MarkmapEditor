@@ -701,7 +701,9 @@ async function buildWorkspaceIndex() {
   WORKSPACE_INDEX_STATE.links = links;
 
   renderWorkspaceIndexSummary();
+  renderWorkspaceActivePanel?.();
   renderWorkspaceTasksPanel();
+  renderWorkspaceRelatedPanel?.();
   renderWorkspaceTagsPanel?.();
   updateWorkspaceJournalSidebarTitlesFromIndex?.();
 
@@ -728,6 +730,7 @@ function scheduleWorkspaceIndexRebuild(reason = 'scheduled') {
   __workspaceIndexTimer = setTimeout(async () => {
     try {
       await buildWorkspaceIndex();
+      renderWorkspaceActivePanel?.();
       renderWorkspaceTasksPanel?.();
       renderWorkspaceRelatedPanel?.();
       renderWorkspaceTagsPanel?.();
@@ -1036,6 +1039,69 @@ function ensureWorkspaceSearchPanel() {
   }
 
   log?.('Workspace Search: panel created');
+
+  return panel;
+}
+
+function ensureWorkspaceActivePanel() {
+  const sidebar = document.getElementById('workspaceSidebar');
+
+  if (!sidebar) {
+    log?.('Workspace Active: ensure failed; sidebar missing');
+    return null;
+  }
+
+  let panel = document.getElementById('workspaceActivePanel');
+
+  if (panel) {
+    return panel;
+  }
+
+  panel = document.createElement('div');
+  panel.id = 'workspaceActivePanel';
+  panel.hidden = true;
+
+  panel.innerHTML = `
+    <div class="workspaceActiveHeader">
+      <button
+        type="button"
+        class="workspacePanelHeaderButton"
+        data-workspace-panel-toggle="active"
+        aria-expanded="true"
+      >
+        <span class="workspacePanelHeaderLeft">
+          <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+          <span class="workspaceActiveTitle">Active</span>
+        </span>
+
+        <span id="workspaceActiveBadge" class="workspaceActiveBadge">
+          No file
+        </span>
+      </button>
+    </div>
+
+    <div class="workspacePanelBody">
+      <div id="workspaceActiveBody" class="workspaceActiveBody">
+        <div class="workspaceActiveEmpty">No active workspace file</div>
+      </div>
+    </div>
+  `;
+
+  const searchPanel = document.getElementById('workspaceSearchPanel');
+  const indexPanel = document.getElementById('workspaceIndexPanel');
+  const filesSection = sidebar.querySelector('.workspaceFilesSection');
+
+  if (searchPanel && searchPanel.nextSibling) {
+    sidebar.insertBefore(panel, searchPanel.nextSibling);
+  } else if (indexPanel) {
+    sidebar.insertBefore(panel, indexPanel);
+  } else if (filesSection) {
+    sidebar.insertBefore(panel, filesSection);
+  } else {
+    sidebar.appendChild(panel);
+  }
+
+  log?.('Workspace Active: panel created');
 
   return panel;
 }
@@ -2047,16 +2113,22 @@ function setupWorkspacePanels() {
     forceUpgradeWorkspacePanelMarkup('index');
     forceUpgradeWorkspacePanelMarkup('related');
     forceUpgradeWorkspacePanelMarkup('tasks');
+
     ensureWorkspaceIndexPanel();
-    wireWorkspaceIndexRefreshButton?.();
+    ensureWorkspaceActivePanel?.();
     ensureWorkspaceRelatedPanel();
     ensureWorkspaceTasksPanel();
     ensureWorkspaceTagsPanel?.();
+
+    wireWorkspaceIndexRefreshButton?.();
+    wireWorkspaceActivePanel?.();
     wireWorkspaceRelatedPanel();
     wireWorkspaceTasksPanel();
     wireWorkspaceTagsPanel?.();
     wireWorkspacePanelCollapses();
+
     renderWorkspaceIndexSummary();
+    renderWorkspaceActivePanel?.();
     renderWorkspaceTasksPanel();
     renderWorkspaceRelatedPanel();
     renderWorkspaceTagsPanel?.();
@@ -2064,6 +2136,215 @@ function setupWorkspacePanels() {
   } catch (e) {
     log?.(`Workspace: panels setup failed: ${e?.message || e}`);
   }
+}
+
+function getWorkspaceParsedActiveFile() {
+  const active = WORKSPACE_STATE?.activeFile;
+
+  if (!active?.path || !WORKSPACE_INDEX_STATE?.ready) {
+    return null;
+  }
+
+  const parsed = WORKSPACE_INDEX_STATE.byPath?.get(active.path);
+
+  return parsed || null;
+}
+
+function getWorkspaceActiveStats(parsed) {
+  if (!parsed) {
+    return {
+      openTasks: 0,
+      doneTasks: 0,
+      related: 0,
+      linksOut: 0,
+      tags: 0,
+    };
+  }
+
+  const openTasks = (parsed.tasks || []).filter((task) => !task.done).length;
+  const doneTasks = (parsed.tasks || []).filter((task) => task.done).length;
+
+  let related = 0;
+
+  if (parsed.kind === 'concepts') {
+    const conceptName =
+      typeof normalizeConceptName === 'function'
+        ? normalizeConceptName(parsed.name || parsed.path || '')
+        : String(parsed.name || '').replace(/\.md$/i, '');
+
+    if (typeof findBacklinksForConcept === 'function') {
+      related = findBacklinksForConcept(conceptName).length;
+    }
+  }
+
+  return {
+    openTasks,
+    doneTasks,
+    related,
+    linksOut: (parsed.conceptLinks || []).length,
+    tags: (parsed.tags || []).length,
+  };
+}
+
+function getWorkspaceKindLabel(kind) {
+  const normalized =
+    typeof normalizeWorkspaceKindForCompare === 'function'
+      ? normalizeWorkspaceKindForCompare(kind || '')
+      : String(kind || '').trim();
+
+  if (normalized === 'journals') return 'Journal';
+  if (normalized === 'concepts') return 'Concept';
+
+  return 'File';
+}
+
+function getWorkspaceKindIcon(kind) {
+  const normalized =
+    typeof normalizeWorkspaceKindForCompare === 'function'
+      ? normalizeWorkspaceKindForCompare(kind || '')
+      : String(kind || '').trim();
+
+  if (normalized === 'journals') return '📝';
+  if (normalized === 'concepts') return '🧠';
+
+  return '📄';
+}
+
+function renderWorkspaceActivePanel() {
+  const panel = ensureWorkspaceActivePanel();
+  const badge = document.getElementById('workspaceActiveBadge');
+  const body = document.getElementById('workspaceActiveBody');
+
+  if (!panel || !badge || !body) {
+    log?.(
+      `Workspace Active: render skipped panel=${Boolean(panel)} badge=${Boolean(
+        badge
+      )} body=${Boolean(body)}`
+    );
+    return;
+  }
+
+  if (!WORKSPACE_STATE?.rootHandle) {
+    panel.hidden = true;
+    badge.textContent = 'No file';
+    body.innerHTML =
+      '<div class="workspaceActiveEmpty">Open a workspace first</div>';
+    return;
+  }
+
+  panel.hidden = false;
+
+  const active = WORKSPACE_STATE?.activeFile;
+
+  if (!active?.path) {
+    badge.textContent = 'No file';
+    body.innerHTML =
+      '<div class="workspaceActiveEmpty">No active workspace file</div>';
+
+    applyWorkspacePanelCollapsed(
+      panel,
+      'active',
+      isWorkspacePanelCollapsed('active')
+    );
+
+    return;
+  }
+
+  const parsed = getWorkspaceParsedActiveFile();
+  const kind = active.kind || parsed?.kind || '';
+  const kindLabel = getWorkspaceKindLabel(kind);
+  const icon = getWorkspaceKindIcon(kind);
+  const displayName =
+    parsed?.title || active.name || active.path || 'Untitled';
+
+  badge.textContent = kindLabel;
+
+  if (!parsed) {
+    body.innerHTML = `
+      <div class="workspaceActiveName">
+        <span aria-hidden="true">${icon}</span>
+        <span class="workspaceActiveNameText">${escapeHtml(displayName)}</span>
+      </div>
+
+      <div class="workspaceActiveMeta">
+        Index not ready for this file
+      </div>
+    `;
+
+    applyWorkspacePanelCollapsed(
+      panel,
+      'active',
+      isWorkspacePanelCollapsed('active')
+    );
+
+    return;
+  }
+
+  const stats = getWorkspaceActiveStats(parsed);
+
+  const tagHtml = (parsed.tags || [])
+    .slice(0, 8)
+    .map((tag) => {
+      return `<span class="workspaceActiveTag">#${escapeHtml(tag)}</span>`;
+    })
+    .join('');
+
+  const statsRows =
+    parsed.kind === 'concepts'
+      ? [
+          ['Open', stats.openTasks],
+          ['Done', stats.doneTasks],
+          ['Related', stats.related],
+          ['Links out', stats.linksOut],
+        ]
+      : [
+          ['Open', stats.openTasks],
+          ['Done', stats.doneTasks],
+          ['Tags', stats.tags],
+          ['Links', stats.linksOut],
+        ];
+
+  body.innerHTML = `
+    <div class="workspaceActiveName">
+      <span aria-hidden="true">${icon}</span>
+      <span class="workspaceActiveNameText">${escapeHtml(displayName)}</span>
+    </div>
+
+    <div class="workspaceActiveMeta">
+      ${escapeHtml(kindLabel)}${parsed.date ? ` · ${escapeHtml(parsed.date)}` : ''}
+    </div>
+
+    ${
+      tagHtml
+        ? `<div class="workspaceActiveTags">${tagHtml}</div>`
+        : '<div class="workspaceActiveMeta">No tags</div>'
+    }
+
+    <div class="workspaceActiveStats">
+      ${statsRows
+        .map(([label, value]) => {
+          return `
+            <div class="workspaceActiveStat">
+              <span class="workspaceActiveStatLabel">${escapeHtml(label)}</span>
+              <span class="workspaceActiveStatValue">${escapeHtml(String(value))}</span>
+            </div>
+          `;
+        })
+        .join('')}
+    </div>
+  `;
+
+  log?.(`Workspace Active: rendered path=${active?.path || '(none)'}`);
+
+  applyWorkspacePanelCollapsed(
+    panel,
+    'active',
+    isWorkspacePanelCollapsed('active')
+  );
+}
+
+function wireWorkspaceActivePanel() {
+  ensureWorkspaceActivePanel();
 }
 
 function renderWorkspaceIndexSummary() {
@@ -2273,6 +2554,7 @@ async function openWorkspaceSearchResultFile(path, preferredKind = '') {
 
   globalThis.persistActiveWorkspaceFile?.();
   window.updateWorkspaceActiveFileHighlight?.();
+  renderWorkspaceActivePanel?.();
   renderWorkspaceRelatedPanel?.();
 
   return fileRecord;
@@ -2321,6 +2603,7 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
 
   globalThis.persistActiveWorkspaceFile?.();
   window.updateWorkspaceActiveFileHighlight?.();
+  renderWorkspaceActivePanel?.();
   renderWorkspaceRelatedPanel?.();
   renderWorkspaceTasksPanel?.();
   scheduleWorkspaceIndexRebuild?.('workspace file opened');
@@ -2741,6 +3024,7 @@ async function createNewConcept() {
   }
 
   window.updateWorkspaceActiveFileHighlight?.();
+  renderWorkspaceActivePanel?.();
   renderWorkspaceTasksPanel?.();
   renderWorkspaceRelatedPanel?.();
 
@@ -3093,6 +3377,16 @@ try {
   globalThis.renderWorkspaceTagsPanel = renderWorkspaceTagsPanel;
   globalThis.wireWorkspaceTagsPanel = wireWorkspaceTagsPanel;
   globalThis.ensureWorkspaceTagsPanel = ensureWorkspaceTagsPanel;
+} catch {}
+
+try {
+  window.renderWorkspaceActivePanel = renderWorkspaceActivePanel;
+  window.ensureWorkspaceActivePanel = ensureWorkspaceActivePanel;
+  window.wireWorkspaceActivePanel = wireWorkspaceActivePanel;
+
+  globalThis.renderWorkspaceActivePanel = renderWorkspaceActivePanel;
+  globalThis.ensureWorkspaceActivePanel = ensureWorkspaceActivePanel;
+  globalThis.wireWorkspaceActivePanel = wireWorkspaceActivePanel;
 } catch {}
 
 async function openFromRecent(item) {

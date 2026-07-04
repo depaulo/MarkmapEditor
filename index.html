@@ -1631,6 +1631,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
           });
 
           window.updateWorkspaceActiveFileHighlight?.();
+          renderWorkspaceActivePanel?.();
           renderWorkspaceRelatedPanel?.();
 
           globalThis.MME_APP?.showToast?.(`Reopened ${file.name}`, 'ok', 1600);
@@ -1839,6 +1840,9 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         persistActiveWorkspaceFile();
         await refreshWorkspaceSidebar();
         window.updateWorkspaceActiveFileHighlight?.();
+        renderWorkspaceActivePanel?.();
+        renderWorkspaceRelatedPanel?.();
+        renderWorkspaceTasksPanel?.();
         window.scheduleWorkspaceIndexRebuild?.('today');
         globalThis.MME_APP?.showToast?.(`Today opened ✓ ${fileName}`, 'ok');
         globalThis.MME_APP?.log?.(`Today opened: ${fileName}`);
@@ -1868,6 +1872,8 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
         persistActiveWorkspaceFile();
         window.updateWorkspaceActiveFileHighlight?.();
+        renderWorkspaceActivePanel?.();
+        renderWorkspaceRelatedPanel?.();
         window.scheduleWorkspaceIndexRebuild?.('workspace file opened');
         globalThis.MME_APP?.showToast?.(`Opened ✓ ${file.name}`, 'ok');
       }
@@ -2073,6 +2079,9 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         }
 
         window.updateWorkspaceActiveFileHighlight?.();
+        renderWorkspaceActivePanel?.();
+        renderWorkspaceRelatedPanel?.();
+        renderWorkspaceTasksPanel?.();
         window.scheduleWorkspaceIndexRebuild?.('archive active');
 
         globalThis.MME_APP.openTextDocument({
