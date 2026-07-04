@@ -706,6 +706,7 @@ async function buildWorkspaceIndex() {
   renderWorkspaceRelatedPanel?.();
   renderWorkspaceTagsPanel?.();
   updateWorkspaceJournalSidebarTitlesFromIndex?.();
+   renderWorkspaceJournalTimeline?.();
 
 
   const openTasks = tasks.filter((task) => !task.done).length;
@@ -2915,6 +2916,129 @@ Updated: ${today}
 -
 `;
 }
+// This will be inserted after line 2917 (after the closing brace of createConceptStarterMarkdown)
+
+// ================================
+// PART B — Journal display helpers
+// ================================
+
+function getParsedJournalForFile(file) {
+  if (!file?.path || !WORKSPACE_INDEX_STATE?.ready) {
+    return null;
+  }
+
+  return WORKSPACE_INDEX_STATE.byPath?.get(file.path) || null;
+}
+
+function getJournalDisplayTitle(file) {
+  const parsed = getParsedJournalForFile(file);
+
+  if (parsed?.title) {
+    return parsed.title;
+  }
+
+  return file?.name || file?.path || 'Untitled journal';
+}
+
+function getJournalDisplayDate(file) {
+  const parsed = getParsedJournalForFile(file);
+
+  if (parsed?.date) {
+    return parsed.date;
+  }
+
+  const match = String(file?.name || file?.path || '').match(
+    /\d{4}-\d{2}-\d{2}/
+  );
+
+  return match ? match[0] : '';
+}
+
+// ================================
+// PART C — Journal Timeline Renderer
+// ================================
+
+function renderWorkspaceJournalTimeline() {
+  const container = document.getElementById('workspaceJournalsList');
+
+  if (!container) {
+    log?.('Workspace Journals: timeline render skipped; container missing');
+    return;
+  }
+
+  const journals = WORKSPACE_STATE.files?.journals || [];
+
+  if (!journals.length) {
+    container.innerHTML = '<div class="workspaceEmpty">No journals</div>';
+    return;
+  }
+
+  const sorted = [...journals].sort((a, b) => {
+    const dateA = getJournalDisplayDate(a);
+    const dateB = getJournalDisplayDate(b);
+
+    if (dateA !== dateB) {
+      return dateB.localeCompare(dateA);
+    }
+
+    return String(b.name || '').localeCompare(String(a.name || ''));
+  });
+
+  const recent = sorted.slice(0, 3);
+
+  function renderJournalButton(file) {
+    const title = escapeHtml(getJournalDisplayTitle(file));
+    const date = escapeHtml(getJournalDisplayDate(file));
+    const path = escapeHtml(file.path || '');
+    const name = escapeHtml(file.name || '');
+    const kind = 'journals';
+
+    return `
+      <button
+        type="button"
+        class="workspaceFileItem workspaceJournalItem"
+        data-workspace-file="1"
+        data-kind="${kind}"
+        data-path="${path}"
+        data-name="${name}"
+        title="${path}"
+      >
+        <span class="workspaceJournalIcon" aria-hidden="true">📝</span>
+        <span class="workspaceJournalBody">
+          <span class="workspaceJournalTitle">${title}</span>
+          <span class="workspaceJournalDate">${date || path}</span>
+        </span>
+      </button>
+    `;
+  }
+
+  container.innerHTML = `
+    <div class="workspaceJournalTimeline">
+      <div class="workspaceJournalGroup">
+        <div class="workspaceJournalGroupTitle">Recent</div>
+        ${recent.map(renderJournalButton).join('')}
+      </div>
+
+      <div class="workspaceJournalGroup">
+        <div class="workspaceJournalGroupTitle">All Journals</div>
+        ${sorted.map(renderJournalButton).join('')}
+      </div>
+    </div>
+  `;
+
+  window.updateWorkspaceActiveFileHighlight?.();
+}
+
+// ================================
+// PART E — Export helper
+// ================================
+
+try {
+  window.renderWorkspaceJournalTimeline = renderWorkspaceJournalTimeline;
+  globalThis.renderWorkspaceJournalTimeline = renderWorkspaceJournalTimeline;
+} catch {}
+
+
 
 
 function updateWorkspaceJournalSidebarTitlesFromIndex() {
