@@ -1344,6 +1344,75 @@ function getOpenWorkspaceTasks() {
     }));
 }
 
+function getWorkspaceTaskFileDisplayName(path, fallback = '') {
+  if (!WORKSPACE_INDEX_STATE?.ready || !path) {
+    return fallback || path || '';
+  }
+
+  const parsed = WORKSPACE_INDEX_STATE.byPath?.get(path);
+
+  if (!parsed) {
+    return fallback || path || '';
+  }
+
+  return parsed.title || parsed.name || fallback || path;
+}
+
+function getGroupedOpenWorkspaceTasks() {
+  const openTasks =
+    typeof getOpenWorkspaceTasks === 'function'
+      ? getOpenWorkspaceTasks()
+      : [];
+
+  const groupsMap = new Map();
+
+  for (const task of openTasks) {
+    const path = task.filePath || '';
+    if (!path) continue;
+
+    if (!groupsMap.has(path)) {
+      const parsed = WORKSPACE_INDEX_STATE?.byPath?.get(path);
+      const kind = task.fileKind || parsed?.kind || '';
+      const fileName = task.fileName || parsed?.name || path;
+
+      groupsMap.set(path, {
+        path,
+        kind,
+        fileName,
+        title: getWorkspaceTaskFileDisplayName(path, fileName),
+        date: parsed?.date || '',
+        tasks: [],
+      });
+    }
+
+    groupsMap.get(path).tasks.push(task);
+  }
+
+  const groups = Array.from(groupsMap.values());
+
+  groups.sort((a, b) => {
+    if (a.kind !== b.kind) {
+      if (a.kind === 'journals') return -1;
+      if (b.kind === 'journals') return 1;
+    }
+
+    const dateA = String(a.date || '');
+    const dateB = String(b.date || '');
+
+    if (dateA !== dateB) {
+      return dateB.localeCompare(dateA);
+    }
+
+    return String(a.title || '').localeCompare(String(b.title || ''));
+  });
+
+  for (const group of groups) {
+    group.tasks.sort((a, b) => Number(a.line || 0) - Number(b.line || 0));
+  }
+
+  return groups;
+}
+
 function renderWorkspaceTasksPanel() {
   const panel = ensureWorkspaceTasksPanel();
   const badge = document.getElementById('workspaceTasksBadge');
@@ -1375,7 +1444,11 @@ function renderWorkspaceTasksPanel() {
   }
 
   const openTasks = getOpenWorkspaceTasks();
-  const fileCount = new Set(openTasks.map((task) => task.filePath)).size;
+  const groups =
+    typeof getGroupedOpenWorkspaceTasks === 'function'
+      ? getGroupedOpenWorkspaceTasks()
+      : [];
+  const fileCount = groups.length;
 
   badge.textContent = `${openTasks.length} open`;
   summary.textContent = openTasks.length
@@ -1388,29 +1461,65 @@ function renderWorkspaceTasksPanel() {
     return;
   }
 
-  list.innerHTML = openTasks
-    .slice(0, 50)
-    .map((task) => {
-      const title = escapeHtml(task.text || '');
-      const fileName = escapeHtml(task.fileName || task.filePath || '');
-      const path = escapeHtml(task.filePath || '');
-      const kind = escapeHtml(task.fileKind || '');
+  list.innerHTML = groups
+    .map((group) => {
+      const icon =
+        group.kind === 'journals'
+          ? '📝'
+          : group.kind === 'concepts'
+            ? '🧠'
+            : '📄';
+
+      const groupTitle = escapeHtml(group.title || group.fileName || group.path);
+      const groupPath = escapeHtml(group.path || '');
+      const groupKind = escapeHtml(group.kind || '');
+
+      const tasksHtml = group.tasks
+        .map((task) => {
+          const title = escapeHtml(task.text || '');
+          const line = Number(task.line || 0);
+
+          return `
+            <button
+              type="button"
+              class="workspaceTasksItem"
+              data-workspace-task-item="1"
+              data-path="${groupPath}"
+              data-kind="${groupKind}"
+              data-line="${line}"
+              title="${groupPath}${line ? `:${line}` : ''}"
+            >
+              <span class="workspaceTasksIcon" aria-hidden="true">☐</span>
+              <span class="workspaceTasksBody">
+                <span class="workspaceTasksText">${title}</span>
+                <span class="workspaceTasksMeta">${line ? `line ${line}` : ''}</span>
+              </span>
+            </button>
+          `;
+        })
+        .join('');
 
       return `
-        <button
-          type="button"
-          class="workspaceTasksItem"
-          data-workspace-task-item="1"
-          data-path="${path}"
-          data-kind="${kind}"
-          title="${fileName}: ${title}"
-        >
-          <span class="workspaceTasksIcon" aria-hidden="true">☐</span>
-          <span class="workspaceTasksBody">
-            <span class="workspaceTasksText">${title}</span>
-            <span class="workspaceTasksMeta">${fileName}</span>
-          </span>
-        </button>
+        <div class="workspaceTaskGroup">
+          <button
+            type="button"
+            class="workspaceTaskGroupHeader"
+            data-workspace-task-group="1"
+            data-path="${groupPath}"
+            data-kind="${groupKind}"
+            title="${groupPath}"
+          >
+            <span class="workspaceTaskGroupTitle">
+              <span class="workspaceTaskGroupTitleIcon" aria-hidden="true">${icon}</span>
+              <span class="workspaceTaskGroupTitleText">${groupTitle}</span>
+            </span>
+            <span class="workspaceTaskGroupCount">${group.tasks.length}</span>
+          </button>
+
+          <div class="workspaceTasksGroupItems">
+            ${tasksHtml}
+          </div>
+        </div>
       `;
     })
     .join('');
@@ -1430,6 +1539,38 @@ function wireWorkspaceTasksPanel() {
   }
 
   panel.addEventListener('click', async (event) => {
+    const groupBtn = event.target?.closest?.('[data-workspace-task-group="1"]');
+
+    if (groupBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const path = groupBtn.dataset.path || '';
+      const kind = groupBtn.dataset.kind || '';
+
+      const file =
+        typeof findWorkspaceFileByPath === 'function'
+          ? findWorkspaceFileByPath(path, kind)
+          : null;
+
+      if (!file) {
+        showToast?.('Task group file not found', 'error', 2200);
+        log?.(`Workspace Tasks: group file not found path=${path} kind=${kind}`);
+        return;
+      }
+
+      log?.(`Workspace Tasks: opening group ${path}`);
+
+      if (typeof openWorkspaceFile === 'function') {
+        await openWorkspaceFile(file, kind || file.kind, 'workspace task group open');
+        return;
+      }
+
+      showToast?.('Workspace open helper missing', 'error', 2200);
+      log?.('Workspace Tasks: openWorkspaceFile missing');
+      return;
+    }
+
     const btn = event.target?.closest?.('[data-workspace-task-item="1"]');
     if (!btn) return;
 
@@ -3782,6 +3923,45 @@ function __addImageOnline() {
   __addImageLog('AddImage: inserted online');
 }
 
+function sanitizeAssetFileName(name) {
+  const raw = String(name || 'image').trim();
+
+  const safe = raw
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  return safe || 'image';
+}
+
+async function ensureWorkspaceAssetsImagesFolder() {
+  const workspaceState = globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
+
+  if (!workspaceState?.rootHandle) {
+    return null;
+  }
+
+  const root = workspaceState.rootHandle;
+  const assetsDir = await root.getDirectoryHandle('assets', { create: true });
+  const imagesDir = await assetsDir.getDirectoryHandle('images', { create: true });
+
+  return imagesDir;
+}
+
+function isWorkspaceImageMode() {
+  const workspaceState = globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
+  return Boolean(workspaceState?.rootHandle);
+}
+
+function getWorkspaceRelativeImagePath(fileName) {
+  return `../assets/images/${fileName}`;
+}
+
+function getStandaloneRelativeImagePath(fileName) {
+  return `./images/${fileName}`;
+}
+
 function __addImageLocalPick() {
   if (!__imageFileInput) {
     __addImageLog('AddImage: imageFile input missing');
@@ -3792,20 +3972,79 @@ function __addImageLocalPick() {
   __addImageLog('AddImage: opened local picker');
 }
 
+async function __copyLocalImageToWorkspaceAssets(file) {
+  const originalName = String(file?.name || 'image').trim();
+  const safeName = sanitizeAssetFileName(originalName);
+
+  const imagesDir = await ensureWorkspaceAssetsImagesFolder();
+
+  if (!imagesDir) {
+    return { safeName, markdownPath: getStandaloneRelativeImagePath(safeName), copied: false };
+  }
+
+  let targetName = safeName;
+  let counter = 2;
+
+  while (true) {
+    try {
+      const handle = await imagesDir.getFileHandle(targetName, { create: false });
+      if (handle) {
+        targetName = `${safeName}-${counter++}`;
+        continue;
+      }
+    } catch {
+      break;
+    }
+  }
+
+  const imageHandle = await imagesDir.getFileHandle(targetName, { create: true });
+  const writable = await imageHandle.createWritable();
+  await writable.write(file);
+  await writable.close();
+
+  const markdownPath = getWorkspaceRelativeImagePath(targetName);
+
+  return { safeName: targetName, markdownPath, copied: true };
+}
+
 if (__imageFileInput && !__imageFileInput.__addImageBound) {
-  __imageFileInput.addEventListener('change', (e) => {
+  __imageFileInput.addEventListener('change', async (e) => {
     try {
       const f = e.target.files && e.target.files[0];
       if (!f) {
         __addImageLog('AddImage: local empty');
         return;
       }
-      const rel = `./images/${f.name}`;
+
       const alt = __filenameToAlt(f.name);
-      const mdImg = __buildImgMd(alt, rel);
-      __insertIntoEditor(mdImg + '\n');
-      showToast('Local link inserted — place file in ./images next to the .md', 'ok', 3200);
-      __addImageLog(`AddImage: inserted local -> ${rel}`);
+
+      if (isWorkspaceImageMode()) {
+        try {
+          const result = await __copyLocalImageToWorkspaceAssets(f);
+          const mdImg = __buildImgMd(alt, result.markdownPath);
+          __insertIntoEditor(mdImg + '\n');
+          showToast(`Image copied to assets/images/${result.safeName}`, 'ok', 1800);
+          __addImageLog(`AddImage: copied local image to workspace assets/images/${result.safeName}`);
+          __addImageLog(`AddImage: inserted workspace image -> ${result.markdownPath}`);
+        } catch (err) {
+          __addImageLog('AddImage: workspace copy failed: ' + (err?.message || err));
+          const fallbackPath = getStandaloneRelativeImagePath(sanitizeAssetFileName(f.name));
+          const mdImg = __buildImgMd(alt, fallbackPath);
+          __insertIntoEditor(mdImg + '\n');
+          showToast('Image inserted as ' + fallbackPath, 'ok', 3200);
+          __addImageLog(`AddImage: fallback standalone local image -> ${fallbackPath}`);
+        }
+      } else {
+        const rel = getStandaloneRelativeImagePath(sanitizeAssetFileName(f.name));
+        const mdImg = __buildImgMd(alt, rel);
+        __insertIntoEditor(mdImg + '\n');
+        showToast(
+          'Image inserted as ' + rel + '. Keep the image in an images folder next to the Markdown file.',
+          'ok',
+          3200
+        );
+        __addImageLog(`AddImage: inserted standalone local image -> ${rel}`);
+      }
     } catch (err) {
       __addImageLog('AddImage: local insert failed: ' + (err?.message || err));
     }
@@ -3936,7 +4175,7 @@ function showExportMenu() {
     if (isSlidesContext()) {
       exportMenu.appendChild(
         makeMenuItem(
-          'Pandoc Markdown (.md)',
+          'Export Slides Markdown (.md)',
           () => {
             hideExportMenu();
             exportMarkdownDownload();
@@ -4007,239 +4246,873 @@ const TEMPLATES_V1_TEAM = true;
 const __TPL_MY_KEY = 'markmap:templates:my:v1';
 
 const __TPL_ORG = [
+  // ==========================
+  // Editor templates
+  // ==========================
   {
-    id: 'meeting_notes',
-    name: '🗓️ Meeting Notes',
-    body: `# 🗓️ Meeting Notes
-## 🎯 Purpose
-- ⟨Why are we meeting?⟩
-## 👥 Attendees
-- ⟨Name⟩
-## 🧩 Agenda
-- ⟨Topic 1⟩
-- ⟨Topic 2⟩
-## 📝 Notes
-- ⟨Key points⟩
-## ✅ Decisions
-- ⟨Decision⟩ — ⟨Owner⟩ — ⟨Rationale⟩
-## 🛠️ Action Items
-- [ ] ⟨Action⟩ — ⟨Owner⟩ — ⟨Due date⟩
-## ⚠️ Risks / Blockers
-- ⟨Risk⟩ — ⟨Mitigation⟩
-## 📌 Parking Lot
-- ⟨Out of scope topic⟩
+    id: 'editor_exec_brief',
+    context: 'editor',
+    name: '📝 Executive Brief',
+    body: `# Executive Brief
+
+Type: Brief
+Status: draft
+Tags:
+Created:
+Updated:
+
+## Executive Summary
+-
+
+## Context
+-
+
+## Key Points
+-
+-
+-
+
+## Recommendation
+-
+
+## Risks / Considerations
+-
+
+## Next Steps
+- [ ]
+
+## Sources
+-
+`,
+  },
+  {
+    id: 'editor_meeting_notes',
+    context: 'editor',
+    name: '📝 Meeting Notes',
+    body: `# Meeting Notes
+
+Type: Meeting
+Status: active
+Tags:
+Created:
+Updated:
+
+## Meeting Details
+Date:
+Participants:
+Topic:
+
+## Agenda
+-
+
+## Notes
+-
+
+## Decisions
+-
+
+## Action Items
+- [ ]
+
+## Follow-up
+-
+`,
+  },
+  {
+    id: 'editor_decision_record',
+    context: 'editor',
+    name: '📝 Decision Record',
+    body: `# Decision Record
+
+Type: Decision
+Status: proposed
+Tags:
+Created:
+Updated:
+
+## Decision
+-
+
+## Context
+-
+
+## Options Considered
+### Option 1
+-
+
+### Option 2
+-
+
+## Rationale
+-
+
+## Impact
+-
+
+## Risks
+-
+
+## Next Steps
+- [ ]
+`,
+  },
+  {
+    id: 'editor_project_plan',
+    context: 'editor',
+    name: '📝 Project Plan',
+    body: `# Project Plan
+
+Type: Project
+Status: active
+Tags:
+Created:
+Updated:
+
+## Objective
+-
+
+## Scope
+-
+
+## Workstreams
+-
+
+## Timeline
+-
+
+## Owners
+-
+
+## Risks / Dependencies
+-
+
+## Tasks
+- [ ]
+
+## Success Criteria
+-
+`,
+  },
+  {
+    id: 'editor_research_notes',
+    context: 'editor',
+    name: '📝 Research Notes',
+    body: `# Research Notes
+
+Type: Research
+Status: active
+Tags:
+Created:
+Updated:
+
+## Research Question
+-
+
+## Summary
+-
+
+## Findings
+-
+
+## Implications
+-
+
+## Open Questions
+-
+
+## Sources
+-
+`,
+  },
+  {
+    id: 'editor_customer_market_brief',
+    context: 'editor',
+    name: '📝 Customer / Market Brief',
+    body: `# Customer / Market Brief
+
+Type: Brief
+Status: active
+Tags:
+Created:
+Updated:
+
+## Overview
+-
+
+## Market / Customer Context
+-
+
+## Opportunity
+-
+
+## Challenges
+-
+
+## Strategic Fit
+-
+
+## Recommended Actions
+- [ ]
+
+## Sources
+-
+`,
+  },
+  {
+    id: 'editor_competitive_note',
+    context: 'editor',
+    name: '📝 Competitive Note',
+    body: `# Competitive Note
+
+Type: Competitive Note
+Status: active
+Tags:
+Created:
+Updated:
+
+## Competitor / Topic
+-
+
+## Summary
+-
+
+## What Changed
+-
+
+## Strengths
+-
+
+## Weaknesses
+-
+
+## Implications
+-
+
+## Response / Action
+- [ ]
+
+## Sources
+-
+`,
+  },
+  {
+    id: 'editor_action_plan',
+    context: 'editor',
+    name: '📝 Action Plan',
+    body: `# Action Plan
+
+Type: Action Plan
+Status: active
+Tags:
+Created:
+Updated:
+
+## Goal
+-
+
+## Actions
+- [ ]
+
+## Owners
+-
+
+## Timeline
+-
+
+## Risks
+-
+
+## Follow-up
+-
 `,
   },
 
+  // ==========================
+  // Journal templates
+  // ==========================
   {
-    id: 'one_on_one',
-    name: '🤝 1:1 Notes',
-    body: `# 🤝 1:1 Notes
-## 🧭 Context
-- ⟨Role / current priorities⟩
-## 🗂️ Topics
-- ⟨Topic 1⟩
-- ⟨Topic 2⟩
-## 🌟 Wins
-- ⟨What went well⟩
-## 🧱 Challenges
-- ⟨What’s hard / blocked⟩
-## 💬 Feedback
-- ✅ Keep doing
-  - ⟨Item⟩
-- 🔁 Start doing
-  - ⟨Item⟩
-- 🛑 Stop doing
-  - ⟨Item⟩
-## 🎯 Growth & Career
-- ⟨Skills to build⟩
-- ⟨Opportunities⟩
-## 🧾 Commitments
-- ⟨Commitment⟩ — ⟨Owner⟩ — ⟨Due date⟩
-## ✅ Next Steps
-- [ ] ⟨Action⟩ — ⟨Owner⟩ — ⟨Due date⟩
+    id: 'journal_daily_capture',
+    context: 'journal',
+    name: '📓 Daily Capture',
+    body: `# Daily Capture
+
+Type: Journal
+Status: active
+Tags:
+Created:
+Updated:
+
+## Plan
+- [ ]
+
+## Capture
+-
+
+## Meetings
+-
+
+## Decisions
+-
+
+## Tasks
+- [ ]
+
+## Links
+-
+
+## Review
+-
+`,
+  },
+  {
+    id: 'journal_meeting_debrief',
+    context: 'journal',
+    name: '📓 Meeting Debrief',
+    body: `# Meeting Debrief
+
+Type: Journal
+Status: active
+Tags:
+Created:
+Updated:
+
+## Meeting
+Date:
+Participants:
+Topic:
+
+## Summary
+-
+
+## Key Points
+-
+
+## Decisions
+-
+
+## Follow-up Tasks
+- [ ]
+
+## Related Concepts
+-
+`,
+  },
+  {
+    id: 'journal_customer_conversation',
+    context: 'journal',
+    name: '📓 Customer Conversation',
+    body: `# Customer Conversation
+
+Type: Journal
+Status: active
+Tags:
+Created:
+Updated:
+
+## Account / Customer
+Account:
+Region:
+Participants:
+
+## Conversation Summary
+-
+
+## Needs / Pain Points
+-
+
+## Opportunities
+-
+
+## Risks
+-
+
+## Follow-up
+- [ ]
+
+## Related Concepts
+-
+`,
+  },
+  {
+    id: 'journal_partner_conversation',
+    context: 'journal',
+    name: '📓 Partner Conversation',
+    body: `# Partner Conversation
+
+Type: Journal
+Status: active
+Tags:
+Created:
+Updated:
+
+## Partner
+Partner:
+Region:
+Participants:
+
+## Summary
+-
+
+## Joint Opportunity
+-
+
+## Dependencies
+-
+
+## Next Steps
+- [ ]
+
+## Related Concepts
+-
+`,
+  },
+  {
+    id: 'journal_travel_event_notes',
+    context: 'journal',
+    name: '📓 Travel / Event Notes',
+    body: `# Event / Travel Notes
+
+Type: Journal
+Status: active
+Tags:
+Created:
+Updated:
+
+## Event / Visit
+Name:
+Location:
+Date:
+
+## Key Observations
+-
+
+## People / Organizations
+-
+
+## Opportunities
+-
+
+## Follow-up
+- [ ]
+
+## Related Concepts
+-
+`,
+  },
+  {
+    id: 'journal_weekly_planning',
+    context: 'journal',
+    name: '📓 Weekly Planning',
+    body: `# Weekly Planning
+
+Type: Journal
+Status: active
+Tags:
+Created:
+Updated:
+
+## Focus Areas
+-
+
+## Key Outcomes
+-
+
+## Priority Tasks
+- [ ]
+
+## Meetings / Events
+-
+
+## Risks / Blockers
+-
+
+## Review Notes
+-
+`,
+  },
+  {
+    id: 'journal_followup_log',
+    context: 'journal',
+    name: '📓 Follow-up Log',
+    body: `# Follow-up Log
+
+Type: Journal
+Status: active
+Tags:
+Created:
+Updated:
+
+## Open Follow-ups
+- [ ]
+
+## Waiting For
+-
+
+## Completed
+- [x]
+
+## Notes
+-
 `,
   },
 
+  // ==========================
+  // Concept templates
+  // ==========================
   {
-    id: 'project_plan',
-    name: '🚀 Project Plan',
-    body: `# 🚀 Project Plan
-## 🎯 Goal
-- ⟨What success looks like⟩
-## 📌 Scope
-- ✅ In scope
-  - ⟨Item⟩
-- 🚫 Out of scope
-  - ⟨Item⟩
-## 🧱 Deliverables
-- ⟨Deliverable 1⟩
-- ⟨Deliverable 2⟩
-## 🗺️ Milestones
-- 🏁 M1: ⟨Milestone⟩ — ⟨Date⟩
-- 🏁 M2: ⟨Milestone⟩ — ⟨Date⟩
-## 👤 Owners
-- ⟨Workstream⟩ — ⟨Owner⟩
-## 📊 Metrics
-- ⟨Metric⟩ — ⟨Target⟩
-## 🧩 Dependencies
-- ⟨Dependency⟩ — ⟨Owner⟩
-## ⚠️ Risks
-- ⟨Risk⟩ — ⟨Mitigation⟩ — ⟨Owner⟩
-## 📅 Timeline
-- ⟨Phase⟩ — ⟨Start⟩ → ⟨End⟩
-## ✅ Next Actions
-- [ ] ⟨Action⟩ — ⟨Owner⟩ — ⟨Due date⟩
+    id: 'concept_general',
+    context: 'concept',
+    name: '🧠 General Concept',
+    body: `# ConceptName
+
+Type: Concept
+Status: active
+Tags:
+Created:
+Updated:
+
+## Summary
+-
+
+## Notes
+-
+
+## Related Concepts
+-
+
+## Tasks
+- [ ]
+
+## Sources
+-
 `,
   },
-
   {
-    id: 'decision_record',
-    name: '🧾 Decision Record',
-    body: `# 🧾 Decision Record
-## 🧠 Context
-- ⟨Why a decision is needed⟩
-## 🎯 Objective
-- ⟨What we optimize for⟩
-## 🧪 Options
-- Option A
-  - ✅ Pros
-    - ⟨Pro⟩
-  - ⚠️ Cons
-    - ⟨Con⟩
-- Option B
-  - ✅ Pros
-    - ⟨Pro⟩
-  - ⚠️ Cons
-    - ⟨Con⟩
-## ✅ Decision
-- ⟨Chosen option⟩
-## 🧩 Rationale
-- ⟨Why this was chosen⟩
-## 🔄 Tradeoffs
-- ⟨Tradeoff⟩
-## 📌 Impact
-- 👥 People
-  - ⟨Impact⟩
-- 🧱 Process
-  - ⟨Impact⟩
-- 🛠️ Tech
-  - ⟨Impact⟩
-## 🗓️ Follow-up
-- [ ] ⟨Action⟩ — ⟨Owner⟩ — ⟨Due date⟩
+    id: 'concept_account_profile',
+    context: 'concept',
+    name: '🧠 Account / Customer Profile',
+    body: `# AccountName
+
+Type: Account
+Status: active
+Tags:
+Created:
+Updated:
+Region:
+Segment:
+Key Contacts:
+Opportunity Stage:
+Owner:
+Next Step:
+
+## Summary
+-
+
+## Business Context
+-
+
+## Needs / Pain Points
+-
+
+## Opportunities
+-
+
+## Stakeholders
+-
+
+## Risks
+-
+
+## Next Steps
+- [ ]
+
+## Sources
+-
 `,
   },
-
   {
-    id: 'weekly_update',
-    name: '📣 Weekly Update',
-    body: `# 📣 Weekly Update
-## 🧭 Summary
-- ⟨One sentence summary⟩
-## 🌟 Wins
-- ⟨Win 1⟩
-- ⟨Win 2⟩
-## 📊 Metrics
-- ⟨Metric⟩ — ⟨This week⟩ → ⟨Trend⟩
-## 🧱 Blockers
-- ⟨Blocker⟩ — ⟨Help needed⟩
-## 🔜 Next Week Priorities
-- ⟨Priority 1⟩
-- ⟨Priority 2⟩
-## 🤝 Asks
-- ⟨Ask⟩ — ⟨Owner⟩ — ⟨Due date⟩
-## 🗓️ Upcoming
-- ⟨Event / deadline⟩
+    id: 'concept_opportunity_brief',
+    context: 'concept',
+    name: '🧠 Opportunity Brief',
+    body: `# OpportunityName
+
+Type: Opportunity
+Status: active
+Tags:
+Created:
+Updated:
+Account:
+Region:
+Stage:
+Owner:
+Next Step:
+
+## Summary
+-
+
+## Problem / Need
+-
+
+## Proposed Solution
+-
+
+## Business Impact
+-
+
+## Decision Process
+-
+
+## Risks / Dependencies
+-
+
+## Next Steps
+- [ ]
+
+## Sources
+-
 `,
   },
-
   {
-    id: 'brainstorm',
-    name: '💡 Brainstorm',
-    body: `# 💡 Brainstorm
-## 🧩 Problem Statement
-- ⟨What problem are we solving?⟩
-## 👥 Users / Stakeholders
-- ⟨Who is affected⟩
-## 🎯 Desired Outcome
-- ⟨What changes⟩
-## 🌩️ Ideas (Diverge)
-- Idea 1
-  - ⟨Notes⟩
-- Idea 2
-  - ⟨Notes⟩
-## 🔎 Assumptions
-- ⟨Assumption⟩ — ⟨Risk if wrong⟩
-## 🧪 Experiments (Converge)
-- [ ] ⟨Experiment⟩ — ⟨Owner⟩ — ⟨Success criteria⟩
-## ✅ Next Steps
-- [ ] ⟨Action⟩ — ⟨Owner⟩ — ⟨Due date⟩
+    id: 'concept_partner_profile',
+    context: 'concept',
+    name: '🧠 Partner Profile',
+    body: `# PartnerName
+
+Type: Partner
+Status: active
+Tags:
+Created:
+Updated:
+Region:
+Relationship Owner:
+Opportunity Area:
+Next Step:
+
+## Summary
+-
+
+## Capabilities
+-
+
+## Joint Opportunities
+-
+
+## Dependencies
+-
+
+## Risks
+-
+
+## Next Steps
+- [ ]
+
+## Sources
+-
 `,
   },
-
   {
-    id: 'sop_checklist',
-    name: '📋 SOP / Checklist',
-    body: `# 📋 SOP / Checklist
-## 🎯 Purpose
-- ⟨What this procedure achieves⟩
-## 🧰 Prerequisites
-- ⟨Access / tools / info needed⟩
-## 🧭 Steps
-- 1) ⟨Step⟩
-  - ✅ Expected result
-    - ⟨Result⟩
-  - ⚠️ Notes
-    - ⟨Note⟩
-- 2) ⟨Step⟩
-## 🔍 Verification
-- ⟨How to confirm success⟩
-## 🧯 Troubleshooting
-- Symptom
-  - ⟨What you see⟩
-  - Fix
-    - ⟨What to do⟩
-## 👤 Owners / Escalation
-- Primary: ⟨Name⟩
-- Backup: ⟨Name⟩
-## 🗓️ Review Cadence
-- ⟨When to revisit/update⟩
+    id: 'concept_product_feedback',
+    context: 'concept',
+    name: '🧠 Product Feedback',
+    body: `# Product Feedback — Topic
+
+Type: Product Feedback
+Status: active
+Tags:
+Created:
+Updated:
+Source:
+Account:
+Region:
+Priority:
+
+## Summary
+-
+
+## Feedback Details
+-
+
+## Business Impact
+-
+
+## Examples / Evidence
+-
+
+## Related Concepts
+-
+
+## Follow-up
+- [ ]
 `,
   },
-
   {
-    id: 'rfc_proposal',
-    name: '🧠 RFC / Proposal',
-    body: `# 🧠 RFC / Proposal
-## 🧾 Summary
-- ⟨One paragraph⟩
-## 🎯 Problem
-- ⟨What is broken / missing⟩
-## ✅ Goals
-- ⟨Goal 1⟩
-- ⟨Goal 2⟩
-## 🚫 Non‑Goals
-- ⟨Non‑goal⟩
-## 🧩 Proposed Solution
-- ⟨High-level approach⟩
-## 🏗️ Design
-- Architecture
-  - ⟨Components⟩
-- Data / Interfaces
-  - ⟨Inputs/outputs⟩
-## 🔁 Alternatives Considered
-- ⟨Alternative⟩ — ⟨Why not⟩
-## ⚠️ Risks
-- ⟨Risk⟩ — ⟨Mitigation⟩
-## 📊 Success Metrics
-- ⟨Metric⟩ — ⟨Target⟩
-## 🧪 Rollout Plan
-- Phase 1
-  - ⟨What⟩
-- Phase 2
-  - ⟨What⟩
-## ✅ Next Actions
-- [ ] ⟨Action⟩ — ⟨Owner⟩ — ⟨Due date⟩
+    id: 'concept_market_region_note',
+    context: 'concept',
+    name: '🧠 Market / Region Note',
+    body: `# Market / Region Note
+
+Type: Market Note
+Status: active
+Tags:
+Created:
+Updated:
+Region:
+Segment:
+
+## Summary
+-
+
+## Market Context
+-
+
+## Trends
+-
+
+## Opportunities
+-
+
+## Risks
+-
+
+## Key Accounts / Partners
+-
+
+## Sources
+-
+`,
+  },
+  {
+    id: 'concept_competitor_profile',
+    context: 'concept',
+    name: '🧠 Competitor Profile',
+    body: `# CompetitorName
+
+Type: Competitor
+Status: active
+Tags:
+Created:
+Updated:
+Region:
+Segment:
+
+## Summary
+-
+
+## Positioning
+-
+
+## Strengths
+-
+
+## Weaknesses
+-
+
+## Recent Activity
+-
+
+## Implications
+-
+
+## Sources
+-
+`,
+  },
+  {
+    id: 'concept_stakeholder_map',
+    context: 'concept',
+    name: '🧠 Stakeholder Map',
+    body: `# Stakeholder Map — Account / Initiative
+
+Type: Stakeholder Map
+Status: active
+Tags:
+Created:
+Updated:
+Account:
+Region:
+Owner:
+
+## Stakeholders
+-
+
+## Influence / Role
+-
+
+## Needs / Concerns
+-
+
+## Engagement Plan
+-
+
+## Next Steps
+- [ ]
+`,
+  },
+  {
+    id: 'concept_playbook_process_note',
+    context: 'concept',
+    name: '🧠 Playbook / Process Note',
+    body: `# Playbook — Topic
+
+Type: Playbook
+Status: active
+Tags:
+Created:
+Updated:
+
+## Purpose
+-
+
+## When to Use
+-
+
+## Process
+-
+
+## Checklist
+- [ ]
+
+## Examples
+-
+
+## Related Concepts
+-
+`,
+  },
+  {
+    id: 'concept_feature_product_concept',
+    context: 'concept',
+    name: '🧠 Feature / Product Concept',
+    body: `# Feature / Product Concept
+
+Type: Product Concept
+Status: active
+Tags:
+Created:
+Updated:
+Owner:
+Status:
+
+## Summary
+-
+
+## User / Customer Need
+-
+
+## Proposed Behavior
+-
+
+## Business Value
+-
+
+## Dependencies
+-
+
+## Open Questions
+-
+
+## Tasks
+- [ ]
 `,
   },
 ];
@@ -4630,11 +5503,12 @@ function __tplShow() {
 
 const __TPL_PANDOC_ORG = [
   {
-    id: 'pandoc_templates_v3',
-    name: '📊 Pandoc Slides Templates V3 — Full Test Deck',
-    body: `layout: title
+    id: 'pandoc_title_slide',
+    name: '📊 Title Slide — Title + Subtitle',
+    body: `# Strategy Proposal
 
-# Strategy Proposal
+<!-- Target PPT layout: Title Slide -->
+<!-- Source layout: title -->
 
 Market expansion, product acceleration, and execution roadmap
 
@@ -4642,11 +5516,18 @@ Business Development Team
 
 2026-05-26
 
----
+::: notes
+Opening context and presenter introduction.
+:::
+`,
+  },
+  {
+    id: 'pandoc_agenda',
+    name: '📊 Agenda — Bullet List',
+    body: `# Agenda
 
-layout: agenda
-
-# Agenda
+<!-- Target PPT layout: Agenda -->
+<!-- Source layout: agenda -->
 
 - Executive summary and recommendation
 - Market opportunity and customer demand signals
@@ -4654,72 +5535,109 @@ layout: agenda
 - Product and go-to-market priorities
 - Execution roadmap and next steps
 
----
+::: notes
+Briefly explain the structure of the presentation.
+:::
+`,
+  },
+  {
+    id: 'pandoc_exec_summary',
+    name: '📊 Executive Summary — Key Points',
+    body: `# Executive Summary
 
-layout: content
-
-# 1. Executive Summary
+<!-- Target PPT layout: Title and Content -->
+<!-- Source layout: content -->
 
 - Clear growth opportunity exists in priority customer segments with strong demand signals.
 - Product innovation is needed to sustain differentiation and improve time-to-value.
 - Go-to-market execution should focus on faster validation, partner leverage, and clearer prioritization.
 - Recommended path combines focused market expansion with AI-enabled product acceleration.
 
----
+::: notes
+State the recommendation early and make the business implication clear.
+:::
+`,
+  },
+  {
+    id: 'pandoc_growth_strategy',
+    name: '📊 Growth Strategy — Two Columns',
+    body: `# Growth Strategy
 
-layout: twocols
+<!-- Target PPT layout: Two Content -->
+<!-- Source layout: twocols -->
 
-# 2. Growth Strategy
-
-## Left
+:::: {.columns}
+::: {.column}
+## Market / GTM
 - Expand priority customer segments with measurable pipeline potential.
 - Strengthen partner-led motion to reduce acquisition friction.
 - Focus regional execution on markets with clear demand signals.
 - Improve account prioritization using data-driven opportunity scoring.
+:::
 
-## Right
+::: {.column}
+## Product / Execution
 - Accelerate AI-enabled product capabilities for high-value workflows.
 - Simplify user experience across onboarding, reporting, and daily execution.
 - Consolidate platform capabilities to reduce complexity.
 - Shorten release cycles to improve learning speed and customer feedback loops.
+:::
+::::
 
----
+::: notes
+Use this slide to show the balanced strategy across market and product.
+:::
+`,
+  },
+  {
+    id: 'pandoc_market_opportunity',
+    name: '📊 Market Opportunity — Image + Text',
+    body: `# Market Opportunity
 
-layout: image-text
+<!-- Target PPT layout: Image Left + Text Right -->
+<!-- Source layout: image-text -->
 
-# 3. Market Opportunity
+../assets/images/market-opportunity.png
 
-## Image
-./images/market-opportunity.png
-
-## Text
 - Local demand for scalable digital infrastructure continues to increase.
 - AI workloads create additional pressure for performance, reliability, and governance.
 - Customers want solutions that reduce complexity while improving decision speed.
 - Partner ecosystem can accelerate adoption if the value proposition is specific and easy to explain.
 - Initial validation should focus on high-intent segments before broader expansion.
 
----
+::: notes
+Explain the demand signals and why the market is attractive now.
+:::
+`,
+  },
+  {
+    id: 'pandoc_product_roadmap',
+    name: '📊 Product Roadmap — Text + Image',
+    body: `# Product Roadmap
 
-layout: text-image
+<!-- Target PPT layout: Text Left + Image Right -->
+<!-- Source layout: text-image -->
 
-# 4. Product Roadmap
-
-## Text
 - Simplify core workflows to reduce time-to-value for new users.
 - Add AI-assisted decision support where users already experience repeated manual work.
 - Improve executive visibility through better reporting and clearer business metrics.
 - Prioritize fewer, higher-impact releases instead of a broad list of disconnected features.
 - Use customer feedback loops to validate adoption before scaling investment.
 
-## Image
-./images/product-roadmap.png
+../assets/images/product-roadmap.png
 
----
+::: notes
+Connect roadmap priorities to customer value and execution focus.
+:::
+`,
+  },
+  {
+    id: 'pandoc_exec_priorities',
+    name: '📊 Key Execution Priorities — Dense Bullets',
+    body: `# Key Execution Priorities
 
-layout: bullets-2
-
-# 5. Key Execution Priorities
+<!-- Target PPT layout: Title and Content -->
+<!-- Source layout: bullets-2 -->
 
 - Market growth
 - Segment expansion
@@ -4732,53 +5650,77 @@ layout: bullets-2
 - Pipeline governance
 - Customer success enablement
 
----
+::: notes
+Use this slide when you need a compact priority overview.
+:::
+`,
+  },
+  {
+    id: 'pandoc_strategic_options',
+    name: '📊 Strategic Options — Three Columns',
+    body: `# Strategic Options
 
-layout: threecols
+<!-- Target PPT layout: Three Content -->
+<!-- Source layout: threecols -->
 
-# 6. Strategic Options
-
-## Column 1
-- Option A: focused market validation
+:::: {.columns}
+::: {.column}
+## Option A
+- Focused market validation
 - Fast to implement
 - Lower investment requirement
 - Best for reducing uncertainty early
+:::
 
-## Column 2
-- Option B: balanced growth and product acceleration
+::: {.column}
+## Option B
+- Balanced growth and product acceleration
 - Medium implementation complexity
 - Stronger cross-functional impact
 - Best balance of speed, risk, and upside
+:::
 
-## Column 3
-- Option C: aggressive expansion
+::: {.column}
+## Option C
+- Aggressive expansion
 - Highest upside potential
 - Higher execution risk
 - Requires stronger funding, governance, and operational capacity
+:::
+::::
 
----
+::: notes
+Present the trade-offs and position the recommended option.
+:::
+`,
+  },
+  {
+    id: 'pandoc_operating_model',
+    name: '📊 Operating Model Overview — 2x2 Grid',
+    body: `# Operating Model Overview
 
-layout: grid2
+<!-- Target PPT layout: Four Content -->
+<!-- Source layout: grid2 -->
 
-# 7. Operating Model Overview
+| Area | Focus |
+|---|---|
+| Market | Focus on priority segments with clear demand signals, measurable pipeline, and partner leverage. |
+| Product | Accelerate AI and UX roadmap delivery while reducing platform complexity. |
+| Operations | Simplify decision cadence, clarify ownership, and improve execution visibility. |
+| Financials | Improve margin discipline, investment prioritization, and ROI tracking. |
 
-## Market
-Focus on priority segments with clear demand signals, measurable pipeline, and partner leverage.
+::: notes
+Use this to summarize operating model implications.
+:::
+`,
+  },
+  {
+    id: 'pandoc_revenue_kpi',
+    name: '📊 Revenue Growth Potential — KPI',
+    body: `# Revenue Growth Potential
 
-## Product
-Accelerate AI and UX roadmap delivery while reducing platform complexity.
-
-## Operations
-Simplify decision cadence, clarify ownership, and improve execution visibility.
-
-## Financials
-Improve margin discipline, investment prioritization, and ROI tracking.
-
----
-
-layout: kpi
-
-# 8. Revenue Growth Potential
+<!-- Target PPT layout: KPI / Big Number -->
+<!-- Source layout: kpi -->
 
 ## 42%
 
@@ -4790,11 +5732,18 @@ Expected growth potential over the planning horizon based on focused market expa
 - Partner-led go-to-market
 - Improved customer retention
 
----
+::: notes
+Explain the number, the assumption behind it, and the key growth drivers.
+:::
+`,
+  },
+  {
+    id: 'pandoc_option_comparison',
+    name: '📊 Option Comparison — Table',
+    body: `# Option Comparison
 
-layout: table
-
-# 9. Option Comparison
+<!-- Target PPT layout: Title and Table -->
+<!-- Source layout: table -->
 
 | Criteria | Option A | Option B | Option C |
 |---|---|---|---|
@@ -4805,42 +5754,162 @@ layout: table
 | Governance need | Low | Medium | High |
 | Recommended use | Validation | Balanced scale | Aggressive expansion |
 
----
+::: notes
+Use this slide to support decision-making and trade-off discussion.
+:::
+`,
+  },
+  {
+    id: 'pandoc_architecture_view',
+    name: '📊 Architecture View — Image + Caption',
+    body: `# Architecture View
 
-layout: image-caption
+<!-- Target PPT layout: Image with Caption -->
+<!-- Source layout: image-caption -->
 
-# 10. Architecture View
-
-./images/architecture-view.png
+../assets/images/architecture-view.png
 
 The target architecture should support scale, observability, integration readiness, and faster product experimentation.
 
----
+::: notes
+Use this slide for system, operating model, or solution architecture.
+:::
+`,
+  },
+  {
+    id: 'pandoc_recommendation',
+    name: '📊 Recommendation — Section Divider',
+    body: `# Recommendation
 
-layout: section
-
-# 11. Recommendation
+<!-- Target PPT layout: Section Header -->
+<!-- Source layout: section -->
 
 Focused expansion with accelerated AI product delivery
 
----
+::: notes
+Transition from analysis to recommendation.
+:::
+`,
+  },
+  {
+    id: 'pandoc_key_message',
+    name: '📊 Key Message — Highlight',
+    body: `# Key Message
 
-layout: highlight
-
-# 12. Key Message
+<!-- Target PPT layout: Highlight / Quote -->
+<!-- Source layout: highlight -->
 
 The best path is to combine focused market expansion with product simplification and AI-enabled differentiation.
 
----
+::: notes
+Use this as a memorable takeaway slide.
+:::
+`,
+  },
+  {
+    id: 'pandoc_next_steps',
+    name: '📊 Next Steps — Action List',
+    body: `# Next Steps
 
-layout: content
-
-# 13. Next Steps
+<!-- Target PPT layout: Title and Content -->
+<!-- Source layout: content -->
 
 - Validate the recommended option with priority stakeholders.
 - Confirm target segments, success metrics, and investment guardrails.
 - Build a 90-day execution plan with clear owners and decision checkpoints.
 - Prepare a follow-up review to assess early results and adjust priorities.
+
+::: notes
+Close with owners, decisions, and timing.
+:::
+`,
+  },
+  {
+    id: 'pandoc_account_snapshot',
+    name: '📊 Customer / Account Snapshot — Profile Card',
+    body: `# Customer / Account Snapshot
+
+<!-- Target PPT layout: Title and Two Content -->
+<!-- Source layout: account-snapshot -->
+
+## Profile
+- Account:
+- Region:
+- Segment:
+- Current status:
+
+## Opportunity
+- Need:
+- Business value:
+- Next step:
+
+::: notes
+Use this for customer, account, partner, or region snapshots.
+:::
+`,
+  },
+  {
+    id: 'pandoc_decision_slide',
+    name: '📊 Decision Slide — Recommendation + Rationale',
+    body: `# Decision
+
+<!-- Target PPT layout: Title and Two Content -->
+<!-- Source layout: decision -->
+
+## Recommendation
+-
+
+## Rationale
+- Reason 1
+- Reason 2
+- Reason 3
+
+## Alternatives
+-
+
+::: notes
+Use this when a decision is required from leadership or stakeholders.
+:::
+`,
+  },
+  {
+    id: 'pandoc_risks_table',
+    name: '📊 Risks / Dependencies — Table',
+    body: `# Risks / Dependencies
+
+<!-- Target PPT layout: Title and Table -->
+<!-- Source layout: risks-table -->
+
+| Risk / Dependency | Impact | Owner | Mitigation |
+|---|---|---|---|
+|  |  |  |  |
+
+::: notes
+Use this for governance, delivery, or execution risk discussions.
+:::
+`,
+  },
+  {
+    id: 'pandoc_timeline',
+    name: '📊 Timeline / Roadmap — Horizontal Timeline',
+    body: `# Timeline / Roadmap
+
+<!-- Target PPT layout: Timeline -->
+<!-- Source layout: timeline -->
+
+## Phases
+- Phase 1 — Discovery — Owner — Date
+- Phase 2 — Pilot — Owner — Date
+- Phase 3 — Scale — Owner — Date
+
+## Key Milestones
+- Milestone 1
+- Milestone 2
+- Milestone 3
+
+::: notes
+Use this for roadmap, launch plan, implementation plan, or project phasing.
+:::
 `,
   },
 ];
@@ -4876,7 +5945,7 @@ function __tplPandocShow() {
 
   __tplPandocMenu.appendChild(
     makeMenuItem(
-      'Export Pandoc Markdown (.md)',
+      'Export Slides Markdown (.md)',
       () => {
         __tplPandocHide();
         exportMarkdownDownload();
@@ -8273,30 +9342,53 @@ async function copyMarkdownToClipboard() {
   }
 }
 
+function getCurrentMarkdownText() {
+  if (typeof window.__cmGetText === 'function') {
+    return window.__cmGetText();
+  }
+
+  const mdEl = document.getElementById('md');
+  return mdEl?.value || '';
+}
+
+function downloadTextFile(text, fileName, mimeType = 'text/markdown;charset=utf-8') {
+  const blob = new Blob([text || ''], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName || 'document.md';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 500);
+}
+
+function getMarkdownExportFileName(defaultName = 'document.md') {
+  const name =
+    typeof currentFileName !== 'undefined' && currentFileName
+      ? currentFileName
+      : defaultName;
+
+  return String(name || defaultName).replace(/\.[^.]+$/, '') + '.md';
+}
+
+function exportCurrentMarkdownFile(fileName) {
+  const text = getCurrentMarkdownText();
+  const safeName = fileName || getMarkdownExportFileName('slides.md');
+  downloadTextFile(text, safeName, 'text/markdown;charset=utf-8');
+}
+
 function exportMarkdownDownload() {
   try {
-    if (typeof globalThis.transformLayouts !== 'function') {
-      showToast('Pandoc export error: transformLayouts is not loaded', 'error', 3500);
-      log('Pandoc export error: globalThis.transformLayouts is not defined');
-      return;
-    }
-
-    const text = globalThis.transformLayouts(md.value);
-
-    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = currentFileName.replace('.md', '') + '_pandoc.md';
-
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    URL.revokeObjectURL(url);
-
-    showToast('Run: pandoc file.md -o output.pptx --reference-doc=template.pptx', 'download');
+    const text = getCurrentMarkdownText();
+    const fileName = getMarkdownExportFileName('slides.md');
+    downloadTextFile(text, fileName, 'text/markdown;charset=utf-8');
+    showToast(`Exported ✓ ${fileName}`, 'download', 2600);
+    log(`Export Slides Markdown: downloaded ${fileName}`);
   } catch (e) {
     showToast(' ❌ Export failed: ' + e.message, 'error');
   }
