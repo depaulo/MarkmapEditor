@@ -1514,12 +1514,29 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
       globalThis.currentAppContextId = ctx.id;
     </script>
     <script type="module">
+      const welcomeScript = document.createElement('script');
+      welcomeScript.src = './js/ui/welcome.js';
+
+      const helpScript = document.createElement('script');
+      helpScript.src = './js/ui/help.js';
+
+      const templatesDataScript = document.createElement('script');
+      templatesDataScript.src = './js/templates/templates-data.js';
+
       const mainScript = document.createElement('script');
       mainScript.src = './js/main.js';
+
+      const templatesMenuScript = document.createElement('script');
+      templatesMenuScript.src = './js/templates/templates-menu.js';
+
+      document.body.appendChild(welcomeScript);
+      document.body.appendChild(helpScript);
+      document.body.appendChild(templatesDataScript);
       mainScript.onload = function () {
         window.dispatchEvent(new Event('mme-main-ready'));
       };
       document.body.appendChild(mainScript);
+      document.body.appendChild(templatesMenuScript);
     </script>
 
     <script type="module" src="./js/editor/codemirror-bootstrap.js"></script>

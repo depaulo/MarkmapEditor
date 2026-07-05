@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v11-sidebar-menu-layering';
+const APP_VERSION = 'markmap-journal-pwa-v13-template-split';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -30,6 +30,10 @@ const LOCAL_APP_SHELL = [
   './css/overlays.css',
   './css/workspace.css',
   './js/main.js',
+  './js/ui/welcome.js',
+  './js/ui/help.js',
+  './js/templates/templates-data.js',
+  './js/templates/templates-menu.js',
   './js/export/pandoc-layout-engine.js',
   './js/editor/codemirror-bootstrap.js',
   './js/core/context.js',
