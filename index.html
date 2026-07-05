@@ -108,6 +108,19 @@
         <div id="exportMenu" class="menu" style="display: none"></div>
       </div>
 
+      <div class="btnSep" aria-hidden="true"></div>
+
+      <div class="btnGroup" id="grpHelp">
+        <button
+          id="btnHelp"
+          type="button"
+          title="Help / Reference"
+          aria-label="Help / Reference"
+        >
+          ?
+        </button>
+      </div>
+
       <span id="saveStatus"></span>
     </div>
     <div id="layout">
@@ -2331,6 +2344,35 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         >
           Tip: Use normal multi-line editing here. Markdown headings (##) work great in Markmap.
         </div>
+      </div>
+    </div>
+    <div id="helpOverlay" class="helpOverlay" hidden>
+      <div
+        class="helpPanel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="helpTitle"
+      >
+        <div class="helpHeader">
+          <div>
+            <div id="helpTitle" class="helpTitle">Help / Reference</div>
+            <div id="helpSubtitle" class="helpSubtitle">
+              Contextual reference for the current mode.
+            </div>
+          </div>
+
+          <button
+            id="btnHelpClose"
+            type="button"
+            class="helpClose"
+            title="Close help"
+            aria-label="Close help"
+          >
+            ×
+          </button>
+        </div>
+
+        <div id="helpBody" class="helpBody"></div>
       </div>
     </div>
     <div id="welcomeOverlay" class="welcomeOverlay" hidden>
