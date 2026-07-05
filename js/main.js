@@ -706,8 +706,7 @@ async function buildWorkspaceIndex() {
   renderWorkspaceRelatedPanel?.();
   renderWorkspaceTagsPanel?.();
   updateWorkspaceJournalSidebarTitlesFromIndex?.();
-   renderWorkspaceJournalTimeline?.();
-
+  renderWorkspaceJournalTimeline?.();
 
   const openTasks = tasks.filter((task) => !task.done).length;
   const doneTasks = tasks.filter((task) => task.done).length;
@@ -735,6 +734,7 @@ function scheduleWorkspaceIndexRebuild(reason = 'scheduled') {
       renderWorkspaceTasksPanel?.();
       renderWorkspaceRelatedPanel?.();
       renderWorkspaceTagsPanel?.();
+      renderWorkspaceJournalTimeline?.();
       log?.(`Workspace Index: rebuild complete (${reason})`);
     } catch (e) {
       log?.(`Workspace Index: rebuild failed (${reason}): ${e?.message || e}`);
@@ -2958,6 +2958,34 @@ function getJournalDisplayDate(file) {
 // PART C — Journal Timeline Renderer
 // ================================
 
+function getJournalMonthGroupLabel(dateIso) {
+  const value = String(dateIso || '').trim();
+
+  const match = value.match(/^(\d{4})-(\d{2})-\d{2}$/);
+
+  if (!match) return 'Undated';
+
+  const year = match[1];
+  const month = Number(match[2]);
+
+  const monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  return `${monthNames[month - 1] || 'Unknown'} ${year}`;
+}
+
 function renderWorkspaceJournalTimeline() {
   const container = document.getElementById('workspaceJournalsList');
 
@@ -2966,7 +2994,14 @@ function renderWorkspaceJournalTimeline() {
     return;
   }
 
-  const journals = WORKSPACE_STATE.files?.journals || [];
+  const workspaceState =
+    globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
+
+  if (!workspaceState) {
+    return;
+  }
+
+  const journals = workspaceState?.files?.journals || [];
 
   if (!journals.length) {
     container.innerHTML = '<div class="workspaceEmpty">No journals</div>';
@@ -3012,6 +3047,30 @@ function renderWorkspaceJournalTimeline() {
     `;
   }
 
+  const monthGroups = new Map();
+
+  for (const file of sorted) {
+    const date = getJournalDisplayDate(file);
+    const groupLabel = getJournalMonthGroupLabel(date);
+
+    if (!monthGroups.has(groupLabel)) {
+      monthGroups.set(groupLabel, []);
+    }
+
+    monthGroups.get(groupLabel).push(file);
+  }
+
+  const monthGroupsHtml = Array.from(monthGroups.entries())
+    .map(([label, files]) => {
+      return `
+        <div class="workspaceJournalGroup">
+          <div class="workspaceJournalGroupTitle">${escapeHtml(label)}</div>
+          ${files.map(renderJournalButton).join('')}
+        </div>
+      `;
+    })
+    .join('');
+
   container.innerHTML = `
     <div class="workspaceJournalTimeline">
       <div class="workspaceJournalGroup">
@@ -3019,14 +3078,14 @@ function renderWorkspaceJournalTimeline() {
         ${recent.map(renderJournalButton).join('')}
       </div>
 
-      <div class="workspaceJournalGroup">
-        <div class="workspaceJournalGroupTitle">All Journals</div>
-        ${sorted.map(renderJournalButton).join('')}
-      </div>
+      ${monthGroupsHtml}
     </div>
   `;
 
   window.updateWorkspaceActiveFileHighlight?.();
+  log?.(
+    `Workspace Journals: timeline rendered journals=${sorted.length} groups=${monthGroups.size} indexReady=${WORKSPACE_INDEX_STATE?.ready}`
+  );
 }
 
 // ================================
@@ -10023,6 +10082,111 @@ if (restored) {
 }
 
 startAutoSave();
+
+maybeShowWelcomeOverlay();
+
+// ================================
+// Welcome Screen
+// ================================
+
+const WELCOME_STORAGE_KEY = 'markmap:welcomeDismissed';
+
+function shouldShowWelcome() {
+  try {
+    return localStorage.getItem(WELCOME_STORAGE_KEY) !== '1';
+  } catch {
+    return true;
+  }
+}
+
+function showWelcomeOverlay() {
+  const overlay = document.getElementById('welcomeOverlay');
+
+  if (!overlay) {
+    log?.('Welcome: overlay missing');
+    return;
+  }
+
+  overlay.hidden = false;
+
+  try {
+    overlay.focus?.();
+  } catch {}
+
+  log?.('Welcome: shown');
+}
+
+function hideWelcomeOverlay({ remember = true } = {}) {
+  const overlay = document.getElementById('welcomeOverlay');
+
+  if (overlay) {
+    overlay.hidden = true;
+  }
+
+  if (remember) {
+    try {
+      localStorage.setItem(WELCOME_STORAGE_KEY, '1');
+    } catch {}
+  }
+
+  log?.('Welcome: hidden');
+}
+
+function wireWelcomeOverlay() {
+  const overlay = document.getElementById('welcomeOverlay');
+  const btnClose = document.getElementById('btnWelcomeClose');
+  const btnContinue = document.getElementById('btnWelcomeContinue');
+
+  if (!overlay) {
+    log?.('Welcome: wire skipped; overlay missing');
+    return;
+  }
+
+  if (overlay.__welcomeBound) {
+    return;
+  }
+
+  function closeWelcome(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+
+    hideWelcomeOverlay({ remember: true });
+  }
+
+  btnClose?.addEventListener('click', closeWelcome);
+  btnContinue?.addEventListener('click', closeWelcome);
+
+  overlay.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeWelcome(event);
+    }
+  });
+
+  overlay.__welcomeBound = true;
+
+  log?.('Welcome: wired');
+}
+
+function maybeShowWelcomeOverlay() {
+  wireWelcomeOverlay();
+
+  if (shouldShowWelcome()) {
+    showWelcomeOverlay();
+  }
+}
+
+try {
+  window.resetWelcomeScreen = function resetWelcomeScreen() {
+    try {
+      localStorage.removeItem(WELCOME_STORAGE_KEY);
+    } catch {}
+
+    showWelcomeOverlay?.();
+  };
+
+  window.showWelcomeOverlay = showWelcomeOverlay;
+  window.hideWelcomeOverlay = hideWelcomeOverlay;
+} catch {}
 
 // Debounced rendering (unchanged)
 let renderTimer = null;

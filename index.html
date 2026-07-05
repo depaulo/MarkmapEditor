@@ -71,7 +71,9 @@
       <div class="btnGroup" id="grpInsert">
         <button id="btnAddImage" title="Add image">🖼️</button>
         <button id="btnTemplatesMarkmap" title="Templates Markmap">🧠 Markmap ▾</button>
-        <button id="btnTemplatesPandoc" class="contextSlidesOnly" title="Templates Pandoc">📊 Pandoc ▾</button>
+        <button id="btnTemplatesPandoc" class="contextSlidesOnly" title="Templates Pandoc">
+          📊 Pandoc ▾
+        </button>
 
         <input type="file" id="imageFile" accept="image/png,image/jpeg" style="display: none" />
         <div id="imageMenu" class="menu" style="display: none"></div>
@@ -1548,6 +1550,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
         renderSidebarFiles(WORKSPACE_STATE.files.journals, 'workspaceJournalsList', 'journals');
         renderSidebarFiles(WORKSPACE_STATE.files.concepts, 'workspaceConceptsList', 'concepts');
+        renderWorkspaceJournalTimeline?.();
 
         window.updateWorkspaceActiveFileHighlight?.();
         window.scheduleWorkspaceIndexRebuild?.('sidebar refreshed');
@@ -2330,6 +2333,87 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
         </div>
       </div>
     </div>
+    <div id="welcomeOverlay" class="welcomeOverlay" hidden>
+      <div class="welcomePanel" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+        <div class="welcomeHeader">
+          <div>
+            <div id="welcomeTitle" class="welcomeTitle">Welcome to Markmap Editor</div>
+
+            <div class="welcomeSubtitle">
+              A Markdown-first workspace for writing, mapping, reviewing, and exporting your ideas.
+            </div>
+          </div>
+
+          <button
+            id="btnWelcomeClose"
+            type="button"
+            class="welcomeClose"
+            title="Close welcome"
+            aria-label="Close welcome"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="welcomeBody">
+          <section class="welcomeSection">
+            <h2>Markdown + Mindmap + Preview</h2>
+            <p>
+              Write in Markdown, view your structure as an interactive mindmap, and switch to
+              preview or export views when you need a cleaner reading or publishing mode.
+            </p>
+          </section>
+
+          <div class="welcomeIntro">Choose the mode that fits your work:</div>
+
+          <section class="welcomeModes">
+            <article class="welcomeModeCard">
+              <div class="welcomeModeIcon" aria-hidden="true">✏️</div>
+
+              <div class="welcomeModeContent">
+                <h3>Editor</h3>
+                <p>
+                  Use Editor mode for standalone Markdown files, mindmaps, outlines, notes, and
+                  general writing.
+                </p>
+              </div>
+            </article>
+
+            <article class="welcomeModeCard">
+              <div class="welcomeModeIcon" aria-hidden="true">📓</div>
+
+              <div class="welcomeModeContent">
+                <h3>Journal</h3>
+                <p>
+                  Use Journal mode for workspace-based writing with journals, concepts, search,
+                  backlinks, tags, open tasks, and archive.
+                </p>
+              </div>
+            </article>
+
+            <article class="welcomeModeCard">
+              <div class="welcomeModeIcon" aria-hidden="true">📊</div>
+
+              <div class="welcomeModeContent">
+                <h3>Pandoc / Slides</h3>
+                <p>
+                  Use Pandoc / Slides mode for presentation-oriented Markdown and export workflows.
+                </p>
+              </div>
+            </article>
+          </section>
+
+          <div class="welcomeHint">
+            You can change modes anytime using the Mode selector in the toolbar.
+          </div>
+        </div>
+
+        <div class="welcomeFooter">
+          <button id="btnWelcomeContinue" type="button" class="welcomePrimary">Continue</button>
+        </div>
+      </div>
+    </div>
+
     <script src="./js/pwa/diagnostics.js"></script>
   </body>
 </html>
