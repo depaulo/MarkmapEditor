@@ -131,9 +131,7 @@ async function reopenLastActiveWorkspaceFileIfPossible() {
 
     return true;
   } catch (e) {
-    globalThis.MME_APP?.log?.(
-      `Workspace: failed to reopen last active file: ${e?.message || e}`
-    );
+    globalThis.MME_APP?.log?.(`Workspace: failed to reopen last active file: ${e?.message || e}`);
     return false;
   }
 }
@@ -282,8 +280,7 @@ async function openToday() {
   const dd = String(d.getDate()).padStart(2, '0');
   const fileName = `${yyyy}-${mm}-${dd}.md`;
 
-
- const fileHandle = await WORKSPACE_STATE.folders.journals.getFileHandle(fileName, {
+  const fileHandle = await WORKSPACE_STATE.folders.journals.getFileHandle(fileName, {
     create: true,
   });
 
@@ -296,46 +293,36 @@ async function openToday() {
     text = `---
 type: journal
 date: ${dateString}
+created: ${dateString}
+updated:
+status: active
+tags: []
 ---
 
-# Daily Capture
+# ${dateString} — Daily Capture
 
 Tags:
 
-## Daily Focus
-
--
+## Plan
+- [ ]
 
 ## Capture
-
 -
 
 ## Meetings
-
-### Meeting — Topic / Account
-
-- Time:
-- Context:
-- Notes:
-- Decisions:
-- Follow-ups:
-  - [ ]
-
-## Tasks
-
-- [ ]
-
-## Notes
-
 -
 
 ## Decisions
-
 -
 
-## Follow-ups
-
+## Tasks
 - [ ]
+
+## Links
+-
+
+## Review
+-
 `;
 
     const writable = await fileHandle.createWritable();
@@ -528,9 +515,7 @@ async function archiveActiveWorkspaceFile() {
 
   if (!active || !active.handle || !active.kind || !active.name) {
     globalThis.MME_APP?.showToast?.('No active workspace file to archive', 'error', 2600);
-    globalThis.MME_APP?.log?.(
-      'Workspace: Archive blocked because no active workspace file exists'
-    );
+    globalThis.MME_APP?.log?.('Workspace: Archive blocked because no active workspace file exists');
     return;
   }
 
@@ -620,7 +605,9 @@ async function archiveActiveWorkspaceFile() {
     reason: 'workspace archive active file',
   });
 
-  const archivedMessage = removedOriginal ? `Archived ${active.name}` : `Archive copy created: ${archiveFileName}`;
+  const archivedMessage = removedOriginal
+    ? `Archived ${active.name}`
+    : `Archive copy created: ${archiveFileName}`;
 
   globalThis.MME_APP?.showToast?.(archivedMessage, removedOriginal ? 'ok' : 'download', 2600);
 
@@ -772,5 +759,3 @@ try {
   globalThis.persistActiveWorkspaceFile = persistActiveWorkspaceFile;
   globalThis.restoreActiveWorkspaceFile = reopenLastActiveWorkspaceFileIfPossible;
 } catch {}
-
-
