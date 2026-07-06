@@ -299,7 +299,7 @@ status: active
 tags: []
 ---
 
-# ${dateString} — Daily Capture
+# Daily Capture — ${dateString}
 
 Tags:
 
@@ -307,9 +307,6 @@ Tags:
 - [ ]
 
 ## Capture
--
-
-## Meetings
 -
 
 ## Decisions
@@ -324,6 +321,7 @@ Tags:
 ## Review
 -
 `;
+
 
     const writable = await fileHandle.createWritable();
     await writable.write(text);

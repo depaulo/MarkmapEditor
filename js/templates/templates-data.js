@@ -290,21 +290,23 @@ Updated:
       id: 'journal_daily_capture',
       context: 'journal',
       name: '📓 Daily Capture',
-      body: `# Daily Capture
+      body: `---
+type: journal
+date: {{date}}
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Journal
-Status: active
+# Daily Capture — {{date}}
+
 Tags:
-Created:
-Updated:
 
 ## Plan
 - [ ]
 
 ## Capture
--
-
-## Meetings
 -
 
 ## Decisions
@@ -324,13 +326,18 @@ Updated:
       id: 'journal_meeting_debrief',
       context: 'journal',
       name: '📓 Meeting Debrief',
-      body: `# Meeting Debrief
+      body: `---
+type: journal
+date: {{date}}
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Journal
-Status: active
+# Meeting Debrief
+
 Tags:
-Created:
-Updated:
 
 ## Meeting
 Date:
@@ -357,13 +364,18 @@ Topic:
       id: 'journal_customer_conversation',
       context: 'journal',
       name: '📓 Customer Conversation',
-      body: `# Customer Conversation
+      body: `---
+type: journal
+date: {{date}}
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Journal
-Status: active
+# Customer Conversation
+
 Tags:
-Created:
-Updated:
 
 ## Account / Customer
 Account:
@@ -393,13 +405,18 @@ Participants:
       id: 'journal_partner_conversation',
       context: 'journal',
       name: '📓 Partner Conversation',
-      body: `# Partner Conversation
+      body: `---
+type: journal
+date: {{date}}
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Journal
-Status: active
+# Partner Conversation
+
 Tags:
-Created:
-Updated:
 
 ## Partner
 Partner:
@@ -426,13 +443,18 @@ Participants:
       id: 'journal_travel_event_notes',
       context: 'journal',
       name: '📓 Travel / Event Notes',
-      body: `# Event / Travel Notes
+      body: `---
+type: journal
+date: {{date}}
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Journal
-Status: active
+# Event / Travel Notes
+
 Tags:
-Created:
-Updated:
 
 ## Event / Visit
 Name:
@@ -459,13 +481,18 @@ Date:
       id: 'journal_weekly_planning',
       context: 'journal',
       name: '📓 Weekly Planning',
-      body: `# Weekly Planning
+      body: `---
+type: journal
+date: {{date}}
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Journal
-Status: active
+# Weekly Planning
+
 Tags:
-Created:
-Updated:
 
 ## Focus Areas
 -
@@ -490,13 +517,18 @@ Updated:
       id: 'journal_followup_log',
       context: 'journal',
       name: '📓 Follow-up Log',
-      body: `# Follow-up Log
+      body: `---
+type: journal
+date: {{date}}
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Journal
-Status: active
+# Follow-up Log
+
 Tags:
-Created:
-Updated:
 
 ## Open Follow-ups
 - [ ]
@@ -519,13 +551,17 @@ Updated:
       id: 'concept_general',
       context: 'concept',
       name: '🧠 General Concept',
-      body: `# ConceptName
+      body: `---
+type: concept
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Concept
-Status: active
+# ConceptName
+
 Tags:
-Created:
-Updated:
 
 ## Summary
 -
@@ -547,13 +583,18 @@ Updated:
       id: 'concept_account_profile',
       context: 'concept',
       name: '🧠 Account / Customer Profile',
-      body: `# AccountName
+      body: `---
+type: concept
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Account
-Status: active
+# AccountName
+
 Tags:
-Created:
-Updated:
+
 Region:
 Segment:
 Key Contacts:
@@ -590,13 +631,18 @@ Next Step:
       id: 'concept_opportunity_brief',
       context: 'concept',
       name: '🧠 Opportunity Brief',
-      body: `# OpportunityName
+      body: `---
+type: concept
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Opportunity
-Status: active
+# OpportunityName
+
 Tags:
-Created:
-Updated:
+
 Account:
 Region:
 Stage:
@@ -632,13 +678,18 @@ Next Step:
       id: 'concept_partner_profile',
       context: 'concept',
       name: '🧠 Partner Profile',
-      body: `# PartnerName
+      body: `---
+type: concept
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Partner
-Status: active
+# PartnerName
+
 Tags:
-Created:
-Updated:
+
 Region:
 Relationship Owner:
 Opportunity Area:
@@ -670,13 +721,18 @@ Next Step:
       id: 'concept_product_feedback',
       context: 'concept',
       name: '🧠 Product Feedback',
-      body: `# Product Feedback — Topic
+      body: `---
+type: concept
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Product Feedback
-Status: active
+# Product Feedback — Topic
+
 Tags:
-Created:
-Updated:
+
 Source:
 Account:
 Region:
@@ -705,13 +761,18 @@ Priority:
       id: 'concept_market_region_note',
       context: 'concept',
       name: '🧠 Market / Region Note',
-      body: `# Market / Region Note
+      body: `---
+type: concept
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Market Note
-Status: active
+# Market / Region Note
+
 Tags:
-Created:
-Updated:
+
 Region:
 Segment:
 
@@ -741,13 +802,18 @@ Segment:
       id: 'concept_competitor_profile',
       context: 'concept',
       name: '🧠 Competitor Profile',
-      body: `# CompetitorName
+      body: `---
+type: concept
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Competitor
-Status: active
+# CompetitorName
+
 Tags:
-Created:
-Updated:
+
 Region:
 Segment:
 
@@ -777,13 +843,18 @@ Segment:
       id: 'concept_stakeholder_map',
       context: 'concept',
       name: '🧠 Stakeholder Map',
-      body: `# Stakeholder Map — Account / Initiative
+      body: `---
+type: concept
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Stakeholder Map
-Status: active
+# Stakeholder Map — Account / Initiative
+
 Tags:
-Created:
-Updated:
+
 Account:
 Region:
 Owner:
@@ -808,13 +879,17 @@ Owner:
       id: 'concept_playbook_process_note',
       context: 'concept',
       name: '🧠 Playbook / Process Note',
-      body: `# Playbook — Topic
+      body: `---
+type: concept
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Playbook
-Status: active
+# Playbook — Topic
+
 Tags:
-Created:
-Updated:
 
 ## Purpose
 -
@@ -839,13 +914,18 @@ Updated:
       id: 'concept_feature_product_concept',
       context: 'concept',
       name: '🧠 Feature / Product Concept',
-      body: `# Feature / Product Concept
+      body: `---
+type: concept
+created: {{created}}
+updated:
+status: active
+tags: []
+---
 
-Type: Product Concept
-Status: active
+# Feature / Product Concept
+
 Tags:
-Created:
-Updated:
+
 Owner:
 Status:
 

@@ -455,9 +455,7 @@ function isReservedWorkspaceTag(tagName) {
 
   if (!normalized) return true;
 
-  if (
-    ['created', 'updated', 'date', 'type', 'journal', 'concept'].includes(normalized)
-  ) {
+  if (['created', 'updated', 'date', 'type', 'journal', 'concept'].includes(normalized)) {
     return true;
   }
 
@@ -1006,7 +1004,9 @@ function hasWorkspacePanelMarkup(panelId) {
 
   if (panelId === 'related') {
     return !!(
-      document.getElementById('workspaceRelatedPanel')?.querySelector?.('#workspaceRelatedSummary') &&
+      document
+        .getElementById('workspaceRelatedPanel')
+        ?.querySelector?.('#workspaceRelatedSummary') &&
       document.getElementById('workspaceRelatedPanel')?.querySelector?.('#workspaceRelatedList') &&
       document.getElementById('workspaceRelatedPanel')?.querySelector?.('#workspaceRelatedBadge')
     );
@@ -1238,9 +1238,7 @@ function toggleWorkspacePanel(panelId) {
   applyWorkspacePanelCollapsed(panelEl, panelId, nextCollapsed);
 
   try {
-    log?.(
-      `Workspace Panels: toggled ${panelId} collapsed=${String(nextCollapsed)}`
-    );
+    log?.(`Workspace Panels: toggled ${panelId} collapsed=${String(nextCollapsed)}`);
   } catch {}
 }
 
@@ -1393,10 +1391,7 @@ function getWorkspaceTaskFileDisplayName(path, fallback = '') {
 }
 
 function getGroupedOpenWorkspaceTasks() {
-  const openTasks =
-    typeof getOpenWorkspaceTasks === 'function'
-      ? getOpenWorkspaceTasks()
-      : [];
+  const openTasks = typeof getOpenWorkspaceTasks === 'function' ? getOpenWorkspaceTasks() : [];
 
   const groupsMap = new Map();
 
@@ -1479,9 +1474,7 @@ function renderWorkspaceTasksPanel() {
 
   const openTasks = getOpenWorkspaceTasks();
   const groups =
-    typeof getGroupedOpenWorkspaceTasks === 'function'
-      ? getGroupedOpenWorkspaceTasks()
-      : [];
+    typeof getGroupedOpenWorkspaceTasks === 'function' ? getGroupedOpenWorkspaceTasks() : [];
   const fileCount = groups.length;
 
   badge.textContent = `${openTasks.length} open`;
@@ -1497,12 +1490,7 @@ function renderWorkspaceTasksPanel() {
 
   list.innerHTML = groups
     .map((group) => {
-      const icon =
-        group.kind === 'journals'
-          ? '📝'
-          : group.kind === 'concepts'
-            ? '🧠'
-            : '📄';
+      const icon = group.kind === 'journals' ? '📝' : group.kind === 'concepts' ? '🧠' : '📄';
 
       const groupTitle = escapeHtml(group.title || group.fileName || group.path);
       const groupPath = escapeHtml(group.path || '');
@@ -1583,9 +1571,7 @@ function wireWorkspaceTasksPanel() {
       const kind = groupBtn.dataset.kind || '';
 
       const file =
-        typeof findWorkspaceFileByPath === 'function'
-          ? findWorkspaceFileByPath(path, kind)
-          : null;
+        typeof findWorkspaceFileByPath === 'function' ? findWorkspaceFileByPath(path, kind) : null;
 
       if (!file) {
         showToast?.('Task group file not found', 'error', 2200);
@@ -2010,9 +1996,7 @@ function getWorkspaceTagFiles(tag) {
 
   if (!tagKey) return [];
 
-  const paths = Array.from(
-    new Set(WORKSPACE_INDEX_STATE.tags?.get(tagKey) || [])
-  );
+  const paths = Array.from(new Set(WORKSPACE_INDEX_STATE.tags?.get(tagKey) || []));
 
   return paths
     .map((path) => WORKSPACE_INDEX_STATE.byPath?.get(path))
@@ -2047,9 +2031,7 @@ function renderWorkspaceTagsPanel() {
     log?.(
       `Workspace Tags: render skipped panel=${Boolean(panel)} badge=${Boolean(
         badge
-      )} summary=${Boolean(summary)} list=${Boolean(list)} results=${Boolean(
-        results
-      )}`
+      )} summary=${Boolean(summary)} list=${Boolean(list)} results=${Boolean(results)}`
     );
     return;
   }
@@ -2073,11 +2055,7 @@ function renderWorkspaceTagsPanel() {
     results.hidden = true;
     results.innerHTML = '';
 
-    applyWorkspacePanelCollapsed(
-      panel,
-      'tags',
-      isWorkspacePanelCollapsed('tags')
-    );
+    applyWorkspacePanelCollapsed(panel, 'tags', isWorkspacePanelCollapsed('tags'));
 
     return;
   }
@@ -2086,9 +2064,7 @@ function renderWorkspaceTagsPanel() {
 
   badge.textContent = `${tags.length} tags`;
 
-  const totalTaggedFiles = new Set(
-    tags.flatMap((row) => row.paths || [])
-  ).size;
+  const totalTaggedFiles = new Set(tags.flatMap((row) => row.paths || [])).size;
 
   summary.textContent = tags.length
     ? `${tags.length} tags across ${totalTaggedFiles} files`
@@ -2099,11 +2075,7 @@ function renderWorkspaceTagsPanel() {
     results.hidden = true;
     results.innerHTML = '';
 
-    applyWorkspacePanelCollapsed(
-      panel,
-      'tags',
-      isWorkspacePanelCollapsed('tags')
-    );
+    applyWorkspacePanelCollapsed(panel, 'tags', isWorkspacePanelCollapsed('tags'));
 
     return;
   }
@@ -2111,8 +2083,7 @@ function renderWorkspaceTagsPanel() {
   list.innerHTML = tags
     .map((row) => {
       const tag = escapeHtml(row.tag || '');
-      const activeClass =
-        String(row.tag || '') === __workspaceActiveTag ? ' __active' : '';
+      const activeClass = String(row.tag || '') === __workspaceActiveTag ? ' __active' : '';
 
       return `
         <button
@@ -2131,11 +2102,7 @@ function renderWorkspaceTagsPanel() {
 
   renderWorkspaceTagResults(__workspaceActiveTag);
 
-  applyWorkspacePanelCollapsed(
-    panel,
-    'tags',
-    isWorkspacePanelCollapsed('tags')
-  );
+  applyWorkspacePanelCollapsed(panel, 'tags', isWorkspacePanelCollapsed('tags'));
 }
 
 function renderWorkspaceTagResults(tag) {
@@ -2171,18 +2138,13 @@ function renderWorkspaceTagResults(tag) {
     ${files
       .map((file) => {
         const kind = String(file.kind || '');
-        const icon =
-          kind === 'journals' ? '📝' : kind === 'concepts' ? '🧠' : '📄';
+        const icon = kind === 'journals' ? '📝' : kind === 'concepts' ? '🧠' : '📄';
 
         const name = escapeHtml(file.name || file.title || file.path || '');
         const path = escapeHtml(file.path || '');
         const meta = escapeHtml(
           [
-            kind === 'journals'
-              ? 'Journal'
-              : kind === 'concepts'
-                ? 'Concept'
-                : 'File',
+            kind === 'journals' ? 'Journal' : kind === 'concepts' ? 'Concept' : 'File',
             file.date || '',
             file.title || '',
           ]
@@ -2234,8 +2196,7 @@ function wireWorkspaceTagsPanel() {
 
       const tag = tagBtn.dataset.tag || '';
 
-      __workspaceActiveTag =
-        __workspaceActiveTag === tag ? '' : tag;
+      __workspaceActiveTag = __workspaceActiveTag === tag ? '' : tag;
 
       renderWorkspaceTagsPanel();
 
@@ -2259,9 +2220,7 @@ function wireWorkspaceTagsPanel() {
     const kind = fileBtn.dataset.kind || '';
 
     const file =
-      typeof findWorkspaceFileByPath === 'function'
-        ? findWorkspaceFileByPath(path, kind)
-        : null;
+      typeof findWorkspaceFileByPath === 'function' ? findWorkspaceFileByPath(path, kind) : null;
 
     if (!file) {
       showToast?.('Tagged file not found', 'error', 2200);
@@ -2285,10 +2244,7 @@ function wireWorkspaceTagsPanel() {
 }
 
 function setupWorkspacePanels() {
-  const workspaceState =
-    globalThis.WORKSPACE_STATE ||
-    window.WORKSPACE_STATE ||
-    null;
+  const workspaceState = globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
 
   if (!workspaceState) {
     globalThis.log?.('Workspace: panels setup skipped; WORKSPACE_STATE not ready');
@@ -2296,7 +2252,6 @@ function setupWorkspacePanels() {
   }
 
   try {
-
     forceUpgradeWorkspacePanelMarkup('index');
     forceUpgradeWorkspacePanelMarkup('related');
     forceUpgradeWorkspacePanelMarkup('tasks');
@@ -2414,8 +2369,7 @@ function renderWorkspaceActivePanel() {
   if (!WORKSPACE_STATE?.rootHandle) {
     panel.hidden = true;
     badge.textContent = 'No file';
-    body.innerHTML =
-      '<div class="workspaceActiveEmpty">Open a workspace first</div>';
+    body.innerHTML = '<div class="workspaceActiveEmpty">Open a workspace first</div>';
     return;
   }
 
@@ -2425,14 +2379,9 @@ function renderWorkspaceActivePanel() {
 
   if (!active?.path) {
     badge.textContent = 'No file';
-    body.innerHTML =
-      '<div class="workspaceActiveEmpty">No active workspace file</div>';
+    body.innerHTML = '<div class="workspaceActiveEmpty">No active workspace file</div>';
 
-    applyWorkspacePanelCollapsed(
-      panel,
-      'active',
-      isWorkspacePanelCollapsed('active')
-    );
+    applyWorkspacePanelCollapsed(panel, 'active', isWorkspacePanelCollapsed('active'));
 
     return;
   }
@@ -2441,8 +2390,7 @@ function renderWorkspaceActivePanel() {
   const kind = active.kind || parsed?.kind || '';
   const kindLabel = getWorkspaceKindLabel(kind);
   const icon = getWorkspaceKindIcon(kind);
-  const displayName =
-    parsed?.title || active.name || active.path || 'Untitled';
+  const displayName = parsed?.title || active.name || active.path || 'Untitled';
 
   badge.textContent = kindLabel;
 
@@ -2458,11 +2406,7 @@ function renderWorkspaceActivePanel() {
       </div>
     `;
 
-    applyWorkspacePanelCollapsed(
-      panel,
-      'active',
-      isWorkspacePanelCollapsed('active')
-    );
+    applyWorkspacePanelCollapsed(panel, 'active', isWorkspacePanelCollapsed('active'));
 
     return;
   }
@@ -2523,11 +2467,7 @@ function renderWorkspaceActivePanel() {
 
   log?.(`Workspace Active: rendered path=${active?.path || '(none)'}`);
 
-  applyWorkspacePanelCollapsed(
-    panel,
-    'active',
-    isWorkspacePanelCollapsed('active')
-  );
+  applyWorkspacePanelCollapsed(panel, 'active', isWorkspacePanelCollapsed('active'));
 }
 
 function wireWorkspaceActivePanel() {
@@ -2574,7 +2514,6 @@ function renderWorkspaceIndexSummary() {
     - hide/clear #workspaceIndexSummary to avoid duplicate Updated row
   */
   summaryEl.innerHTML = '';
-
 
   const badge = document.getElementById('workspaceIndexBadge');
   if (badge) {
@@ -2916,7 +2855,6 @@ function wireWorkspacePanelCollapses() {
   }
 }
 
-
 function setStatus(s) {
   saveStatus.textContent = s || '';
 }
@@ -3076,9 +3014,25 @@ function createConceptStarterMarkdown(fileName) {
     .replace(/\.md$/i, '')
     .trim();
 
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const dateString = `${yyyy}-${mm}-${dd}`;
+
   const today = new Date().toISOString().slice(0, 10);
 
-  return `# ${title}
+  return `
+---
+type: concept
+created: ${dateString}
+updated:
+status: active
+tags: []
+---
+
+
+# ${title}
 
 Type: Concept
 Status: active
@@ -3133,9 +3087,7 @@ function getJournalDisplayDate(file) {
     return parsed.date;
   }
 
-  const match = String(file?.name || file?.path || '').match(
-    /\d{4}-\d{2}-\d{2}/
-  );
+  const match = String(file?.name || file?.path || '').match(/\d{4}-\d{2}-\d{2}/);
 
   return match ? match[0] : '';
 }
@@ -3180,8 +3132,7 @@ function renderWorkspaceJournalTimeline() {
     return;
   }
 
-  const workspaceState =
-    globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
+  const workspaceState = globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
 
   if (!workspaceState) {
     return;
@@ -3283,17 +3234,12 @@ try {
   globalThis.renderWorkspaceJournalTimeline = renderWorkspaceJournalTimeline;
 } catch {}
 
-
-
-
 function updateWorkspaceJournalSidebarTitlesFromIndex() {
   try {
     if (!WORKSPACE_INDEX_STATE?.ready) return;
 
     document
-      .querySelectorAll(
-        '.workspaceFileItem[data-workspace-file="1"][data-kind="journals"]'
-      )
+      .querySelectorAll('.workspaceFileItem[data-workspace-file="1"][data-kind="journals"]')
       .forEach((btn) => {
         const path = btn.dataset.path || '';
         const nameEl = btn.querySelector('.workspaceFileName');
@@ -3317,8 +3263,10 @@ function updateWorkspaceJournalSidebarTitlesFromIndex() {
 }
 
 try {
-  window.updateWorkspaceJournalSidebarTitlesFromIndex = updateWorkspaceJournalSidebarTitlesFromIndex;
-  globalThis.updateWorkspaceJournalSidebarTitlesFromIndex = updateWorkspaceJournalSidebarTitlesFromIndex;
+  window.updateWorkspaceJournalSidebarTitlesFromIndex =
+    updateWorkspaceJournalSidebarTitlesFromIndex;
+  globalThis.updateWorkspaceJournalSidebarTitlesFromIndex =
+    updateWorkspaceJournalSidebarTitlesFromIndex;
 } catch {}
 
 function updateWorkspaceJournalSidebarTitlesFromIndexSafe() {
@@ -7316,9 +7264,7 @@ function downloadTextFile(text, fileName, mimeType = 'text/markdown;charset=utf-
 
 function getMarkdownExportFileName(defaultName = 'document.md') {
   const name =
-    typeof currentFileName !== 'undefined' && currentFileName
-      ? currentFileName
-      : defaultName;
+    typeof currentFileName !== 'undefined' && currentFileName ? currentFileName : defaultName;
 
   return String(name || defaultName).replace(/\.[^.]+$/, '') + '.md';
 }
@@ -9150,7 +9096,6 @@ wireHelpOverlay?.();
 startAutoSave();
 
 maybeShowWelcomeOverlay();
-
 
 // Debounced rendering (unchanged)
 let renderTimer = null;
