@@ -95,8 +95,8 @@
 
         <button id="btnLogs" data-icon="📜" title="Toggle logs" aria-label="Toggle logs">📜</button>
 
-        <button id="btnHtml" data-icon="&lt;/&gt;" title="Toggle HTML" aria-label="Toggle HTML">
-          &lt;/&gt;
+        <button id="btnHtml" data-icon="</>" title="Toggle HTML" aria-label="Toggle HTML">
+          </>
         </button>
         <button id="btnCompact" title="Toggle compact mode">⚡</button>
       </div>
@@ -223,7 +223,7 @@
           <div class="editorOverlayToolRow editorOverlayToolRowInsert" aria-label="Insert tools">
             <button type="button" data-editor-command="link" title="Insert link">🔗</button>
             <button type="button" data-editor-command="inlineCode" title="Inline code">
-              &lt;/&gt;
+              </>
             </button>
             <button type="button" data-editor-command="bullet" title="Unordered list">•</button>
             <button type="button" data-editor-command="ordered" title="Ordered list">1.</button>
@@ -270,47 +270,66 @@
         <div id="cmHost"></div>
         <textarea id="md">
 
-# 🧠 Markmap Editor — Release 39
+# 🧠 Markmap Editor — Release 40
 
-Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Hot Reload + Dark Mode + Auto-save + Templates + Quick Insert + HTML/Shiki + Export Menu + Markmap Overlay + Editor Overlay, Map Style Modifier, improved HTML sync, and accurate Markmap → Editor jump, Pandoc Slide Expot
+Markdown-first editor with interactive Markmap, Journal Workspace, Concepts, HTML Preview, Pandoc Slides, templates, exports, overlays, workspace panels, and modularized app structure.
 
 ## 🎯 Objetivo
 
-- Um editor simples de Markdown que gera um mindmap interativo com Markmap.
-- Manter a experiência pequena, rápida e profissional.
-- Preservar o fluxo de trabalho principal:
+- Um editor simples e rápido de Markdown que gera um mindmap interativo com Markmap.
+- Manter a experiência pequena, prática, profissional e confiável.
+- Preservar o fluxo principal:
   - Editar Markdown à esquerda.
   - Navegar pelo mindmap à direita.
-  - Ver HTML opcionalmente.
+  - Ver HTML Preview quando necessário.
+  - Trabalhar com journals/concepts em workspace local.
   - Salvar/exportar de forma confiável.
 - Organizar a interface por contexto:
   - Controles do mindmap dentro da área do Markmap.
   - Controles do editor dentro da área do CodeMirror.
-  - Ações de arquivo dentro do Open/Save workflow.
+  - Ações de arquivo dentro do fluxo Open/Save.
+  - Templates contextuais por modo.
   - Exportações dentro de um menu Export dedicado.
-  - This document can be used both as a mindmap outline and as a source for editable PowerPoint slides through Pandoc.
+  - Workspace panels dentro do modo Journal.
+- Permitir uso como:
+  - editor Markdown standalone;
+  - mindmap visual;
+  - journal/concept workspace local;
+  - fonte Markdown para slides editáveis via Pandoc/PowerPoint.
+
+---
 
 ## 🧭 Como o app funciona
-
 
 - Você edita Markdown no editor.
 - O mindmap atualiza com debounce enquanto você digita e também no blur.
 - O app tenta preservar zoom, pan e folds durante edições normais.
-- O HTML Preview renderiza Markdown com tabelas, imagens, headings, anchors e code blocks destacados.
-- O scroll Editor → HTML usa headings como âncoras, melhorando a precisão em arquivos grandes.
+- HTML Preview renderiza Markdown com headings, listas, imagens, links, tabelas, anchors e code blocks destacados.
+- O scroll Editor → HTML usa headings como âncoras para melhorar a precisão em arquivos maiores.
 - O clique no Markmap usa source-line metadata quando disponível, melhorando jumps em headings duplicados.
-- Dark Mode muda o tema sem reconstruir o mindmap.
+- Dark Mode muda o tema sem reconstruir desnecessariamente o mindmap.
 - Toasts mostram feedback rápido:
   - Saved
   - Downloaded
   - Exported
   - Reloaded
   - Errors
-- Overlays deixam os controles próximos do contexto onde são usados:
+- Overlays deixam controles perto do contexto onde são usados:
   - Markmap Overlay no mapa.
   - Editor Overlay no editor.
+  - HTML Preview controls no painel HTML.
   - Export no menu Export.
-  - Draft cleanup no Open menu.
+  - Help modal contextual.
+- O modo Journal usa workspace local com:
+  - journals
+  - concepts
+  - assets/images
+  - archive
+  - tags
+  - tasks
+  - backlinks/related
+  - workspace index
+- O modo Slides/Pandoc permite escrever Markdown orientado a apresentações e exportar Markdown fonte para conversão externa com Pandoc.
 
 ---
 
@@ -318,39 +337,49 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
 
 ### 1) Arquivos / Salvamento
 
-- **Open menu** com:
+- Open menu com:
   - New document.
   - Browse.
   - Recent files.
   - Clear draft for current file.
   - Clear recent files.
-- **Save único**:
+- Save único:
   - Sobrescreve o arquivo original quando existe handle gravável.
   - Se não for possível sobrescrever, usa Save As.
   - Se Save As não estiver disponível, usa download com sufixo de data.
 - Cancelar Save As não gera fallback nem altera estado.
 - Proteção contra sobrescrever arquivo alterado externamente.
 - Status e título da aba refletem:
-  - arquivo atual
-  - dirty state
-  - external stale state
+  - arquivo atual;
+  - dirty state;
+  - external stale state.
+- Workflow recomendado:
+  - Save sobrescreve arquivo aberto quando possível.
+  - Save As é usado apenas quando necessário.
+  - Download é fallback final.
 
+---
 
 ### 2) Recent Files
 
 - Lista de arquivos recentes graváveis usando handles persistidos.
-- Reabertura rápida pelo menu de Open.
+- Reabertura rápida pelo menu Open.
 - Opção para limpar recentes.
 - Integração com IndexedDB para manter file handles quando o browser suporta.
 - Fallback seguro quando permissões ou APIs não estão disponíveis.
+
+---
 
 ### 3) Novo documento
 
 - Criação de documento novo pelo menu Open.
 - Confirmação antes de descartar alterações não salvas.
-- Nome inicial `untitled_N.md` até o primeiro Save.
+- Nome inicial contextual conforme o modo.
 - Novo documento não possui handle gravável até ser salvo.
 - Hot Reload é interrompido ao criar documento novo.
+- Draft anterior pode ser limpo com segurança.
+
+---
 
 ### 4) Mindmap engine
 
@@ -364,11 +393,13 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
 - Carregamento incremental de assets usados pelo Markmap.
 - Boot retry para casos em que a engine Markmap demora a carregar.
 - Logs detalhados para:
-  - render
-  - assets
-  - criação da instância
-  - erros
+  - render;
+  - assets;
+  - criação da instância;
+  - erros;
+  - restore de zoom/pan.
 
+---
 
 ### 5) Preservação de estado visual
 
@@ -378,45 +409,45 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
 - Evita render desnecessário do mindmap no toggle de Dark Mode.
 - Restaura view state após `mm.setData()`.
 - Salva view state após interações:
-  - wheel
-  - pointerup
-  - touchend
-- Usa restore imediato e `requestAnimationFrame` em algumas situações para maior estabilidade visual.
+  - wheel;
+  - pointerup;
+  - touchend.
+- Usa restore imediato e `requestAnimationFrame` em alguns cenários para maior estabilidade visual.
 
+---
 
 ### 6) Markmap Overlay Controls
 
 - Controles do mindmap ficam dentro da área renderizada do Markmap.
-- Os antigos botões duplicados do topo foram removidos.
-- O overlay inclui:
-  - **+1 nível**
-  - **-1 nível**
-  - **Fit map**
-  - **Expand all**
-  - **Collapse all**
-  - **Dark/Light Mode**
-  - **Map Style**
+- Overlay inclui:
+  - +1 nível
+  - -1 nível
+  - Fit map
+  - Expand all
+  - Collapse all
+  - Dark/Light Mode
+  - Map Style
 - Os cliques no overlay não interferem com drag/pan/click nos nodes do Markmap.
-- O botão Dark/Light do overlay usa a API global de tema.
-- O ícone do botão de tema é atualizado automaticamente quando o tema muda.
+- O botão Dark/Light usa API global de tema.
+- O ícone do botão de tema é atualizado automaticamente.
 - O overlay respeita Compact Mode e Dark Mode.
+
+---
 
 ### 7) Markmap → Editor jump
 
 - Clique em node do mindmap leva o editor para a origem correspondente no Markdown.
-- Prioridade atual:
-  - Markmap source-line metadata
-  - path/context heading match
-  - exact heading match
-  - fuzzy heading match
-- Melhor precisão com headings repetidos como:
-  - Key Numbers
-  - Sources
-  - Why Brazil matters
-  - Executive Highlights
+- Estratégia de match:
+  - Markmap source-line metadata;
+  - path/context heading match;
+  - exact heading match;
+  - fuzzy heading match.
+- Melhor precisão com headings repetidos.
 - Feedback visual de node ativo.
 - Suprime renders indesejados causados por blur durante interação com o mapa.
 - Logs mostram o tipo de match usado.
+
+---
 
 ### 8) Editor / CodeMirror
 
@@ -431,32 +462,29 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
 - Search também disponível via botão visual no overlay do editor.
 - Fallback para textarea se CodeMirror falhar.
 - Ajustes visuais para Dark Mode.
-- Helpers globais para operações do editor:
-  - inserir texto no cursor
-  - substituir conteúdo
-  - scroll para linha
-  - obter linha atual
-  - aplicar operações multi-line
-  - abrir painel de busca do CodeMirror quando disponível
+- Helpers globais para:
+  - obter texto atual;
+  - substituir conteúdo;
+  - inserir texto no cursor;
+  - scroll para linha;
+  - obter linha atual;
+  - aplicar operações multi-line;
+  - abrir painel de busca.
+
+---
 
 ### 9) Editor Overlay Controls
 
 - Controles específicos do editor ficam dentro da área do CodeMirror.
-- O overlay do editor inclui:
-  - **Search**
-  - **Copy Markdown**
-- O botão Search abre o painel de busca do CodeMirror quando disponível.
-- Se o painel do CodeMirror não estiver disponível, o botão mostra fallback com atalhos.
-- O botão Copy Markdown copia o conteúdo Markdown atual.
-- O antigo botão Copy Markdown foi removido do topo.
-- O overlay foi estruturado para permitir futuras ações específicas do editor, como:
-  - Link
-  - Inline code
-  - Bold
-  - Italic
-  - Checkbox
-  - Headers
+- Overlay do editor inclui:
+  - Search
+  - Copy Markdown
+  - painel expansível de ferramentas rápidas.
+- Search abre o painel de busca do CodeMirror quando disponível.
+- Copy Markdown copia o conteúdo Markdown atual.
 - O overlay respeita Compact Mode e Dark Mode.
+
+---
 
 ### 10) Quick Insert Toolbar
 
@@ -474,7 +502,9 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
 - Proteção para seleção que termina no começo da próxima linha/heading.
 - Usa helpers do CodeMirror quando disponíveis.
 - Usa fallback textarea quando necessário.
-- Mantém seleção/cursor de forma mais previsível em operações comuns.
+- Mantém seleção/cursor de forma mais previsível.
+
+---
 
 ### 11) Headers menu
 
@@ -490,43 +520,52 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
 - Funciona com seleção simples ou multi-line.
 - Fecha ao clicar fora do menu.
 
+---
+
 ### 12) Add Image
 
 - Menu Add Image com:
   - Online URL.
   - Local relative image.
 - Online URL exige link direto para arquivo de imagem.
-- Local relative image insere referência no formato:
+- Em modo standalone, imagem local usa:
   - `./images/<filename>`
+- Em workspace, imagem local é copiada para:
+  - `assets/images/<filename>`
+- Referência Markdown em journals/concepts usa:
+  - `../assets/images/<filename>`
 - Inserção usa CodeMirror quando disponível.
 - Fallback para textarea quando necessário.
 - Toast/logs para ações e erros.
-- Imagens no HTML preview e no mindmap têm constraints visuais para não explodir layout.
+- Imagens no HTML Preview e no mindmap têm constraints visuais para evitar quebra de layout.
 
-### 13) HTML View / Sync
+---
+
+### 13) HTML Preview / Sync
 
 - Toggle do painel HTML.
 - Renderização via `marked`.
 - GFM habilitado.
 - Tabelas estilizadas.
 - Imagens responsivas.
-- Scroll sync editor → HTML baseado em headings quando possível.
+- Heading anchors no HTML preview.
 - Refresh do HTML durante renders quando o painel está aberto.
 - Refresh do HTML/Shiki quando Dark Mode muda e o painel está aberto.
-- Heading anchors no HTML preview.
 - Scroll sync Editor → HTML baseado em:
-  - heading order
-  - heading occurrence
-  - interpolação entre headings
-- Fallback por ratio para documentos sem headings.
-- Mais preciso em arquivos grandes.
+  - heading order;
+  - heading occurrence;
+  - interpolação entre headings;
+  - fallback por ratio para documentos sem headings.
+- Mais preciso em arquivos grandes do que scroll por ratio puro.
+- HTML Preview close/edge controls foram movidos para perto do viewer.
 
+---
 
 ### 14) Shiki / Code blocks
 
 - Highlight de fenced code blocks via Shiki.
 - Tema claro/escuro alinhado ao Dark Mode.
-- Botão **Copy** em code blocks.
+- Botão Copy em code blocks.
 - Copiar inline code clicando no código.
 - Styling para inline code.
 - Suporte a várias linguagens comuns:
@@ -542,19 +581,21 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
   - XML
 - Fallback seguro para code blocks quando Shiki falha.
 
+---
+
 ### 15) Dark Mode
 
-- Toggle 🌙/☀️ pelo Markmap Overlay.
+- Toggle via Markmap Overlay.
 - Persistência em `localStorage`.
 - Respeita preferência inicial do sistema quando não há configuração salva.
 - Atualiza HTML/Shiki quando o HTML View está aberto.
-- Não dispara expansão do mindmap.
-- Não depende mais de botão oculto no topo.
+- Não dispara expansão desnecessária do mindmap.
 - API global de tema:
   - `window.toggleDarkMode()`
   - `window.setDarkMode(enabled)`
   - `window.isDarkMode()`
-- Mantém compatibilidade caso uma versão antiga ainda tenha `btnDarkMode`.
+
+---
 
 ### 16) Hot Reload
 
@@ -566,6 +607,8 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
 - Integra com título da aba usando `!` quando há alteração externa recusada.
 - Integra com Save para atualizar `fileLastSeenModified`.
 
+---
+
 ### 17) Auto-save draft
 
 - Salva rascunho periodicamente quando há alterações não salvas.
@@ -575,6 +618,8 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
 - Permite limpar manualmente o draft atual pelo Open menu.
 - Clear Draft não altera conteúdo, dirty state ou render.
 - Toast/logs para draft salvo, restaurado e limpo.
+
+---
 
 ### 18) Templates — Org + My
 
@@ -589,6 +634,13 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
 - Exportar My templates para JSON.
 - Modal de edição multi-line para templates.
 - Templates sobrevivem a atualizações do app porque ficam em storage separado.
+- Templates são contextuais:
+  - Editor
+  - Journal
+  - Concept
+  - Pandoc / Slides
+
+---
 
 ### 19) Toolbar UX
 
@@ -597,33 +649,34 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
   - Toggle editor.
   - Toggle logs.
   - Toggle HTML.
-- Compact Mode para reduzir altura/padding/fonte da toolbar.
-- Hot reload vira “HR” em Compact Mode.
+- Compact Mode para reduzir altura/padding/fonte.
+- Hot Reload vira `HR` em Compact Mode.
 - Layout com splitters para editor/mapa/HTML.
 - Mostrar/Ocultar editor para modo apresentação.
 - Menu de exportação consolidado.
-- Controles contextuais movidos para overlays:
-  - Markmap Overlay.
-  - Editor Overlay.
+- Controles contextuais movidos para overlays.
+
+---
 
 ### 20) Export Menu
 
 - Menu único `Export ▾`.
-- Export Markdown como `.md`.
 - Export Mindmap como SVG estático.
 - Export HTML Preview como `.html` standalone.
+- Export Slides Markdown como `.md` no modo Slides/Pandoc.
 - SVG export:
-  - Clona o SVG atual.
-  - Adiciona background.
-  - Injeta estilos para preservar aparência.
-  - Exporta conforme tema atual.
+  - clona o SVG atual;
+  - adiciona background;
+  - injeta estilos para preservar aparência;
+  - exporta conforme tema atual.
 - HTML export:
-  - Usa o renderer atual com Shiki.
-  - Gera HTML standalone.
-  - Inclui CSS básico.
-  - Mantém copy buttons em code blocks.
+  - usa o renderer atual com Shiki;
+  - gera HTML standalone;
+  - inclui CSS básico;
+  - mantém code blocks destacados.
 - Export My Templates como JSON continua disponível no menu Templates.
 
+---
 
 ### 21) Map Style Modifier
 
@@ -656,11 +709,9 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
 - Apply.
 - Persistência em `localStorage`.
 - Default restaura a paleta original do Markmap.
-- Node length controla `maxWidth` separadamente do layout.
-- Layout controla spacing/density.
-- Link style controla solid/dashed/dotted.
-- SVG export deve respeitar o estilo visual atual.
+- SVG export respeita o estilo visual atual.
 
+---
 
 ### 22) KaTeX / Math
 
@@ -669,8 +720,9 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
   - `$...$`
 - Sintaxe block suportada no mindmap:
   - `$$...$$`
-- Limitação atual:
-  - HTML Preview ainda não renderiza KaTeX visualmente.
+- HTML Preview ainda não renderiza KaTeX visualmente.
+
+---
 
 ### 23) Logs e diagnóstico
 
@@ -690,7 +742,10 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
 - Logs de export.
 - Logs de Quick Insert.
 - Logs de overlay controls.
-- Logs de operações principais.
+- Logs de workspace.
+- Logs de service worker/PWA diagnostics.
+
+---
 
 ### 24) Título dinâmico da aba
 
@@ -699,11 +754,180 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
 - `*` quando há alterações não salvas.
 - `!` quando há alteração externa recusada/stale.
 - Atualizado após:
-  - open
-  - save
-  - dirty state
-  - hot reload
-  - external stale state
+  - open;
+  - save;
+  - dirty state;
+  - hot reload;
+  - external stale state.
+
+---
+
+## 📓 Journal Workspace
+
+### Estrutura do workspace
+
+O modo Journal trabalha com uma pasta local organizada assim:
+
+~~~text
+workspace/
+  journals/
+  concepts/
+  assets/
+    images/
+  archive/
+  system/
+~~~
+
+### Journals
+
+- Journals são arquivos de captura diária.
+- Usados para:
+  - reuniões;
+  - decisões;
+  - tarefas;
+  - notas rápidas;
+  - conversas com clientes;
+  - follow-ups;
+  - ideias do dia.
+- O botão Today abre ou cria o journal do dia.
+- Journals aparecem na timeline do workspace.
+
+### Concepts
+
+- Concepts são páginas persistentes de conhecimento.
+- Usados para:
+  - contas/clientes;
+  - oportunidades;
+  - parceiros;
+  - feedback de produto;
+  - notas de mercado;
+  - concorrentes;
+  - iniciativas;
+  - playbooks.
+- Concepts podem ser relacionados a journals usando links como:
+  - `[[ConceptName]]`
+
+### Workspace Index
+
+- Indexa arquivos do workspace.
+- Conta:
+  - journals;
+  - concepts;
+  - tags;
+  - tasks;
+  - open tasks;
+  - done tasks;
+  - links.
+- Rebuild automático após abrir workspace ou alterar arquivo.
+- Botão refresh manual disponível.
+
+### Active Panel
+
+- Mostra o arquivo ativo.
+- Exibe informações relevantes do documento.
+- Atualiza ao abrir journals/concepts.
+- Integra com active highlight no sidebar.
+
+### Related Panel
+
+- Mostra arquivos relacionados/backlinks.
+- Permite abrir journals/concepts relacionados.
+- Usa normalização de kind/path para evitar erros entre:
+  - `journal` / `journals`
+  - `concept` / `concepts`
+
+### Open Tasks Panel
+
+- Mostra tarefas abertas do workspace.
+- Agrupa por arquivo de origem.
+- Permite abrir arquivos a partir das tarefas.
+
+### Tags Panel
+
+- Indexa tags do workspace.
+- Permite navegar por tag.
+- Mostra arquivos relacionados à tag selecionada.
+
+### Archive
+
+- Archive move arquivos para fora da visão ativa sem deletar.
+- Recomendado usar archive em vez de delete quando quiser preservar histórico.
+
+---
+
+## 📊 Pandoc Slides Mode
+
+O modo Slides/Pandoc permite escrever Markdown orientado a apresentações.
+
+### Como funciona
+
+1. Escreva slides em Markdown.
+2. Use templates Pandoc quando quiser acelerar a estrutura.
+3. Use comentários de layout para preservar intenção visual.
+4. Exporte pelo menu:
+
+~~~text
+Export ▾ → Export Slides Markdown (.md)
+~~~
+
+5. Converta fora do browser usando Pandoc:
+
+~~~bash
+pandoc slides.md -o output.pptx --reference-doc=PandocTemplateV4.pptx
+~~~
+
+### Características atuais
+
+- Exporta Markdown fonte.
+- Preserva headings.
+- Preserva comentários de layout.
+- Preserva speaker notes.
+- Preserva columns.
+- Preserva imagens.
+- Preserva tabelas.
+- Não roda Pandoc dentro do browser.
+
+### Estruturas comuns suportadas
+
+- Title slide.
+- Agenda.
+- Executive Summary.
+- Key points.
+- Two columns.
+- Image + text.
+- Text + image.
+- Tables.
+- Speaker notes.
+- Action list.
+- KPI / metric slides.
+- Strategic options.
+- Roadmap-style slides.
+
+### Speaker notes
+
+~~~markdown
+::: notes
+Presenter notes go here.
+:::
+~~~
+
+### Columns
+
+~~~markdown
+:::: {.columns}
+::: {.column}
+## Left
+- Point 1
+- Point 2
+:::
+
+::: {.column}
+## Right
+- Point A
+- Point B
+:::
+::::
+~~~
 
 ---
 
@@ -745,536 +969,127 @@ Baseline estável + CodeMirror + Markmap + Recents + Save workflow + Toasts + Ho
 
 ### Code block
 
-```python
+~~~python
 def hello_world():
     print("Hello, World!")
-```
+~~~
 
 ### JavaScript code block
 
-```js
+~~~js
 function greet(name) {
   console.log(`Hello, ${name}`);
 }
-```
+~~~
 
 ### Math syntax examples
 
 - Inline KaTeX syntax: $x = {-b \pm \sqrt{b^2-4ac}\over 2a}$
-- Block KaTeX syntax:
-  $$
-  E = mc^2
-  $$
+
+Block KaTeX syntax:
+
+$$
+E = mc^2
+$$
 
 > Note: math renders in the mindmap. HTML Preview math rendering is still pending.
 
-
-### Markmap jump duplicate test
-
-#### Alibaba Cloud
-
-##### Key Numbers
-
-- US$53B
-- 91 AZs
-- Brazil data center planned
-
-##### Why Brazil matters
-
-- Latency
-- Data residency
-- Latin America expansion
-
-#### ByteDance
-
-##### Key Numbers
-
-- US$23B reported AI infrastructure capex
-- R$200B+ Brazil data center project
-- Ceará / Pecém
-
-##### Why Brazil matters
-
-- Creator economy
-- Social commerce
-- Renewable energy
-
-
 ---
 
-## ⚠️ Observações / Known issues
+## ⚠️ Observações / Known Issues
 
-- Abrir via `file://` pode limitar recursos do browser, especialmente storage, File System Access API e carregamento de módulos.
-- Preferir rodar via servidor local, por exemplo:
-  - `http://localhost`
+- Abrir via `file://` pode limitar recursos do browser, especialmente storage, File System Access API, módulos e service worker.
+- Preferir rodar via:
+  - GitHub Pages;
+  - Codespaces;
+  - servidor local;
+  - localhost.
+- File System Access API funciona melhor em Chromium-based browsers.
 - Read-only open não permite sobrescrever o arquivo original sem handle gravável.
-- Imagens locais `./images/...` dependem do contexto onde o app está rodando.
-- Hot reload funciona melhor com arquivos abertos em modo gravável.
-- A preservação de folds é baseada na estrutura/ordem dos nodes; grandes reorganizações no Markdown podem alterar o mapeamento.
-- Export SVG é estático; interatividade completa deve ser feita via export HTML interativo separado.
-- SVG export usa o tema atual no momento do export.
-- SVG aberto via `file://` pode gerar warning de segurança no console do browser.
+- O workspace é local no PC do usuário; GitHub Pages hospeda o app, não os arquivos do workspace.
+- O usuário precisa selecionar/autorizar o workspace local no navegador.
+- Permissões de file handles podem variar conforme browser, perfil e segurança.
+- Imagens locais standalone `./images/...` dependem do contexto do Markdown exportado.
+- Imagens em workspace devem ficar em:
+  - `assets/images/`
+- Hot Reload funciona melhor com arquivos abertos em modo gravável.
+- A preservação de folds depende da estrutura/ordem dos nodes; grandes reorganizações podem alterar o mapeamento.
+- Export SVG é estático.
+- Export HTML Preview exporta o conteúdo renderizado do Markdown, não um mindmap interativo.
 - HTML Preview ainda não renderiza KaTeX visualmente.
-- Export HTML Preview é standalone, mas não é o mesmo que Export Interactive Mindmap HTML.
-- Markmap source-line jump é muito mais preciso, mas fallback por heading/texto ainda pode ser usado quando source metadata não existe.
-- Editor Overlay atualmente tem Search e Copy Markdown; mover mais ações para ele ainda precisa de avaliação.
-
-
----
-
-## 🚧 Future Features — prioritized roadmap
-
-### 🥇 High impact + practical next steps
-
-- **Export Interactive Mindmap HTML**
-  - Exportar um HTML standalone com mindmap interativo.
-  - Incluir Markmap renderizado de forma navegável.
-  - Incluir Fit / Expand all / Collapse all.
-  - Incluir dark/light toggle.
-  - Não incluir editor completo.
-  - Diferente do atual Export HTML Preview, que exporta o preview Markdown/HTML.
-
-- **KaTeX rendering in HTML preview**
-  - Mindmap math rendering already works.
-  - Próximo passo: adicionar renderização equivalente no HTML pane.
-  - Deve evitar processar math dentro de fenced code blocks e inline code.
-
-- **Outliner / Table of Contents**
-  - Navegação baseada em headings.
-  - Click heading → scroll editor.
-  - Útil para documentos grandes.
-  - Pode reutilizar a lógica de heading index já usada no HTML sync.
-
-### 🥈 Editor polish
-
-- **Autocomplete básico**
-  - Sugestões simples durante digitação.
-  - Base para snippets/templates no futuro.
-  - Poderia sugerir:
-    - checklist
-    - code block
-    - table
-    - image
-    - link
-    - headings
-  - Futuramente poderia integrar com My Templates.
-
-- **Editor overlay expansion**
-  - O overlay do editor já existe com Search e Copy Markdown.
-  - Próximo passo: avaliar mover alguns botões de edição para o overlay.
-  - Candidatos:
-    - Link
-    - Inline code
-    - Bold
-    - Italic
-    - Checkbox
-    - Headers
-  - Deve ser feito com cuidado para não deixar o overlay grande demais.
-  - Talvez usar um botão `Edit ▾` dentro do overlay em vez de muitos botões soltos.
-
-- **Quick Insert organization**
-  - Reavaliar quais botões devem ficar no top toolbar e quais devem ir para o Editor Overlay.
-  - Possível separação:
-    - Top toolbar: ações globais.
-    - Editor Overlay: ações de texto.
-    - Menus: ações com muitas opções.
-
-### 🥉 Navigation / structure
-
-
-- **Editor → Map active node highlighting**
-  - Já existe mapa → editor.
-  - Próximo passo:
-    - editor → mapa.
-  - Destacar node ativo com base no cursor do editor.
-  - Poderia reutilizar a classe `__active`.
-
-- **Optional map centering on active node**
-  - Centralizar o node correspondente quando o cursor muda no editor.
-  - Deve ser opcional para não atrapalhar pan/zoom manual.
-
-
-### ⚙️ Advanced / optional
-
-
-- **Export Mindmap PNG**
-  - Converter SVG para PNG via canvas.
-  - Útil para apresentações, chats e documentos.
-  - Deve lidar com:
-    - background
-    - dark/light mode
-    - tamanho
-    - fontes
-    - imagens externas
-
-- **Advanced SVG export options**
-  - Tamanho.
-  - Margens.
-  - Background.
-  - Fit before export.
-  - Theme export validation.
-
-- **Line highlighting em code blocks**
-  - Suporte a fence metadata como:
-    - ```js {1,3}
-  - Parsear metadados do fence.
-  - Aplicar destaque visual nas linhas escolhidas.
-  - Provavelmente no HTML Preview primeiro.
-
-- **Markdown export variants**
-  - Cleanup/normalização opcional antes de exportar.
-  - Possíveis variantes:
-    - clean Markdown
-    - normalized headings
-    - remove trailing spaces
-    - normalize blank lines
-    - presentation Markdown
-
-- **Export package**
-  - Futuro opcional: exportar `.md` + assets relacionados.
-  - Poderia ser útil para documentos com imagens locais.
-  - Mais complexo porque envolve múltiplos arquivos.
+- Service worker pode manter versão antiga se `APP_VERSION` não for atualizado.
+- Ao criar novos arquivos JS/CSS, é necessário adicioná-los ao `LOCAL_APP_SHELL` no `sw.js`.
+- Se a versão publicada parecer antiga, usar:
+  - reload;
+  - hard reload;
+  - `resetServiceWorkerAndCaches()`.
+- Logs iniciais podem mostrar pequenos avisos de timing durante boot, desde que depois apareçam estados corretos como:
+  - context boot com `hasApi=true`;
+  - workspace panels setup complete;
+  - active highlight function ready = true.
+- App instalado via GitHub Pages e app rodando no Codespace usam origens diferentes, portanto caches/service workers/localStorage são separados.
+- Se raw JavaScript aparecer na tela, isso indica fragmento solto no `index.html` fora de `<script>`. O `index.html` deve conter apenas script tags válidas e não deve manter restos do workspace controller inline.
 
 ---
 
+## 📝 Current Status
 
-## 🎨 Future Style Enhancements
-
-The Map Style Modifier MVP is implemented. Future style work should focus only on advanced/power-user options.
-
-### Node shape options
-
-- Default
-- Minimal
-- Circle
-- Box
-- Pill
-
-### Border options
-
-- None
-- Solid
-- Dashed
-- Dotted
-- Border width
-- Border radius
-
-### Advanced spacing controls
-
-- Max node width
-- Horizontal spacing
-- Vertical spacing
-- Animation duration
-- Sliders or numeric inputs
-- Keep presets visible
-
-### Custom colors
-
-- Map background
-- Node text
-- Link color
-- Active node color
-- Node fill
-- Node border
-
-### Per-level color palette
-
-- Depth 1 color
-- Depth 2 color
-- Depth 3 color
-- Depth 4+ color
-- Freeze colors after level N
-
-### Style import/export JSON
-
-- Export current style.
-- Import style JSON.
-- Save as custom preset.
-- Delete custom preset.
-
-### Interactive preview inside style popup
-
-- Small preview area with sample nodes and links.
-- Useful before adding custom color controls.
-
-### Research only
-
-- True orientation changes:
-  - right-to-left
-  - top-down
-  - bottom-up
-  - left-right split
-  - radial
-- Custom connector geometry:
-  - straight
-  - elbow
-  - rounded step
-
-These likely require deeper renderer/layout changes and should stay outside the practical MVP.
-
+- Editor Markdown funcionando.
+- CodeMirror funcionando.
+- Markmap render funcionando.
+- HTML Preview funcionando.
+- Shiki/code blocks funcionando.
+- Save/Open/Recent workflow funcionando.
+- Hot Reload funcionando.
+- Auto-save draft funcionando.
+- Templates Org/My funcionando.
+- Add Image funcionando.
+- Export SVG funcionando.
+- Export HTML Preview funcionando.
+- Export Slides Markdown funcionando.
+- Journal Workspace funcionando.
+- Concepts funcionando.
+- Workspace Index funcionando.
+- Related/Backlinks funcionando.
+- Open Tasks funcionando.
+- Tags funcionando.
+- Active Panel funcionando.
+- Journal Timeline funcionando.
+- Help modal contextual funcionando.
+- Welcome modal funcionando.
+- GitHub Pages/PWA flow preparado.
+- Modularização inicial concluída para UI, templates, export, image, workspace controller e workspace highlight.
 
 ---
 
-## ❌ Not recommended for now
+## 📌 Implementation Strategy
 
-Essas ideias podem ser úteis no futuro, mas aumentariam muito a complexidade agora.
+- Manter o app pequeno, prático e confiável.
+- Preferir melhorias incrementais a grandes reescritas.
+- Testar após cada split/refactor.
+- Sempre rodar `node --check` nos arquivos JS alterados.
+- Sempre atualizar `sw.js` quando arquivos estáticos forem criados/removidos.
+- Sempre fazer bump de `APP_VERSION` quando JS/CSS/HTML mudar.
+- Evitar deixar implementações duplicadas entre `main.js` e módulos extraídos.
+- Evitar remover código grande sem antes confirmar que o novo módulo funciona.
+- Para futuras mudanças:
+  - implementar;
+  - testar;
+  - limpar código antigo;
+  - validar cache/service worker;
+  - publicar.
 
-- **Tabbed editing / multi-file**
-  - Exige múltiplos estados, handles e views.
-  - Exige dirty state por arquivo.
-  - Exige draft por aba/documento.
-  - Exige hot reload por arquivo.
-  - Pode transformar o app em um editor muito mais complexo.
+## ✅ Release 40 Summary
 
-- **Workspace / file manager**
-  - Transformaria o app em uma IDE completa.
-  - Exigiria árvore de arquivos, permissões, múltiplos handles e estado persistente maior.
-  - Não combina com a proposta atual de app pequeno e direto.
-
-- **Plugin system**
-  - Alto custo arquitetural.
-  - Exigiria modularização formal.
-  - Exigiria API pública estável.
-  - Difícil manter em single-file app.
-
-- **Full IDE behavior**
-  - Build system.
-  - Multi-file project state.
-  - Extension marketplace.
-  - Debugger.
-  - Terminal.
-  - Não faz sentido para o objetivo atual.
-
-👉 Considerar somente depois de uma grande refatoração e se o produto realmente precisar virar algo maior.
-
----
-
-## 🧠 Internal improvements
-
-### ✅ Priority internal improvements
-
-- **Code organization**
-  - Agrupar lógica por domínio:
-    - File system
-    - Rendering
-    - UI
-    - Templates
-    - Editor integration
-    - Mindmap state
-    - Export
-    - Overlay controls
-
-- **Render pipeline stabilization**
-  - Evitar renders assíncronos sobrepostos.
-  - Prevenir race conditions entre:
-    - input,
-    - blur,
-    - HTML render,
-    - Shiki,
-    - Markmap render,
-    - Hot Reload,
-    - Dark Mode refresh.
-  - Possível uso de render sequence IDs.
-  - Ignorar resultados de renders antigos/stale.
-
-- **State management clarity**
-  - Centralizar estado importante:
-    - file state
-    - dirty state
-    - external changes
-    - view state
-    - fold state
-    - active node state
-    - overlay state
-    - HTML pane state
-
-- **Null-safe UI wiring**
-  - Evitar crashes quando botões são movidos/removidos.
-  - Usar padrão:
-    - buscar elemento,
-    - checar existência,
-    - checar `__bound`,
-    - adicionar listener.
-  - Útil porque a UI está evoluindo com overlays e menus.
-
-- **Preparation for future modularization**
-  - Manter código agrupado para facilitar split futuro.
-  - Exemplo futuro:
-    - `render.js`
-    - `ui.js`
-    - `file.js`
-    - `templates.js`
-    - `editor.js`
-    - `mindmap.js`
-    - `export.js`
-    - `overlays.js`
-    - `state.js`
-
-- **Menu consistency**
-  - Padronizar todos os menus:
-    - Open menu
-    - Export menu
-    - Templates menu
-    - Image menu
-    - Headers menu
-  - Fechar ao clicar fora.
-  - Reposicionar no resize.
-  - Evitar duplicação de lógica.
-
-- **Overlay consistency**
-  - Padronizar visual e comportamento:
-    - Markmap Overlay
-    - Editor Overlay
-  - Garantir:
-    - dark mode,
-    - compact mode,
-    - stopPropagation,
-    - tooltips,
-    - acessibilidade básica.
-
----
-
-## 📌 Implementation strategy
-
-- Focar em features de uso diário.
-- Preferir melhorias incrementais a novos sistemas grandes.
-- Evitar complexidade de workspace/multi-file por enquanto.
-- Manter a aplicação pequena, prática e confiável.
-- Mover controles para perto do contexto onde são usados.
-- Antes de adicionar muitas features novas, estabilizar arquitetura e render pipeline.
-- Sempre que possível:
-  - primeiro implementar de forma segura,
-  - testar,
-  - depois limpar HTML/wiring antigo.
-- Evitar deletar partes grandes sem antes confirmar que a nova estrutura funciona.
-- Roadmap atual recomendado:
-  1. Consolidar overlays e menus.
-  2. Melhorar organização interna.
-  3. Implementar export interativo HTML.
-  4. Implementar KaTeX no HTML Preview.
-  5. Implementar Outliner/TOC.
-  6. Só depois considerar features maiores.
-
-## 💡 Idea Parking Lot
-
-- Interactive exported mindmap HTML.
-- Settings panel.
-- Better SVG export options.
-- Presentation mode.
-- Keyboard shortcut reference.
-- Outliner / TOC.
-- Editor → Map highlighting.
-- Style import/export JSON.
-- Custom color picker.
-
----
-
-## 🧠 Markmap Editor — Pandoc Slides Mode
-
----
-
-## 📊 Pandoc Slides (Quick Guide)
-
-You can use this editor to generate **editable PowerPoint slides**.
-
-### How it works
-
-1. Write your slides in Markdown.
-2. Use `layout:` to control structure.
-3. Separate slides with `---`.
-4. Export using:
-
-Export ▾ → Markdown (Pandoc .md)
-
-5. Convert using Pandoc:
-
-~~~bash
-pandoc file.md -o output.pptx --reference-doc=PandocTemplateV4.pptx
-~~~
-
----
-
-
-### Supported layouts (v2)
-
-- `layout: title`
-- `layout: agenda`
-- `layout: content`
-- `layout: twocols`
-- `layout: image-text`
-- `layout: text-image`
-- `layout: image-caption`
-- `layout: bullets-2`
-- `layout: threecols`
-- `layout: grid2`
-- `layout: section`
-- `layout: highlight`
-- `layout: big`
-- `layout: kpi`
-- `layout: table`
-
-
----
-
-### Important notes
-
-- 2 columns → real PowerPoint columns ✅
-- 3 columns → table fallback ✅
-- 2x2 → table fallback ✅
-- Tables may need manual styling in PowerPoint
-
----
-
-### Tip
-
-Use the button:
-
-📊 Pandoc ▾ → Pandoc Slides Templates V3 — Full Test Deck
-
-to insert a richer test deck with text slides, two-column slides, image slides, KPI slides, and table slides.
-
----
-
-## 🧠 Current Status
-
-- Pandoc export working ✅
-- Two columns working ✅
-- Tables preserved ✅
-- Template-ready output ✅
-## 📝 What Changed in This Version
-
-Changes made during the Pandoc Slides Mode iteration:
-
-1. Pandoc became the main presentation export path.
-2. Marp was deprioritized because Marp-generated PPTX was not editable enough for the target workflow.
-3. The existing Markdown export now produces Pandoc-ready Markdown.
-4. The export function uses a layout engine through `transformLayouts(md.value)`.
-5. The layout engine reads `layout:` at the start of each slide.
-6. `twocols` and `bullets-2` are converted into Pandoc column syntax.
-7. `threecols` uses a table fallback to preserve all three columns.
-8. `grid2` uses a table fallback to preserve the 2x2 structure.
-9. `content`, `section`, `highlight`, `big`, and `table` pass through as simple Pandoc-compatible slide content.
-10. The current generated PPTX confirms that tables are preserved as PowerPoint table objects.
-11. Future optimization should focus on table styling, native three-column layout, and PPTX post-processing.
-
-
-
-## How Pandoc Chooses PowerPoint Layouts
-
-The app uses `layout:` tags as an easy authoring syntax.
-
-During export, the app converts those tags into Pandoc-compatible Markdown.
-
-Pandoc then chooses the actual PowerPoint layout based on the slide content:
-
-- Metadata → Title Slide
-- Normal title + bullets → Title and Content
-- Pandoc columns → Two Content
-- Columns with text + image/table → Comparison
-- Text followed by image/table → Content with Caption
-- Section divider → Section Header
-
-
+-Release 40 consolida o app como:
+  - editor Markdown;
+  - mindmap interativo;
+  - workspace local de journals/concepts;
+  - ferramenta de HTML Preview;
+  - fonte Markdown para slides Pandoc;
+  - PWA publicável via GitHub Pages;
+  - app parcialmente modularizado e mais fácil de manter.
+-Esta versão é adequada como baseline estável para uso diário e futuras melhorias incrementais.
 
     </textarea
         >
@@ -1445,728 +1260,7 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
     <script type="module" src="./js/editor/codemirror-bootstrap.js"></script>
 
-
     <script type="module" src="./js/workspace/workspace-controller.js"></script>
-
-        }
-
-        WORKSPACE_STATE.files.journals = (await scanFolder(WORKSPACE_STATE.folders.journals))
-          .map((handle) => ({
-            name: handle.name,
-            path: `journals/${handle.name}`,
-            kind: 'journals',
-            handle,
-          }))
-          .sort((a, b) => b.name.localeCompare(a.name));
-
-        WORKSPACE_STATE.files.concepts = (await scanFolder(WORKSPACE_STATE.folders.concepts))
-          .map((handle) => ({
-            name: handle.name,
-            path: `concepts/${handle.name}`,
-            kind: 'concepts',
-            handle,
-          }))
-          .sort((a, b) => a.name.localeCompare(b.name));
-
-        log?.(
-          `Workspace: sidebar scan journals=${WORKSPACE_STATE.files.journals.length} concepts=${WORKSPACE_STATE.files.concepts.length}`
-        );
-
-        renderSidebarFiles(WORKSPACE_STATE.files.journals, 'workspaceJournalsList', 'journals');
-        renderSidebarFiles(WORKSPACE_STATE.files.concepts, 'workspaceConceptsList', 'concepts');
-        renderWorkspaceJournalTimeline?.();
-
-        window.updateWorkspaceActiveFileHighlight?.();
-        window.scheduleWorkspaceIndexRebuild?.('sidebar refreshed');
-      }
-
-      function updateWorkspaceUiState() {
-        const hasWorkspace = Boolean(WORKSPACE_STATE.rootHandle);
-
-        document.documentElement.classList.toggle('workspace-ready', hasWorkspace);
-        document.documentElement.classList.toggle('workspace-empty', !hasWorkspace);
-
-        const btnToday = document.getElementById('btnJournalToday');
-        if (btnToday) {
-          btnToday.disabled = !hasWorkspace;
-          btnToday.title = hasWorkspace ? 'Open today journal' : 'Open a workspace first';
-        }
-
-        const btnArchiveActive = document.getElementById('btnArchiveActive');
-        if (btnArchiveActive) {
-          btnArchiveActive.disabled = !hasWorkspace || !WORKSPACE_STATE.activeFile;
-        }
-
-        const title = document.getElementById('workspaceTitle');
-        if (title) {
-          title.textContent = hasWorkspace
-            ? WORKSPACE_STATE.rootName || 'Workspace'
-            : 'Journal Workspace';
-        }
-      }
-
-      function getLastActiveWorkspacePath() {
-        return getLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath, '').trim();
-      }
-
-      function findWorkspaceFileByPath(path) {
-        const target = String(path || '').trim();
-
-        if (!target) return null;
-
-        const journals = WORKSPACE_STATE.files?.journals || [];
-        const concepts = WORKSPACE_STATE.files?.concepts || [];
-
-        return (
-          journals.find((file) => file.path === target) ||
-          concepts.find((file) => file.path === target) ||
-          null
-        );
-      }
-
-      async function reopenLastActiveWorkspaceFileIfPossible() {
-        const lastPath = getLastActiveWorkspacePath();
-
-        if (!lastPath) {
-          globalThis.MME_APP?.log?.('Workspace: no last active file to reopen');
-          return false;
-        }
-
-        const file = findWorkspaceFileByPath(lastPath);
-
-        if (!file || !file.handle) {
-          globalThis.MME_APP?.log?.(`Workspace: last active file not found: ${lastPath}`);
-          return false;
-        }
-
-        try {
-          const blob = await file.handle.getFile();
-          const text = await blob.text();
-
-          WORKSPACE_STATE.activeFile = {
-            kind: file.kind,
-            name: file.name,
-            path: file.path,
-            handle: file.handle,
-          };
-
-          globalThis.MME_APP.openTextDocument({
-            text,
-            fileName: file.name,
-            fileHandle: file.handle,
-            reason: `workspace reopen last active file: ${file.path}`,
-          });
-
-          window.updateWorkspaceActiveFileHighlight?.();
-          renderWorkspaceActivePanel?.();
-          renderWorkspaceRelatedPanel?.();
-
-          globalThis.MME_APP?.showToast?.(`Reopened ${file.name}`, 'ok', 1600);
-          globalThis.MME_APP?.log?.(`Workspace: reopened last active file ${file.path}`);
-
-          return true;
-        } catch (e) {
-          globalThis.MME_APP?.log?.(
-            `Workspace: failed to reopen last active file: ${e?.message || e}`
-          );
-          return false;
-        }
-      }
-
-      async function openWorkspace() {
-        const root = await openWorkspaceDirectory();
-
-        WORKSPACE_STATE.rootHandle = root;
-        WORKSPACE_STATE.rootName = root.name || 'Workspace';
-
-        WORKSPACE_STATE.folders.journals = await ensureSubfolder(root, 'journals');
-        WORKSPACE_STATE.folders.concepts = await ensureSubfolder(root, 'concepts');
-        WORKSPACE_STATE.folders.assets = await ensureSubfolder(root, 'assets');
-        WORKSPACE_STATE.folders.archive = await ensureSubfolder(root, 'archive');
-        WORKSPACE_STATE.folders.system = await ensureSubfolder(root, 'system');
-
-        updateWorkspaceUiState();
-        await refreshWorkspaceSidebar();
-
-        await reopenLastActiveWorkspaceFileIfPossible();
-
-        try {
-          restoreWorkspaceSidebarWidth?.();
-          wireWorkspaceSidebarResize?.();
-          ensureWorkspaceSearchPanel?.();
-          wireWorkspaceSearch?.();
-          ensureWorkspaceRelatedPanel?.();
-          wireWorkspaceRelatedPanel?.();
-          renderWorkspaceRelatedPanel?.();
-        } catch (e) {
-          globalThis.MME_APP?.log?.(
-            `Workspace: sidebar resize restore/wire failed after openWorkspace: ${e?.message || e}`
-          );
-        }
-
-        globalThis.MME_APP?.showToast?.(`Workspace opened ✓ ${WORKSPACE_STATE.rootName}`, 'ok');
-        globalThis.MME_APP?.log?.(`Workspace opened: ${WORKSPACE_STATE.rootName}`);
-      }
-
-      function persistActiveWorkspaceFile() {
-        const active = WORKSPACE_STATE.activeFile;
-
-        if (!active || !active.path) {
-          removeLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath);
-          return;
-        }
-
-        setLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath, active.path);
-
-        globalThis.MME_APP?.log?.(`Workspace: persisted active file ${active.path}`);
-      }
-
-      globalThis.persistActiveWorkspaceFile = persistActiveWorkspaceFile;
-      globalThis.refreshWorkspaceSidebar = refreshWorkspaceSidebar;
-
-      function normalizeWorkspaceKindForCompare(value) {
-        const kind = String(value || '')
-          .trim()
-          .toLowerCase();
-
-        if (kind === 'journal') return 'journals';
-        if (kind === 'journals') return 'journals';
-
-        if (kind === 'concept') return 'concepts';
-        if (kind === 'concepts') return 'concepts';
-
-        return kind;
-      }
-
-      function buildArchiveFileName(activeFile) {
-        const name = String(activeFile?.name || 'archived.md').trim();
-        const kind = normalizeWorkspaceKindForCompare
-          ? normalizeWorkspaceKindForCompare(activeFile?.kind || 'workspace')
-          : String(activeFile?.kind || 'workspace').trim();
-        const stamp = new Date().toISOString().slice(0, 10);
-
-        return `${stamp}-${kind}-${name}`;
-      }
-
-      async function readActiveWorkspaceFileText() {
-        const active = WORKSPACE_STATE.activeFile;
-
-        if (!active || !active.handle) {
-          throw new Error('No active workspace file');
-        }
-
-        const file = await active.handle.getFile();
-        return await file.text();
-      }
-
-      async function removeArchivedOriginalFile(activeFile) {
-        if (!activeFile || !activeFile.kind || !activeFile.name) {
-          return false;
-        }
-
-        const folder = WORKSPACE_STATE.folders?.[activeFile.kind];
-
-        if (!folder || typeof folder.removeEntry !== 'function') {
-          globalThis.MME_APP?.log?.(
-            'Workspace: removeEntry unavailable; archive copy created but original not removed'
-          );
-          return false;
-        }
-
-        await folder.removeEntry(activeFile.name);
-
-        return true;
-      }
-
-      function clearActiveWorkspaceFileAfterArchive() {
-        WORKSPACE_STATE.activeFile = null;
-
-        if (typeof globalThis.MME_APP?.setWritableHandleForCurrentFile === 'function') {
-          globalThis.MME_APP.setWritableHandleForCurrentFile(null);
-        }
-
-        if (typeof currentSaveHandle !== 'undefined') {
-          currentSaveHandle = null;
-        }
-
-        if (
-          typeof removeLocalStorageValue === 'function' &&
-          typeof WORKSPACE_UI_STORAGE_KEYS !== 'undefined'
-        ) {
-          removeLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath);
-        }
-
-        window.updateWorkspaceActiveFileHighlight?.();
-      }
-
-      async function openToday() {
-        if (!WORKSPACE_STATE.rootHandle) {
-          globalThis.MME_APP?.showToast?.('Open a workspace first', 'error', 3000);
-          return;
-        }
-
-        if (!WORKSPACE_STATE.folders.journals) {
-          await openWorkspace();
-        }
-
-        if (!WORKSPACE_STATE.folders.journals) return;
-
-        const d = new Date();
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        const fileName = `${yyyy}-${mm}-${dd}.md`;
-
-        const fileHandle = await WORKSPACE_STATE.folders.journals.getFileHandle(fileName, {
-          create: true,
-        });
-
-        let file = await fileHandle.getFile();
-        let text = await file.text();
-
-        if (!text.trim()) {
-          text = `---
-      type: journal
-      date: ${yyyy}-${mm}-${dd}
-      tags: []
-      ---
-
-      # Today
-      Tags:
-
-      ## Capture
-      -
-
-      ## Tasks
-      - [ ]
-
-      ## Notes
-      `;
-
-          const writable = await fileHandle.createWritable();
-          await writable.write(text);
-          await writable.close();
-        }
-
-        if (!globalThis.MME_APP?.confirmDiscardIfDirty?.()) return;
-
-        globalThis.MME_APP.openTextDocument({
-          text,
-          fileName,
-          fileHandle,
-          reason: 'workspace today',
-        });
-
-        WORKSPACE_STATE.activeFile = {
-          kind: 'journals',
-          name: fileName,
-          path: `journals/${fileName}`,
-          handle: fileHandle,
-        };
-
-        persistActiveWorkspaceFile();
-        await refreshWorkspaceSidebar();
-        window.updateWorkspaceActiveFileHighlight?.();
-        renderWorkspaceActivePanel?.();
-        renderWorkspaceRelatedPanel?.();
-        renderWorkspaceTasksPanel?.();
-        window.scheduleWorkspaceIndexRebuild?.('today');
-        globalThis.MME_APP?.showToast?.(`Today opened ✓ ${fileName}`, 'ok');
-        globalThis.MME_APP?.log?.(`Today opened: ${fileName}`);
-      }
-
-      async function openWorkspaceFile(fileRecord) {
-        if (!fileRecord?.handle) return;
-
-        if (!globalThis.MME_APP?.confirmDiscardIfDirty?.()) return;
-
-        const file = await fileRecord.handle.getFile();
-        const text = await file.text();
-
-        globalThis.MME_APP.openTextDocument({
-          text,
-          fileName: file.name,
-          fileHandle: fileRecord.handle,
-          reason: 'workspace open file',
-        });
-
-        WORKSPACE_STATE.activeFile = {
-          kind: fileRecord.kind || 'journals',
-          name: fileRecord.name,
-          path: fileRecord.path,
-          handle: fileRecord.handle,
-        };
-
-        persistActiveWorkspaceFile();
-        window.updateWorkspaceActiveFileHighlight?.();
-        renderWorkspaceActivePanel?.();
-        renderWorkspaceRelatedPanel?.();
-        window.scheduleWorkspaceIndexRebuild?.('workspace file opened');
-        globalThis.MME_APP?.showToast?.(`Opened ✓ ${file.name}`, 'ok');
-      }
-
-      function handleSidebarClick(event) {
-        const item = event.target.closest('.workspaceFileItem');
-        if (!item) return;
-
-        const path = item.dataset.path || '';
-        const allFiles = [...WORKSPACE_STATE.files.journals, ...WORKSPACE_STATE.files.concepts];
-
-        const fileRecord = allFiles.find((file) => file.path === path);
-        if (!fileRecord) {
-          globalThis.MME_APP?.log?.(`Workspace file not found in state: ${path}`);
-          return;
-        }
-
-        openWorkspaceFile(fileRecord).catch((e) => {
-          globalThis.MME_APP?.showToast?.(`Open file failed: ${e?.message || e}`, 'error');
-          globalThis.MME_APP?.log?.(`Open file failed: ${e?.message || e}`);
-        });
-      }
-
-      const WORKSPACE_UI_STORAGE_KEYS = {
-        lastActivePath: 'markmap:workspace:lastActivePath',
-        sidebarCollapsed: 'markmap:workspace:sidebarCollapsed',
-      };
-
-      const JOURNAL_SIDEBAR_COLLAPSED_KEY = 'markmap:journalSidebarCollapsed';
-
-      function getLocalStorageValue(key, fallback = '') {
-        try {
-          return localStorage.getItem(key) ?? fallback;
-        } catch {
-          return fallback;
-        }
-      }
-
-      function setLocalStorageValue(key, value) {
-        try {
-          localStorage.setItem(key, String(value ?? ''));
-        } catch {
-          // Ignore storage errors.
-        }
-      }
-
-      function removeLocalStorageValue(key) {
-        try {
-          localStorage.removeItem(key);
-        } catch {
-          // Ignore storage errors.
-        }
-      }
-
-      function applyJournalSidebarCollapsed(collapsed) {
-        document.documentElement.classList.toggle('journal-sidebar-collapsed', !!collapsed);
-
-        const btn = document.getElementById('btnWorkspaceCollapse');
-        if (btn) {
-          btn.textContent = collapsed ? '▶' : '◀';
-          btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
-          btn.setAttribute('aria-label', btn.title);
-        }
-
-        setLocalStorageValue(JOURNAL_SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
-      }
-
-      function initJournalSidebarCollapse() {
-        const btn = document.getElementById('btnWorkspaceCollapse');
-        if (!btn || btn.__bound) return;
-
-        let saved = false;
-        try {
-          saved = localStorage.getItem(JOURNAL_SIDEBAR_COLLAPSED_KEY) === '1';
-        } catch {}
-
-        applyJournalSidebarCollapsed(saved);
-
-        btn.addEventListener('click', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-
-          const next = !document.documentElement.classList.contains('journal-sidebar-collapsed');
-          applyJournalSidebarCollapsed(next);
-
-          if (!next) {
-            try {
-              restoreWorkspaceSidebarWidth?.();
-              wireWorkspaceSidebarResize?.();
-            } catch (e) {
-              globalThis.MME_APP?.log?.(
-                `Workspace: sidebar resize restore/wire failed after expand: ${e?.message || e}`
-              );
-            }
-          }
-        });
-
-        btn.__bound = true;
-      }
-
-      async function archiveActiveWorkspaceFile() {
-        globalThis.MME_APP?.log?.('Workspace: archiveActiveWorkspaceFile() begin');
-
-        if (!WORKSPACE_STATE.rootHandle) {
-          globalThis.MME_APP?.showToast?.('Open a workspace first', 'error', 2600);
-          globalThis.MME_APP?.log?.('Workspace: Archive blocked because rootHandle is missing');
-          return;
-        }
-
-        if (!WORKSPACE_STATE.folders?.archive) {
-          globalThis.MME_APP?.showToast?.('Archive folder is not ready', 'error', 2600);
-          globalThis.MME_APP?.log?.('Workspace: Archive blocked because archive folder is missing');
-          return;
-        }
-
-        const active = WORKSPACE_STATE.activeFile;
-
-        globalThis.MME_APP?.log?.(
-          `Workspace: archive active candidate kind=${active?.kind || '(none)'} path=${
-            active?.path || '(none)'
-          } name=${active?.name || '(none)'} hasHandle=${Boolean(active?.handle)}`
-        );
-
-        if (!active || !active.handle || !active.kind || !active.name) {
-          globalThis.MME_APP?.showToast?.('No active workspace file to archive', 'error', 2600);
-          globalThis.MME_APP?.log?.(
-            'Workspace: Archive blocked because no active workspace file exists'
-          );
-          return;
-        }
-
-        const activeKind = normalizeWorkspaceKindForCompare
-          ? normalizeWorkspaceKindForCompare(active.kind)
-          : String(active.kind || '').trim();
-
-        const sourceFolder = WORKSPACE_STATE.folders?.[activeKind];
-
-        globalThis.MME_APP?.log?.(
-          `Workspace: archive sourceFolder kind=${activeKind} exists=${Boolean(sourceFolder)} removeEntry=${typeof sourceFolder?.removeEntry}`
-        );
-
-        const activePath = active.path || `${activeKind}/${active.name}`;
-
-        const ok = confirm(`Archive ${activePath}?`);
-
-        if (!ok) {
-          globalThis.MME_APP?.log?.(`Workspace: archive cancelled for ${activePath}`);
-          return;
-        }
-
-        const file = await active.handle.getFile();
-        const text = await file.text();
-
-        const archiveFileName = buildArchiveFileName({
-          ...active,
-          kind: activeKind,
-        });
-
-        globalThis.MME_APP?.log?.(`Workspace: archive target archive/${archiveFileName}`);
-
-        const archiveHandle = await WORKSPACE_STATE.folders.archive.getFileHandle(archiveFileName, {
-          create: true,
-        });
-
-        const writable = await archiveHandle.createWritable();
-        await writable.write(text);
-        await writable.close();
-
-        globalThis.MME_APP?.log?.(`Workspace: archive copy written archive/${archiveFileName}`);
-
-        let removedOriginal = false;
-
-        try {
-          if (sourceFolder && typeof sourceFolder.removeEntry === 'function') {
-            await sourceFolder.removeEntry(active.name);
-            removedOriginal = true;
-            globalThis.MME_APP?.log?.(`Workspace: archive original removed ${activePath}`);
-          } else {
-            globalThis.MME_APP?.log?.('Workspace: removeEntry unavailable; original kept');
-          }
-        } catch (e) {
-          globalThis.MME_APP?.log?.(
-            `Workspace: original remove failed after archive copy: ${e?.message || e}`
-          );
-          removedOriginal = false;
-        }
-
-        WORKSPACE_STATE.activeFile = null;
-
-        if (typeof currentSaveHandle !== 'undefined') {
-          currentSaveHandle = null;
-        }
-
-        if (
-          typeof removeLocalStorageValue === 'function' &&
-          typeof WORKSPACE_UI_STORAGE_KEYS !== 'undefined'
-        ) {
-          removeLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath);
-        }
-
-        if (typeof refreshWorkspaceSidebar === 'function') {
-          await refreshWorkspaceSidebar();
-        }
-
-        window.updateWorkspaceActiveFileHighlight?.();
-        renderWorkspaceActivePanel?.();
-        renderWorkspaceRelatedPanel?.();
-        renderWorkspaceTasksPanel?.();
-        window.scheduleWorkspaceIndexRebuild?.('archive active');
-
-        globalThis.MME_APP.openTextDocument({
-          text: `# Archived\n\nArchived: ${activePath}\n\nArchive copy: archive/${archiveFileName}\n`,
-          fileName: 'archived.md',
-          fileHandle: null,
-          reason: 'workspace archive active file',
-        });
-
-        const archivedMessage = removedOriginal
-          ? `Archived ${active.name}`
-          : `Archive copy created: ${archiveFileName}`;
-
-        globalThis.MME_APP?.showToast?.(archivedMessage, removedOriginal ? 'ok' : 'download', 2600);
-
-        globalThis.MME_APP?.log?.(
-          removedOriginal
-            ? `Workspace: archived and removed original ${activePath} -> archive/${archiveFileName}`
-            : `Workspace: archive copy created but original kept ${activePath} -> archive/${archiveFileName}`
-        );
-
-        globalThis.MME_APP?.log?.('Workspace: archiveActiveWorkspaceFile() end');
-      }
-
-      let __archiveActiveInProgress = false;
-
-      function bindArchiveActiveDirect() {
-        const btn = document.getElementById('btnArchiveActive');
-
-        if (!btn) {
-          globalThis.MME_APP?.log?.('Workspace: Archive Active direct button not found');
-          return;
-        }
-
-        if (btn.__archiveDirectBound) {
-          return;
-        }
-
-        let __archiveActiveLastEvent = 0;
-        const archiveActiveHandler = async (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-
-          const now = performance.now();
-          if (now - __archiveActiveLastEvent < 120) {
-            globalThis.MME_APP?.log?.(
-              `Workspace: Archive Active direct duplicate event ignored (${event.type})`
-            );
-            return;
-          }
-          __archiveActiveLastEvent = now;
-
-          globalThis.MME_APP?.log?.(
-            `Workspace: Archive Active direct ${event.type} clicked disabled=${Boolean(
-              btn.disabled
-            )} active=${WORKSPACE_STATE.activeFile?.path || '(none)'}`
-          );
-
-          if (__archiveActiveInProgress) {
-            globalThis.MME_APP?.log?.(
-              'Workspace: Archive Active ignored because archive is already in progress'
-            );
-            return;
-          }
-
-          try {
-            __archiveActiveInProgress = true;
-
-            if (btn.disabled) {
-              globalThis.MME_APP?.log?.('Workspace: Archive Active direct forced disabled=false');
-              btn.disabled = false;
-            }
-
-            if (typeof archiveActiveWorkspaceFile !== 'function') {
-              throw new Error('archiveActiveWorkspaceFile missing');
-            }
-
-            await archiveActiveWorkspaceFile();
-          } catch (e) {
-            const msg = e?.message || String(e);
-            globalThis.MME_APP?.log?.(`Workspace: Archive Active direct failed: ${msg}`);
-            globalThis.MME_APP?.showToast?.(`Archive failed: ${msg}`, 'error', 3500);
-          } finally {
-            __archiveActiveInProgress = false;
-          }
-        };
-
-        ['click', 'pointerup'].forEach((evt) => {
-          btn.addEventListener(evt, archiveActiveHandler, {
-            capture: true,
-            passive: false,
-          });
-        });
-
-        btn.__archiveDirectBound = true;
-        globalThis.MME_APP?.log?.('Workspace: Archive Active direct bound');
-      }
-
-      function initWorkspace() {
-        if (initWorkspace.__done) return;
-        initWorkspace.__done = true;
-
-        updateWorkspaceUiState();
-        initJournalSidebarCollapse();
-
-        createWorkspaceActions({
-          onOpenWorkspace: openWorkspace,
-          onToday: openToday,
-          onNewConcept: createNewConcept,
-          onArchiveActive: archiveActiveWorkspaceFile,
-        });
-
-        globalThis.MME_APP?.log?.(
-          `Workspace: archive handler registered = ${
-            typeof archiveActiveWorkspaceFile === 'function'
-          }`
-        );
-
-        bindArchiveActiveDirect();
-
-        clearSidebar();
-        ensureWorkspaceSearchPanel?.();
-        wireWorkspaceSearch?.();
-
-        document
-          .getElementById('workspaceJournalsList')
-          ?.addEventListener('click', handleSidebarClick);
-
-        document
-          .getElementById('workspaceConceptsList')
-          ?.addEventListener('click', handleSidebarClick);
-
-        globalThis.MME_APP?.log?.('Workspace: actions wired');
-      }
-
-      globalThis.WORKSPACE_API = {
-        isWorkspaceReady,
-        createWorkspaceActions,
-        clearSidebar,
-        renderSidebarFiles,
-        openWorkspaceDirectory,
-        ensureSubfolder,
-        scanFolder,
-        refreshWorkspaceSidebar,
-        openWorkspace,
-        openToday,
-        initWorkspace,
-      };
-
-      globalThis.MME_APP?.log?.(
-        `Workspace: stored last active file = ${getLastActiveWorkspacePath() || '(none)'}`
-      );
-
-      if (globalThis.MME_APP) {
-        initWorkspace();
-      } else {
-        window.addEventListener('mme-main-ready', initWorkspace, { once: true });
-      }
 
     <!-- Template Editor Modal -->
 
