@@ -1431,115 +1431,13 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
       // workspace UI empty/ready state (Stage 7.5)
       document.documentElement.classList.add('workspace-empty');
 
-      // ================================
-      // Stage 7.5E — Active File Highlight
-      // ================================
-      function normalizeWorkspacePathForCompare(value) {
-        return String(value || '')
-          .trim()
-          .replace(/\\/g, '/')
-          .replace(/^\.?\//, '');
-      }
-
-      function isSameWorkspaceFileButton(btn, active) {
-        if (!btn || !active) return false;
-
-        const btnKind = String(btn.dataset.kind || '').trim();
-        const btnPath = normalizeWorkspacePathForCompare(btn.dataset.path || '');
-        const btnName = String(btn.dataset.name || '').trim();
-
-        const activeKind = String(active.kind || '').trim();
-        const activePath = normalizeWorkspacePathForCompare(active.path || '');
-        const activeName = String(active.name || '').trim();
-
-        if (!btnKind || !activeKind) return false;
-        if (btnKind !== activeKind) return false;
-
-        if (btnPath && activePath && btnPath === activePath) return true;
-        if (btnName && activeName && btnName === activeName) return true;
-
-        return false;
-      }
-
-      function updateWorkspaceActiveFileHighlight() {
-        const active = WORKSPACE_STATE.activeFile || null;
-
-        let total = 0;
-        let matched = 0;
-
-        document.querySelectorAll('.workspaceFileItem[data-workspace-file="1"]').forEach((btn) => {
-          total += 1;
-
-          const isActive = isSameWorkspaceFileButton(btn, active);
-
-          if (isActive) matched += 1;
-
-          btn.classList.toggle('__active', isActive);
-
-          if (isActive) {
-            btn.dataset.active = '1';
-            btn.setAttribute('aria-current', 'true');
-          } else {
-            delete btn.dataset.active;
-            btn.removeAttribute('aria-current');
-          }
-        });
-
-        globalThis.MME_APP?.log?.(
-          `Workspace: highlight updated active=${
-            active?.path || active?.name || '(none)'
-          } matched=${matched}/${total}`
-        );
-
-        if (active && total > 0 && matched === 0) {
-          document
-            .querySelectorAll('.workspaceFileItem[data-workspace-file="1"]')
-            .forEach((btn) => {
-              globalThis.MME_APP?.log?.(
-                `Workspace: highlight miss btn kind=${btn.dataset.kind || ''} path=${
-                  btn.dataset.path || ''
-                } name=${btn.dataset.name || ''}`
-              );
-            });
-        }
-      }
-
       globalThis.APP_CONTEXT_API = {
         getStoredAppContextId,
-        getAppContext,
-        storeAppContextId,
-        applyAppContextDataset,
-      };
-
-      globalThis.currentAppContextId = ctx.id;
     </script>
-    <script type="module">
-      const welcomeScript = document.createElement('script');
-      welcomeScript.src = './js/ui/welcome.js';
-
-      const helpScript = document.createElement('script');
-      helpScript.src = './js/ui/help.js';
-
-      const templatesDataScript = document.createElement('script');
-      templatesDataScript.src = './js/templates/templates-data.js';
-
-      const mainScript = document.createElement('script');
-      mainScript.src = './js/main.js';
-
-      const templatesMenuScript = document.createElement('script');
-      templatesMenuScript.src = './js/templates/templates-menu.js';
-
-      document.body.appendChild(welcomeScript);
-      document.body.appendChild(helpScript);
-      document.body.appendChild(templatesDataScript);
-      mainScript.onload = function () {
-        window.dispatchEvent(new Event('mme-main-ready'));
-      };
-      document.body.appendChild(mainScript);
-      document.body.appendChild(templatesMenuScript);
-    </script>
+    <script src="./js/app/script-loader.js"></script>
 
     <script type="module" src="./js/editor/codemirror-bootstrap.js"></script>
+
 
     <script type="module">
       import { WORKSPACE_STATE, isWorkspaceReady } from './js/workspace/workspace-state.js';

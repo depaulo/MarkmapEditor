@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v14-template-split';
+const APP_VERSION = 'markmap-journal-pwa-v15-script-loader';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -30,7 +30,11 @@ const LOCAL_APP_SHELL = [
   './css/overlays.css',
   './css/workspace.css',
   './js/main.js',
+  './js/app/script-loader.js',
   './js/ui/welcome.js',
+  './js/ui/help.js',
+
+
   './js/ui/help.js',
   './js/templates/templates-data.js',
   './js/templates/templates-menu.js',
@@ -44,7 +48,9 @@ const LOCAL_APP_SHELL = [
   './js/workspace/workspace-scanner.js',
   './js/workspace/workspace-sidebar.js',
   './js/workspace/workspace-actions.js',
+  './js/workspace/workspace-highlight.js',
 ];
+
 
 const CDN_APP_SHELL = [
   'https://cdn.jsdelivr.net/npm/d3@7',
