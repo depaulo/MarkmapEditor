@@ -769,6 +769,9 @@ try {
   globalThis.buildWorkspaceIndex = buildWorkspaceIndex;
   globalThis.scheduleWorkspaceIndexRebuild = scheduleWorkspaceIndexRebuild;
   globalThis.logWorkspaceIndexSummary = logWorkspaceIndexSummary;
+
+  // Workspace Panels debug helper exposure
+  window.wireWorkspacePanelCollapseControls = wireWorkspacePanelCollapses;
 } catch {}
 
 function ensureWorkspaceSidebarResizeHandle() {
@@ -1208,6 +1211,12 @@ function toggleWorkspacePanel(panelId) {
 
   setWorkspacePanelCollapsedState(panelId, nextCollapsed);
   applyWorkspacePanelCollapsed(panelEl, panelId, nextCollapsed);
+
+  try {
+    log?.(
+      `Workspace Panels: toggled ${panelId} collapsed=${String(nextCollapsed)}`
+    );
+  } catch {}
 }
 
 function ensureWorkspaceRelatedPanel() {
@@ -2860,28 +2869,28 @@ function wireWorkspacePanelCollapses() {
     return;
   }
 
-  if (sidebar.__workspacePanelCollapseBound) {
-    return;
+  // Idempotent: listener is global delegation on the sidebar.
+  if (!sidebar.__workspacePanelCollapseDelegated) {
+    sidebar.addEventListener('click', (event) => {
+      const btn = event.target?.closest?.('[data-workspace-panel-toggle]');
+
+      if (!btn) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const panelId = btn.dataset.workspacePanelToggle || '';
+
+      if (!panelId) return;
+
+      toggleWorkspacePanel(panelId);
+    });
+
+    sidebar.__workspacePanelCollapseDelegated = true;
+    log?.('Workspace Panels: collapse delegation wired');
   }
-
-  sidebar.addEventListener('click', (event) => {
-    const btn = event.target?.closest?.('[data-workspace-panel-toggle]');
-
-    if (!btn) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    const panelId = btn.dataset.workspacePanelToggle || '';
-
-    if (!panelId) return;
-
-    toggleWorkspacePanel(panelId);
-  });
-
-  sidebar.__workspacePanelCollapseBound = true;
-  log?.('Workspace Panels: collapse controls wired');
 }
+
 
 function setStatus(s) {
   saveStatus.textContent = s || '';
