@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v20-workspace-panel-collapse-fix';
+const APP_VERSION = 'markmap-journal-pwa-v21-opentoday-fix';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -33,8 +33,6 @@ const LOCAL_APP_SHELL = [
   './js/app/script-loader.js',
   './js/ui/welcome.js',
 
-
-
   './js/ui/help.js',
   './js/templates/templates-data.js',
   './js/templates/templates-menu.js',
@@ -51,7 +49,6 @@ const LOCAL_APP_SHELL = [
   './js/workspace/workspace-highlight.js',
   './js/workspace/workspace-controller.js',
 ];
-
 
 const CDN_APP_SHELL = [
   'https://cdn.jsdelivr.net/npm/d3@7',

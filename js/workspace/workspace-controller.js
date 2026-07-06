@@ -282,35 +282,69 @@ async function openToday() {
   const dd = String(d.getDate()).padStart(2, '0');
   const fileName = `${yyyy}-${mm}-${dd}.md`;
 
-  const fileHandle = await WORKSPACE_STATE.folders.journals.getFileHandle(fileName, {
+
+ const fileHandle = await WORKSPACE_STATE.folders.journals.getFileHandle(fileName, {
     create: true,
   });
 
   let file = await fileHandle.getFile();
   let text = await file.text();
 
-  if (!text.trim()) {
+  const dateString = `${yyyy}-${mm}-${dd}`;
+
+  if (!String(text || '').trim()) {
     text = `---
-      type: journal
-      date: ${yyyy}-${mm}-${dd}
-      tags: []
-      ---
+type: journal
+date: ${dateString}
+---
 
-      # Today
-      Tags:
+# Daily Capture
 
-      ## Capture
-      -
+Tags:
 
-      ## Tasks
-      - [ ]
+## Daily Focus
 
-      ## Notes
-      `;
+-
+
+## Capture
+
+-
+
+## Meetings
+
+### Meeting — Topic / Account
+
+- Time:
+- Context:
+- Notes:
+- Decisions:
+- Follow-ups:
+  - [ ]
+
+## Tasks
+
+- [ ]
+
+## Notes
+
+-
+
+## Decisions
+
+-
+
+## Follow-ups
+
+- [ ]
+`;
 
     const writable = await fileHandle.createWritable();
     await writable.write(text);
     await writable.close();
+
+    globalThis.MME_APP?.log?.(
+      `Workspace: initialized Today journal with Daily Capture starter ${fileName}`
+    );
   }
 
   if (!globalThis.MME_APP?.confirmDiscardIfDirty?.()) return;

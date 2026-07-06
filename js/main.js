@@ -443,8 +443,33 @@ function getMarkdownTitle(text, fallback = '') {
   return fallback;
 }
 
+function stripYamlFrontmatterForTags(text) {
+  return String(text || '').replace(/^---\s*[\s\S]*?\s*---\s*/, '');
+}
+
+function isReservedWorkspaceTag(tagName) {
+  const normalized = String(tagName || '')
+    .trim()
+    .replace(/^#/, '')
+    .toLowerCase();
+
+  if (!normalized) return true;
+
+  if (
+    ['created', 'updated', 'date', 'type', 'journal', 'concept'].includes(normalized)
+  ) {
+    return true;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return true;
+  }
+
+  return false;
+}
+
 function parseMarkdownTags(text) {
-  const source = normalizeParserText(text);
+  const source = stripYamlFrontmatterForTags(normalizeParserText(text));
   const tags = new Set();
 
   const lines = source.split('\n');
