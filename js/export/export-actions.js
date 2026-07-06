@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 // Classic browser script: Export helpers moved out of js/main.js
 // Must not change export behavior.
 

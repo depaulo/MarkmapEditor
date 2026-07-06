@@ -2251,7 +2251,18 @@ function wireWorkspaceTagsPanel() {
 }
 
 function setupWorkspacePanels() {
+  const workspaceState =
+    globalThis.WORKSPACE_STATE ||
+    window.WORKSPACE_STATE ||
+    null;
+
+  if (!workspaceState) {
+    globalThis.log?.('Workspace: panels setup skipped; WORKSPACE_STATE not ready');
+    return;
+  }
+
   try {
+
     forceUpgradeWorkspacePanelMarkup('index');
     forceUpgradeWorkspacePanelMarkup('related');
     forceUpgradeWorkspacePanelMarkup('tasks');
@@ -3393,119 +3404,9 @@ log(
 log(`Env: showOpenFilePicker=${'showOpenFilePicker' in window}`);
 log(`Env: showSaveFilePicker=${'showSaveFilePicker' in window}`);
 
-// Workspace active-file highlight helpers (exposed globally)
-function normalizeWorkspacePathForCompare(value) {
-  return String(value || '')
-    .trim()
-    .replace(/\\/g, '/')
-    .replace(/^\.?\//, '');
-}
-
-function normalizeWorkspaceKindForCompare(value) {
-  const kind = String(value || '')
-    .trim()
-    .toLowerCase();
-
-  if (kind === 'journal') return 'journals';
-  if (kind === 'journals') return 'journals';
-
-  if (kind === 'concept') return 'concepts';
-  if (kind === 'concepts') return 'concepts';
-
-  return kind;
-}
-
-function isSameWorkspaceFileButton(btn, active) {
-  if (!btn || !active) return false;
-
-  const btnKind = normalizeWorkspaceKindForCompare(btn.dataset.kind || '');
-  const btnPath = normalizeWorkspacePathForCompare(btn.dataset.path || '');
-  const btnName = String(btn.dataset.name || '').trim();
-
-  const activeKind = normalizeWorkspaceKindForCompare(active.kind || '');
-  const activePath = normalizeWorkspacePathForCompare(active.path || '');
-  const activeName = String(active.name || '').trim();
-
-  /*
-    Prefer exact path match first.
-    If path matches, allow kind normalization to handle concept/concepts.
-  */
-  if (btnPath && activePath && btnPath === activePath) {
-    if (!btnKind || !activeKind) return true;
-    return btnKind === activeKind;
-  }
-
-  /*
-    Then fall back to kind + name.
-  */
-  if (btnKind && activeKind && btnKind !== activeKind) {
-    return false;
-  }
-
-  if (btnName && activeName && btnName === activeName) {
-    return true;
-  }
-
-  return false;
-}
-
-function updateWorkspaceActiveFileHighlight() {
-  try {
-    const active = WORKSPACE_STATE?.activeFile || globalThis.WORKSPACE_STATE?.activeFile || null;
-
-    const activeKind = normalizeWorkspaceKindForCompare(active?.kind || '');
-    const activePath = normalizeWorkspacePathForCompare(active?.path || '');
-    const activeName = String(active?.name || '').trim();
-
-    let total = 0;
-    let matched = 0;
-
-    document.querySelectorAll('.workspaceFileItem[data-workspace-file="1"]').forEach((btn) => {
-      total += 1;
-
-      const isActive = isSameWorkspaceFileButton(btn, active);
-
-      if (isActive) matched += 1;
-
-      btn.classList.toggle('__active', isActive);
-
-      if (isActive) {
-        btn.dataset.active = '1';
-        btn.setAttribute('aria-current', 'true');
-      } else {
-        delete btn.dataset.active;
-        btn.removeAttribute('aria-current');
-      }
-    });
-
-    log?.(
-      `Workspace: highlight updated active=${
-        activePath || activeName || '(none)'
-      } kind=${activeKind || '(none)'} matched=${matched}/${total}`
-    );
-
-    if (active && total > 0 && matched === 0) {
-      log?.(
-        `Workspace: highlight active debug kind=${activeKind} path=${activePath} name=${activeName}`
-      );
-
-      document.querySelectorAll('.workspaceFileItem[data-workspace-file="1"]').forEach((btn) => {
-        log?.(
-          `Workspace: highlight miss btn kind=${normalizeWorkspaceKindForCompare(
-            btn.dataset.kind || ''
-          )} path=${normalizeWorkspacePathForCompare(
-            btn.dataset.path || ''
-          )} name=${btn.dataset.name || ''}`
-        );
-      });
-    }
-  } catch (e) {
-    log?.(`Workspace: active highlight update failed: ${e?.message || e}`);
-  }
-}
-
-window.updateWorkspaceActiveFileHighlight = updateWorkspaceActiveFileHighlight;
-globalThis.updateWorkspaceActiveFileHighlight = updateWorkspaceActiveFileHighlight;
+// Workspace active-file highlight helpers moved to ./js/workspace/workspace-highlight.js (R5B.1)
+// main.js intentionally does not define normalizeWorkspacePathForCompare / isSameWorkspaceFileButton /
+// updateWorkspaceActiveFileHighlight anymore.
 
 try {
   if (typeof WORKSPACE_STATE !== 'undefined') globalThis.WORKSPACE_STATE = WORKSPACE_STATE;

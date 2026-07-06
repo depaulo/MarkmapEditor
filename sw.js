@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v15-script-loader';
+const APP_VERSION = 'markmap-journal-pwa-v18-r5d-final';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -32,7 +32,7 @@ const LOCAL_APP_SHELL = [
   './js/main.js',
   './js/app/script-loader.js',
   './js/ui/welcome.js',
-  './js/ui/help.js',
+
 
 
   './js/ui/help.js',
@@ -49,6 +49,7 @@ const LOCAL_APP_SHELL = [
   './js/workspace/workspace-sidebar.js',
   './js/workspace/workspace-actions.js',
   './js/workspace/workspace-highlight.js',
+  './js/workspace/workspace-controller.js',
 ];
 
 

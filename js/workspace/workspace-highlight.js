@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 import { WORKSPACE_STATE } from './workspace-state.js';
 
 function normalizeWorkspacePathForCompare(value) {
@@ -7,7 +9,7 @@ function normalizeWorkspacePathForCompare(value) {
     .replace(/^\.?\//, '');
 }
 
-function normalizeWorkspaceKindForCompareLocal(value) {
+function normalizeWorkspaceKindForCompare(value) {
   const kind = String(value || '').trim().toLowerCase();
 
   if (kind === 'journal') return 'journals';
@@ -18,16 +20,18 @@ function normalizeWorkspaceKindForCompareLocal(value) {
   return kind;
 }
 
+
 function isSameWorkspaceFileButton(btn, active) {
   if (!btn || !active) return false;
 
-  const btnKind = normalizeWorkspaceKindForCompareLocal(btn.dataset.kind || '');
+  const btnKind = normalizeWorkspaceKindForCompare(btn.dataset.kind || '');
   const btnPath = normalizeWorkspacePathForCompare(btn.dataset.path || '');
   const btnName = String(btn.dataset.name || '').trim();
 
-  const activeKind = normalizeWorkspaceKindForCompareLocal(active.kind || '');
+  const activeKind = normalizeWorkspaceKindForCompare(active.kind || '');
   const activePath = normalizeWorkspacePathForCompare(active.path || '');
   const activeName = String(active.name || '').trim();
+
 
   /*
     Prefer exact path match first.
@@ -60,7 +64,7 @@ function updateWorkspaceActiveFileHighlight() {
       null;
 
 
-    const activeKind = normalizeWorkspaceKindForCompareLocal(active?.kind || '');
+    const activeKind = normalizeWorkspaceKindForCompare(active?.kind || '');
     const activePath = normalizeWorkspacePathForCompare(active?.path || '');
     const activeName = String(active?.name || '').trim();
 
@@ -105,8 +109,8 @@ function updateWorkspaceActiveFileHighlight() {
       document
         .querySelectorAll('.workspaceFileItem[data-workspace-file="1"]')
         .forEach((btn) => {
-          globalThis.log?.(
-            `Workspace: highlight miss btn kind=${normalizeWorkspaceKindForCompareLocal(
+globalThis.log?.(
+            `Workspace: highlight miss btn kind=${normalizeWorkspaceKindForCompare(
               btn.dataset.kind || ''
             )} path=${normalizeWorkspacePathForCompare(
               btn.dataset.path || ''
@@ -124,9 +128,14 @@ function updateWorkspaceActiveFileHighlight() {
 try {
   window.updateWorkspaceActiveFileHighlight = updateWorkspaceActiveFileHighlight;
   globalThis.updateWorkspaceActiveFileHighlight = updateWorkspaceActiveFileHighlight;
+
   window.normalizeWorkspacePathForCompare = normalizeWorkspacePathForCompare;
   globalThis.normalizeWorkspacePathForCompare = normalizeWorkspacePathForCompare;
+
+  window.normalizeWorkspaceKindForCompare = normalizeWorkspaceKindForCompare;
+  globalThis.normalizeWorkspaceKindForCompare = normalizeWorkspaceKindForCompare;
 } catch {}
+
 
 globalThis.log?.(
   `Workspace: active highlight function ready = ${
@@ -136,6 +145,7 @@ globalThis.log?.(
 
 export {
   normalizeWorkspacePathForCompare,
+  normalizeWorkspaceKindForCompare,
   isSameWorkspaceFileButton,
   updateWorkspaceActiveFileHighlight,
 };

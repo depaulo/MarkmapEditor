@@ -1433,25 +1433,21 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
 
       globalThis.APP_CONTEXT_API = {
         getStoredAppContextId,
+        getAppContext,
+        storeAppContextId,
+        applyAppContextDataset,
+      };
+
+      globalThis.currentAppContextId = ctx.id;
     </script>
+    <script type="module" src="./js/workspace/workspace-highlight.js"></script>
     <script src="./js/app/script-loader.js"></script>
 
     <script type="module" src="./js/editor/codemirror-bootstrap.js"></script>
 
 
-    <script type="module">
-      import { WORKSPACE_STATE, isWorkspaceReady } from './js/workspace/workspace-state.js';
-      import { createWorkspaceActions } from './js/workspace/workspace-actions.js';
-      import { clearSidebar, renderSidebarFiles } from './js/workspace/workspace-sidebar.js';
-      import { openWorkspaceDirectory, ensureSubfolder } from './js/workspace/workspace-open.js';
-      import { scanFolder } from './js/workspace/workspace-scanner.js';
+    <script type="module" src="./js/workspace/workspace-controller.js"></script>
 
-      globalThis.WORKSPACE_STATE = WORKSPACE_STATE;
-
-      async function refreshWorkspaceSidebar() {
-        if (!WORKSPACE_STATE.folders.journals || !WORKSPACE_STATE.folders.concepts) {
-          clearSidebar();
-          return;
         }
 
         WORKSPACE_STATE.files.journals = (await scanFolder(WORKSPACE_STATE.folders.journals))
@@ -2171,9 +2167,9 @@ Pandoc then chooses the actual PowerPoint layout based on the slide content:
       } else {
         window.addEventListener('mme-main-ready', initWorkspace, { once: true });
       }
-    </script>
 
     <!-- Template Editor Modal -->
+
     <div
       id="tplModal"
       style="

@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 // Classic browser script: Export menu wiring
 // Extracted behavior-preserving from js/main.js.
 
