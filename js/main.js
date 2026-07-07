@@ -443,19 +443,102 @@ function getMarkdownTitle(text, fallback = '') {
   return fallback;
 }
 
-function stripYamlFrontmatterForTags(text) {
-  return String(text || '').replace(/^---\s*[\s\S]*?\s*---\s*/, '');
+function parseSimpleYamlFrontmatter(text) {
+  const raw = String(text || '');
+  const match = raw.match(/^\uFEFF?\s*---\s*\n([\s\S]*?)\n---\s*/);
+
+  if (!match) {
+    return {
+      data: {},
+      body: raw,
+    };
+  }
+
+  const yaml = match[1];
+  const body = raw.slice(match[0].length);
+  const data = {};
+  const lines = yaml.split(/\r?\n/);
+
+  let currentKey = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (!trimmed) continue;
+
+    const listMatch = trimmed.match(/^-\s+(.+)$/);
+
+    if (listMatch && currentKey) {
+      if (!Array.isArray(data[currentKey])) {
+        data[currentKey] = [];
+      }
+
+      data[currentKey].push(
+        listMatch[1].trim().replace(/^['"]|['"]$/g, '')
+      );
+      continue;
+    }
+
+    const kv = trimmed.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+
+    if (!kv) continue;
+
+    const key = kv[1].trim();
+    let value = kv[2].trim();
+
+    currentKey = key;
+
+    if (value === '[]') {
+      data[key] = [];
+      continue;
+    }
+
+    if (/^\[.*\]$/.test(value)) {
+      data[key] = value
+        .replace(/^\[/, '')
+        .replace(/\]$/, '')
+        .split(',')
+        .map((item) => item.trim().replace(/^['"]|['"]$/g, ''))
+        .filter(Boolean);
+      continue;
+    }
+
+    data[key] = value.replace(/^['"]|['"]$/g, '');
+  }
+
+  return {
+    data,
+    body,
+  };
 }
 
-function isReservedWorkspaceTag(tagName) {
-  const normalized = String(tagName || '')
+function normalizeWorkspaceTagName(tag) {
+  return String(tag || '')
     .trim()
     .replace(/^#/, '')
     .toLowerCase();
+}
+
+function isReservedWorkspaceTag(tagName) {
+  const normalized = normalizeWorkspaceTagName(tagName);
 
   if (!normalized) return true;
 
-  if (['created', 'updated', 'date', 'type', 'journal', 'concept'].includes(normalized)) {
+  if (
+    [
+      'created',
+      'updated',
+      'date',
+      'type',
+      'journal',
+      'concept',
+      'status',
+      'tags',
+      '-',
+      '---',
+      '[]',
+    ].includes(normalized)
+  ) {
     return true;
   }
 
@@ -466,7 +549,27 @@ function isReservedWorkspaceTag(tagName) {
   return false;
 }
 
+function stripYamlFrontmatterForTags(text) {
+  return String(text || '').replace(/^---\s*[\s\S]*?\s*---\s*/, '');
+}
+
+function normalizeFrontmatterTags(tagsValue) {
+  if (!tagsValue) return [];
+
+  const raw = Array.isArray(tagsValue)
+    ? tagsValue
+    : typeof tagsValue === 'string'
+      ? tagsValue.split(/[ ,]+/)
+      : [];
+
+  return raw
+    .map(normalizeWorkspaceTagName)
+    .filter(Boolean)
+    .filter((tag) => !isReservedWorkspaceTag(tag));
+}
+
 function parseMarkdownTags(text) {
+
   const source = stripYamlFrontmatterForTags(normalizeParserText(text));
   const tags = new Set();
 
@@ -595,11 +698,15 @@ function parseVisibleHeaderFields(text) {
 
 function parseWorkspaceDocument({ kind, name, path, text }) {
   const normalizedText = normalizeParserText(text);
-  const headings = parseMarkdownHeadings(normalizedText);
-  const tasks = parseMarkdownTasks(normalizedText);
-  const tags = parseMarkdownTags(normalizedText);
-  const conceptLinks = parseConceptLinks(normalizedText);
-  const header = parseVisibleHeaderFields(normalizedText);
+  const parsedFrontmatter = parseSimpleYamlFrontmatter(normalizedText);
+  const frontmatterTags = normalizeFrontmatterTags(parsedFrontmatter.data?.tags);
+  const headings = parseMarkdownHeadings(parsedFrontmatter.body);
+  const tasks = parseMarkdownTasks(parsedFrontmatter.body);
+  const bodyTags = parseMarkdownTags(parsedFrontmatter.body);
+  const tags = Array.from(new Set([...(frontmatterTags || []), ...(bodyTags || [])])).sort();
+  const conceptLinks = parseConceptLinks(parsedFrontmatter.body);
+  const header = parseVisibleHeaderFields(parsedFrontmatter.body);
+
 
   const title = getMarkdownTitle(normalizedText, String(name || '').replace(/\.md$/i, ''));
 
@@ -3034,11 +3141,7 @@ tags: []
 
 # ${title}
 
-Type: Concept
-Status: active
 Tags:
-Created: ${today}
-Updated: ${today}
 
 ## Summary
 -
@@ -5876,6 +5979,7 @@ function toggleEditor() {
       lastEditorWidth = editorEl.style.width || editorEl.getBoundingClientRect().width + 'px';
       editorEl.style.display = 'none';
       splitEditorEl.style.display = 'none';
+      document.body.classList.add('editor-hidden');
       log(`Editor HIDE (saved width=${lastEditorWidth})`);
       setShowHideLabel('btnToggleEditor', false, 'Editor');
       syncToolbarHeight();
@@ -5883,6 +5987,7 @@ function toggleEditor() {
     }
     editorEl.style.display = 'block';
     splitEditorEl.style.display = 'block';
+    document.body.classList.remove('editor-hidden');
     if (lastEditorWidth) editorEl.style.width = lastEditorWidth;
     log(`Editor SHOW (restored width=${lastEditorWidth || '(default)'})`);
     setShowHideLabel('btnToggleEditor', true, 'Editor');
@@ -6901,7 +7006,49 @@ document.getElementById('btnSave').addEventListener('click', () =>
   })
 );
 
-const btnCopyMd = document.getElementById('btnCopyMd');
+  const btnEditorEdgeOpen = document.getElementById('btnEditorEdgeOpen');
+  const btnEditorHide = document.getElementById('editorBtnHide');
+
+  function updateEditorOverlayButtons() {
+    const editorVisible = editorEl.style.display !== 'none';
+    if (btnEditorHide) {
+      btnEditorHide.style.display = editorVisible ? '' : 'none';
+      btnEditorHide.textContent = '‹';
+    }
+    if (btnEditorEdgeOpen) {
+      btnEditorEdgeOpen.style.display = editorVisible ? 'none' : '';
+      btnEditorEdgeOpen.hidden = editorVisible;
+      btnEditorEdgeOpen.textContent = '›';
+    }
+  }
+
+  if (btnEditorHide && !btnEditorHide.__bound) {
+    btnEditorHide.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      log?.('Editor overlay hide clicked');
+      toggleEditor();
+      updateEditorOverlayButtons();
+    });
+    btnEditorHide.__bound = true;
+  }
+
+  if (btnEditorEdgeOpen && !btnEditorEdgeOpen.__bound) {
+    btnEditorEdgeOpen.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      log?.('Editor edge open clicked');
+      toggleEditor();
+      updateEditorOverlayButtons();
+    });
+    btnEditorEdgeOpen.__bound = true;
+  }
+
+  if (typeof updateEditorOverlayButtons === 'function') {
+    setTimeout(updateEditorOverlayButtons, 100);
+  }
+
+  const btnCopyMd = document.getElementById('btnCopyMd');
 if (btnCopyMd) {
   btnCopyMd.addEventListener('click', copyMarkdownToClipboard);
 }
@@ -8986,6 +9133,157 @@ function applyAppContextUi(contextId, reason = 'applyAppContextUi') {
   }
 }
 
+// ================================
+// R-MULTI1 — Mode-Specific Internal State
+// ================================
+const APP_MODE_IDS = ['editor', 'journal', 'slides'];
+
+const APP_MODE_SESSIONS = globalThis.APP_MODE_SESSIONS || {
+  editor: {},
+  journal: {},
+  slides: {},
+};
+
+globalThis.APP_MODE_SESSIONS = APP_MODE_SESSIONS;
+
+function normalizeAppModeId(mode) {
+  const value = String(mode || '').toLowerCase();
+  return APP_MODE_IDS.includes(value) ? value : 'editor';
+}
+
+function getCurrentModeIdSafe() {
+  return normalizeAppModeId(
+    globalThis.currentAppContextId ||
+      document.documentElement?.dataset?.appContext ||
+      'editor'
+  );
+}
+
+function getCurrentEditorTextSafe() {
+  try {
+    if (globalThis.MME_APP?.getText) return globalThis.MME_APP.getText();
+  } catch {}
+
+  try {
+    if (globalThis.cm?.getValue) return globalThis.cm.getValue();
+  } catch {}
+
+  try {
+    const textarea = document.getElementById('md');
+    if (textarea) return textarea.value || '';
+  } catch {}
+
+  return '';
+}
+
+function setCurrentEditorTextSafe(text) {
+  try {
+    if (globalThis.MME_APP?.setText) {
+      globalThis.MME_APP.setText(String(text || ''));
+      return true;
+    }
+  } catch {}
+
+  try {
+    if (globalThis.__cmSetText) {
+      globalThis.__cmSetText(String(text || ''));
+      return true;
+    }
+  } catch {}
+
+  try {
+    if (globalThis.cm?.setValue) {
+      globalThis.cm.setValue(String(text || ''));
+      return true;
+    }
+  } catch {}
+
+  try {
+    const textarea = document.getElementById('md');
+    if (textarea) {
+      textarea.value = String(text || '');
+      return true;
+    }
+  } catch {}
+
+  return false;
+}
+
+function captureCurrentModeSession(reason = 'capture') {
+  const mode = getCurrentModeIdSafe();
+  const session = APP_MODE_SESSIONS[mode] || {};
+
+  session.mode = mode;
+  session.text = getCurrentEditorTextSafe();
+  session.fileName =
+    globalThis.currentFileName ||
+    globalThis.MME_APP?.currentFileName ||
+    '';
+
+  session.dirty =
+    Boolean(globalThis.isDirty) ||
+    Boolean(globalThis.MME_APP?.isDirty?.());
+
+  session.htmlOpen =
+    document.body.classList.contains('html-open') ||
+    document.documentElement.classList.contains('html-open') ||
+    Boolean(document.getElementById('htmlPane')?.classList.contains('open'));
+
+  session.editorHidden =
+    document.body.classList.contains('editor-hidden') ||
+    document.documentElement.classList.contains('editor-hidden');
+
+  session.timestamp = Date.now();
+
+  APP_MODE_SESSIONS[mode] = session;
+
+  globalThis.log?.(
+    `ModeSession: captured mode=${mode} reason=${reason} file=${session.fileName || '(none)'} dirty=${session.dirty}`
+  );
+
+  return session;
+}
+
+function restoreModeSession(modeInput, reason = 'restore') {
+  const mode = normalizeAppModeId(modeInput);
+  const session = APP_MODE_SESSIONS[mode];
+
+  if (!session || typeof session.text !== 'string') {
+    globalThis.log?.(`ModeSession: no session to restore mode=${mode} reason=${reason}`);
+    return false;
+  }
+
+  if (
+    mode === 'journal' &&
+    globalThis.WORKSPACE_STATE?.activeFile
+  ) {
+    globalThis.log?.(`ModeSession: journal restore skipped because workspace activeFile exists`);
+    return false;
+  }
+
+  setCurrentEditorTextSafe(session.text);
+
+  globalThis.log?.(
+    `ModeSession: restored mode=${mode} reason=${reason} file=${session.fileName || '(none)'}`
+  );
+
+  return true;
+}
+
+function getModeStoragePrefix(modeInput) {
+  const mode = normalizeAppModeId(modeInput);
+  return `mme:${mode}:`;
+}
+
+function getModeStorageKey(modeInput, key) {
+  return `${getModeStoragePrefix(modeInput)}${key}`;
+}
+
+globalThis.APP_MODE_SESSIONS = APP_MODE_SESSIONS;
+globalThis.captureCurrentModeSession = captureCurrentModeSession;
+globalThis.restoreModeSession = restoreModeSession;
+globalThis.getModeStorageKey = getModeStorageKey;
+
 function wireAppContextSelector() {
   const select = document.getElementById('appContextSelect');
   const api = getContextApi();
@@ -9037,7 +9335,9 @@ function wireAppContextSelector() {
       }
     }
 
+    captureCurrentModeSession('before context switch');
     applyAppContextUi(nextId, 'context switch');
+    restoreModeSession(nextId, 'after context switch');
   });
 
   select.__bound = true;

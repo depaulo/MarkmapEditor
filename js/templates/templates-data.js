@@ -962,11 +962,9 @@ Status:
 <!-- Target PPT layout: Title Slide -->
 <!-- Source layout: title -->
 
-Market expansion, product acceleration, and execution roadmap
-
-Business Development Team
-
-2026-05-26
+- Market expansion, product acceleration, and execution roadmap
+- Business Development Team
+- 2026-05-26
 
 ::: notes
 Opening context and presenter introduction.

@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v23-concept-help-dateString-fix';
+const APP_VERSION = 'markmap-journal-pwa-v28-mode-session-editor-handle';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 

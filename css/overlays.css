@@ -393,6 +393,84 @@ html.compact #mapOverlayControls button {
 }
 
 /* =========================== */
+/* Editor Hide / Edge Open      */
+/* =========================== */
+
+#editorBtnHide {
+  position: absolute;
+  right: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 80;
+  width: 24px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--toolbar-border, rgba(255, 255, 255, 0.18));
+  background: var(--btn-bg, rgba(30, 30, 30, 0.82));
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.68;
+  font-size: 16px;
+  line-height: 1;
+  user-select: none;
+}
+
+#editorBtnHide:hover {
+  opacity: 1;
+}
+
+#editorBtnHide:active {
+  transform: translateY(-50%) scale(0.96);
+}
+
+#btnEditorEdgeOpen {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 80;
+  width: 24px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--toolbar-border, rgba(255, 255, 255, 0.18));
+  background: var(--btn-bg, rgba(30, 30, 30, 0.82));
+  color: var(--text);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.68;
+  font-size: 16px;
+  line-height: 1;
+  user-select: none;
+}
+
+#btnEditorEdgeOpen:hover {
+  opacity: 1;
+}
+
+#btnEditorEdgeOpen:active {
+  transform: translateY(-50%) scale(0.96);
+}
+
+body.editor-hidden #btnEditorEdgeOpen {
+  display: inline-flex;
+}
+
+body.editor-hidden #editorBtnHide {
+  display: none;
+}
+
+html.dark #editorBtnHide,
+html.dark #btnEditorEdgeOpen {
+  background: var(--btn-bg, rgba(37, 37, 38, 0.9));
+  border-color: var(--btn-border, rgba(255, 255, 255, 0.18));
+}
+
+/* =========================== */
 /* Editor Overlay Controls     */
 /* =========================== */
 

@@ -17,10 +17,7 @@ function getCurrentHelpContext() {
   }
 
   if (contextId === 'journal') {
-    const workspaceState =
-      globalThis.WORKSPACE_STATE ||
-      window.WORKSPACE_STATE ||
-      null;
+    const workspaceState = globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
 
     const activeKind =
       typeof normalizeWorkspaceKindForCompare === 'function'
@@ -520,8 +517,8 @@ function getSlidesHelpHtml() {
       </p>
       <code class="helpCode"># Executive Summary
 
-&amp;lt;!-- Target PPT layout: Title and Content --&amp;gt;
-&amp;lt;!-- Source layout: content --&amp;gt;
+&lt;!-- Target PPT layout: Title and Content --&gt;
+&lt;!-- Source layout: content --&gt;
 
 - Point 1
 - Point 2
@@ -533,8 +530,8 @@ function getSlidesHelpHtml() {
       <p>
         Layout comments describe the intended PowerPoint template target and preserve the old source layout mapping.
       </p>
-      <code class="helpCode">&amp;lt;!-- Target PPT layout: Image Left + Text Right --&amp;gt;
-&amp;lt;!-- Source layout: image-text --&amp;gt;</code>
+      <code class="helpCode">&lt;!-- Target PPT layout: Image Left + Text Right --&gt;
+&lt;!-- Source layout: image-text --&gt;</code>
       <p>
         These comments are kept in the Markdown export and can be used by future tooling.
       </p>

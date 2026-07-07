@@ -30,8 +30,27 @@
     return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   }
 
+  function getTemplateDateString() {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  function applyTemplatePlaceholders(text) {
+    const dateString = getTemplateDateString();
+
+    return String(text || '')
+      .replaceAll('{{date}}', dateString)
+      .replaceAll('{{today}}', dateString)
+      .replaceAll('{{created}}', dateString)
+      .replaceAll('{{journalDate}}', dateString);
+  }
+
   function __tplInsert(body) {
-    const txt = String(body || '').trimEnd();
+    const replaced = applyTemplatePlaceholders(body);
+    const txt = String(replaced || '').trimEnd();
     if (!txt) return;
     try {
       if (typeof __insertIntoEditor === 'function') {

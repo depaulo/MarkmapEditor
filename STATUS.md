@@ -369,6 +369,43 @@ log(`App context changed: ${ctx.label}`);
 
 # Implementation Plan
 
+## Future Architecture — Splitting and Multi-Mode State
+
+### R-SPLIT1 — Extract Mode Session Manager
+- Move mode-specific state capture/restore logic out of main.js.
+- Manage editor/journal/slides state separately.
+- Keep one editor instance for now.
+
+### R-SPLIT2 — Extract Workspace Metadata/Index Parser
+- Move frontmatter parsing, tag extraction, reserved tag filtering, and workspace document parsing into a dedicated module.
+- Preserve frontmatter tags and body tag fallback.
+
+### R-SPLIT3 — Extract Editor Visibility Controls
+- Move editor hide/show toolbar, overlay handle, and edge open behavior into a dedicated editor UI module.
+- All controls must share the same editor visibility state.
+
+### R-SPLIT4 — Render Pipeline Stabilization
+- Extract render debounce, Markmap setData, HTML refresh, and scroll sync into a render controller.
+- Prevent stale overlapping renders.
+
+### R-MULTI1 — Mode-Specific Internal State
+- Maintain separate in-memory state for editor, journal, and slides.
+- Preserve text/file/draft/view state per mode.
+- Do not create multiple editor instances.
+
+### R-MULTI2 — URL Mode Startup
+- Support ?mode=editor, ?mode=journal, ?mode=slides.
+
+### R-MULTI3 — Separate Current Mode Button
+- Open active mode in a new window with ?mode=...&session=....
+
+### R-MULTI4 — Session-Aware State
+- Add session-specific storage keys.
+
+### R-MULTI5 — Multi-Window Safety
+- Warn about same file open in multiple windows.
+- Consider BroadcastChannel.
+
 ## Roadmap — UI polish follow-ups
 
 These items are planned for later, after archive behavior is stable.
@@ -398,6 +435,21 @@ These items are planned for later, after archive behavior is stable.
   - Add bottom-right overlay actions for text/HTML copy and export.
   - Keep the controls compact and non-invasive.
   - Reuse the existing HTML export path.
+
+- R-META2 — Split Metadata Templates From Body Templates
+  - Keep metadata/frontmatter templates separate from body content templates.
+  - Compose metadata + body at creation/insertion time.
+  - Avoid duplicated frontmatter across templates.
+
+- R-META3 — Hide Frontmatter In Editor
+  - Keep frontmatter in saved Markdown files.
+  - Hide/collapse it in normal editor view.
+  - Add Show Metadata toggle.
+
+- R-META4 — Metadata Panel
+  - Editable metadata UI for type/date/created/updated/status/tags.
+  - Tags editable as chips.
+  - Save recomposes frontmatter + body.
 
 ## Phase 1 — Add Context State
 
