@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v29-editor-visibility-split';
+const APP_VERSION = 'markmap-journal-pwa-v30-workspace-parser-url-mode';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -49,6 +49,7 @@ const LOCAL_APP_SHELL = [
   './js/workspace/workspace-actions.js',
   './js/workspace/workspace-highlight.js',
   './js/workspace/workspace-controller.js',
+  './js/workspace/workspace-parser.js',
 ];
 
 const CDN_APP_SHELL = [

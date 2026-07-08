@@ -1252,7 +1252,23 @@ $$
         applyAppContextDataset,
       } from './js/core/context.js';
 
-      const ctx = applyAppContextDataset(getStoredAppContextId());
+      function getUrlModeParam() {
+        try {
+          const url = new URL(window.location.href);
+          const mode = String(url.searchParams.get('mode') || '').toLowerCase();
+
+          if (['editor', 'journal', 'slides'].includes(mode)) {
+            return mode;
+          }
+        } catch {}
+
+        return '';
+      }
+
+      const urlMode = getUrlModeParam();
+      const initialContextId = urlMode || getStoredAppContextId();
+
+      const ctx = applyAppContextDataset(initialContextId);
 
       // workspace UI empty/ready state (Stage 7.5)
       document.documentElement.classList.add('workspace-empty');
@@ -1265,6 +1281,14 @@ $$
       };
 
       globalThis.currentAppContextId = ctx.id;
+
+      // Reflect URL mode in the selector if present and valid.
+      if (urlMode) {
+        try {
+          const select = document.getElementById('appContextSelect');
+          if (select) select.value = ctx.id;
+        } catch {}
+      }
     </script>
     <script type="module" src="./js/workspace/workspace-highlight.js"></script>
     <script src="./js/app/script-loader.js"></script>

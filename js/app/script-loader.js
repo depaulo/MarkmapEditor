@@ -21,6 +21,10 @@
   appendScript('./js/export/export-actions.js');
   appendScript('./js/export/export-menu.js');
 
+  // Workspace metadata/index parser (R-SPLIT2). Loaded before main.js so its
+  // globals are available; main.js no longer declares these functions.
+  appendScript('./js/workspace/workspace-parser.js');
+
   appendScript('./js/main.js', {
     onload: function () {
       // main entry notifies other modules that UI actions can be wired
