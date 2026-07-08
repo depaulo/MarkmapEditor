@@ -129,8 +129,7 @@ function wireHelpOverlay() {
   log?.('Help: wired');
 }
 
-function renderHelpContent() {
-  const context = getCurrentHelpContext();
+function renderHelpContentForContext(context) {
   const title = document.getElementById('helpTitle');
   const subtitle = document.getElementById('helpSubtitle');
   const body = document.getElementById('helpBody');
@@ -152,6 +151,24 @@ function renderHelpContent() {
   } else {
     body.innerHTML = getEditorHelpHtml();
   }
+
+  const overlay = document.getElementById('helpOverlay');
+  if (overlay) {
+    overlay.hidden = false;
+    overlay.style.display = 'flex';
+    try { overlay.focus?.(); } catch {}
+  }
+}
+
+function renderHelpContent() {
+  renderHelpContentForContext(getCurrentHelpContext());
+}
+
+function showHelpForContext(context) {
+  const valid = context === 'journal' || context === 'concept' || context === 'slides' || context === 'editor';
+  const target = valid ? context : 'editor';
+  log?.(`Help: force context=${target}`);
+  renderHelpContentForContext(target);
 }
 
 function getEditorHelpHtml() {
@@ -630,5 +647,11 @@ Presenter notes go here.
     globalThis.hideHelpOverlay = hideHelpOverlay;
     globalThis.wireHelpOverlay = wireHelpOverlay;
     globalThis.renderHelpContent = renderHelpContent;
+    globalThis.showHelpForContext = showHelpForContext;
+    window.showHelpOverlay = showHelpOverlay;
+    window.hideHelpOverlay = hideHelpOverlay;
+    window.wireHelpOverlay = wireHelpOverlay;
+    window.renderHelpContent = renderHelpContent;
+    window.showHelpForContext = showHelpForContext;
   } catch {}
 })();

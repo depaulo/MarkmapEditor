@@ -25,6 +25,10 @@
   // globals are available; main.js no longer declares these functions.
   appendScript('./js/workspace/workspace-parser.js');
 
+  // Mode session manager (R-SPLIT1 + R-MULTI3). Loaded before main.js so
+  // captureCurrentModeSession / restoreModeSession globals are available.
+  appendScript('./js/core/mode-session.js');
+
   appendScript('./js/main.js', {
     onload: function () {
       // main entry notifies other modules that UI actions can be wired

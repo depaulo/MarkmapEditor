@@ -78,6 +78,22 @@ function wireWelcomeOverlay() {
     }
   });
 
+  // Welcome reference shortcuts -> reuse Help modal for the requested context.
+  document.querySelectorAll('.welcomeReferenceBtn').forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const ctx = btn.dataset.helpContext || 'editor';
+
+      try {
+        globalThis.showHelpForContext?.(ctx);
+      } catch {}
+
+      log?.(`Welcome: reference requested context=${ctx}`);
+    });
+  });
+
   overlay.__welcomeBound = true;
 
   log?.('Welcome: wired');

@@ -252,6 +252,25 @@
   opacity: 0.78;
 }
 
+.welcomeReferenceBtn {
+  margin-top: 8px;
+  padding: 6px 10px;
+
+  border-radius: 8px;
+  border: 1px solid var(--menu-border);
+
+  background: var(--toolbar-bg, rgba(127, 127, 127, 0.14));
+  color: inherit;
+
+  font-size: 12px;
+
+  cursor: pointer;
+}
+
+.welcomeReferenceBtn:hover {
+  background: var(--menu-hover);
+}
+
 .welcomeHint {
   font-size: 13px;
   opacity: 0.68;

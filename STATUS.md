@@ -27,9 +27,20 @@ Incremental JS extraction from `js/main.js` into focused modules, each loaded by
 compatibility wrapper.
 
 ### Completed splits
-- R-SPLIT1 — HTML preview rendering → `js/render/html-preview.js`
-- R-SPLIT2 — Templates data → `js/data/templates-data.js`
+- R-SPLIT1 — Mode session manager → `js/core/mode-session.js`
+- R-SPLIT2 — Workspace metadata/index parser → `js/workspace/workspace-parser.js`
 - R-SPLIT3 — Editor visibility (hide/show + edge handle) → `js/editor/editor-visibility.js`
+
+### UX-MODE1 — Mode-specific Starters and Welcome References
+Status: implemented
+
+- Editor mode has its own initial Markmap starter in `APP_CONTEXTS.editor.defaultMarkdown`.
+- Journal mode has its own Journal Workspace starter in `APP_CONTEXTS.journal.defaultMarkdown`.
+- Slides mode has its own starter Pandoc deck in `APP_CONTEXTS.slides.defaultMarkdown` with today's date.
+- Welcome cards include direct mode-specific Reference shortcuts (`welcomeReferenceBtn`).
+- Help modal supports `showHelpForContext(context)`.
+- `js/ui/help.js` exports `showHelpForContext` for Welcome reference buttons.
+- Global Help button continues to use the current app context.
   - Centralized `toggleEditor()` / `hideEditor()` / `showEditor()` / `isEditorHidden()`.
   - Wires `#btnToggleEditor`, `#editorBtnHide`, `#btnEditorEdgeOpen`.
   - `body.editor-hidden` state + width save/restore preserved.
@@ -425,10 +436,10 @@ log(`App context changed: ${ctx.label}`);
 - Do not create multiple editor instances.
 
 ### R-MULTI2 — URL Mode Startup
-- Support ?mode=editor, ?mode=journal, ?mode=slides.
+- Support `?mode=editor`, `?mode=journal`, `?mode=slides`.
 
 ### R-MULTI3 — Separate Current Mode Button
-- Open active mode in a new window with ?mode=...&session=....
+- Open active mode in a new window with `?mode=...&session=...`.
 
 ### R-MULTI4 — Session-Aware State
 - Add session-specific storage keys.
@@ -506,8 +517,8 @@ These items are planned for later, after archive behavior is stable.
    - MarkMapJournal
    - MarkMapSlides
 4. On change:
-   - if dirty, ask user before switching.
-   - if allowed, call applyAppContext(value).
+   - Mode switch no longer asks to save/discard; it captures/restores per-mode session state.
+   - Same-mode document replacement still uses `confirmDiscardIfDirty()` (Open/New/Workspace flows).
 5. Persist selected context.
 6. On app boot, restore the last selected context.
 
@@ -640,6 +651,7 @@ Later Journal features:
 ## Phase 8 — Slides Mode Polish
 
 Slides mode should:
+
 
 - Route template button to Pandoc templates.
 - Use a Pandoc starter document.

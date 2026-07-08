@@ -8907,156 +8907,9 @@ function applyAppContextUi(contextId, reason = 'applyAppContextUi') {
   }
 }
 
-// ================================
-// R-MULTI1 — Mode-Specific Internal State
-// ================================
-const APP_MODE_IDS = ['editor', 'journal', 'slides'];
-
-const APP_MODE_SESSIONS = globalThis.APP_MODE_SESSIONS || {
-  editor: {},
-  journal: {},
-  slides: {},
-};
-
-globalThis.APP_MODE_SESSIONS = APP_MODE_SESSIONS;
-
-function normalizeAppModeId(mode) {
-  const value = String(mode || '').toLowerCase();
-  return APP_MODE_IDS.includes(value) ? value : 'editor';
-}
-
-function getCurrentModeIdSafe() {
-  return normalizeAppModeId(
-    globalThis.currentAppContextId ||
-      document.documentElement?.dataset?.appContext ||
-      'editor'
-  );
-}
-
-function getCurrentEditorTextSafe() {
-  try {
-    if (globalThis.MME_APP?.getText) return globalThis.MME_APP.getText();
-  } catch {}
-
-  try {
-    if (globalThis.cm?.getValue) return globalThis.cm.getValue();
-  } catch {}
-
-  try {
-    const textarea = document.getElementById('md');
-    if (textarea) return textarea.value || '';
-  } catch {}
-
-  return '';
-}
-
-function setCurrentEditorTextSafe(text) {
-  try {
-    if (globalThis.MME_APP?.setText) {
-      globalThis.MME_APP.setText(String(text || ''));
-      return true;
-    }
-  } catch {}
-
-  try {
-    if (globalThis.__cmSetText) {
-      globalThis.__cmSetText(String(text || ''));
-      return true;
-    }
-  } catch {}
-
-  try {
-    if (globalThis.cm?.setValue) {
-      globalThis.cm.setValue(String(text || ''));
-      return true;
-    }
-  } catch {}
-
-  try {
-    const textarea = document.getElementById('md');
-    if (textarea) {
-      textarea.value = String(text || '');
-      return true;
-    }
-  } catch {}
-
-  return false;
-}
-
-function captureCurrentModeSession(reason = 'capture') {
-  const mode = getCurrentModeIdSafe();
-  const session = APP_MODE_SESSIONS[mode] || {};
-
-  session.mode = mode;
-  session.text = getCurrentEditorTextSafe();
-  session.fileName =
-    globalThis.currentFileName ||
-    globalThis.MME_APP?.currentFileName ||
-    '';
-
-  session.dirty =
-    Boolean(globalThis.isDirty) ||
-    Boolean(globalThis.MME_APP?.isDirty?.());
-
-  session.htmlOpen =
-    document.body.classList.contains('html-open') ||
-    document.documentElement.classList.contains('html-open') ||
-    Boolean(document.getElementById('htmlPane')?.classList.contains('open'));
-
-  session.editorHidden =
-    document.body.classList.contains('editor-hidden') ||
-    document.documentElement.classList.contains('editor-hidden');
-
-  session.timestamp = Date.now();
-
-  APP_MODE_SESSIONS[mode] = session;
-
-  globalThis.log?.(
-    `ModeSession: captured mode=${mode} reason=${reason} file=${session.fileName || '(none)'} dirty=${session.dirty}`
-  );
-
-  return session;
-}
-
-function restoreModeSession(modeInput, reason = 'restore') {
-  const mode = normalizeAppModeId(modeInput);
-  const session = APP_MODE_SESSIONS[mode];
-
-  if (!session || typeof session.text !== 'string') {
-    globalThis.log?.(`ModeSession: no session to restore mode=${mode} reason=${reason}`);
-    return false;
-  }
-
-  if (
-    mode === 'journal' &&
-    globalThis.WORKSPACE_STATE?.activeFile
-  ) {
-    globalThis.log?.(`ModeSession: journal restore skipped because workspace activeFile exists`);
-    return false;
-  }
-
-  setCurrentEditorTextSafe(session.text);
-
-  globalThis.log?.(
-    `ModeSession: restored mode=${mode} reason=${reason} file=${session.fileName || '(none)'}`
-  );
-
-  return true;
-}
-
-function getModeStoragePrefix(modeInput) {
-  const mode = normalizeAppModeId(modeInput);
-  return `mme:${mode}:`;
-}
-
-function getModeStorageKey(modeInput, key) {
-  return `${getModeStoragePrefix(modeInput)}${key}`;
-}
-
-globalThis.APP_MODE_SESSIONS = APP_MODE_SESSIONS;
-globalThis.captureCurrentModeSession = captureCurrentModeSession;
-globalThis.restoreModeSession = restoreModeSession;
-globalThis.getModeStorageKey = getModeStorageKey;
+// Mode session helpers moved to js/core/mode-session.js (R-SPLIT1 + R-MULTI3).
+// wireAppContextSelector below still uses captureCurrentModeSession /
+// restoreModeSession, which are now provided as globals by that module.
 
 function wireAppContextSelector() {
   const select = document.getElementById('appContextSelect');
@@ -9097,18 +8950,8 @@ function wireAppContextSelector() {
       log(`CTX selector change: nextId=${nextId}`);
     } catch {}
 
-    if (dirty) {
-      const ok = confirm(
-        'Switch app mode? Current document has unsaved changes. The content will not be erased, but UI mode will change.'
-      );
-
-      if (!ok) {
-        select.value = globalThis.currentAppContextId || 'editor';
-        logContextState('selector change canceled');
-        return;
-      }
-    }
-
+    // R-MULTI1: switching modes must NOT prompt to save/discard.
+    // Each mode keeps its own unsaved session state.
     captureCurrentModeSession('before context switch');
     applyAppContextUi(nextId, 'context switch');
     restoreModeSession(nextId, 'after context switch');

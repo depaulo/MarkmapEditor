@@ -103,6 +103,19 @@
 
       <div class="btnSep" aria-hidden="true"></div>
 
+      <div class="btnGroup" id="grpSeparateMode">
+        <button
+          id="btnSeparateMode"
+          type="button"
+          title="Open current mode in new window"
+          aria-label="Open current mode in new window"
+        >
+          ↗
+        </button>
+      </div>
+
+      <div class="btnSep" aria-hidden="true"></div>
+
       <div class="btnGroup" id="grpLevels">
         <button id="btnExportMenu" title="Export options">⬇️ Export ▾</button>
         <div id="exportMenu" class="menu" style="display: none"></div>
@@ -1458,6 +1471,13 @@ $$
                   Use Editor mode for standalone Markdown files, mindmaps, outlines, notes, and
                   general writing.
                 </p>
+                <button
+                  type="button"
+                  class="welcomeReferenceBtn"
+                  data-help-context="editor"
+                >
+                  Editor Reference
+                </button>
               </div>
             </article>
 
@@ -1470,6 +1490,13 @@ $$
                   Use Journal mode for workspace-based writing with journals, concepts, search,
                   backlinks, tags, open tasks, and archive.
                 </p>
+                <button
+                  type="button"
+                  class="welcomeReferenceBtn"
+                  data-help-context="journal"
+                >
+                  Journal Reference
+                </button>
               </div>
             </article>
 
@@ -1481,6 +1508,13 @@ $$
                 <p>
                   Use Pandoc / Slides mode for presentation-oriented Markdown and export workflows.
                 </p>
+                <button
+                  type="button"
+                  class="welcomeReferenceBtn"
+                  data-help-context="slides"
+                >
+                  Slides Reference
+                </button>
               </div>
             </article>
           </section>
