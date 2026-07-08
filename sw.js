@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v28-mode-session-editor-handle';
+const APP_VERSION = 'markmap-journal-pwa-v29-editor-visibility-split';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -39,6 +39,7 @@ const LOCAL_APP_SHELL = [
   './js/export/pandoc-layout-engine.js',
   './js/editor/codemirror-bootstrap.js',
   './js/editor/add-image.js',
+  './js/editor/editor-visibility.js',
   './js/core/context.js',
   './js/pwa/diagnostics.js',
   './js/workspace/workspace-state.js',

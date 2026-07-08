@@ -402,20 +402,23 @@ html.compact #mapOverlayControls button {
   top: 50%;
   transform: translateY(-50%);
   z-index: 80;
-  width: 24px;
-  height: 44px;
-  border-radius: 999px;
+  width: 26px;
+  height: 46px;
+  border-radius: 10px;
   border: 1px solid var(--toolbar-border, rgba(255, 255, 255, 0.18));
-  background: var(--btn-bg, rgba(30, 30, 30, 0.82));
+  background: var(--toolbar-bg, rgba(30, 30, 30, 0.92));
   color: var(--text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0.68;
-  font-size: 16px;
+  opacity: 0.78;
+  font-size: 18px;
   line-height: 1;
   user-select: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  transition: opacity 0.15s ease, transform 0.05s ease;
 }
 
 #editorBtnHide:hover {
@@ -423,7 +426,7 @@ html.compact #mapOverlayControls button {
 }
 
 #editorBtnHide:active {
-  transform: translateY(-50%) scale(0.96);
+  transform: translateY(-50%) scale(0.95);
 }
 
 #btnEditorEdgeOpen {
@@ -432,20 +435,23 @@ html.compact #mapOverlayControls button {
   top: 50%;
   transform: translateY(-50%);
   z-index: 80;
-  width: 24px;
-  height: 44px;
-  border-radius: 999px;
+  width: 26px;
+  height: 46px;
+  border-radius: 10px;
   border: 1px solid var(--toolbar-border, rgba(255, 255, 255, 0.18));
-  background: var(--btn-bg, rgba(30, 30, 30, 0.82));
+  background: var(--toolbar-bg, rgba(30, 30, 30, 0.92));
   color: var(--text);
   display: none;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0.68;
-  font-size: 16px;
+  opacity: 0.78;
+  font-size: 18px;
   line-height: 1;
   user-select: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  transition: opacity 0.15s ease, transform 0.05s ease;
 }
 
 #btnEditorEdgeOpen:hover {
@@ -453,7 +459,7 @@ html.compact #mapOverlayControls button {
 }
 
 #btnEditorEdgeOpen:active {
-  transform: translateY(-50%) scale(0.96);
+  transform: translateY(-50%) scale(0.95);
 }
 
 body.editor-hidden #btnEditorEdgeOpen {
@@ -466,7 +472,7 @@ body.editor-hidden #editorBtnHide {
 
 html.dark #editorBtnHide,
 html.dark #btnEditorEdgeOpen {
-  background: var(--btn-bg, rgba(37, 37, 38, 0.9));
+  background: var(--toolbar-bg, rgba(37, 37, 38, 0.95));
   border-color: var(--btn-border, rgba(255, 255, 255, 0.18));
 }
 

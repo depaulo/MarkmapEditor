@@ -5968,13 +5968,21 @@ function toggleLogs() {
   syncToolbarHeight();
 }
 
+// Editor visibility logic now lives in js/editor/editor-visibility.js (R-SPLIT3).
+// Keep a lightweight compatibility wrapper so existing references in main.js keep working.
 let editorWasVisible = true;
 let lastEditorWidth = null;
 
 function toggleEditor() {
   try {
+    if (typeof globalThis.toggleEditor === 'function') {
+      globalThis.toggleEditor();
+      editorWasVisible = !document.body.classList.contains('editor-hidden');
+      return;
+    }
+    // Fallback if module not loaded.
     editorWasVisible = !(editorEl.style.display === 'none');
-    const willShow = !editorWasVisible;
+    const willShow = editorWasVisible;
     if (!willShow) {
       lastEditorWidth = editorEl.style.width || editorEl.getBoundingClientRect().width + 'px';
       editorEl.style.display = 'none';
@@ -7006,48 +7014,6 @@ document.getElementById('btnSave').addEventListener('click', () =>
   })
 );
 
-  const btnEditorEdgeOpen = document.getElementById('btnEditorEdgeOpen');
-  const btnEditorHide = document.getElementById('editorBtnHide');
-
-  function updateEditorOverlayButtons() {
-    const editorVisible = editorEl.style.display !== 'none';
-    if (btnEditorHide) {
-      btnEditorHide.style.display = editorVisible ? '' : 'none';
-      btnEditorHide.textContent = '‹';
-    }
-    if (btnEditorEdgeOpen) {
-      btnEditorEdgeOpen.style.display = editorVisible ? 'none' : '';
-      btnEditorEdgeOpen.hidden = editorVisible;
-      btnEditorEdgeOpen.textContent = '›';
-    }
-  }
-
-  if (btnEditorHide && !btnEditorHide.__bound) {
-    btnEditorHide.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      log?.('Editor overlay hide clicked');
-      toggleEditor();
-      updateEditorOverlayButtons();
-    });
-    btnEditorHide.__bound = true;
-  }
-
-  if (btnEditorEdgeOpen && !btnEditorEdgeOpen.__bound) {
-    btnEditorEdgeOpen.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      log?.('Editor edge open clicked');
-      toggleEditor();
-      updateEditorOverlayButtons();
-    });
-    btnEditorEdgeOpen.__bound = true;
-  }
-
-  if (typeof updateEditorOverlayButtons === 'function') {
-    setTimeout(updateEditorOverlayButtons, 100);
-  }
-
   const btnCopyMd = document.getElementById('btnCopyMd');
 if (btnCopyMd) {
   btnCopyMd.addEventListener('click', copyMarkdownToClipboard);
@@ -7257,7 +7223,12 @@ updateHtmlPreviewButtons();
 wireHtmlCloseButton();
 
 document.getElementById('btnHtmlEdgeOpen')?.addEventListener('click', toggleHtml);
-document.getElementById('btnToggleEditor').addEventListener('click', toggleEditor);
+
+// Editor visibility (hide/show) is now owned by js/editor/editor-visibility.js (R-SPLIT3).
+// The module wires btnToggleEditor / editorBtnHide / btnEditorEdgeOpen itself.
+if (window.MME_EDITOR_VISIBILITY && !document.getElementById('btnToggleEditor').__editorVisibilityBound) {
+  window.MME_EDITOR_VISIBILITY.wireEditorVisibilityControls();
+}
 
 async function copyHtmlPreviewText() {
   const pane = document.getElementById('htmlPane');

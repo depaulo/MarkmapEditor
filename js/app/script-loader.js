@@ -13,7 +13,7 @@
     return s;
   }
 
-  // Load order: UI overlays/modals -> templates data -> export helpers -> main -> templates menu
+  // Load order: UI overlays/modals -> templates data -> export helpers -> main -> editor visibility -> templates menu
   appendScript('./js/ui/welcome.js');
   appendScript('./js/ui/help.js');
   appendScript('./js/templates/templates-data.js');
@@ -27,6 +27,8 @@
       window.dispatchEvent(new Event('mme-main-ready'));
     },
   });
+
+  appendScript('./js/editor/editor-visibility.js');
 
   appendScript('./js/templates/templates-menu.js');
 })();

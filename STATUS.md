@@ -20,6 +20,37 @@ Prepare MarkMapJournal for a future multi-context app:
 
 Refactor file organization safely before implementing the context selector.
 
+## Splitting Plan (refactor backlog)
+
+Incremental JS extraction from `js/main.js` into focused modules, each loaded by
+`js/app/script-loader.js`. Each split keeps `main.js` behavior intact via a thin
+compatibility wrapper.
+
+### Completed splits
+- R-SPLIT1 — HTML preview rendering → `js/render/html-preview.js`
+- R-SPLIT2 — Templates data → `js/data/templates-data.js`
+- R-SPLIT3 — Editor visibility (hide/show + edge handle) → `js/editor/editor-visibility.js`
+  - Centralized `toggleEditor()` / `hideEditor()` / `showEditor()` / `isEditorHidden()`.
+  - Wires `#btnToggleEditor`, `#editorBtnHide`, `#btnEditorEdgeOpen`.
+  - `body.editor-hidden` state + width save/restore preserved.
+  - Added to `LOCAL_APP_SHELL` in `sw.js` (APP_VERSION bumped to `v29-editor-visibility-split`).
+
+### Pending splits (candidates)
+- Editor overlay tools panel → `js/editor/overlay-tools.js`
+- Map overlay controls → `js/map/overlay-controls.js`
+- Map style modifier → `js/map/style-modifier.js`
+- Export (SVG / HTML) → `js/export/export-actions.js` (already partial)
+- Quick-insert toolbar → `js/editor/quick-insert.js`
+- Workspace panels/search/index → `js/workspace/*` (already partial)
+- App context selector + sessions → `js/core/context.js` (already partial) + mode-session module
+
+### Rules for each split
+1. Create `js/<area>/<name>.js` as IIFE assigning to `window.MME_<NAME>` + `globalThis`.
+2. Keep `main.js` reference working via a compatibility wrapper.
+3. Register the script in `js/app/script-loader.js` load order.
+4. Add new file to `LOCAL_APP_SHELL` in `sw.js` and bump `APP_VERSION`.
+5. Validate with `node --check` on every touched JS file.
+
 ## Browser target
 
 Chrome / Chromium.
