@@ -1,44 +1,51 @@
 // @ts-nocheck
-
 (function () {
   'use strict';
 
-  // Classic dynamic script loader to keep index.html clean and preserve ordering.
-
-  function appendScript(src, { onload } = {}) {
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = function() {
-      console.log('Loaded:', src);
-      if (onload) onload();
-    };
-    document.body.appendChild(s);
-    return s;
+  function loadScriptSequentially(srcs) {
+    return new Promise((resolve) => {
+      let index = 0;
+      function loadNext() {
+        if (index >= srcs.length) {
+          resolve();
+          return;
+        }
+        const s = document.createElement('script');
+        s.src = srcs[index];
+        s.onload = function () {
+          console.log('Loaded:', srcs[index]);
+          index++;
+          loadNext();
+        };
+        s.onerror = function () {
+          console.error('Failed to load:', srcs[index]);
+          index++;
+          loadNext();
+        };
+        document.body.appendChild(s);
+      }
+      loadNext();
+    });
   }
 
-  // Load order: UI overlays/modals -> templates data -> export helpers -> mode-session -> main -> templates menu
-  appendScript('./js/ui/welcome.js');
-  appendScript('./js/ui/help.js');
-  appendScript('./js/templates/templates-data.js');
+  const scripts = [
+    './js/ui/welcome.js',
+    './js/ui/help.js',
+    './js/templates/templates-data.js',
+    './js/export/export-actions.js',
+    './js/export/export-menu.js',
+    './js/workspace/workspace-parser.js',
+    './js/core/mode-session.js',
+    './js/main.js',
+    './js/editor/editor-visibility.js',
+    './js/templates/templates-menu.js',
+    './js/editor/editor-overlay-tools.js',
+    './js/map/map-overlay-controls.js',
+    './js/map/map-style-modifier.js',
+    './js/editor/quick-insert.js'
+  ];
 
-  appendScript('./js/export/export-actions.js');
-  appendScript('./js/export/export-menu.js');
-
-  appendScript('./js/core/mode-session.js');
-
-  appendScript('./js/main.js', {
-    onload: function () {
-      // main entry notifies other modules that UI actions can be wired
-      window.dispatchEvent(new Event('mme-main-ready'));
-    },
+  loadScriptSequentially(scripts).then(() => {
+    window.dispatchEvent(new Event('mme-main-ready'));
   });
-
-  // Modules extracted from main.js — must load after main.js so globals are available
-  appendScript('./js/editor/editor-overlay-tools.js');
-  appendScript('./js/map/map-overlay-controls.js');
-  appendScript('./js/map/map-style-modifier.js');
-  appendScript('./js/editor/quick-insert.js');
-
-  appendScript('./js/templates/templates-menu.js');
 })();
-

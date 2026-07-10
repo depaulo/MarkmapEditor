@@ -1354,6 +1354,8 @@ function getGroupedOpenWorkspaceTasks() {
 
 function renderWorkspaceTasksPanel() {
   const panel = ensureWorkspaceTasksPanel();
+
+  // Re-query elements after ensuring panel exists to avoid stale references
   const badge = document.getElementById('workspaceTasksBadge');
   const summary = document.getElementById('workspaceTasksSummary');
   const list = document.getElementById('workspaceTasksList');
@@ -1611,6 +1613,8 @@ function findBacklinksForConcept(conceptName) {
 
 function renderWorkspaceRelatedPanel() {
   const panel = ensureWorkspaceRelatedPanel();
+
+  // Re-query elements after ensuring panel exists to avoid stale references
   const badge = document.getElementById('workspaceRelatedBadge');
   const summary = document.getElementById('workspaceRelatedSummary');
   const list = document.getElementById('workspaceRelatedList');
