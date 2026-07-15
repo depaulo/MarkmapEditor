@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v32-mode-specific-starters-welcome-reference';
+const APP_VERSION = 'markmap-journal-pwa-v44-session-aware-storage-complete';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 

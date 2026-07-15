@@ -20,10 +20,7 @@ Prepare MarkMapJournal for a future multi-context app:
 
 Refactor file organization safely before implementing the context selector.
 
-## Splitting Plan (refactor backlog)
-
-Incremental JS extraction from `js/main.js` into focused modules, each loaded by
-`js/app/script-loader.js`. Each split keeps `main.js` behavior intact via a thin
+## Splitting Plan (refactor backl`js/app/script-loader.js`. Each split keeps `main.js` behavior intact via a thin
 compatibility wrapper.
 
 ### Completed splits
@@ -441,8 +438,17 @@ log(`App context changed: ${ctx.label}`);
 ### R-MULTI3 — Separate Current Mode Button
 - Open active mode in a new window with `?mode=...&session=...`.
 
-### R-MULTI4 — Session-Aware State
-- Add session-specific storage keys.
+### R-MULTI4 — Session-Aware State/Storage
+Status: Implemented, pending browser verification
+
+- Session API: `getCurrentModeSessionId()`, `normalizeModeSessionId()`, `getModeSessionStoragePrefix()`, `getModeSessionStorageKey()` defined in `js/core/mode-session.js`.
+- Draft storage: session-aware keys (`mme:<mode>:<session>:draft:<file-identity>`), legacy read fallback, write-new-only, clear-current-session-only.
+- ViewState: session-aware keys (`mme:<mode>:<session>:viewState`), all save/restore paths use same key generator, legacy read fallback, write-new-only.
+- Journal last active file: session-aware keys (`mme:<mode>:<session>:lastActiveFile`), custom Journal sessions isolated, legacy read fallback, write-new-only.
+- Mode session objects: `session.sessionId` captured during `captureCurrentModeSession()`.
+- Legacy keys are not destructively deleted.
+- No duplicate global identifiers added.
+- No unsafe early-boot `globalThis.log()` calls.
 
 ### R-MULTI5 — Multi-Window Safety
 - Warn about same file open in multiple windows.

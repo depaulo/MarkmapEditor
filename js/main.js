@@ -3956,8 +3956,22 @@ let forceFitNextRender = false;
 const AUTO_SAVE_INTERVAL_MS = 30000; // 30 seconds
 let autoSaveTimer = null;
 
+// R-MULTI4: draft key helpers — session-aware with legacy fallback.
 function draftKey(filename) {
   return `markmap-draft:${filename}`;
+}
+
+function getSessionDraftKey(filename) {
+  const fileId = String(filename || '').trim();
+  if (!fileId) return '';
+  try {
+    const key = globalThis.getModeSessionStorageKey?.(
+      undefined, undefined, 'draft:' + fileId
+    );
+    return key || draftKey(filename);
+  } catch {
+    return draftKey(filename);
+  }
 }
 
 function saveDraft() {
@@ -3968,7 +3982,10 @@ function saveDraft() {
       text: md.value,
       time: Date.now(),
     };
-    localStorage.setItem(draftKey(currentFileName), JSON.stringify(data));
+    const newKey = getSessionDraftKey(currentFileName);
+    if (newKey) {
+      localStorage.setItem(newKey, JSON.stringify(data));
+    }
     log('Auto‑save: draft saved');
   } catch (e) {
     /* quota exceeded, ignore */
@@ -3977,14 +3994,28 @@ function saveDraft() {
 
 function clearDraft(filename) {
   try {
-    localStorage.removeItem(draftKey(filename));
+    const newKey = getSessionDraftKey(filename);
+    if (newKey) {
+      localStorage.removeItem(newKey);
+    }
     log(`Auto‑save: draft cleared for ${filename}`);
   } catch {}
 }
 
 function checkAndRestoreDraft(filename) {
   try {
-    const raw = localStorage.getItem(draftKey(filename));
+    // 1. Try the new session-aware key first.
+    let raw = null;
+    const newKey = getSessionDraftKey(filename);
+    if (newKey) {
+      raw = localStorage.getItem(newKey);
+    }
+
+    // 2. Fall back to the legacy key.
+    if (!raw) {
+      raw = localStorage.getItem(draftKey(filename));
+    }
+
     if (globalThis.__creatingNewDocument) return false;
     if (!raw) return false;
     const draft = JSON.parse(raw);
@@ -4535,7 +4566,17 @@ function getCurrentMapLayoutOptions() {
 
   return jsonOptions;
 }
-const VIEW_STATE_KEY = 'markmap:viewState:v1';
+// R-MULTI4: session-aware viewState key with legacy fallback.
+function getViewStateKey() {
+  try {
+    return globalThis.getModeSessionStorageKey?.(
+      undefined, undefined, 'viewState'
+    ) || 'markmap:viewState:v1';
+  } catch {
+    return 'markmap:viewState:v1';
+  }
+}
+const VIEW_STATE_KEY_LEGACY = 'markmap:viewState:v1';
 const VIEW_MIN_K = 0.05;
 const VIEW_MAX_K = 20;
 let viewSaveTimer = null;
@@ -4592,7 +4633,7 @@ function getCurrentViewState() {
     if (!state) {
       console.warn('Invalid zoomTransform detected:', t);
       try {
-        localStorage.removeItem(VIEW_STATE_KEY);
+        localStorage.removeItem(getViewStateKey());
       } catch {}
       return null;
     }
@@ -4611,7 +4652,7 @@ function applyViewState(state, reason = 'applyViewState') {
     if (!mm || !safeState || !window.d3?.zoomIdentity) {
       console.warn(`${reason}: invalid view state blocked`, state);
       try {
-        localStorage.removeItem(VIEW_STATE_KEY);
+        localStorage.removeItem(getViewStateKey());
       } catch {}
       return;
     }
@@ -4645,7 +4686,7 @@ function restoreViewStateTwice(state, reason = 'restoreView') {
     if (!safeState) {
       console.warn(`${reason}: invalid restore state blocked`, state);
       try {
-        localStorage.removeItem(VIEW_STATE_KEY);
+        localStorage.removeItem(getViewStateKey());
       } catch {}
       return;
     }
@@ -4661,8 +4702,16 @@ function restoreViewStateTwice(state, reason = 'restoreView') {
 }
 
 function loadViewState() {
+  const newKey = getViewStateKey();
   try {
-    const raw = localStorage.getItem(VIEW_STATE_KEY);
+    // 1. Try the new session-aware key first.
+    let raw = localStorage.getItem(newKey);
+
+    // 2. Fall back to the legacy key.
+    if (!raw) {
+      raw = localStorage.getItem(VIEW_STATE_KEY_LEGACY);
+    }
+
     if (!raw) return null;
 
     const parsed = JSON.parse(raw);
@@ -4670,15 +4719,14 @@ function loadViewState() {
 
     if (!safeState) {
       console.warn('Invalid stored view state removed:', parsed);
-      localStorage.removeItem(VIEW_STATE_KEY);
+      try { localStorage.removeItem(newKey); } catch {}
       return null;
     }
 
     return safeState;
   } catch {
-    try {
-      localStorage.removeItem(VIEW_STATE_KEY);
-    } catch {}
+    try { localStorage.removeItem(newKey); } catch {}
+    try { localStorage.removeItem(VIEW_STATE_KEY_LEGACY); } catch {}
     return null;
   }
 }
@@ -4689,7 +4737,8 @@ function saveViewState(state, reason = 'saveViewState') {
       console.warn('Skipping invalid view state save:', state);
       return;
     }
-    localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(state));
+    const newKey = getViewStateKey();
+    localStorage.setItem(newKey, JSON.stringify(state));
     log(`${reason}: saved zoom/pan`);
   } catch (e) {
     log(`${reason} error: ${e?.message || e}`);

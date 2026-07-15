@@ -88,6 +88,7 @@
     const session = APP_MODE_SESSIONS[mode] || {};
 
     session.mode = mode;
+    session.sessionId = getCurrentModeSessionId(mode);
     session.text = getCurrentEditorTextSafe();
     session.fileName =
       globalThis.currentFileName ||
@@ -112,7 +113,7 @@
     APP_MODE_SESSIONS[mode] = session;
 
     globalThis.log?.(
-      `ModeSession: captured mode=${mode} reason=${reason} file=${session.fileName || '(none)'} dirty=${session.dirty}`
+      `ModeSession: captured mode=${mode} session=${session.sessionId} reason=${reason} file=${session.fileName || '(none)'} dirty=${session.dirty}`
     );
 
     return session;
@@ -137,19 +138,79 @@
     setCurrentEditorTextSafe(session.text);
 
     globalThis.log?.(
-      `ModeSession: restored mode=${mode} reason=${reason} file=${session.fileName || '(none)'}`
+      `ModeSession: restored mode=${mode} session=${getCurrentModeSessionId(mode)} reason=${reason} file=${session.fileName || '(none)'}`
     );
 
     return true;
   }
 
+  // ---- R-MULTI4 — session-aware storage helpers ----
+
+  function normalizeModeSessionId(sessionInput, modeInput) {
+    const mode = normalizeAppModeId(
+      modeInput || getCurrentModeIdSafe()
+    );
+
+    const normalized = String(sessionInput || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    return normalized || `${mode}-main`;
+  }
+
+  function getCurrentModeSessionId(modeInput) {
+    const mode = normalizeAppModeId(
+      modeInput || getCurrentModeIdSafe()
+    );
+
+    try {
+      const url = new URL(globalThis.location.href);
+      const rawSession = String(
+        url.searchParams.get('session') || ''
+      ).trim();
+
+      if (rawSession) {
+        return normalizeModeSessionId(rawSession, mode);
+      }
+    } catch {}
+
+    return `${mode}-main`;
+  }
+
+  function getModeSessionStoragePrefix(modeInput, sessionInput) {
+    const mode = normalizeAppModeId(
+      modeInput || getCurrentModeIdSafe()
+    );
+
+    const session = normalizeModeSessionId(
+      sessionInput || getCurrentModeSessionId(mode),
+      mode
+    );
+
+    return `mme:${mode}:${session}:`;
+  }
+
+  function getModeSessionStorageKey(modeInput, sessionInput, keyInput) {
+    const key = String(keyInput || '').trim();
+    return `${getModeSessionStoragePrefix(modeInput, sessionInput)}${key}`;
+  }
+
+  // Backward-compatible existing helpers delegate to session-aware versions.
   function getModeStoragePrefix(modeInput) {
-    const mode = normalizeAppModeId(modeInput);
-    return `mme:${mode}:`;
+    return getModeSessionStoragePrefix(
+      modeInput,
+      getCurrentModeSessionId(modeInput)
+    );
   }
 
   function getModeStorageKey(modeInput, key) {
-    return `${getModeStoragePrefix(modeInput)}${key}`;
+    return getModeSessionStorageKey(
+      modeInput,
+      getCurrentModeSessionId(modeInput),
+      key
+    );
   }
 
   // ---- R-MULTI3 — separate current mode helpers ----
@@ -224,6 +285,10 @@
     APP_MODE_SESSIONS,
     normalizeAppModeId,
     getCurrentModeIdSafe,
+    normalizeModeSessionId,
+    getCurrentModeSessionId,
+    getModeSessionStoragePrefix,
+    getModeSessionStorageKey,
     captureCurrentModeSession,
     restoreModeSession,
     getModeStoragePrefix,
@@ -246,6 +311,10 @@
     globalThis.getCurrentModeIdSafe = getCurrentModeIdSafe;
     globalThis.captureCurrentModeSession = captureCurrentModeSession;
     globalThis.restoreModeSession = restoreModeSession;
+    globalThis.normalizeModeSessionId = normalizeModeSessionId;
+    globalThis.getCurrentModeSessionId = getCurrentModeSessionId;
+    globalThis.getModeSessionStoragePrefix = getModeSessionStoragePrefix;
+    globalThis.getModeSessionStorageKey = getModeSessionStorageKey;
     globalThis.getModeStoragePrefix = getModeStoragePrefix;
     globalThis.getModeStorageKey = getModeStorageKey;
     globalThis.getUrlSessionParam = getUrlSessionParam;

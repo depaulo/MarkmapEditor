@@ -71,7 +71,14 @@ function updateWorkspaceUiState() {
 }
 
 function getLastActiveWorkspacePath() {
-  return getLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath, '').trim();
+  // 1. Try the new session-aware key first.
+  const newKey = getLastActiveFileKey();
+  let value = getLocalStorageValue(newKey, '').trim();
+  if (value) return value;
+
+  // 2. Fall back to the legacy key.
+  value = getLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePathLegacy, '').trim();
+  return value;
 }
 
 function findWorkspaceFileByPath(path) {
@@ -175,11 +182,12 @@ function persistActiveWorkspaceFile() {
   const active = WORKSPACE_STATE.activeFile;
 
   if (!active || !active.path) {
-    removeLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath);
+    removeLocalStorageValue(getLastActiveFileKey());
     return;
   }
 
-  setLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath, active.path);
+  // Write only to the new session-aware key.
+  setLocalStorageValue(getLastActiveFileKey(), active.path);
 
   globalThis.MME_APP?.log?.(`Workspace: persisted active file ${active.path}`);
 }
@@ -408,8 +416,19 @@ function handleSidebarClick(event) {
   });
 }
 
+// R-MULTI4: session-aware last active file key with legacy fallback.
+function getLastActiveFileKey() {
+  try {
+    return globalThis.getModeSessionStorageKey?.(
+      undefined, undefined, 'lastActiveFile'
+    ) || 'markmap:workspace:lastActivePath';
+  } catch {
+    return 'markmap:workspace:lastActivePath';
+  }
+}
 const WORKSPACE_UI_STORAGE_KEYS = {
   lastActivePath: 'markmap:workspace:lastActivePath',
+  lastActivePathLegacy: 'markmap:workspace:lastActivePath',
   sidebarCollapsed: 'markmap:workspace:sidebarCollapsed',
 };
 
