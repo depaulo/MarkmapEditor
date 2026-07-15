@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v44-session-aware-storage-complete';
+const APP_VERSION = 'markmap-journal-pwa-v46-metadata-templates-hidden-frontmatter';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -36,6 +36,8 @@ const LOCAL_APP_SHELL = [
   './js/ui/help.js',
   './js/templates/templates-data.js',
   './js/templates/templates-menu.js',
+  './js/templates/metadata-templates.js',
+  './js/editor/frontmatter-visibility.js',
   './js/export/pandoc-layout-engine.js',
   './js/editor/codemirror-bootstrap.js',
   './js/editor/add-image.js',

@@ -290,16 +290,12 @@ Updated:
       id: 'journal_daily_capture',
       context: 'journal',
       name: '📓 Daily Capture',
-      body: `---
-type: journal
-date: {{date}}
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# Daily Capture — {{date}}
+      metadataType: 'journal',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# Daily Capture — {{date}}
 
 Tags:
 
@@ -326,16 +322,12 @@ Tags:
       id: 'journal_meeting_debrief',
       context: 'journal',
       name: '📓 Meeting Debrief',
-      body: `---
-type: journal
-date: {{date}}
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# Meeting Debrief
+      metadataType: 'journal',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# Meeting Debrief
 
 Tags:
 
@@ -364,16 +356,12 @@ Topic:
       id: 'journal_customer_conversation',
       context: 'journal',
       name: '📓 Customer Conversation',
-      body: `---
-type: journal
-date: {{date}}
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# Customer Conversation
+      metadataType: 'journal',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# Customer Conversation
 
 Tags:
 
@@ -405,16 +393,12 @@ Participants:
       id: 'journal_partner_conversation',
       context: 'journal',
       name: '📓 Partner Conversation',
-      body: `---
-type: journal
-date: {{date}}
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# Partner Conversation
+      metadataType: 'journal',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# Partner Conversation
 
 Tags:
 
@@ -443,16 +427,12 @@ Participants:
       id: 'journal_travel_event_notes',
       context: 'journal',
       name: '📓 Travel / Event Notes',
-      body: `---
-type: journal
-date: {{date}}
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# Event / Travel Notes
+      metadataType: 'journal',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# Event / Travel Notes
 
 Tags:
 
@@ -481,16 +461,12 @@ Date:
       id: 'journal_weekly_planning',
       context: 'journal',
       name: '📓 Weekly Planning',
-      body: `---
-type: journal
-date: {{date}}
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# Weekly Planning
+      metadataType: 'journal',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# Weekly Planning
 
 Tags:
 
@@ -517,16 +493,12 @@ Tags:
       id: 'journal_followup_log',
       context: 'journal',
       name: '📓 Follow-up Log',
-      body: `---
-type: journal
-date: {{date}}
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# Follow-up Log
+      metadataType: 'journal',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# Follow-up Log
 
 Tags:
 
@@ -551,15 +523,12 @@ Tags:
       id: 'concept_general',
       context: 'concept',
       name: '🧠 General Concept',
-      body: `---
-type: concept
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# ConceptName
+      metadataType: 'concept',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# ConceptName
 
 Tags:
 
@@ -583,15 +552,12 @@ Tags:
       id: 'concept_account_profile',
       context: 'concept',
       name: '🧠 Account / Customer Profile',
-      body: `---
-type: concept
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# AccountName
+      metadataType: 'concept',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# AccountName
 
 Tags:
 
@@ -631,15 +597,12 @@ Next Step:
       id: 'concept_opportunity_brief',
       context: 'concept',
       name: '🧠 Opportunity Brief',
-      body: `---
-type: concept
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# OpportunityName
+      metadataType: 'concept',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# OpportunityName
 
 Tags:
 
@@ -678,15 +641,12 @@ Next Step:
       id: 'concept_partner_profile',
       context: 'concept',
       name: '🧠 Partner Profile',
-      body: `---
-type: concept
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# PartnerName
+      metadataType: 'concept',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# PartnerName
 
 Tags:
 
@@ -721,15 +681,12 @@ Next Step:
       id: 'concept_product_feedback',
       context: 'concept',
       name: '🧠 Product Feedback',
-      body: `---
-type: concept
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# Product Feedback — Topic
+      metadataType: 'concept',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# Product Feedback — Topic
 
 Tags:
 
@@ -761,15 +718,12 @@ Priority:
       id: 'concept_market_region_note',
       context: 'concept',
       name: '🧠 Market / Region Note',
-      body: `---
-type: concept
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# Market / Region Note
+      metadataType: 'concept',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# Market / Region Note
 
 Tags:
 
@@ -802,15 +756,12 @@ Segment:
       id: 'concept_competitor_profile',
       context: 'concept',
       name: '🧠 Competitor Profile',
-      body: `---
-type: concept
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# CompetitorName
+      metadataType: 'concept',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# CompetitorName
 
 Tags:
 
@@ -843,15 +794,12 @@ Segment:
       id: 'concept_stakeholder_map',
       context: 'concept',
       name: '🧠 Stakeholder Map',
-      body: `---
-type: concept
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# Stakeholder Map — Account / Initiative
+      metadataType: 'concept',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# Stakeholder Map — Account / Initiative
 
 Tags:
 
@@ -879,15 +827,12 @@ Owner:
       id: 'concept_playbook_process_note',
       context: 'concept',
       name: '🧠 Playbook / Process Note',
-      body: `---
-type: concept
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# Playbook — Topic
+      metadataType: 'concept',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# Playbook — Topic
 
 Tags:
 
@@ -914,15 +859,12 @@ Tags:
       id: 'concept_feature_product_concept',
       context: 'concept',
       name: '🧠 Feature / Product Concept',
-      body: `---
-type: concept
-created: {{created}}
-updated:
-status: active
-tags: []
----
-
-# Feature / Product Concept
+      metadataType: 'concept',
+      metadata: {
+        status: 'active',
+        tags: [],
+      },
+      body: `# Feature / Product Concept
 
 Tags:
 

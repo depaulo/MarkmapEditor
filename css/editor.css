@@ -102,6 +102,21 @@ html.dark .cm-editor .cm-activeLine .cm-selectionBackground {
   background-color: rgba(34, 197, 94, 0.58) !important;
 }
 
+/* Frontmatter visibility placeholder */
+.frontmatterPlaceholder {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  color: var(--text);
+  opacity: 0.6;
+  font-style: italic;
+  font-size: 12px;
+  line-height: 1.4;
+  user-select: none;
+}
+
 /* Fallback textarea */
 body.cmFailed #editor textarea {
   display: block !important;

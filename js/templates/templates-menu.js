@@ -48,21 +48,48 @@
       .replaceAll('{{journalDate}}', dateString);
   }
 
-  function __tplInsert(body) {
-    const replaced = applyTemplatePlaceholders(body);
-    const txt = String(replaced || '').trimEnd();
+  function __tplInsert(templateInput) {
+    let bodyText = '';
+    let metadata = null;
+    let metadataType = null;
+
+    if (typeof templateInput === 'string') {
+      bodyText = applyTemplatePlaceholders(templateInput);
+    } else if (templateInput && typeof templateInput === 'object') {
+      bodyText = applyTemplatePlaceholders(templateInput.body || '');
+      metadataType = templateInput.metadataType;
+      metadata = templateInput.metadata;
+    }
+
+    let txt = String(bodyText || '').trimEnd();
     if (!txt) return;
+
+    try {
+      const composer =
+        typeof globalThis.MME_METADATA_TEMPLATES === 'object' &&
+        globalThis.MME_METADATA_TEMPLATES !== null
+          ? globalThis.MME_METADATA_TEMPLATES
+          : null;
+
+      if (composer && typeof composer.composeDocument === 'function' && metadataType && metadata) {
+        txt = composer.composeDocument(metadata, txt);
+      }
+    } catch {}
+
+    const finalText = String(txt || '').trimEnd() + '\n\n';
+    if (!finalText) return;
+
     try {
       if (typeof __insertIntoEditor === 'function') {
-        __insertIntoEditor(txt + '\n\n');
+        __insertIntoEditor(finalText);
       } else if (typeof window.__cmInsertAtCursor === 'function') {
-        window.__cmInsertAtCursor(txt + '\n\n');
+        window.__cmInsertAtCursor(finalText);
       } else {
         const mdEl = document.getElementById('md');
         if (!mdEl) return;
         const start = mdEl.selectionStart ?? mdEl.value.length;
         const end = mdEl.selectionEnd ?? mdEl.value.length;
-        mdEl.value = mdEl.value.slice(0, start) + txt + '\n\n' + mdEl.value.slice(end);
+        mdEl.value = mdEl.value.slice(0, start) + finalText + mdEl.value.slice(end);
         mdEl.dispatchEvent(new Event('input', { bubbles: true }));
       }
     } catch {}

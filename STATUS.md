@@ -23,6 +23,9 @@
 🔄 R-SPLIT4
 🔄 R-RENDER1
 
+✅ R-META2 — Metadata Template Split
+✅ R-META3 — Hidden Frontmatter
+
 ---
 
 # Roadmap

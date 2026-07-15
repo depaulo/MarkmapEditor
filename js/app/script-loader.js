@@ -42,6 +42,15 @@
 
   appendScript('./js/editor/editor-visibility.js');
 
+  // R-META2 — metadata template split. Load before templates-menu so
+  // metadata/body composition helpers are available.
+  appendScript('./js/templates/metadata-templates.js');
+
+  // R-META3 — frontmatter visual hide/collapse. Load after editor visibility
+  // and before templates-menu so CodeMirror-dependent wiring can use the
+  // editor view when available.
+  appendScript('./js/editor/frontmatter-visibility.js');
+
   appendScript('./js/templates/templates-menu.js');
 })();
 
