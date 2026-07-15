@@ -1,4 +1,4 @@
-// @ts-nocheck
+ // @ts-nocheck
 // Welcome screen overlay logic.
 // Extracted from js/main.js into a standalone UI module.
 // ================================
@@ -85,6 +85,9 @@ function wireWelcomeOverlay() {
       event.stopPropagation();
 
       const ctx = btn.dataset.helpContext || 'editor';
+
+      // UX-MODE1.1: hide Welcome before showing Help to avoid overlap.
+      hideWelcomeOverlay({ remember: false });
 
       try {
         globalThis.showHelpForContext?.(ctx);

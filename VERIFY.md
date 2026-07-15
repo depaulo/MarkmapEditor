@@ -37,4 +37,27 @@
 - [ ] js/workspace/* loaded/cached
 - [ ] js/export/* loaded/cached
 
+## R-LINK1 — Wiki Links
 
+- [ ] Editor links open files
+- [ ] Markmap links open files
+- [ ] HTML Preview links open files
+- [ ] Missing links identified
+
+## R-TASK2 — Task Search
+
+- [ ] Completed tasks searchable
+- [ ] Open tasks searchable
+- [ ] Filters correct
+
+## R-TASK3 — Task Priority
+
+- [ ] P1 detected
+- [ ] P2 detected
+- [ ] P3 detected
+- [ ] Priority filters work
+
+## R-LINK2 — Backlinks
+
+- [ ] Backlinks update correctly
+- [ ] Renames handled safely

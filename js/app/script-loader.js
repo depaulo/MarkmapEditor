@@ -29,6 +29,10 @@
   // captureCurrentModeSession / restoreModeSession globals are available.
   appendScript('./js/core/mode-session.js');
 
+  // Render controller (R-SPLIT4 + R-RENDER1). Loaded before main.js so
+  // MME_RENDER globals are available.
+  appendScript('./js/render/render-controller.js');
+
   appendScript('./js/main.js', {
     onload: function () {
       // main entry notifies other modules that UI actions can be wired

@@ -4912,12 +4912,12 @@ function __ensureMarkmapBoot() {
   const tick = () => {
     tries++;
     const ok = !!(window.markmap && window.markmap.Transformer && window.markmap.Markmap);
-    if (ok) {
-      try {
-        render('boot ensureMarkmapBoot');
-      } catch {}
-      return;
-    }
+      if (ok) {
+        try {
+          globalThis.MME_RENDER?.renderNow?.('boot ensureMarkmapBoot');
+        } catch {}
+        return;
+      }
     if (tries >= maxTries) {
       try {
         setStatus('⚠ markmap engine not loaded (check console / network)');
@@ -9047,14 +9047,14 @@ function clearCurrentDraftAction() {
 const restored = checkAndRestoreDraft(currentFileName);
 if (restored) {
   // If restored, render immediately to reflect the draft content
-  render('draft restore render()');
+  globalThis.MME_RENDER?.renderNow?.('draft restore render()');
 } else {
   // Normal initial render
   setStatus(modeLabel());
   updateDocumentTitle();
   __ensureMarkmapBoot();
-  render('boot render()');
-  setTimeout(() => render('boot delayed render()'), 1000);
+  globalThis.MME_RENDER?.renderNow?.('boot render()');
+  setTimeout(() => globalThis.MME_RENDER?.renderNow?.('boot delayed render()'), 1000);
 }
 
 wireHelpOverlay?.();
@@ -9063,24 +9063,14 @@ startAutoSave();
 
 maybeShowWelcomeOverlay();
 
-// Debounced rendering (unchanged)
-let renderTimer = null;
+// Debounced rendering via MME_RENDER (R-SPLIT4 + R-RENDER1)
 const RENDER_DEBOUNCE_MS = 1000;
 md.addEventListener('input', () => {
   dirty = true;
   setStatus(modeLabel() + ' (modified)');
   log(`Editor input: dirty=true; scheduling render in ${RENDER_DEBOUNCE_MS}ms`);
   updateDocumentTitle();
-  if (renderTimer) {
-    clearTimeout(renderTimer);
-    renderTimer = null;
-    log('Debounce: cleared previous render timer');
-  }
-  renderTimer = setTimeout(() => {
-    renderTimer = null;
-    log('Debounce: timeout reached -> rendering');
-    render('debounced render()');
-  }, RENDER_DEBOUNCE_MS);
+  globalThis.MME_RENDER?.scheduleRender?.('editor input');
 });
 
 md.addEventListener('blur', () => {
@@ -9089,12 +9079,8 @@ md.addEventListener('blur', () => {
     window.__suppressBlurRenderUntil = 0;
     return;
   }
-  if (renderTimer) {
-    clearTimeout(renderTimer);
-    renderTimer = null;
-  }
   log('Editor blur -> rendering immediately');
-  render('blur render()');
+  globalThis.MME_RENDER?.renderNow?.('editor blur');
 });
 
 window.addEventListener('beforeunload', (ev) => {

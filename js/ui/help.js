@@ -94,6 +94,7 @@ function wireHelpOverlay() {
   const btnHelp = document.getElementById('btnHelp');
   const overlay = document.getElementById('helpOverlay');
   const btnClose = document.getElementById('btnHelpClose');
+  const btnBackToWelcome = document.getElementById('btnHelpBackToWelcome');
 
   if (!overlay) {
     log?.('Help: wire skipped; overlay missing');
@@ -114,6 +115,17 @@ function wireHelpOverlay() {
     event.preventDefault();
     event.stopPropagation();
     hideHelpOverlay();
+  });
+
+  // UX-MODE1.1: Back to Welcome button.
+  btnBackToWelcome?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    hideHelpOverlay();
+    try {
+      globalThis.showWelcomeOverlay?.();
+    } catch {}
+    log?.('Help: back to Welcome');
   });
 
   overlay.addEventListener('keydown', (event) => {
