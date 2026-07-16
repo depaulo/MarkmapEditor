@@ -1566,3 +1566,217 @@ html[data-app-context='slides'] .contextSlidesOnly {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* =========================== */
+/* Task Review (R-TASK2/3)     */
+/* =========================== */
+
+.workspaceTaskSearchRow {
+  padding: 6px 8px;
+}
+
+.workspaceTaskSearchInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--menu-border);
+  background: var(--toolbar-bg);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+
+.workspaceTaskSearchInput:focus {
+  border-color: #22c55e;
+}
+
+.workspaceTaskFilterRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 6px;
+  flex-wrap: wrap;
+}
+
+.workspaceTaskStatusFilters {
+  display: flex;
+  gap: 3px;
+}
+
+.workspaceTaskFilterBtn {
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--menu-border);
+  background: var(--toolbar-bg);
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.workspaceTaskFilterBtn:hover {
+  background: var(--menu-hover);
+}
+
+.workspaceTaskFilterBtn.active {
+  background: #22c55e;
+  color: #06120a;
+  border-color: #22c55e;
+}
+
+.workspaceTaskPriorityFilter {
+  padding: 3px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--menu-border);
+  background: var(--toolbar-bg);
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+  outline: none;
+  max-width: 120px;
+}
+
+.workspaceTaskRow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--menu-border);
+  background: rgba(127, 127, 127, 0.04);
+  margin-bottom: 4px;
+}
+
+.workspaceTaskRow:hover {
+  background: var(--menu-hover);
+}
+
+.workspaceTaskDone {
+  opacity: 0.6;
+}
+
+.workspaceTaskDone .workspaceTaskRowText {
+  text-decoration: line-through;
+}
+
+.workspaceTaskRowMain {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.workspaceTaskCheckbox {
+  flex: 0 0 auto;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.workspaceTaskRowText {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.workspaceTaskRowMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.workspaceTaskOpenBtn {
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--menu-border);
+  background: transparent;
+  color: var(--text);
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.workspaceTaskOpenBtn:hover {
+  opacity: 1;
+  background: var(--menu-hover);
+}
+
+.workspaceTaskPriorityBadge {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.priority-p1 {
+  background: rgba(220, 38, 38, 0.2);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+}
+
+.priority-p2 {
+  background: rgba(217, 119, 6, 0.2);
+  color: #d97706;
+  border: 1px solid rgba(217, 119, 6, 0.3);
+}
+
+.priority-p3 {
+  background: rgba(37, 99, 235, 0.15);
+  color: #2563eb;
+  border: 1px solid rgba(37, 99, 235, 0.25);
+}
+
+html.dark .priority-p1 {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
+html.dark .priority-p2 {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+html.dark .priority-p3 {
+  background: rgba(96, 165, 250, 0.2);
+  color: #60a5fa;
+}
+
+.workspaceTaskPriorityActions {
+  display: flex;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.workspaceTaskPriorityAction {
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--menu-border);
+  background: transparent;
+  color: var(--text);
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0.6;
+  line-height: 1.3;
+}
+
+.workspaceTaskPriorityAction:hover {
+  opacity: 1;
+  background: var(--menu-hover);
+}
+
+.workspaceTasksEmpty {
+  padding: 10px 8px;
+  font-size: 12px;
+  opacity: 0.6;
+  text-align: center;
+}

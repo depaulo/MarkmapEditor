@@ -54,6 +54,9 @@
   // R-LINK1 — wiki links. Load after workspace index and editor are ready.
   appendScript('./js/links/wiki-links.js');
 
+  // R-TASK2 + R-TASK3 — task search, filters, and priority.
+  appendScript('./js/workspace/task-review.js');
+
   appendScript('./js/templates/templates-menu.js');
 })();
 

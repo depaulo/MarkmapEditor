@@ -1,4 +1,4 @@
- // @ts-nocheck
+// @ts-nocheck
 // Welcome screen overlay logic.
 // Extracted from js/main.js into a standalone UI module.
 // ================================
@@ -6,11 +6,25 @@
 // ================================
 
 const WELCOME_STORAGE_KEY = 'markmap:welcomeDismissed';
+const WELCOME_VERSION_KEY = 'mme:welcomeVersionSeen';
+const WELCOME_CONTENT_VERSION = '2026-07-v1';
 
 function shouldShowWelcome() {
   try {
-    return localStorage.getItem(WELCOME_STORAGE_KEY) !== '1';
+    const storedVersion = localStorage.getItem(WELCOME_VERSION_KEY);
+    if (storedVersion !== WELCOME_CONTENT_VERSION) {
+      log?.(`Welcome: startup decision show=true reason=version-changed key=${WELCOME_VERSION_KEY} value=${storedVersion}`);
+      return true;
+    }
+    const dismissed = localStorage.getItem(WELCOME_STORAGE_KEY);
+    if (dismissed === '1') {
+      log?.(`Welcome: startup decision show=false reason=explicitly-dismissed key=${WELCOME_STORAGE_KEY} value=${dismissed}`);
+      return false;
+    }
+    log?.(`Welcome: startup decision show=false reason=already-seen key=${WELCOME_VERSION_KEY} value=${storedVersion}`);
+    return false;
   } catch {
+    log?.('Welcome: startup decision show=true reason=storage-error');
     return true;
   }
 }
@@ -23,7 +37,15 @@ function showWelcomeOverlay() {
     return;
   }
 
+  // Apply complete open state consistently.
   overlay.hidden = false;
+  overlay.removeAttribute('hidden');
+  overlay.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('open');
+  overlay.style.display = '';
+  overlay.style.visibility = '';
+  overlay.style.opacity = '';
+  overlay.style.pointerEvents = '';
 
   try {
     overlay.focus?.();
@@ -37,11 +59,14 @@ function hideWelcomeOverlay({ remember = true } = {}) {
 
   if (overlay) {
     overlay.hidden = true;
+    overlay.removeAttribute('aria-hidden');
+    overlay.classList.remove('open');
   }
 
   if (remember) {
     try {
       localStorage.setItem(WELCOME_STORAGE_KEY, '1');
+      localStorage.setItem(WELCOME_VERSION_KEY, WELCOME_CONTENT_VERSION);
     } catch {}
   }
 
@@ -123,6 +148,7 @@ function maybeShowWelcomeOverlay() {
     window.resetWelcomeScreen = function resetWelcomeScreen() {
       try {
         localStorage.removeItem(WELCOME_STORAGE_KEY);
+        localStorage.removeItem(WELCOME_VERSION_KEY);
       } catch {}
 
       showWelcomeOverlay?.();

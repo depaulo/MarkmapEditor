@@ -167,11 +167,15 @@
 
     try {
       const url = new URL(globalThis.location.href);
+      const urlMode = String(
+        url.searchParams.get('mode') || ''
+      ).toLowerCase().trim();
       const rawSession = String(
         url.searchParams.get('session') || ''
       ).trim();
 
-      if (rawSession) {
+      // Only reuse URL session if URL mode matches current mode.
+      if (rawSession && urlMode === mode) {
         return normalizeModeSessionId(rawSession, mode);
       }
     } catch {}

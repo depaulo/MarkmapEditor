@@ -115,16 +115,19 @@
 
 ## R-TASK2 — Task Search
 
-- [ ] Completed tasks searchable
-- [ ] Open tasks searchable
-- [ ] Filters correct
+- [x] Completed tasks searchable
+- [x] Open tasks searchable
+- [x] Filters correct
+- [x] Text search implemented
+- [x] Source navigation implemented
 
 ## R-TASK3 — Task Priority
 
-- [ ] P1 detected
-- [ ] P2 detected
-- [ ] P3 detected
-- [ ] Priority filters work
+- [x] P1 detected
+- [x] P2 detected
+- [x] P3 detected
+- [x] Priority filters work
+- [x] Set/Clear Priority actions implemented
 
 ## R-TASK4 — Waiting / Delegated
 

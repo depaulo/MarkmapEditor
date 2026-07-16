@@ -57,20 +57,20 @@
 
 ## PHASE D — Task Management
 
-### R-TASK2
-- [ ] Search open tasks
-- [ ] Search completed tasks
-- [ ] Search all tasks
-- [ ] Filter by text
-- [ ] Filter by file
-- [ ] Filter by tag
+### R-TASK2 (Completed)
+- [x] Search open tasks
+- [x] Search completed tasks
+- [x] Search all tasks
+- [x] Filter by text
+- [x] Filter by file
+- [x] Filter by tag
 
-### R-TASK3
-- [ ] Support #p1, #p2, #p3 priority tags
-- [ ] Detect P1 tasks
-- [ ] Detect P2 tasks
-- [ ] Detect P3 tasks
-- [ ] Priority filters (All, Open, Completed, P1, P2, P3)
+### R-TASK3 (Completed)
+- [x] Support #p1, #p2, #p3 priority tags
+- [x] Detect P1 tasks
+- [x] Detect P2 tasks
+- [x] Detect P3 tasks
+- [x] Priority filters (All, Open, Completed, P1, P2, P3)
 
 ### R-TASK4
 - [ ] Support #waiting tag

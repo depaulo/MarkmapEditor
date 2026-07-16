@@ -24,6 +24,8 @@
 
 ✅ UX-MODE1.2 — Welcome/Help navigation state (origin tracking, requestAnimationFrame transitions, button always visible)
 ✅ R-LINK1 — Wiki Links (parse, resolve, open via existing workspace paths)
+✅ R-TASK2 — Task Search and Status Filters (open/completed/all, text search, source navigation)
+✅ R-TASK3 — Task Priority Parsing and Actions (#p1/#p2/#p3, priority filters, set/clear priority)
 
 ### In Progress
 

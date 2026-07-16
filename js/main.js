@@ -2179,6 +2179,11 @@ function setupWorkspacePanels() {
     wireWorkspaceTagsPanel?.();
     wireWorkspacePanelCollapses();
 
+    // R-TASK2 + R-TASK3: wire task review module.
+    try {
+      globalThis.MME_TASK_REVIEW?.wire?.();
+    } catch {}
+
     renderWorkspaceIndexSummary();
     renderWorkspaceActivePanel?.();
     renderWorkspaceTasksPanel();

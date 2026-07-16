@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v47-wiki-links-welcome-navigation';
+const APP_VERSION = 'markmap-journal-pwa-v48-task-search-priority';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
