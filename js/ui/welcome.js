@@ -86,12 +86,15 @@ function wireWelcomeOverlay() {
 
       const ctx = btn.dataset.helpContext || 'editor';
 
-      // UX-MODE1.1: hide Welcome before showing Help to avoid overlap.
+      // UX-MODE1.2: hide Welcome before showing Help to avoid overlap.
+      // Use requestAnimationFrame to avoid click-through overlapping overlays.
       hideWelcomeOverlay({ remember: false });
 
-      try {
-        globalThis.showHelpForContext?.(ctx);
-      } catch {}
+      requestAnimationFrame(() => {
+        try {
+          globalThis.showHelpForContext?.(ctx, { origin: 'welcome' });
+        } catch {}
+      });
 
       log?.(`Welcome: reference requested context=${ctx}`);
     });

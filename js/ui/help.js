@@ -5,6 +5,17 @@
 // Help / Reference Modal
 // ================================
 
+// UX-MODE1.2: Help navigation origin state.
+let helpOrigin = 'toolbar';
+
+function setHelpOrigin(origin) {
+  helpOrigin = origin === 'welcome' ? 'welcome' : 'toolbar';
+}
+
+function getHelpOrigin() {
+  return helpOrigin;
+}
+
 function getCurrentHelpContext() {
   const contextId =
     globalThis.currentAppContextId ||
@@ -176,10 +187,16 @@ function renderHelpContent() {
   renderHelpContentForContext(getCurrentHelpContext());
 }
 
-function showHelpForContext(context) {
+function showHelpForContext(context, options) {
   const valid = context === 'journal' || context === 'concept' || context === 'slides' || context === 'editor';
   const target = valid ? context : 'editor';
-  log?.(`Help: force context=${target}`);
+
+  // UX-MODE1.2: Record origin if provided.
+  if (options && typeof options === 'object') {
+    setHelpOrigin(options.origin);
+  }
+
+  log?.(`Help: force context=${target} origin=${getHelpOrigin()}`);
   renderHelpContentForContext(target);
 }
 
@@ -665,5 +682,11 @@ Presenter notes go here.
     window.wireHelpOverlay = wireHelpOverlay;
     window.renderHelpContent = renderHelpContent;
     window.showHelpForContext = showHelpForContext;
+
+    // UX-MODE1.2: Expose navigation origin state.
+    globalThis.setHelpOrigin = setHelpOrigin;
+    globalThis.getHelpOrigin = getHelpOrigin;
+    window.setHelpOrigin = setHelpOrigin;
+    window.getHelpOrigin = getHelpOrigin;
   } catch {}
 })();

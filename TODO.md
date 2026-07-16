@@ -14,15 +14,15 @@
 
 ## PHASE B — Metadata Foundation
 
-### R-META2
-- [ ] Separate metadata generation from body templates
-- [ ] Compose metadata + body at creation/insertion time
-- [ ] Avoid duplicated frontmatter across templates
+### R-META2 (Completed)
+- [x] Separate metadata generation from body templates
+- [x] Compose metadata + body at creation/insertion time
+- [x] Avoid duplicated frontmatter across templates
 
-### R-META3
-- [ ] Keep frontmatter in saved Markdown files
-- [ ] Hide/collapse frontmatter in normal editor view
-- [ ] Add Show Metadata toggle
+### R-META3 (Completed)
+- [x] Keep frontmatter in saved Markdown files
+- [x] Hide/collapse frontmatter in normal editor view
+- [x] Add Show Metadata toggle
 
 ### R-META4
 - [ ] Editable metadata UI for type/date/created/updated/status/tags
@@ -34,18 +34,24 @@
 ## PHASE C — Knowledge Navigation
 
 ### R-LINK1
-- [ ] Support [[WikiLinks]] syntax
-- [ ] Make links clickable in CodeMirror
-- [ ] Make links clickable in Markmap
-- [ ] Make links clickable in HTML Preview
-- [ ] Open workspace file on click
-- [ ] Identify missing targets
+- [ ] Parse [[WikiLinks]] syntax including [[target|label]] aliases
+- [ ] Resolve [[target]] to workspace file via path, filename, basename, H1 title
+- [ ] Detect missing targets (no file found)
+- [ ] Detect ambiguous targets (multiple matches)
+- [ ] CodeMirror: decorate wiki links with visual styles
+- [ ] CodeMirror: Ctrl/Cmd+Click opens resolved target
+- [ ] HTML Preview: render wiki links as clickable anchors
+- [ ] Markmap: wiki link click integration (postponed if unsafe)
+- [ ] Open resolved target via existing workspace file-open flow
+- [ ] Preserve dirty confirmation, active highlight, Render Controller, lastActiveFile
+- [ ] Compatible with R-META3 hidden frontmatter
 
 ### R-LINK2
 - [ ] Provide reverse references (backlinks)
 - [ ] Display "Referenced By" section
 - [ ] Update backlinks correctly
 - [ ] Handle renames safely
+- [ ] Depends on R-LINK1
 
 ---
 
@@ -70,6 +76,7 @@
 - [ ] Support #waiting tag
 - [ ] Waiting filter
 - [ ] Delegated task tracking
+- [ ] Depends on R-TASK2
 
 ---
 
@@ -85,6 +92,7 @@
 ### R-BIZ3
 - [ ] Aggregate meetings, tasks, contacts, projects
 - [ ] Company rollup views
+- [ ] Depends on R-LINK1, R-LINK2, R-META4
 
 ---
 
@@ -113,7 +121,7 @@
 ## Short-term Priorities
 
 1. [ ] Render stabilization (R-SPLIT4, R-RENDER1)
-2. [ ] Metadata foundation (R-META2, R-META3)
+2. [x] Metadata foundation (R-META2, R-META3)
 3. [ ] Wiki links (R-LINK1)
 4. [ ] Task search (R-TASK2)
 5. [ ] Task priorities (R-TASK3)

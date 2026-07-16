@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v46-metadata-templates-hidden-frontmatter';
+const APP_VERSION = 'markmap-journal-pwa-v47-wiki-links-welcome-navigation';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -38,6 +38,7 @@ const LOCAL_APP_SHELL = [
   './js/templates/templates-menu.js',
   './js/templates/metadata-templates.js',
   './js/editor/frontmatter-visibility.js',
+  './js/links/wiki-links.js',
   './js/export/pandoc-layout-engine.js',
   './js/editor/codemirror-bootstrap.js',
   './js/editor/add-image.js',

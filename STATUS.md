@@ -17,14 +17,18 @@
 
 ✅ R-IMAGE1 — Image workflow
 
-### In Progress
-
-🔄 UX-MODE1.1
-🔄 R-SPLIT4
-🔄 R-RENDER1
-
 ✅ R-META2 — Metadata Template Split
 ✅ R-META3 — Hidden Frontmatter
+
+### Completed
+
+✅ UX-MODE1.2 — Welcome/Help navigation state (origin tracking, requestAnimationFrame transitions, button always visible)
+✅ R-LINK1 — Wiki Links (parse, resolve, open via existing workspace paths)
+
+### In Progress
+
+🔄 R-SPLIT4 — Render Pipeline Stabilization
+🔄 R-RENDER1 — Centralized Render Orchestration
 
 ---
 
@@ -68,6 +72,9 @@ Metadata Template Split
 **Goal:**
 Separate metadata generation from body templates.
 
+**Status:**
+Completed
+
 **Priority:**
 High
 
@@ -78,6 +85,9 @@ Hidden Frontmatter
 
 **Goal:**
 Hide metadata visually while preserving complete Markdown source.
+
+**Status:**
+Completed
 
 **Priority:**
 High

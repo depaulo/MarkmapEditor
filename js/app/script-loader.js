@@ -51,6 +51,9 @@
   // editor view when available.
   appendScript('./js/editor/frontmatter-visibility.js');
 
+  // R-LINK1 — wiki links. Load after workspace index and editor are ready.
+  appendScript('./js/links/wiki-links.js');
+
   appendScript('./js/templates/templates-menu.js');
 })();
 
