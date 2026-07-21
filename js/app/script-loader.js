@@ -5,13 +5,14 @@
 
   // Classic dynamic script loader to keep index.html clean and preserve ordering.
 
-  function appendScript(src, { onload } = {}) {
-    const s = document.createElement('script');
-    s.src = src;
-    if (onload) s.onload = onload;
-    document.body.appendChild(s);
-    return s;
-  }
+function appendScript(src, { onload } = {}) {
+  const s = document.createElement('script');
+  s.src = src;
+  s.async = false;
+  if (onload) s.onload = onload;
+  document.body.appendChild(s);
+  return s;
+}
 
   // Load order: UI overlays/modals -> templates data -> export helpers -> main -> editor visibility -> templates menu
   appendScript('./js/ui/welcome.js');

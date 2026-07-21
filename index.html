@@ -44,6 +44,7 @@
           <option value="editor">Editor</option>
           <option value="journal">Journal</option>
           <option value="slides">Slides</option>
+          <option value="report">Report</option>
         </select>
       </div>
       <div class="btnSep" aria-hidden="true"></div>
@@ -119,6 +120,19 @@
       <div class="btnGroup" id="grpLevels">
         <button id="btnExportMenu" title="Export options">⬇️ Export ▾</button>
         <div id="exportMenu" class="menu" style="display: none"></div>
+      </div>
+
+      <div class="btnSep" aria-hidden="true"></div>
+
+      <div class="btnGroup" id="grpReport" class="contextReportOnly">
+        <button
+          id="btnRenderReport"
+          type="button"
+          title="Render Report"
+          aria-label="Render Report"
+        >
+          📄 Render Report
+        </button>
       </div>
 
       <div class="btnSep" aria-hidden="true"></div>
@@ -1127,57 +1141,66 @@ $$
         >
           ›
         </button>
-        <div id="mapPane">
-          <div id="mapOverlayControls" aria-label="Mindmap controls">
-            <button id="mapBtnLevelUp" type="button" title="Expand one level">➕</button>
-            <button id="mapBtnLevelDown" type="button" title="Collapse one level">➖</button>
-            <button id="mapBtnFit" type="button" title="Fit map">🎯</button>
-            <button id="mapBtnExpandAll" type="button" title="Expand all">🔼</button>
-            <button id="mapBtnCollapseAll" type="button" title="Collapse all">🔽</button>
-            <button id="mapBtnTheme" type="button" title="Toggle dark/light mode">🌙</button>
-            <button id="mapBtnStyle" type="button" title="Map style">🎨</button>
+
+        <!-- Report Mode Middle Column -->
+        <div id="reportMiddleColumn">
+          <div id="reportMarkmapPane" class="reportPane">
+            <div id="mapPane">
+              <div id="mapOverlayControls" aria-label="Mindmap controls">
+                <button id="mapBtnLevelUp" type="button" title="Expand one level">➕</button>
+                <button id="mapBtnLevelDown" type="button" title="Collapse one level">➖</button>
+                <button id="mapBtnFit" type="button" title="Fit map">🎯</button>
+                <button id="mapBtnExpandAll" type="button" title="Expand all">🔼</button>
+                <button id="mapBtnCollapseAll" type="button" title="Collapse all">🔽</button>
+                <button id="mapBtnTheme" type="button" title="Toggle dark/light mode">🌙</button>
+                <button id="mapBtnStyle" type="button" title="Map style">🎨</button>
+              </div>
+
+              <svg id="mapSvg"></svg>
+            </div>
           </div>
 
-          <svg id="mapSvg"></svg>
+          <div class="reportVerticalSplitter" aria-hidden="true"></div>
+
+          <div id="drawioTemplatePane" class="reportPane">
+            <div class="reportPaneHeader">
+              <span class="reportPaneTitle">Draw.io Template</span>
+              <button
+                id="btnReloadTemplate"
+                type="button"
+                title="Reload template"
+                aria-label="Reload template"
+              >
+                ↻
+              </button>
+            </div>
+            <div class="reportPaneBody">
+              <div id="drawioTemplatePreview" class="reportPlaceholder">
+                Template preview will appear here.
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="splitter" id="splitHtml"></div>
-        <div id="htmlPane">
-          <button
-            id="btnHtmlClose"
-            type="button"
-            title="Close HTML Preview"
-            aria-label="Close HTML Preview"
-          >
-            &times;
-          </button>
 
-          <div id="htmlOverlayControls" hidden>
+        <!-- Report Mode Output Viewer -->
+        <div id="drawioOutputPane" class="reportPane">
+          <div class="reportPaneHeader">
+            <span class="reportPaneTitle">Draw.io Output</span>
             <button
-              id="htmlBtnCopyText"
+              id="btnReloadOutput"
               type="button"
-              title="Copy rendered text"
-              aria-label="Copy rendered text"
+              title="Reload output"
+              aria-label="Reload output"
             >
-              Text
+              ↻
             </button>
-
-            <button id="htmlBtnCopyHtml" type="button" title="Copy HTML" aria-label="Copy HTML">
-              HTML
-            </button>
-
-            <button id="htmlBtnExport" type="button" title="Export HTML" aria-label="Export HTML">
-              Export
-            </button>
-
-            <button
-              id="htmlBtnTop"
-              type="button"
-              title="Scroll HTML preview to top"
-              aria-label="Scroll HTML preview to top"
-            >
-              ↑
-            </button>
+          </div>
+          <div class="reportPaneBody">
+            <div id="drawioOutputPreview" class="reportPlaceholder">
+              Rendered report will appear here after clicking Render Report.
+            </div>
           </div>
         </div>
       </div>
@@ -1268,7 +1291,7 @@ $$
           const url = new URL(window.location.href);
           const mode = String(url.searchParams.get('mode') || '').toLowerCase();
 
-          if (['editor', 'journal', 'slides'].includes(mode)) {
+          if (['editor', 'journal', 'slides', 'report'].includes(mode)) {
             return mode;
           }
         } catch {}
@@ -1307,6 +1330,8 @@ $$
     <script type="module" src="./js/editor/codemirror-bootstrap.js"></script>
 
     <script type="module" src="./js/workspace/workspace-controller.js"></script>
+
+    <script type="module" src="./js/render/report-renderer.js"></script>
 
     <!-- Template Editor Modal -->
 

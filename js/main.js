@@ -129,6 +129,48 @@ async function renderHtmlWithShiki(mdText) {
     }
   };
 
+  // R-LINK1: Transform wiki links in HTML Preview
+  renderer.text = function (text) {
+    const str = String(text || '');
+    const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
+
+    let result = '';
+    let lastIndex = 0;
+    let match;
+
+    while ((match = WIKI_RE.exec(str)) !== null) {
+      // Add text before this match
+      if (match.index > lastIndex) {
+        result += escapeHtml(str.slice(lastIndex, match.index));
+      }
+
+      const inner = match[1];
+      const pipeIndex = inner.indexOf('|');
+      let target = pipeIndex !== -1 ? inner.slice(0, pipeIndex) : inner;
+      const label = pipeIndex !== -1 ? inner.slice(pipeIndex + 1) : target;
+
+      target = target.trim();
+      const displayLabel = label.trim();
+
+      if (target) {
+        // Escape attributes
+        const escapedTarget = escapeHtml(target);
+        const escapedLabel = escapeHtml(displayLabel);
+
+        result += `<span class="wikiLink" data-wiki-target="${escapedTarget}" title="Wiki link: ${escapedTarget}">${escapedLabel}</span>`;
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining text
+    if (lastIndex < str.length) {
+      result += escapeHtml(str.slice(lastIndex));
+    }
+
+    return result || str;
+  };
+
   return marked.parse(mdText, { renderer });
 }
 
@@ -632,6 +674,18 @@ async function buildWorkspaceIndex() {
   WORKSPACE_INDEX_STATE.tags = tags;
   WORKSPACE_INDEX_STATE.tasks = tasks;
   WORKSPACE_INDEX_STATE.links = links;
+
+  // Dispatch workspace index ready event for late modules
+  try {
+    window.dispatchEvent(
+      new CustomEvent('mme-workspace-index-ready', {
+        detail: {
+          files: parsedFiles.length,
+          tasks: tasks.length,
+        },
+      })
+    );
+  } catch {}
 
   renderWorkspaceIndexSummary();
   renderWorkspaceActivePanel?.();
@@ -1353,6 +1407,14 @@ function getGroupedOpenWorkspaceTasks() {
 }
 
 function renderWorkspaceTasksPanel() {
+  // Compatibility wrapper: delegate to Task Review if available
+  if (globalThis.MME_TASK_REVIEW?.refresh) {
+    globalThis.MME_TASK_REVIEW.refresh();
+    log?.('Workspace Tasks: legacy renderer bypassed (Task Review active)');
+    return;
+  }
+
+  // Legacy fallback
   const panel = ensureWorkspaceTasksPanel();
   const badge = document.getElementById('workspaceTasksBadge');
   const summary = document.getElementById('workspaceTasksSummary');
@@ -1458,6 +1520,14 @@ function renderWorkspaceTasksPanel() {
 }
 
 function wireWorkspaceTasksPanel() {
+  // Compatibility wrapper: delegate to Task Review if available
+  if (globalThis.MME_TASK_REVIEW?.wire) {
+    globalThis.MME_TASK_REVIEW.wire();
+    log?.('Workspace Tasks: legacy click wiring bypassed (Task Review active)');
+    return;
+  }
+
+  // Legacy fallback
   ensureWorkspaceTasksPanel();
 
   const panel = document.getElementById('workspaceTasksPanel');

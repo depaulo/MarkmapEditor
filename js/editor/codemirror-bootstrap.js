@@ -445,7 +445,271 @@ try {
       view.focus();
     } catch {}
   };
+
+  // ---- CodeMirror bridge for Task Review priority editing ----
+  // Line numbers are 1-based (first line = 1)
+  window.__cmGetLineText = (lineNo) => {
+    try {
+      const ln = Math.max(1, Math.min(view.state.doc.lines, Number(lineNo) || 1));
+      return view.state.doc.line(ln).text;
+    } catch {
+      return null;
+    }
+  };
+
+  window.__cmReplaceLine = (lineNo, newText, options = {}) => {
+    try {
+      const ln = Math.max(1, Math.min(view.state.doc.lines, Number(lineNo) || 1));
+      const line = view.state.doc.line(ln);
+      const scrollTo = options?.scrollTo || false;
+
+      view.dispatch({
+        changes: { from: line.from, to: line.to, insert: String(newText ?? '') },
+        scrollIntoView: scrollTo,
+      });
+
+      view.focus();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   window.dispatchEvent(new Event('cm-ready'));
 } catch (e) {
   fallbackToTextarea(e);
 }
+
+// ================================
+// Wiki Link Decoration Extension (R-LINK1)
+// ================================
+
+function createWikiLinkDecorationExtension() {
+  let currentDecorations = null;
+  let refreshScheduled = false;
+
+  function getWorkspaceIndex() {
+    return globalThis.WORKSPACE_INDEX_STATE || window.WORKSPACE_INDEX_STATE || null;
+  }
+
+  function parseWikiLinksFromText(text) {
+    if (!text || typeof text !== 'string') return [];
+    const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
+    const results = [];
+    let match;
+    while ((match = WIKI_RE.exec(text)) !== null) {
+      const raw = match[0];
+      const inner = match[1];
+      const from = match.index;
+      const to = from + raw.length;
+      let target = inner;
+      let label = '';
+      const pipeIndex = inner.indexOf('|');
+      if (pipeIndex !== -1) {
+        target = inner.slice(0, pipeIndex);
+        label = inner.slice(pipeIndex + 1);
+      }
+      target = target.trim();
+      label = label.trim();
+      if (!target) continue;
+      results.push({ raw, target, label: label || target, from, to });
+    }
+    return results;
+  }
+
+  function resolveTargetStatus(target) {
+    const index = getWorkspaceIndex();
+    if (!index || !index.ready || !index.files) {
+      return 'missing';
+    }
+
+    const normalized = String(target || '')
+      .replace(/\.md$/i, '')
+      .trim()
+      .toLowerCase();
+
+    if (!normalized) return 'missing';
+
+    const candidates = [];
+    for (const file of index.files) {
+      const filePath = String(file.path || '');
+      const fileName = String(file.name || '');
+      const fileBasename = fileName.replace(/\.md$/i, '');
+      const fileTitle = String(file.title || '');
+
+      if (filePath.replace(/\.md$/i, '').trim().toLowerCase() === normalized) {
+        candidates.push(file);
+      } else if (fileName.replace(/\.md$/i, '').trim().toLowerCase() === normalized) {
+        candidates.push(file);
+      } else if (fileBasename.toLowerCase() === normalized) {
+        candidates.push(file);
+      } else if (fileTitle && fileTitle.toLowerCase() === normalized) {
+        candidates.push(file);
+      }
+    }
+
+    const seen = new Set();
+    const unique = [];
+    for (const f of candidates) {
+      if (!seen.has(f.path)) {
+        seen.add(f.path);
+        unique.push(f);
+      }
+    }
+
+    if (unique.length === 0) return 'missing';
+    if (unique.length === 1) return 'resolved';
+    return 'ambiguous';
+  }
+
+  function computeDecorations(state) {
+    const index = getWorkspaceIndex();
+    if (!index?.ready) {
+      return Decoration.none;
+    }
+
+    const links = index.links;
+    if (!links || links.size === 0) {
+      return Decoration.none;
+    }
+
+    const widgets = [];
+    const docText = state.doc.toString();
+
+    // Build a map of link text -> status
+    const linkStatusMap = new Map();
+    for (const [target, paths] of links) {
+      const status = resolveTargetStatus(target);
+      linkStatusMap.set(target.toLowerCase(), status);
+    }
+
+    // Find all wiki link occurrences in current document
+    const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
+    let match;
+    while ((match = WIKI_RE.exec(docText)) !== null) {
+      const inner = match[1];
+      const pipeIndex = inner.indexOf('|');
+      let target = pipeIndex !== -1 ? inner.slice(0, pipeIndex) : inner;
+      target = target.trim();
+      if (!target) continue;
+
+      const from = match.index;
+      const to = from + match[0].length;
+      const status = linkStatusMap.get(target.toLowerCase()) || 'missing';
+
+      let className = 'wikiLink';
+      if (status === 'missing') className = 'wikiLink wikiLinkMissing';
+      else if (status === 'ambiguous') className = 'wikiLink wikiLinkAmbiguous';
+
+      widgets.push(
+        Decoration.mark({ from, to, attributes: { class: className } })
+      );
+    }
+
+    return Decoration.set(widgets, true);
+  }
+
+  const wikiLinkField = StateField.define({
+    create: computeDecorations,
+    update: (decorations, tr) => {
+      if (!tr.docChanged && !tr.startState.field(wikiLinkField, false)) {
+        return decorations;
+      }
+      return computeDecorations(tr.state);
+    },
+    provide: (field) => {
+      return EditorView.decorations.from(field);
+    },
+  });
+
+   // Store view reference for click handling
+   let wikiLinkView = null;
+
+   const wikiLinkPlugin = ViewPlugin.define((v) => {
+     wikiLinkView = v;
+     return {
+       refresh() {
+         if (!refreshScheduled) {
+           refreshScheduled = true;
+           requestAnimationFrame(() => {
+             refreshScheduled = false;
+             v.dispatch({});
+           });
+         }
+       }
+     };
+   }, {
+     eventHandlers: {
+       update: () => {
+         // Refresh decorations when workspace index might have changed
+       }
+     }
+   });
+
+   // Handle Ctrl/Cmd+Click on wiki links in CodeMirror
+   const wikiLinkClickHandler = EditorView.domEventHandlers({
+     click: (event) => {
+       // Only handle primary button with Ctrl/Cmd modifier
+       if (event.button !== 0 || (!event.ctrlKey && !event.metaKey)) {
+         return false;
+       }
+
+       if (!wikiLinkView) return false;
+
+       // Get position from click coordinates
+       const coords = { x: event.clientX, y: event.clientY };
+       const pos = wikiLinkView.posAtCoords(coords);
+       if (pos === null) return false;
+
+       // Get current document text and find wiki links
+       const docText = wikiLinkView.state.doc.toString();
+       const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
+       let match;
+       while ((match = WIKI_RE.exec(docText)) !== null) {
+         const from = match.index;
+         const to = from + match[0].length;
+         if (pos >= from && pos <= to) {
+           // Found a wiki link at this position
+           const inner = match[1];
+           const pipeIndex = inner.indexOf('|');
+           const target = (pipeIndex !== -1 ? inner.slice(0, pipeIndex) : inner).trim();
+           if (target) {
+             event.preventDefault();
+             event.stopPropagation();
+             if (typeof globalThis.MME_WIKI_LINKS?.openTarget === 'function') {
+               globalThis.MME_WIKI_LINKS.openTarget(target);
+             }
+             return true;
+           }
+           break;
+         }
+       }
+       return false;
+     }
+   });
+
+  // Expose refresh function
+  window.__refreshWikiLinkDecorations = function() {
+    if (view && wikiLinkField) {
+      view.dispatch({});
+    }
+  };
+
+   return [wikiLinkField, wikiLinkPlugin, wikiLinkClickHandler];
+   }
+
+   // Add wiki link decoration extension if CodeMirror is ready
+   if (typeof EditorView !== 'undefined' && typeof StateField !== 'undefined' && typeof Decoration !== 'undefined') {
+     try {
+       const wikiLinkExtensions = createWikiLinkDecorationExtension();
+       if (view && wikiLinkExtensions.length === 3) {
+         view.dispatch({
+           effects: StateEffect.appendConfig.of(wikiLinkExtensions)
+         });
+       }
+     } catch (e) {
+       try {
+         console.warn('Wiki link decoration extension failed:', e);
+       } catch {}
+     }
+   }

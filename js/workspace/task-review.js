@@ -24,6 +24,7 @@
       globalThis.log(msg);
     }
   }
+ }());
 
   function getWorkspaceIndex() {
     return globalThis.WORKSPACE_INDEX_STATE || window.WORKSPACE_INDEX_STATE || null;
@@ -141,13 +142,77 @@
 
   // ---- Panel UI ----
 
-  function ensurePanel() {
+  function ensureOrUpgradePanel() {
     const sidebar = document.getElementById('workspaceSidebar');
     if (!sidebar) return null;
 
     let panel = document.getElementById('workspaceTasksPanel');
-    if (panel) return panel;
 
+    // Check if panel already has the Task Review markup
+    const hasSearchInput = document.getElementById('workspaceTaskSearchInput');
+    const hasStatusFilters = document.querySelector('.workspaceTaskStatusFilters');
+    const hasPriorityFilter = document.getElementById('workspaceTaskPriorityFilter');
+    const hasSummary = document.getElementById('workspaceTasksSummary');
+    const hasList = document.getElementById('workspaceTasksList');
+
+    if (panel && hasSearchInput && hasStatusFilters && hasPriorityFilter && hasSummary && hasList) {
+      // Panel already upgraded
+      return panel;
+    }
+
+    // If panel exists but lacks Task Review markup, upgrade it
+    if (panel) {
+      panel.innerHTML = `
+        <div class="workspaceTasksHeader">
+          <button
+            type="button"
+            class="workspacePanelHeaderButton"
+            data-workspace-panel-toggle="tasks"
+            aria-expanded="false"
+          >
+            <span class="workspacePanelHeaderLeft">
+              <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+              <span class="workspaceTasksTitle">Tasks</span>
+            </span>
+            <span id="workspaceTasksBadge" class="workspacePanelBadge">0</span>
+          </button>
+        </div>
+        <div class="workspacePanelBody">
+          <div id="workspaceTaskSearchRow" class="workspaceTaskSearchRow">
+            <input
+              type="search"
+              id="workspaceTaskSearchInput"
+              class="workspaceTaskSearchInput"
+              placeholder="Search tasks..."
+              autocomplete="off"
+            />
+          </div>
+          <div class="workspaceTaskFilterRow">
+            <div class="workspaceTaskStatusFilters">
+              <button type="button" class="workspaceTaskFilterBtn active" data-status="open">Open</button>
+              <button type="button" class="workspaceTaskFilterBtn" data-status="completed">Done</button>
+              <button type="button" class="workspaceTaskFilterBtn" data-status="all">All</button>
+            </div>
+            <select id="workspaceTaskPriorityFilter" class="workspaceTaskPriorityFilter">
+              <option value="all">All priorities</option>
+              <option value="p1">P1</option>
+              <option value="p2">P2</option>
+              <option value="p3">P3</option>
+              <option value="none">No priority</option>
+            </select>
+          </div>
+          <div id="workspaceTasksSummary" class="workspaceRelatedSummary">No tasks</div>
+          <div id="workspaceTasksList" class="workspaceTasksList">
+            <div class="workspaceTasksEmpty">No tasks</div>
+          </div>
+        </div>
+      `;
+      panel.dataset.taskReviewUpgraded = '1';
+      safeLog('TaskReview: panel upgraded');
+      return panel;
+    }
+
+    // Create new panel
     panel = document.createElement('div');
     panel.id = 'workspaceTasksPanel';
     panel.className = 'workspaceSection workspaceTasksPanel';
@@ -210,17 +275,22 @@
       sidebar.appendChild(panel);
     }
 
+    panel.dataset.taskReviewUpgraded = '1';
     safeLog('TaskReview: panel created');
     return panel;
   }
 
   function renderPanel() {
-    const panel = ensurePanel();
+    const panel = ensureOrUpgradePanel();
+    if (!panel) {
+      safeLog('TaskReview: render skipped; panel not available');
+      return;
+    }
     const badge = document.getElementById('workspaceTasksBadge');
     const summary = document.getElementById('workspaceTasksSummary');
     const list = document.getElementById('workspaceTasksList');
 
-    if (!panel || !badge || !summary || !list) {
+    if (!badge || !summary || !list) {
       safeLog('TaskReview: render skipped; panel elements missing');
       return;
     }
@@ -348,6 +418,27 @@
       } else {
         safeLog('TaskReview: openWorkspaceFile not available');
       }
+
+      // Wait for file activation
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve();
+          });
+        });
+      });
+
+      // Scroll to the line and focus editor
+      const scrollToLine = typeof window.__cmScrollToLine === 'function' ? window.__cmScrollToLine : null;
+      if (scrollToLine) {
+        scrollToLine(line - 1); // Convert 1-based to 0-based
+      }
+
+      // Focus the editor
+      const focusEditor = typeof window.__cmFocus === 'function' ? window.__cmFocus : null;
+      if (focusEditor) {
+        focusEditor();
+      }
     } catch (e) {
       safeLog(`TaskReview: open failed: ${e?.message || e}`);
     } finally {
@@ -356,6 +447,52 @@
   }
 
   // ---- Priority actions ----
+
+  // Normalize task text for comparison (preserves identity-bearing content)
+  function normalizeTaskTextForComparison(text) {
+    return String(text || '')
+      .replace(/^(\s*[-*+]\s+\[[ xX]\]\s+)/, '') // Remove checkbox prefix
+      .replace(/#p[123]\b/gi, '') // Remove priority tokens
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim()
+      .toLowerCase();
+  }
+
+  // Find the actual line for a task, with nearby fallback
+  function findActualTaskLine(getLineText, indexedLine, expectedText) {
+    // First, check the exact indexed line
+    const exactLineText = getLineText(indexedLine);
+    if (exactLineText !== null) {
+      const exactMatch = exactLineText.match(/^(\s*[-*+]\s+\[[ xX]\]\s+)(.*)$/);
+      if (exactMatch && normalizeTaskTextForComparison(exactMatch[2]) === normalizeTaskTextForComparison(expectedText)) {
+        return indexedLine;
+      }
+    }
+
+    // Search nearby range (indexedLine - 3 through indexedLine + 3)
+    const candidates = [];
+    for (let offset = -3; offset <= 3; offset++) {
+      if (offset === 0) continue; // Already checked
+      const checkLine = indexedLine + offset;
+      const checkText = getLineText(checkLine);
+      if (checkText === null) continue;
+
+      const checkMatch = checkText.match(/^(\s*[-*+]\s+\[[ xX]\]\s+)(.*)$/);
+      if (checkMatch && normalizeTaskTextForComparison(checkMatch[2]) === normalizeTaskTextForComparison(expectedText)) {
+        candidates.push({ line: checkLine, text: checkText });
+      }
+    }
+
+    if (candidates.length === 0) {
+      return null; // No match found
+    }
+
+    if (candidates.length > 1) {
+      return { ambiguous: true }; // Multiple matches
+    }
+
+    return candidates[0].line; // Unique match
+  }
 
   async function setTaskPriority(path, kind, line, newPriority) {
     const index = getWorkspaceIndex();
@@ -401,31 +538,63 @@
       return;
     }
 
+    // Wait for file activation and at least one animation frame
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+    });
+
     // Now edit the source line
     try {
-      const cm = globalThis.cm;
-      if (!cm || typeof cm.state !== 'object') {
-        safeLog('TaskReview: CodeMirror not available for priority edit');
+      // Use stable CodeMirror bridge if available
+      const getLineText = typeof window.__cmGetLineText === 'function' ? window.__cmGetLineText : null;
+      const replaceLine = typeof window.__cmReplaceLine === 'function' ? window.__cmReplaceLine : null;
+      const scrollToLine = typeof window.__cmScrollToLine === 'function' ? window.__cmScrollToLine : null;
+
+      if (!getLineText || !replaceLine) {
+        safeLog('TaskReview: CodeMirror bridge not available for priority edit');
         globalThis.showToast?.('Editor not ready', 'error', 2200);
         return;
       }
 
-      const doc = cm.state.doc;
-      const totalLines = doc.lines;
-      const lineIndex = Math.max(0, Math.min(line - 1, totalLines - 1));
+      // Get the expected task text from the index for comparison
+      const indexedTask = index.tasks?.find((t) => t.filePath === path && t.line === line);
+      const expectedText = indexedTask?.text || '';
 
-      // Validate the line
-      const currentLine = doc.line(lineIndex + 1);
-      if (!currentLine) {
-        safeLog(`TaskReview: line ${line} not found`);
+      // Find the actual line (with nearby fallback)
+      const actualLine = findActualTaskLine(getLineText, line, expectedText);
+
+      if (actualLine === null) {
+        safeLog(`TaskReview: task not found near indexed line ${line}`);
+        globalThis.showToast?.('Task not found. Try refreshing the workspace index.', 'error', 2600);
+        return;
+      }
+
+      if (actualLine && actualLine.ambiguous) {
+        safeLog(`TaskReview: multiple tasks match near indexed line ${line}`);
+        globalThis.showToast?.('Multiple matching tasks found. Cannot edit.', 'error', 2600);
+        return;
+      }
+
+      // Log if we used a shifted line
+      if (actualLine !== line) {
+        safeLog(`TaskReview: shifted task resolved indexedLine=${line} actualLine=${actualLine}`);
+      }
+
+      // Validate the actual line
+      const lineText = getLineText(actualLine);
+      if (lineText === null) {
+        safeLog(`TaskReview: line ${actualLine} not found`);
         globalThis.showToast?.('Task line not found', 'error', 2200);
         return;
       }
 
-      const lineText = currentLine.text;
       const taskMatch = lineText.match(/^(\s*[-*+]\s+\[[ xX]\]\s+)(.*)$/);
       if (!taskMatch) {
-        safeLog(`TaskReview: line ${line} is not a task`);
+        safeLog(`TaskReview: line ${actualLine} is not a task`);
         globalThis.showToast?.('Line is not a task', 'error', 2200);
         return;
       }
@@ -444,16 +613,20 @@
 
       const newLine = prefix + newContent;
 
-      // Apply edit via CodeMirror transaction
-      const from = currentLine.from;
-      const to = currentLine.to;
+      // Apply edit via CodeMirror bridge
+      const success = replaceLine(actualLine, newLine, { scrollTo: true });
+      if (!success) {
+        safeLog('TaskReview: priority edit failed (replaceLine returned false)');
+        globalThis.showToast?.('Priority edit failed', 'error', 2200);
+        return;
+      }
 
-      cm.dispatch({
-        changes: { from, to, insert: newLine },
-        scrollIntoView: true,
-      });
+      // Scroll to the actual line
+      if (scrollToLine) {
+        scrollToLine(actualLine - 1); // Convert 1-based to 0-based
+      }
 
-      safeLog(`TaskReview: priority changed ${newPriority || 'cleared'} on ${path}:${line}`);
+      safeLog(`TaskReview: priority changed ${newPriority || 'cleared'} on ${path}:${actualLine}`);
 
       // Schedule render
       if (typeof globalThis.MME_RENDER?.scheduleRender === 'function') {
@@ -470,14 +643,12 @@
   // ---- Wiring ----
 
   function wire() {
-    if (wired) return;
-    wired = true;
+    if (wired) return true;
 
-    const panel = ensurePanel();
+    const panel = ensureOrUpgradePanel();
     if (!panel) {
       safeLog('TaskReview: wire deferred; panel not available');
-      setTimeout(wire, 200);
-      return;
+      return false;
     }
 
     // Search input
@@ -554,7 +725,9 @@
       }
     });
 
+    wired = true;
     safeLog('TaskReview: wired');
+    return true;
   }
 
   function refresh() {
@@ -577,12 +750,16 @@
     getCompletedTasks,
     openTaskSource,
     setTaskPriority,
+    findActualTaskLine, // Exposed for testing
   };
 
   try {
     window.MME_TASK_REVIEW = MME_TASK_REVIEW;
     globalThis.MME_TASK_REVIEW = MME_TASK_REVIEW;
   } catch {}
+
+  safeLog('TaskReview: module loaded');
+ }());
 
   safeLog('TaskReview: module loaded');
 })();

@@ -176,7 +176,13 @@
 
       // Only reuse URL session if URL mode matches current mode.
       if (rawSession && urlMode === mode) {
+        globalThis.log?.(`ModeSession: resolve currentMode=${mode} urlMode=${urlMode} urlSession=${rawSession} resolved=${normalizeModeSessionId(rawSession, mode)}`);
         return normalizeModeSessionId(rawSession, mode);
+      }
+
+      // Log when URL session is present but mode doesn't match
+      if (rawSession && urlMode !== mode) {
+        globalThis.log?.(`ModeSession: resolve currentMode=${mode} urlMode=${urlMode} urlSession=${rawSession} resolved=${mode}-main (mode mismatch)`);
       }
     } catch {}
 

@@ -184,6 +184,55 @@ export const APP_CONTEXTS = {
     showPandocTools: true,
     defaultMarkdown: buildSlidesStarterMarkdown(),
   },
+
+  report: {
+    id: 'report',
+    label: 'MarkMap Report',
+    shortLabel: 'Report',
+    templateLabel: 'Report Templates',
+    defaultFileName: 'report.md',
+    showWorkspace: false,
+    showJournalControls: false,
+    showPandocTools: false,
+    showReportTools: true,
+    defaultMarkdown: `# Project Report
+
+## Highlights
+
+### Alibaba
+
+- Item 1
+- Item 2
+
+### ByteDance
+
+- Item 1
+
+### Tencent
+
+- Item 1
+
+## Projects
+
+### Alibaba
+
+#### Brasil
+
+##### Brasil - Phase 1
+
+Forecast: 1.2M
+
+Period:
+26Q2~27Q1
+
+Comments:
+Waiting contract
+
+## Notes
+
+- General comment 1
+`,
+  },
 };
 
 export function getAppContext(contextId) {

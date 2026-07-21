@@ -383,6 +383,85 @@ The application is evolving toward:
 
 ---
 
+# Report Mode Roadmap
+
+## v0.4 - Report Context Foundation
+
+- Add Report context
+- Add report.md starter template
+- Add Report-specific layout
+- Hide HTML Viewer in Report Mode
+- Keep Editor visible on the left
+- Keep Markmap Viewer visible in the middle-top area
+- Add Draw.io Template Viewer in the middle-bottom area
+- Add Draw.io Output Viewer on the right side
+
+## v0.5 - Draw.io Placeholder Rendering
+
+- Add placeholder engine
+- Support text replacements
+- Generate report-output.drawio
+- Add Render Report command
+
+## v0.6 - Report Preview Workflow
+
+- Refresh Draw.io Output Viewer after render
+- Add reload buttons for template and output
+- Add basic error handling and logs
+- Add optional auto-render toggle
+
+## v0.7 - Image Support
+
+- Add image placeholders
+- Add logo/image replacement
+- Support company assets
+
+## v0.8 - Project Block Generation
+
+- Parse projects from Markdown
+- Generate rows from project hierarchy
+- Support company sections:
+    - Alibaba
+    - ByteDance
+    - Tencent
+
+## v0.9 - Timeline / Gantt Rendering
+
+- Parse quarter ranges
+- Generate timeline bars
+- Add project-level Gantt visualization
+
+## v1.0 - Stable Draw.io Report Mode
+
+- Stable Markdown report format
+- Stable Draw.io template workflow
+- Stable generated Draw.io output
+- AI-generated report.md workflow
+- GitHub-ready report process
+
+## v1.1 - Draw.io Export Assets
+
+- Export report-output.drawio
+- Export SVG
+- Export PNG
+- Support one image per Draw.io page
+
+## v1.2 - PPT Export Without Pandoc
+
+- Generate report-output.pptx from report-output.drawio
+- Use PNG or SVG images as full-slide visuals
+- Treat PPT as non-editable presentation output
+- Keep Draw.io as master editable format
+
+## v1.3 - Draw.io PPT-Like Templates
+
+- Support Draw.io templates designed as slide decks
+- Treat each Draw.io page as one slide
+- Generate PPT slides from Draw.io pages
+- Evaluate if this workflow can replace or simplify Pandoc Slides
+
+---
+
 # Verification
 
 ## R-LINK1 — Wiki Links

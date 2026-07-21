@@ -74,6 +74,12 @@
 /* Welcome Screen              */
 /* =========================== */
 
+.welcomeOverlay,
+.helpOverlay {
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
 .welcomeOverlay {
   position: fixed;
   inset: 0;
@@ -89,13 +95,27 @@
   backdrop-filter: blur(6px);
 }
 
+@media (max-width: 760px) {
+  .welcomeOverlay,
+  .helpOverlay {
+    padding:
+      max(8px, env(safe-area-inset-top))
+      max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
+    align-items: stretch;
+  }
+}
+
 .welcomeOverlay[hidden] {
   display: none !important;
 }
 
 .welcomePanel {
+  min-height: 0;
+  max-height: min(760px, calc(100vh - 32px));
+  max-height: min(760px, calc(100dvh - 32px));
   width: min(760px, 96vw);
-  max-height: min(760px, 90vh);
 
   display: flex;
   flex-direction: column;
@@ -109,6 +129,27 @@
   color: var(--text);
 
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+}
+
+.welcomeHeader,
+.welcomeFooter {
+  flex: 0 0 auto;
+}
+
+.welcomeBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 18px 22px;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
 .welcomeHeader {
@@ -161,16 +202,6 @@
 
 .welcomeClose:hover {
   background: var(--menu-hover);
-}
-
-.welcomeBody {
-  padding: 18px 22px;
-
-  overflow: auto;
-
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
 }
 
 .welcomeSection {
@@ -969,8 +1000,10 @@ html.dark #mapStyleApply {
 }
 
 .helpPanel {
+  min-height: 0;
+  max-height: min(840px, calc(100vh - 32px));
+  max-height: min(840px, calc(100dvh - 32px));
   width: min(920px, 96vw);
-  max-height: min(840px, 92vh);
 
   display: flex;
   flex-direction: column;
@@ -984,6 +1017,30 @@ html.dark #mapStyleApply {
   color: var(--text);
 
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+}
+
+.helpHeader,
+.helpFooter {
+  flex: 0 0 auto;
+}
+
+.helpBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 18px 22px;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .helpHeader {
@@ -1058,19 +1115,6 @@ html.dark #mapStyleApply {
 
 #btnHelpBackToWelcome:hover {
   background: var(--menu-hover);
-}
-
-.helpBody {
-  padding: 18px 22px;
-
-  overflow: auto;
-
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-
-  font-size: 14px;
-  line-height: 1.5;
 }
 
 .helpBody h2 {

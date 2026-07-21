@@ -1,0 +1,101 @@
+FINAL SOURCE VALIDATION REPORT
+
+Repository:
+- branch: development
+- changed files: 8 (css/overlays.css, css/workspace.css, js/app/script-loader.js, js/core/mode-session.js, js/editor/codemirror-bootstrap.js, js/links/wiki-links.js, js/main.js, js/workspace/task-review.js)
+- insertion/deletion summary: 914 insertions(+), 69 deletions(-)
+- git diff --check: PASS (no trailing whitespace)
+
+Syntax validation:
+- js/ui/welcome.js: PASS
+- js/ui/help.js: PASS
+- js/links/wiki-links.js: PASS
+- js/workspace/task-review.js: PASS
+- js/workspace/workspace-controller.js: PASS
+- js/workspace/workspace-actions.js: PASS
+- js/workspace/workspace-open.js: PASS
+- js/editor/codemirror-bootstrap.js: PASS
+- js/editor/frontmatter-visibility.js: PASS
+- js/core/mode-session.js: PASS
+- js/render/render-controller.js: PASS
+- js/main.js: PASS
+- js/app/script-loader.js: PASS
+- sw.js: PASS
+
+R-LINK1 source evidence:
+- decoration API: Decoration.mark, StateField.define, ViewPlugin.define, EditorView.decorations.from (js/editor/codemirror-bootstrap.js:487-652)
+- extension installed: createWikiLinkDecorationExtension() returns [wikiLinkField, wikiLinkPlugin], added via StateEffect.appendConfig (lines 656-663)
+- refresh lifecycle: window.__refreshWikiLinkDecorations dispatched on mme-workspace-index-ready, cm-ready, and MME_WIKI_LINKS.refresh() (js/links/wiki-links.js:263-268, 477-486)
+- resolved class: wikiLink (js/editor/codemirror-bootstrap.js:600)
+- missing class: wikiLink wikiLinkMissing (js/editor/codemirror-bootstrap.js:601)
+- ambiguous class: wikiLink wikiLinkAmbiguous (js/editor/codemirror-bootstrap.js:602)
+- desktop handler: Ctrl/Cmd+Click handled via auxclick event in HTML preview (js/links/wiki-links.js:292-306)
+- normal editing preserved: CodeMirror decoration uses mark() without click handlers, normal editing unaffected
+- Android button: btnOpenWikiLink created in editorOverlayToolsPanel (js/links/wiki-links.js:363-395)
+- Android click handler: wired to getCursorWikiLinkInfo() and openTarget() (js/links/wiki-links.js:380-392)
+- cursor tracking: keyup, mouseup, selectionchange on cmHost (js/links/wiki-links.js:404-421)
+- disabled/hidden state: button.disabled = !info (js/links/wiki-links.js:358)
+- HTML transformation: [[Target|Alias]] -> span.wikiLink with data-wiki-target (js/main.js:160)
+- escaping: escapeHtml() used for target and label (js/main.js:157-158)
+- delegated listener: single htmlPane click listener (js/links/wiki-links.js:279-310)
+- normal Markdown links: not intercepted (only [data-wiki-target] selector)
+- standalone export: no workspace handles in exported HTML
+- Markmap status: NOT IMPLEMENTED
+
+R-TASK2 source evidence:
+- sole panel owner: ensureOrUpgradePanel() in task-review.js (js/workspace/task-review.js:144)
+- legacy panel upgrade: upgrades existing #workspaceTasksPanel if missing Task Review markup (js/workspace/task-review.js:163-212)
+- legacy renderer bypass: main.js renderWorkspaceTasksPanel() delegates to MME_TASK_REVIEW.refresh() (js/main.js:1411-1415)
+- legacy listener bypass: main.js wireWorkspaceTasksPanel() delegates to MME_TASK_REVIEW.wire() (js/main.js:1524-1527)
+- one delegated listener: single panel.addEventListener('click') in task-review.js (js/workspace/task-review.js:590)
+- search/status/priority controls: search input, status filter buttons, priority select all wired (js/workspace/task-review.js:557-587)
+
+R-TASK3 source evidence:
+- open once: openTaskSource() has taskOpenInProgress guard (js/workspace/task-review.js:381-386)
+- activation wait: requestAnimationFrame double-frame wait after open (js/workspace/task-review.js:474-480)
+- line conventions: __cmGetLineText uses 0-based line numbers (js/workspace/task-review.js:495)
+- stale-line check: getLineText returns null check (js/workspace/task-review.js:496-500)
+- unique nearby fallback: NOT IMPLEMENTED (uses exact line from index)
+- priority-token replacement: #p1/#p2/#p3 removed, #waiting preserved (js/workspace/task-review.js:513)
+- Wiki Links preserved: replacement only affects priority tokens
+- other content preserved: only task line modified
+- CodeMirror transaction: uses __cmReplaceLine bridge (js/workspace/task-review.js:524)
+- undo/redo support: CodeMirror bridge preserves undo stack
+- source-line navigation: scrollTo: true option in replaceLine call (js/workspace/task-review.js:524)
+
+Mode/session source evidence:
+- mode comparison: urlMode === mode check before reusing URL session (js/core/mode-session.js:178)
+- diagnostic: logs when URL session present but mode mismatch (js/core/mode-session.js:184-186)
+- invalid-key search: no invalid key combinations found
+- browser/cache verification status: NOT RUN
+
+Collision checks:
+- Wiki Link namespace: MME_WIKI_LINKS defined once (js/links/wiki-links.js:496)
+- Task Review namespace: MME_TASK_REVIEW defined once (js/workspace/task-review.js:643)
+- Tasks renderers: main.js delegates to MME_TASK_REVIEW.refresh() when available
+- Tasks listeners: main.js delegates to MME_TASK_REVIEW.wire() when available
+- undocumented global cm: globalThis.cm used in mode-session.js and frontmatter-visibility.js as fallback
+- editor bridge definitions: __cmGetLineText, __cmReplaceLine, __cmScrollToLine defined in codemirror-bootstrap.js
+- workspace-index-ready dispatch/listeners: dispatched in main.js:681, listened in wiki-links.js:477
+
+Deferred correctly:
+- browser tests: PENDING
+- documentation verification: PENDING
+- service-worker bump: NOT DONE
+- Markmap Wiki Link navigation: NOT IMPLEMENTED
+
+Manual tests still required:
+- W1: Open app, verify welcome/help flex scrolling
+- W2: Verify script execution order
+- W3: Verify CodeMirror wiki link decoration
+- W4: Verify HTML preview wiki link click
+- W5: Verify mobile Open Wiki Link button
+- W6: Verify task review panel
+- W7: Verify task open navigation
+- W8: Verify priority edit
+- W9: Verify mode switching
+- W10: Verify workspace index rebuild
+- W11: Verify wiki link decoration refresh
+- W12: Verify no duplicate button/listener
+
+Final status: SOURCE IMPLEMENTATION AND STATIC VALIDATION COMPLETE — MANUAL BROWSER TESTS REQUIRED
