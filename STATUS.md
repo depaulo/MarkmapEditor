@@ -385,6 +385,9 @@ The application is evolving toward:
 
 # Report Mode Roadmap
 
+Status:
+PLANNED — NOT IMPLEMENTED — NOT RUNTIME-REACHABLE
+
 ## v0.4 - Report Context Foundation
 
 - Add Report context

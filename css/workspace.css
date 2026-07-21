@@ -1398,14 +1398,6 @@ html[data-app-context='slides'] .contextSlidesOnly {
   display: inline-flex !important;
 }
 
-.contextReportOnly {
-  display: none !important;
-}
-
-html[data-app-context='report'] .contextReportOnly {
-  display: inline-flex !important;
-}
-
 /* =========================== */
 /* Task Review Panel (R-TASK2 + R-TASK3) */
 /* =========================== */
