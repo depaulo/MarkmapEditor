@@ -79,6 +79,7 @@
     return {
       data,
       body,
+      bodyLineOffset: match ? match[0].split(/\r?\n/).length - 1 : 0,
     };
   }
 
@@ -190,9 +191,10 @@
   function parseWorkspaceDocument({ kind, name, path, text }) {
     const normalizedText = normalizeParserText(text);
     const parsedFrontmatter = parseSimpleYamlFrontmatter(normalizedText);
+    const offset = parsedFrontmatter.bodyLineOffset || 0;
     const frontmatterTags = normalizeFrontmatterTags(parsedFrontmatter.data?.tags);
-    const headings = parseMarkdownHeadings(parsedFrontmatter.body);
-    const tasks = parseMarkdownTasks(parsedFrontmatter.body);
+    const headings = parseMarkdownHeadings(parsedFrontmatter.body).map((h) => ({ ...h, line: h.line + offset }));
+    const tasks = parseMarkdownTasks(parsedFrontmatter.body).map((t) => ({ ...t, line: t.line + offset }));
     const bodyTags = parseMarkdownTags(parsedFrontmatter.body);
     const tags = Array.from(new Set([...(frontmatterTags || []), ...(bodyTags || [])])).sort();
     const conceptLinks = parseConceptLinks(parsedFrontmatter.body);

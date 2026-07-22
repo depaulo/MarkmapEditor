@@ -8,8 +8,10 @@
 
   // ---- Private state ----
 
-  let wired = false;
+  let wiredPanel = null;
   let taskOpenInProgress = false;
+  let taskStatusInProgress = false;
+  let taskPriorityInProgress = false;
 
   const filterState = {
     query: '',
@@ -147,26 +149,40 @@
 
     for (const task of tasks) {
       const path = task.filePath || '';
-      if (!path) continue;
+      let groupKey = path;
+      let groupPath = path;
+      let groupKind = task.fileKind || '';
+      let groupFileName = task.fileName || '';
+      let groupTitle = task.fileName || 'Unknown source';
 
-      if (!groupsMap.has(path)) {
+      if (!path) {
+        // Deterministic fallback for tasks without filePath
+        const kind = task.fileKind || '';
+        const name = task.fileName || '';
+        groupKey = kind && name ? `${kind}::${name}` : name || '__unknown';
+        groupPath = '';
+        groupKind = kind;
+        groupFileName = name || 'Unknown source';
+        groupTitle = name ? `Unknown source (${name})` : 'Unknown source';
+      } else {
         const parsed = index?.byPath?.get(path);
-        const kind = task.fileKind || parsed?.kind || '';
-        const fileName = task.fileName || parsed?.name || path;
-        const title = parsed?.title || parsed?.name || fileName || path;
-        const date = parsed?.date || '';
+        groupKind = task.fileKind || parsed?.kind || '';
+        groupFileName = task.fileName || parsed?.name || path;
+        groupTitle = parsed?.title || parsed?.name || groupFileName || path;
+      }
 
-        groupsMap.set(path, {
-          path,
-          kind,
-          fileName,
-          title,
-          date,
+      if (!groupsMap.has(groupKey)) {
+        groupsMap.set(groupKey, {
+          path: groupPath,
+          kind: groupKind,
+          fileName: groupFileName,
+          title: groupTitle,
+          date: '',
           tasks: [],
         });
       }
 
-      groupsMap.get(path).tasks.push(task);
+      groupsMap.get(groupKey).tasks.push(task);
     }
 
     const groups = Array.from(groupsMap.values());
@@ -413,7 +429,16 @@
             return `
               <div class="workspaceTaskRow${doneClass}" data-task-id="${escapeHtml(task.id || '')}">
                 <div class="workspaceTaskRowMain">
-                  <span class="workspaceTaskCheckbox">${task.done ? '☑' : '☐'}</span>
+                  <button
+                    type="button"
+                    class="workspaceTaskStatusBtn"
+                    data-path="${filePath}"
+                    data-kind="${escapeHtml(task.fileKind || '')}"
+                    data-line="${line}"
+                    data-current-checked="${task.done ? '1' : '0'}"
+                    title="${task.done ? 'Reopen' : 'Complete'}"
+                    aria-label="${task.done ? 'Reopen task' : 'Complete task'}"
+                  >${task.done ? '☑' : '☐'}</button>
                   ${priorityBadge}
                   <span class="workspaceTaskRowText">${displayText}</span>
                 </div>
@@ -463,6 +488,42 @@
         `;
       })
       .join('');
+  }
+
+  // ---- Open source file (file-level, no task line) ----
+
+  async function openSourceFile(path, kind, reason) {
+    const findFn = typeof globalThis.findWorkspaceFileByPath === 'function'
+      ? globalThis.findWorkspaceFileByPath
+      : typeof window.findWorkspaceFileByPath === 'function'
+      ? window.findWorkspaceFileByPath
+      : null;
+
+    if (!findFn) {
+      safeLog('TaskReview: findWorkspaceFileByPath not available');
+      return;
+    }
+
+    const file = findFn(path, kind);
+    if (!file || !file.handle) {
+      safeLog(`TaskReview: file not found path=${path} kind=${kind}`);
+      globalThis.showToast?.('Source file not found', 'error', 2200);
+      return;
+    }
+
+    safeLog(`TaskReview: opening source ${path} reason=${reason}`);
+
+    const openFn = typeof globalThis.openWorkspaceFile === 'function'
+      ? globalThis.openWorkspaceFile
+      : typeof window.openWorkspaceFile === 'function'
+      ? window.openWorkspaceFile
+      : null;
+
+    if (openFn) {
+      await openFn(file, kind || file.kind, reason || 'task review open source');
+    } else {
+      safeLog('TaskReview: openWorkspaceFile not available');
+    }
   }
 
   // ---- Open task source ----
@@ -615,145 +676,158 @@
   }
 
   async function setTaskPriority(path, kind, line, newPriority) {
-    const index = getWorkspaceIndex();
-    if (!index || !index.ready) {
-      safeLog('TaskReview: index not ready for priority edit');
+    if (taskPriorityInProgress) {
+      safeLog('TaskReview: priority change already in progress, skipping');
       return;
     }
 
-    // Find the file record
-    const findFn = typeof globalThis.findWorkspaceFileByPath === 'function'
-      ? globalThis.findWorkspaceFileByPath
-      : typeof window.findWorkspaceFileByPath === 'function'
-      ? window.findWorkspaceFileByPath
-      : null;
+    taskPriorityInProgress = true;
 
-    if (!findFn) {
-      safeLog('TaskReview: findWorkspaceFileByPath not available');
-      return;
-    }
+    try {
+      const index = getWorkspaceIndex();
+      if (!index || !index.ready) {
+        safeLog('TaskReview: index not ready for priority edit');
+        return;
+      }
 
-    const file = findFn(path, kind);
-    if (!file || !file.handle) {
-      safeLog(`TaskReview: file not found for priority edit path=${path}`);
-      globalThis.showToast?.('File not found', 'error', 2200);
-      return;
-    }
+      // Find the file record
+      const findFn = typeof globalThis.findWorkspaceFileByPath === 'function'
+        ? globalThis.findWorkspaceFileByPath
+        : typeof window.findWorkspaceFileByPath === 'function'
+        ? window.findWorkspaceFileByPath
+        : null;
 
-    // Open the file first
-    const openFn = typeof globalThis.openWorkspaceFile === 'function'
-      ? globalThis.openWorkspaceFile
-      : typeof window.openWorkspaceFile === 'function'
-      ? window.openWorkspaceFile
-      : null;
+      if (!findFn) {
+        safeLog('TaskReview: findWorkspaceFileByPath not available');
+        return;
+      }
 
-    if (!openFn) {
-      safeLog('TaskReview: openWorkspaceFile not available');
-      return;
-    }
+      const file = findFn(path, kind);
+      if (!file || !file.handle) {
+        safeLog(`TaskReview: file not found for priority edit path=${path}`);
+        globalThis.showToast?.('File not found', 'error', 2200);
+        return;
+      }
 
-    const result = await openFn(file, kind || file.kind, 'task priority edit');
-    if (!result) {
-      safeLog('TaskReview: file open cancelled or failed');
-      return;
-    }
+      // Open the file first
+      const openFn = typeof globalThis.openWorkspaceFile === 'function'
+        ? globalThis.openWorkspaceFile
+        : typeof window.openWorkspaceFile === 'function'
+        ? window.openWorkspaceFile
+        : null;
 
-    // Wait for file activation and at least one animation frame
-    await new Promise((resolve) => {
-      requestAnimationFrame(() => {
+      if (!openFn) {
+        safeLog('TaskReview: openWorkspaceFile not available');
+        return;
+      }
+
+      const result = await openFn(file, kind || file.kind, 'task priority edit');
+      if (!result) {
+        safeLog('TaskReview: file open cancelled or failed');
+        return;
+      }
+
+      // Wait for file activation and at least one animation frame
+      await new Promise((resolve) => {
         requestAnimationFrame(() => {
-          resolve();
+          requestAnimationFrame(() => {
+            resolve();
+          });
         });
       });
-    });
 
-    // Now edit the source line
-    try {
-      // Use stable CodeMirror bridge if available
-      const getLineText = typeof window.__cmGetLineText === 'function' ? window.__cmGetLineText : null;
-      const replaceLine = typeof window.__cmReplaceLine === 'function' ? window.__cmReplaceLine : null;
-      const scrollToLine = typeof window.__cmScrollToLine === 'function' ? window.__cmScrollToLine : null;
+      // Now edit the source line
+      try {
+        // Use stable CodeMirror bridge if available
+        const getLineText = typeof window.__cmGetLineText === 'function' ? window.__cmGetLineText : null;
+        const replaceLine = typeof window.__cmReplaceLine === 'function' ? window.__cmReplaceLine : null;
+        const scrollToLine = typeof window.__cmScrollToLine === 'function' ? window.__cmScrollToLine : null;
 
-      if (!getLineText || !replaceLine) {
-        safeLog('TaskReview: CodeMirror bridge not available for priority edit');
-        globalThis.showToast?.('Editor not ready', 'error', 2200);
-        return;
-      }
+        if (!getLineText || !replaceLine) {
+          safeLog('TaskReview: CodeMirror bridge not available for priority edit');
+          globalThis.showToast?.('Editor not ready', 'error', 2200);
+          return;
+        }
 
-      // Get the expected task text from the index for comparison
-      const indexedTask = index.tasks?.find((t) => t.filePath === path && t.line === line);
-      const expectedText = indexedTask?.text || '';
+        // Get the expected task text from the index for comparison
+        const indexedTask = index.tasks?.find((t) => t.filePath === path && t.line === line);
+        const expectedText = indexedTask?.text || '';
 
-      // Find the actual line (with nearby fallback)
-      const actualLine = findActualTaskLine(getLineText, line, expectedText);
+        // Find the actual line (with nearby fallback)
+        const actualLine = findActualTaskLine(getLineText, line, expectedText);
 
-      if (actualLine === null) {
-        safeLog(`TaskReview: task not found near indexed line ${line}`);
-        globalThis.showToast?.('Task not found. Try refreshing the workspace index.', 'error', 2600);
-        return;
-      }
+        if (actualLine === null) {
+          safeLog(`TaskReview: task not found near indexed line ${line}`);
+          globalThis.showToast?.('Task not found. Try refreshing the workspace index.', 'error', 2600);
+          return;
+        }
 
-      if (actualLine && actualLine.ambiguous) {
-        safeLog(`TaskReview: multiple tasks match near indexed line ${line}`);
-        globalThis.showToast?.('Multiple matching tasks found. Cannot edit.', 'error', 2600);
-        return;
-      }
+        if (actualLine && actualLine.ambiguous) {
+          safeLog(`TaskReview: multiple tasks match near indexed line ${line}`);
+          globalThis.showToast?.('Multiple matching tasks found. Cannot edit.', 'error', 2600);
+          return;
+        }
 
-      // Log if we used a shifted line
-      if (actualLine !== line) {
-        safeLog(`TaskReview: shifted task resolved indexedLine=${line} actualLine=${actualLine}`);
-      }
+        // Log if we used a shifted line
+        if (actualLine !== line) {
+          safeLog(`TaskReview: shifted task resolved indexedLine=${line} actualLine=${actualLine}`);
+        }
 
-      // Validate the actual line
-      const lineText = getLineText(actualLine);
-      if (lineText === null) {
-        safeLog(`TaskReview: line ${actualLine} not found`);
-        globalThis.showToast?.('Task line not found', 'error', 2200);
-        return;
-      }
+        // Validate the actual line
+        const lineText = getLineText(actualLine);
+        if (lineText === null) {
+          safeLog(`TaskReview: line ${actualLine} not found`);
+          globalThis.showToast?.('Task line not found', 'error', 2200);
+          return;
+        }
 
-      const taskMatch = lineText.match(/^(\s*[-*+]\s+\[[ xX]\]\s+)(.*)$/);
-      if (!taskMatch) {
-        safeLog(`TaskReview: line ${actualLine} is not a task`);
-        globalThis.showToast?.('Line is not a task', 'error', 2200);
-        return;
-      }
+        const taskMatch = lineText.match(/^(\s*[-*+]\s+\[[ xX]\]\s+)(.*)$/);
+        if (!taskMatch) {
+          safeLog(`TaskReview: line ${actualLine} is not a task`);
+          globalThis.showToast?.('Line is not a task', 'error', 2200);
+          return;
+        }
 
-      const prefix = taskMatch[1];
-      const content = taskMatch[2];
+        const prefix = taskMatch[1];
+        const content = taskMatch[2];
 
-      // Remove existing priority tokens
-      let newContent = content.replace(/#p[123]\b/gi, '').replace(/\s+/g, ' ').trim();
+        // Remove existing priority tokens
+        let newContent = content.replace(/#p[123]\b/gi, '').replace(/\s+/g, ' ').trim();
 
-      // Add new priority token
-      if (newPriority === 'p1') newContent = newContent + ' #p1';
-      else if (newPriority === 'p2') newContent = newContent + ' #p2';
-      else if (newPriority === 'p3') newContent = newContent + ' #p3';
-      // clear: no token added
+        // Add new priority token
+        if (newPriority === 'p1') newContent = newContent + ' #p1';
+        else if (newPriority === 'p2') newContent = newContent + ' #p2';
+        else if (newPriority === 'p3') newContent = newContent + ' #p3';
+        // clear: no token added
 
-      const newLine = prefix + newContent;
+        const newLine = prefix + newContent;
 
-      // Apply edit via CodeMirror bridge
-      const success = replaceLine(actualLine, newLine, { scrollTo: true });
-      if (!success) {
-        safeLog('TaskReview: priority edit failed (replaceLine returned false)');
+        // Apply edit via CodeMirror bridge
+        const success = replaceLine(actualLine, newLine, { scrollTo: true });
+        if (!success) {
+          safeLog('TaskReview: priority edit failed (replaceLine returned false)');
+          globalThis.showToast?.('Priority edit failed', 'error', 2200);
+          return;
+        }
+
+        // Scroll to the actual line
+        if (scrollToLine) {
+          scrollToLine(actualLine - 1); // Convert 1-based to 0-based
+        }
+
+        safeLog(`TaskReview: priority changed ${newPriority || 'cleared'} on ${path}:${actualLine}`);
+
+        await saveAfterTaskMutation(
+          `priority changed ${newPriority || 'cleared'}`,
+          file,
+          kind || file.kind
+        );
+      } catch (e) {
+        safeLog(`TaskReview: priority edit failed: ${e?.message || e}`);
         globalThis.showToast?.('Priority edit failed', 'error', 2200);
-        return;
+      } finally {
+        taskPriorityInProgress = false;
       }
-
-      // Scroll to the actual line
-      if (scrollToLine) {
-        scrollToLine(actualLine - 1); // Convert 1-based to 0-based
-      }
-
-      safeLog(`TaskReview: priority changed ${newPriority || 'cleared'} on ${path}:${actualLine}`);
-
-      // Schedule render
-      if (typeof globalThis.MME_RENDER?.scheduleRender === 'function') {
-        globalThis.MME_RENDER.scheduleRender('task priority changed');
-      }
-
-      globalThis.showToast?.(`Priority ${newPriority ? 'set to ' + newPriority.toUpperCase() : 'cleared'}`, 'ok', 2000);
     } catch (e) {
       safeLog(`TaskReview: priority edit failed: ${e?.message || e}`);
       globalThis.showToast?.('Priority edit failed', 'error', 2200);
@@ -763,12 +837,14 @@
   // ---- Wiring ----
 
   function wire() {
-    if (wired) return true;
-
     const panel = ensureOrUpgradePanel();
     if (!panel) {
       safeLog('TaskReview: wire deferred; panel not available');
       return false;
+    }
+
+    if (wiredPanel === panel) {
+      return true;
     }
 
     // Search input
@@ -806,6 +882,25 @@
 
     // Delegated click handler on panel
     panel.addEventListener('click', async (event) => {
+      // Completion / reopen toggle
+      const statusBtn = event.target?.closest?.('.workspaceTaskStatusBtn');
+      if (statusBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const path = statusBtn.dataset.path || '';
+        const kind = statusBtn.dataset.kind || '';
+        const line = Number(statusBtn.dataset.line || 0);
+        const currentChecked = statusBtn.dataset.currentChecked === '1';
+        const desiredChecked = !currentChecked;
+        if (!path) {
+          safeLog('TaskReview: status click skipped; empty path');
+          return;
+        }
+        safeLog(`TaskReview: status action=${desiredChecked ? 'complete' : 'reopen'} path=${path} line=${line}`);
+        await setTaskCompletion(path, kind, line, desiredChecked);
+        return;
+      }
+
       // Open task source
       const openBtn = event.target?.closest?.('.workspaceTaskOpenBtn');
       if (openBtn) {
@@ -814,18 +909,28 @@
         const path = openBtn.dataset.path || '';
         const kind = openBtn.dataset.kind || '';
         const line = Number(openBtn.dataset.line || 0);
+        if (!path) {
+          safeLog('TaskReview: task-source click skipped; empty path');
+          return;
+        }
+        safeLog(`TaskReview: task-source click path=${path} line=${line}`);
         await openTaskSource(path, kind, line);
         return;
       }
 
-      // Open group header (source file)
+      // Open group header (source file) — file-level open only
       const groupHeader = event.target?.closest?.('.workspaceTaskGroupHeader');
       if (groupHeader) {
         event.preventDefault();
         event.stopPropagation();
         const path = groupHeader.dataset.path || '';
         const kind = groupHeader.dataset.kind || '';
-        await openTaskSource(path, kind, 1);
+        if (!path) {
+          safeLog('TaskReview: group-header click skipped; empty path');
+          return;
+        }
+        safeLog(`TaskReview: group-header click path=${path}`);
+        await openSourceFile(path, kind, 'workspace task group open');
         return;
       }
 
@@ -836,6 +941,8 @@
         event.stopPropagation();
 
         const action = priorityBtn.dataset.action || '';
+        if (!action) return;
+
         const taskRow = priorityBtn.closest('.workspaceTaskRow');
         if (!taskRow) return;
 
@@ -847,6 +954,13 @@
         const kind = openBtn2.dataset.kind || '';
         const line = Number(openBtn2.dataset.line || 0);
 
+        if (!path) {
+          safeLog('TaskReview: priority action skipped; empty path');
+          return;
+        }
+
+        safeLog(`TaskReview: priority action=${action} path=${path} line=${line}`);
+
         if (action === 'clear') {
           await setTaskPriority(path, kind, line, '');
         } else if (action === 'p1' || action === 'p2' || action === 'p3') {
@@ -856,14 +970,182 @@
       }
     });
 
-    wired = true;
+    wiredPanel = panel;
     safeLog('TaskReview: wired');
     return true;
+  }
+
+  // ---- Task completion ----
+
+  async function setTaskCompletion(path, kind, line, desiredChecked) {
+    if (taskStatusInProgress) {
+      safeLog('TaskReview: status change already in progress, skipping');
+      return;
+    }
+
+    taskStatusInProgress = true;
+
+    try {
+      const index = getWorkspaceIndex();
+      if (!index || !index.ready) {
+        safeLog('TaskReview: index not ready for status edit');
+        return;
+      }
+
+      const findFn = typeof globalThis.findWorkspaceFileByPath === 'function'
+        ? globalThis.findWorkspaceFileByPath
+        : typeof window.findWorkspaceFileByPath === 'function'
+        ? window.findWorkspaceFileByPath
+        : null;
+
+      if (!findFn) {
+        safeLog('TaskReview: findWorkspaceFileByPath not available');
+        return;
+      }
+
+      const file = findFn(path, kind);
+      if (!file || !file.handle) {
+        safeLog(`TaskReview: file not found for status edit path=${path}`);
+        globalThis.showToast?.('File not found', 'error', 2200);
+        return;
+      }
+
+      const openFn = typeof globalThis.openWorkspaceFile === 'function'
+        ? globalThis.openWorkspaceFile
+        : typeof window.openWorkspaceFile === 'function'
+        ? window.openWorkspaceFile
+        : null;
+
+      if (!openFn) {
+        safeLog('TaskReview: openWorkspaceFile not available');
+        return;
+      }
+
+      const result = await openFn(file, kind || file.kind, 'task status change');
+      if (!result) {
+        safeLog('TaskReview: file open cancelled or failed');
+        return;
+      }
+
+      // Wait for file activation
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve();
+          });
+        });
+      });
+
+      // Validate and edit the source line
+      const getLineText = typeof window.__cmGetLineText === 'function' ? window.__cmGetLineText : null;
+      const replaceLine = typeof window.__cmReplaceLine === 'function' ? window.__cmReplaceLine : null;
+
+      if (!getLineText || !replaceLine) {
+        safeLog('TaskReview: CodeMirror bridge not available for status edit');
+        globalThis.showToast?.('Editor not ready', 'error', 2200);
+        return;
+      }
+
+      const indexedTask = index.tasks?.find((t) => t.filePath === path && t.line === line);
+      const expectedText = indexedTask?.text || '';
+
+      const actualLine = findActualTaskLine(getLineText, line, expectedText);
+
+      if (actualLine === null) {
+        safeLog(`TaskReview: status task not found near indexed line ${line}`);
+        globalThis.showToast?.('Task not found. Try refreshing the workspace index.', 'error', 2600);
+        return;
+      }
+
+      if (actualLine && actualLine.ambiguous) {
+        safeLog(`TaskReview: status task ambiguous near indexed line ${line}`);
+        globalThis.showToast?.('Multiple matching tasks found. Cannot edit.', 'error', 2600);
+        return;
+      }
+
+      const lineText = getLineText(actualLine);
+      if (lineText === null) {
+        safeLog(`TaskReview: line ${actualLine} not found for status edit`);
+        globalThis.showToast?.('Task line not found', 'error', 2200);
+        return;
+      }
+
+      const taskMatch = lineText.match(/^(\s*[-*+]\s+\[)([ xX])(\]\s+)(.*)$/);
+      if (!taskMatch) {
+        safeLog(`TaskReview: line ${actualLine} is not a task for status edit`);
+        globalThis.showToast?.('Line is not a task', 'error', 2200);
+        return;
+      }
+
+      const currentChecked = taskMatch[2].toLowerCase() === 'x';
+      if (currentChecked === desiredChecked) {
+        safeLog(`TaskReview: status already satisfied path=${path} line=${actualLine} desired=${desiredChecked}`);
+        return;
+      }
+
+      const newCheckbox = desiredChecked ? 'x' : ' ';
+      const newLine = taskMatch[1] + newCheckbox + taskMatch[3] + taskMatch[4];
+
+      const success = replaceLine(actualLine, newLine, { scrollTo: false });
+      if (!success) {
+        safeLog('TaskReview: status edit failed (replaceLine returned false)');
+        globalThis.showToast?.('Status edit failed', 'error', 2200);
+        return;
+      }
+
+      safeLog(`TaskReview: ${desiredChecked ? 'completed' : 'reopened'} path=${path} line=${actualLine}`);
+
+      await saveAfterTaskMutation(
+        desiredChecked ? 'task completed' : 'task reopened',
+        file,
+        kind || file.kind
+      );
+    } catch (e) {
+      safeLog(`TaskReview: status edit failed: ${e?.message || e}`);
+      globalThis.showToast?.('Status edit failed', 'error', 2200);
+    } finally {
+      taskStatusInProgress = false;
+    }
+  }
+
+  async function saveAfterTaskMutation(reason, file, kind) {
+    const saveFn = typeof globalThis.saveSmart === 'function'
+      ? globalThis.saveSmart
+      : typeof window.saveSmart === 'function'
+      ? window.saveSmart
+      : null;
+
+    if (!saveFn) {
+      safeLog('TaskReview: save workflow not available after mutation');
+      globalThis.showToast?.('Change applied but could not auto-save', 'error', 2600);
+      return;
+    }
+
+    try {
+      const result = await saveFn();
+      if (result === false) {
+        safeLog(`TaskReview: ${reason} save cancelled`);
+        globalThis.showToast?.('Change applied but save was cancelled', 'error', 2600);
+        return;
+      }
+
+      safeLog(`TaskReview: ${reason} saved`);
+
+      if (typeof globalThis.MME_RENDER?.scheduleRender === 'function') {
+        globalThis.MME_RENDER.scheduleRender(`task ${reason} saved`);
+      }
+
+      globalThis.showToast?.(`Saved`, 'ok', 1800);
+    } catch (e) {
+      safeLog(`TaskReview: ${reason} save failed: ${e?.message || e}`);
+      globalThis.showToast?.('Save failed. Editor retains your change.', 'error', 3000);
+    }
   }
 
   function refresh() {
     const index = getWorkspaceIndex();
     safeLog(`TaskReview: refresh indexReady=${Boolean(index?.ready)} tasks=${index?.tasks?.length || 0}`);
+    wire();
     renderPanel();
   }
 
@@ -881,6 +1163,7 @@
     getCompletedTasks,
     openTaskSource,
     setTaskPriority,
+    setTaskCompletion,
     findActualTaskLine, // Exposed for testing
   };
 
@@ -890,4 +1173,13 @@
   } catch {}
 
   safeLog('TaskReview: module loaded');
+
+  // Late-load recovery: attempt wiring immediately if the panel already exists.
+  // If no sidebar/panel is present yet, wire() returns false and refresh()
+  // will recover once the workspace is set up.
+  try {
+    if (document.getElementById('workspaceSidebar')) {
+      wire();
+    }
+  } catch {}
 })();

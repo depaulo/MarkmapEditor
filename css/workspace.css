@@ -1544,6 +1544,22 @@ html[data-app-context='slides'] .contextSlidesOnly {
   opacity: 0.7;
 }
 
+.workspaceTaskStatusBtn {
+  flex: 0 0 auto;
+  width: 16px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+  line-height: 1;
+}
+
+.workspaceTaskStatusBtn:hover {
+  opacity: 1;
+}
+
 .workspaceTaskRowText {
   flex: 1 1 auto;
   font-size: 13px;
