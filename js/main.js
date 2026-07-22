@@ -131,7 +131,10 @@ async function renderHtmlWithShiki(mdText) {
 
   // R-LINK1: Transform wiki links in HTML Preview
   renderer.text = function (text) {
-    const str = String(text || '');
+    // Support both newer (token object) and older (string) marked API
+    const str = typeof text === 'object' && text !== null
+      ? String(text.text ?? text.raw ?? '')
+      : String(text || '');
     const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
 
     let result = '';

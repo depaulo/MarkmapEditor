@@ -24,7 +24,6 @@
       globalThis.log(msg);
     }
   }
- }());
 
   function getWorkspaceIndex() {
     return globalThis.WORKSPACE_INDEX_STATE || window.WORKSPACE_INDEX_STATE || null;
@@ -138,6 +137,63 @@
     }
 
     return tasks;
+  }
+
+  // ---- Grouping helper ----
+
+  function groupTasksByFile(tasks) {
+    const index = getWorkspaceIndex();
+    const groupsMap = new Map();
+
+    for (const task of tasks) {
+      const path = task.filePath || '';
+      if (!path) continue;
+
+      if (!groupsMap.has(path)) {
+        const parsed = index?.byPath?.get(path);
+        const kind = task.fileKind || parsed?.kind || '';
+        const fileName = task.fileName || parsed?.name || path;
+        const title = parsed?.title || parsed?.name || fileName || path;
+        const date = parsed?.date || '';
+
+        groupsMap.set(path, {
+          path,
+          kind,
+          fileName,
+          title,
+          date,
+          tasks: [],
+        });
+      }
+
+      groupsMap.get(path).tasks.push(task);
+    }
+
+    const groups = Array.from(groupsMap.values());
+
+    // Sort: journals first, then by date descending, then by title ascending
+    groups.sort((a, b) => {
+      if (a.kind !== b.kind) {
+        if (a.kind === 'journals') return -1;
+        if (b.kind === 'journals') return 1;
+      }
+
+      const dateA = String(a.date || '');
+      const dateB = String(b.date || '');
+
+      if (dateA !== dateB) {
+        return dateB.localeCompare(dateA);
+      }
+
+      return String(a.title || '').localeCompare(String(b.title || ''));
+    });
+
+    // Sort tasks within each group by line number
+    for (const group of groups) {
+      group.tasks.sort((a, b) => Number(a.line || 0) - Number(b.line || 0));
+    }
+
+    return groups;
   }
 
   // ---- Panel UI ----
@@ -316,10 +372,12 @@
 
     const filtered = getFilteredTasks();
     const total = getAllTasks().length;
+    const groups = groupTasksByFile(filtered);
+    const groupCount = groups.length;
 
     badge.textContent = `${filtered.length}`;
     summary.textContent = filtered.length
-      ? `Showing ${filtered.length} of ${total} tasks`
+      ? `Showing ${filtered.length} of ${total} tasks, grouped in ${groupCount} files`
       : 'No tasks match';
 
     if (!filtered.length) {
@@ -334,41 +392,72 @@
       return;
     }
 
-    list.innerHTML = filtered
-      .map((task) => {
-        const priorityBadge = task.priority
-          ? `<span class="workspaceTaskPriorityBadge priority-${task.priority}">${task.priority.toUpperCase()}</span>`
-          : '';
-        const doneClass = task.done ? ' workspaceTaskDone' : '';
-        const displayText = escapeHtml(task.displayText || task.text || '');
-        const filePath = escapeHtml(task.filePath || '');
-        const fileName = escapeHtml(task.fileName || task.filePath || '');
-        const line = Number(task.line || 0);
+    list.innerHTML = groups
+      .map((group) => {
+        const icon = group.kind === 'journals' ? '📝' : group.kind === 'concepts' ? '🧠' : '📄';
+        const groupTitle = escapeHtml(group.title || group.fileName || group.path);
+        const groupPath = escapeHtml(group.path || '');
+        const groupKind = escapeHtml(group.kind || '');
+
+        const tasksHtml = group.tasks
+          .map((task) => {
+            const priorityBadge = task.priority
+              ? `<span class="workspaceTaskPriorityBadge priority-${task.priority}">${task.priority.toUpperCase()}</span>`
+              : '';
+            const doneClass = task.done ? ' workspaceTaskDone' : '';
+            const displayText = escapeHtml(task.displayText || task.text || '');
+            const filePath = escapeHtml(task.filePath || '');
+            const fileName = escapeHtml(task.fileName || task.filePath || '');
+            const line = Number(task.line || 0);
+
+            return `
+              <div class="workspaceTaskRow${doneClass}" data-task-id="${escapeHtml(task.id || '')}">
+                <div class="workspaceTaskRowMain">
+                  <span class="workspaceTaskCheckbox">${task.done ? '☑' : '☐'}</span>
+                  ${priorityBadge}
+                  <span class="workspaceTaskRowText">${displayText}</span>
+                </div>
+                <div class="workspaceTaskRowMeta">
+                  <button
+                    type="button"
+                    class="workspaceTaskOpenBtn"
+                    data-path="${filePath}"
+                    data-kind="${escapeHtml(task.fileKind || '')}"
+                    data-line="${line}"
+                    title="Open ${filePath}${line ? `:${line}` : ''}"
+                  >
+                    ${fileName}${line ? `:${line}` : ''}
+                  </button>
+                  <span class="workspaceTaskPriorityActions">
+                    <button type="button" class="workspaceTaskPriorityAction" data-action="p1" title="Set P1">P1</button>
+                    <button type="button" class="workspaceTaskPriorityAction" data-action="p2" title="Set P2">P2</button>
+                    <button type="button" class="workspaceTaskPriorityAction" data-action="p3" title="Set P3">P3</button>
+                    ${task.priority ? '<button type="button" class="workspaceTaskPriorityAction" data-action="clear" title="Clear priority">✕</button>' : ''}
+                  </span>
+                </div>
+              </div>
+            `;
+          })
+          .join('');
 
         return `
-          <div class="workspaceTaskRow${doneClass}" data-task-id="${escapeHtml(task.id || '')}">
-            <div class="workspaceTaskRowMain">
-              <span class="workspaceTaskCheckbox">${task.done ? '☑' : '☐'}</span>
-              ${priorityBadge}
-              <span class="workspaceTaskRowText">${displayText}</span>
-            </div>
-            <div class="workspaceTaskRowMeta">
-              <button
-                type="button"
-                class="workspaceTaskOpenBtn"
-                data-path="${filePath}"
-                data-kind="${escapeHtml(task.fileKind || '')}"
-                data-line="${line}"
-                title="Open ${filePath}${line ? `:${line}` : ''}"
-              >
-                ${fileName}${line ? `:${line}` : ''}
-              </button>
-              <span class="workspaceTaskPriorityActions">
-                <button type="button" class="workspaceTaskPriorityAction" data-action="p1" title="Set P1">P1</button>
-                <button type="button" class="workspaceTaskPriorityAction" data-action="p2" title="Set P2">P2</button>
-                <button type="button" class="workspaceTaskPriorityAction" data-action="p3" title="Set P3">P3</button>
-                ${task.priority ? '<button type="button" class="workspaceTaskPriorityAction" data-action="clear" title="Clear priority">✕</button>' : ''}
+          <div class="workspaceTaskGroup">
+            <button
+              type="button"
+              class="workspaceTaskGroupHeader"
+              data-workspace-task-group="1"
+              data-path="${groupPath}"
+              data-kind="${groupKind}"
+              title="Open ${groupPath}"
+            >
+              <span class="workspaceTaskGroupTitle">
+                <span class="workspaceTaskGroupTitleIcon" aria-hidden="true">${icon}</span>
+                <span class="workspaceTaskGroupTitleText">${groupTitle}</span>
               </span>
+              <span class="workspaceTaskGroupCount">${group.tasks.length}</span>
+            </button>
+            <div class="workspaceTasksGroupItems">
+              ${tasksHtml}
             </div>
           </div>
         `;
@@ -460,13 +549,32 @@
 
   // Find the actual line for a task, with nearby fallback
   function findActualTaskLine(getLineText, indexedLine, expectedText) {
+    // P1-DIAG: capture indexed task state
+    const diagExpected = String(expectedText ?? '');
+    const diagExpectedNorm = normalizeTaskTextForComparison(diagExpected);
+    safeLog(
+      `TaskReview: findActualTaskLine START indexedLine=${indexedLine} expected="${diagExpected}" expectedNorm="${diagExpectedNorm}"`
+    );
+
     // First, check the exact indexed line
     const exactLineText = getLineText(indexedLine);
     if (exactLineText !== null) {
       const exactMatch = exactLineText.match(/^(\s*[-*+]\s+\[[ xX]\]\s+)(.*)$/);
-      if (exactMatch && normalizeTaskTextForComparison(exactMatch[2]) === normalizeTaskTextForComparison(expectedText)) {
-        return indexedLine;
+      if (exactMatch) {
+        const exactNorm = normalizeTaskTextForComparison(exactMatch[2]);
+        safeLog(
+          `TaskReview: findActualTaskLine exactLine=${indexedLine} raw="${exactLineText}" match2="${exactMatch[2]}" norm="${exactNorm}" equal=${exactNorm === diagExpectedNorm}`
+        );
+        if (exactNorm === diagExpectedNorm) {
+          return indexedLine;
+        }
+      } else {
+        safeLog(
+          `TaskReview: findActualTaskLine exactLine=${indexedLine} raw="${exactLineText}" NO_TASK_MATCH`
+        );
       }
+    } else {
+      safeLog(`TaskReview: findActualTaskLine exactLine=${indexedLine} NULL_LINE`);
     }
 
     // Search nearby range (indexedLine - 3 through indexedLine + 3)
@@ -478,19 +586,31 @@
       if (checkText === null) continue;
 
       const checkMatch = checkText.match(/^(\s*[-*+]\s+\[[ xX]\]\s+)(.*)$/);
-      if (checkMatch && normalizeTaskTextForComparison(checkMatch[2]) === normalizeTaskTextForComparison(expectedText)) {
-        candidates.push({ line: checkLine, text: checkText });
+      if (checkMatch) {
+        const candidateNorm = normalizeTaskTextForComparison(checkMatch[2]);
+        const equal = candidateNorm === diagExpectedNorm;
+        safeLog(
+          `TaskReview: findActualTaskLine candidate line=${checkLine} raw="${checkText}" match2="${checkMatch[2]}" norm="${candidateNorm}" equal=${equal}`
+        );
+        if (equal) {
+          candidates.push({ line: checkLine, text: checkText });
+        }
       }
     }
 
     if (candidates.length === 0) {
+      safeLog(`TaskReview: findActualTaskLine NO_CANDIDATES indexedLine=${indexedLine}`);
       return null; // No match found
     }
 
     if (candidates.length > 1) {
+      safeLog(
+        `TaskReview: findActualTaskLine AMBIGUOUS candidates=${candidates.length} indexedLine=${indexedLine}`
+      );
       return { ambiguous: true }; // Multiple matches
     }
 
+    safeLog(`TaskReview: findActualTaskLine MATCH line=${candidates[0].line}`);
     return candidates[0].line; // Unique match
   }
 
@@ -698,6 +818,17 @@
         return;
       }
 
+      // Open group header (source file)
+      const groupHeader = event.target?.closest?.('.workspaceTaskGroupHeader');
+      if (groupHeader) {
+        event.preventDefault();
+        event.stopPropagation();
+        const path = groupHeader.dataset.path || '';
+        const kind = groupHeader.dataset.kind || '';
+        await openTaskSource(path, kind, 1);
+        return;
+      }
+
       // Priority action
       const priorityBtn = event.target?.closest?.('.workspaceTaskPriorityAction');
       if (priorityBtn) {
@@ -757,9 +888,6 @@
     window.MME_TASK_REVIEW = MME_TASK_REVIEW;
     globalThis.MME_TASK_REVIEW = MME_TASK_REVIEW;
   } catch {}
-
-  safeLog('TaskReview: module loaded');
- }());
 
   safeLog('TaskReview: module loaded');
 })();
