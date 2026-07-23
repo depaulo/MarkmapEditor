@@ -7,7 +7,7 @@
 // Uses defaultHighlightStyle always; dark/light differences via CSS (html.dark ...)
 // ============================================================
 
-import { EditorState } from 'codemirror/state/dist/index.js';
+import { EditorState, StateField, StateEffect } from 'codemirror/state/dist/index.js';
 import {
   EditorView,
   keymap,
@@ -15,6 +15,8 @@ import {
   highlightActiveLine,
   highlightActiveLineGutter,
   drawSelection,
+  ViewPlugin,
+  Decoration,
 } from 'codemirror/view/dist/index.js';
 import {
   defaultKeymap,
@@ -474,8 +476,6 @@ try {
       return false;
     }
   };
-
-  window.dispatchEvent(new Event('cm-ready'));
 } catch (e) {
   fallbackToTextarea(e);
 }
@@ -483,6 +483,8 @@ try {
 // ================================
 // Wiki Link Decoration Extension (R-LINK1)
 // ================================
+
+const wikiLinkRefreshEffect = StateEffect.define();
 
 function createWikiLinkDecorationExtension() {
   let currentDecorations = null;
@@ -518,48 +520,12 @@ function createWikiLinkDecorationExtension() {
   }
 
   function resolveTargetStatus(target) {
-    const index = getWorkspaceIndex();
-    if (!index || !index.ready || !index.files) {
-      return 'missing';
+    const resolver = globalThis.MME_WIKI_LINKS || window.MME_WIKI_LINKS;
+    if (!resolver || typeof resolver.resolveTarget !== 'function') {
+      return 'not-ready';
     }
-
-    const normalized = String(target || '')
-      .replace(/\.md$/i, '')
-      .trim()
-      .toLowerCase();
-
-    if (!normalized) return 'missing';
-
-    const candidates = [];
-    for (const file of index.files) {
-      const filePath = String(file.path || '');
-      const fileName = String(file.name || '');
-      const fileBasename = fileName.replace(/\.md$/i, '');
-      const fileTitle = String(file.title || '');
-
-      if (filePath.replace(/\.md$/i, '').trim().toLowerCase() === normalized) {
-        candidates.push(file);
-      } else if (fileName.replace(/\.md$/i, '').trim().toLowerCase() === normalized) {
-        candidates.push(file);
-      } else if (fileBasename.toLowerCase() === normalized) {
-        candidates.push(file);
-      } else if (fileTitle && fileTitle.toLowerCase() === normalized) {
-        candidates.push(file);
-      }
-    }
-
-    const seen = new Set();
-    const unique = [];
-    for (const f of candidates) {
-      if (!seen.has(f.path)) {
-        seen.add(f.path);
-        unique.push(f);
-      }
-    }
-
-    if (unique.length === 0) return 'missing';
-    if (unique.length === 1) return 'resolved';
-    return 'ambiguous';
+    const result = resolver.resolveTarget(target);
+    return result.status || 'not-ready';
   }
 
   function computeDecorations(state) {
@@ -612,7 +578,7 @@ function createWikiLinkDecorationExtension() {
   const wikiLinkField = StateField.define({
     create: computeDecorations,
     update: (decorations, tr) => {
-      if (!tr.docChanged && !tr.startState.field(wikiLinkField, false)) {
+      if (!tr.docChanged && !tr.effects.some((effect) => effect.is(wikiLinkRefreshEffect))) {
         return decorations;
       }
       return computeDecorations(tr.state);
@@ -647,69 +613,109 @@ function createWikiLinkDecorationExtension() {
    });
 
    // Handle Ctrl/Cmd+Click on wiki links in CodeMirror
-   const wikiLinkClickHandler = EditorView.domEventHandlers({
-     click: (event) => {
-       // Only handle primary button with Ctrl/Cmd modifier
-       if (event.button !== 0 || (!event.ctrlKey && !event.metaKey)) {
-         return false;
-       }
+  const wikiLinkClickHandler = EditorView.domEventHandlers({
+    click: async (event) => {
+      // Only handle primary button with Ctrl/Cmd modifier
+      if (event.button !== 0 || (!event.ctrlKey && !event.metaKey)) {
+        return false;
+      }
 
-       if (!wikiLinkView) return false;
+      if (!wikiLinkView) return false;
 
-       // Get position from click coordinates
-       const coords = { x: event.clientX, y: event.clientY };
-       const pos = wikiLinkView.posAtCoords(coords);
-       if (pos === null) return false;
+      // Get position from click coordinates
+      const coords = { x: event.clientX, y: event.clientY };
+      const pos = wikiLinkView.posAtCoords(coords);
+      if (pos === null) return false;
 
-       // Get current document text and find wiki links
-       const docText = wikiLinkView.state.doc.toString();
-       const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
-       let match;
-       while ((match = WIKI_RE.exec(docText)) !== null) {
-         const from = match.index;
-         const to = from + match[0].length;
-         if (pos >= from && pos <= to) {
-           // Found a wiki link at this position
-           const inner = match[1];
-           const pipeIndex = inner.indexOf('|');
-           const target = (pipeIndex !== -1 ? inner.slice(0, pipeIndex) : inner).trim();
-           if (target) {
-             event.preventDefault();
-             event.stopPropagation();
-             if (typeof globalThis.MME_WIKI_LINKS?.openTarget === 'function') {
-               globalThis.MME_WIKI_LINKS.openTarget(target);
-             }
-             return true;
-           }
-           break;
-         }
-       }
-       return false;
-     }
-   });
+      // Get current document text and find wiki links
+      const docText = wikiLinkView.state.doc.toString();
+      const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
+      let match;
+      while ((match = WIKI_RE.exec(docText)) !== null) {
+        const from = match.index;
+        const to = from + match[0].length;
+        if (pos >= from && pos < to) {
+          // Found a wiki link at this position
+          const inner = match[1];
+          const pipeIndex = inner.indexOf('|');
+          const target = (pipeIndex !== -1 ? inner.slice(0, pipeIndex) : inner).trim();
+          if (!target) break;
+
+          event.preventDefault();
+          event.stopPropagation();
+
+          const resolver = globalThis.MME_WIKI_LINKS;
+          if (!resolver?.resolveTarget) {
+            // Fallback if canonical resolver is not yet available
+            try {
+              await globalThis.MME_WIKI_LINKS?.openTarget(target);
+            } catch {}
+            return true;
+          }
+
+          const result = resolver.resolveTarget(target);
+          if (result.status !== 'resolved') {
+            return true;
+          }
+
+          try {
+            await resolver.openTarget(target);
+          } catch {
+            // openTarget() logs/toasts its own failures
+          }
+          return true;
+        }
+      }
+      return false;
+    }
+  });
 
   // Expose refresh function
   window.__refreshWikiLinkDecorations = function() {
     if (view && wikiLinkField) {
-      view.dispatch({});
+      view.dispatch({
+        effects: wikiLinkRefreshEffect.of(null)
+      });
+    }
+  };
+
+  // Expose exact cursor offset bridge
+  window.__cmGetCursorOffset = function() {
+    try {
+      return view.state.selection.main.head;
+    } catch {
+      return null;
     }
   };
 
    return [wikiLinkField, wikiLinkPlugin, wikiLinkClickHandler];
    }
 
-   // Add wiki link decoration extension if CodeMirror is ready
-   if (typeof EditorView !== 'undefined' && typeof StateField !== 'undefined' && typeof Decoration !== 'undefined') {
-     try {
-       const wikiLinkExtensions = createWikiLinkDecorationExtension();
-       if (view && wikiLinkExtensions.length === 3) {
-         view.dispatch({
-           effects: StateEffect.appendConfig.of(wikiLinkExtensions)
-         });
-       }
-     } catch (e) {
-       try {
-         console.warn('Wiki link decoration extension failed:', e);
-       } catch {}
-     }
-   }
+  // Track installed view for idempotence
+  let wikiLinkInstalledView = null;
+
+  // Add wiki link decoration extension if CodeMirror is ready
+  if (typeof EditorView !== 'undefined' && typeof StateField !== 'undefined' && typeof Decoration !== 'undefined') {
+    try {
+      if (wikiLinkInstalledView === view) {
+        // already installed for this view
+      } else {
+        const wikiLinkExtensions = createWikiLinkDecorationExtension();
+        if (view && wikiLinkExtensions.length === 3) {
+          view.dispatch({
+            effects: StateEffect.appendConfig.of(wikiLinkExtensions)
+          });
+          wikiLinkInstalledView = view;
+          try {
+            window.log?.('WikiLinks: CodeMirror extension installed');
+          } catch {}
+        }
+      }
+    } catch (e) {
+      try {
+        console.warn('Wiki link decoration extension failed:', e);
+      } catch {}
+    }
+  }
+
+window.dispatchEvent(new Event("cm-ready"));
