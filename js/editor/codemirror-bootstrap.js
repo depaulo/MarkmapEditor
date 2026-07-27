@@ -42,6 +42,7 @@ import { closeBrackets, closeBracketsKeymap } from 'codemirror/autocomplete/dist
 
 const md = document.getElementById('md');
 const host = document.getElementById('cmHost');
+let view = null;
 
 function fallbackToTextarea(err) {
   console.error('CodeMirror init failed:', err);
@@ -114,7 +115,7 @@ try {
     ],
   });
 
-  const view = new EditorView({ state, parent: host });
+  view = new EditorView({ state, parent: host });
 
   window.__cmOpenSearchPanel = function __cmOpenSearchPanel() {
     try {
@@ -568,7 +569,7 @@ function createWikiLinkDecorationExtension() {
       else if (status === 'ambiguous') className = 'wikiLink wikiLinkAmbiguous';
 
       widgets.push(
-        Decoration.mark({ from, to, attributes: { class: className } })
+        Decoration.mark({ attributes: { class: className } }).range(from, to)
       );
     }
 
@@ -714,6 +715,13 @@ function createWikiLinkDecorationExtension() {
     } catch (e) {
       try {
         console.warn('Wiki link decoration extension failed:', e);
+      } catch {}
+      try {
+        window.log?.(
+          `WikiLinks: CodeMirror extension installation failed: ${
+            e?.message || e
+          }`
+        );
       } catch {}
     }
   }

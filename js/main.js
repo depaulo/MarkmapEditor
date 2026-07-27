@@ -408,6 +408,20 @@ const WORKSPACE_INDEX_STATE = {
   links: new Map(),
 };
 
+let __relatedTraceCount = 0;
+const DEBUG_RELATED_PANEL = true;
+function safeTrace(msg) {
+  if (!DEBUG_RELATED_PANEL) return;
+  __relatedTraceCount++;
+  const formatted = `[RelatedTrace #${__relatedTraceCount}] ${msg}`;
+  try {
+    if (typeof log === 'function') log(formatted);
+  } catch {}
+  try {
+    console.log(formatted);
+  } catch {}
+}
+
 try {
   window.WORKSPACE_INDEX_STATE = WORKSPACE_INDEX_STATE;
   globalThis.WORKSPACE_INDEX_STATE = WORKSPACE_INDEX_STATE;
@@ -677,6 +691,8 @@ async function buildWorkspaceIndex() {
   WORKSPACE_INDEX_STATE.tags = tags;
   WORKSPACE_INDEX_STATE.tasks = tasks;
   WORKSPACE_INDEX_STATE.links = links;
+  safeTrace("indexBuilt ready=true files=" + parsedFiles.length + " journals=" + (byKind.journals || []).length + " concepts=" + (byKind.concepts || []).length + " links=" + links.size);
+  for (const p of parsedFiles) { safeTrace("indexedFile path=" + p.path + " kind=" + p.kind + " conceptLinks=" + (p.conceptLinks || []).join(",")); }
 
   // Dispatch workspace index ready event for late modules
   try {
@@ -1640,6 +1656,7 @@ function normalizeBacklinkConceptKey(value) {
 }
 
 function findBacklinksForConcept(conceptName) {
+  safeTrace("findBacklinksForConcept called conceptName=" + conceptName + " indexReady=" + Boolean(WORKSPACE_INDEX_STATE?.ready));
   if (!WORKSPACE_INDEX_STATE?.ready) {
     return [];
   }
@@ -1693,10 +1710,12 @@ function renderWorkspaceRelatedPanel() {
     log?.(
       `Workspace Related: render skipped panel=${Boolean(panel)} summary=${Boolean(summary)} list=${Boolean(list)} badge=${Boolean(badge)}`
     );
+    wireWorkspaceRelatedPanel();
     return;
   }
 
   const activeConcept = getActiveConceptName();
+  safeTrace("render activeFile=" + (WORKSPACE_STATE.activeFile ? WORKSPACE_STATE.activeFile.path : "none") + " kind=" + (WORKSPACE_STATE.activeFile ? WORKSPACE_STATE.activeFile.kind : "none") + " activeConcept=" + activeConcept + " indexReady=" + Boolean(WORKSPACE_INDEX_STATE?.ready) + " indexLastBuilt=" + (WORKSPACE_INDEX_STATE?.lastBuiltAt || 0) + " files=" + ((WORKSPACE_INDEX_STATE?.files || []).length));
 
   if (!activeConcept) {
     panel.hidden = true;
@@ -1718,6 +1737,7 @@ function renderWorkspaceRelatedPanel() {
   }
 
   const backlinks = findBacklinksForConcept(activeConcept);
+  safeTrace("render backlinks=" + backlinks.length + " paths=" + backlinks.map(function(f) { return f.path; }).join(","));
   badge.textContent = `${backlinks.length} related`;
 
   if (!backlinks.length) {
