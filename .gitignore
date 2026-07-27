@@ -40,7 +40,6 @@ work-notes/
 # Test downloads
 *_mindmap_*.svg
 *_html-preview_*.html
-*_*.md
 
 # OneDrive / sync conflict noise
 *conflict*
