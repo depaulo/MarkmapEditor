@@ -50,11 +50,48 @@ export function renderSidebarFiles(files, containerId, kind = '') {
     .join('');
 }
 
-
 export function escapeHtml(text) {
   return String(text || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+export function renderNavigationControls() {
+  const existing = document.getElementById('workspaceNavControls');
+  if (existing) return existing;
+
+  const sidebar = document.getElementById('workspaceSidebar');
+  if (!sidebar) return null;
+
+  // Wrap existing sidebar content in a scrollable container.
+  const scroller = document.createElement('div');
+  scroller.className = 'workspaceNavScroller';
+  scroller.setAttribute('data-nav-scroller', '1');
+
+  while (sidebar.firstChild) {
+    scroller.appendChild(sidebar.firstChild);
+  }
+
+  sidebar.appendChild(scroller);
+
+  // Create navigation controls as a persistent footer.
+  const container = document.createElement('div');
+  container.id = 'workspaceNavControls';
+  container.className = 'workspaceNavControls';
+  container.innerHTML = `
+    <button id="btnNavBack" class="navBtn" aria-label="Back" disabled title="Back">←</button>
+    <button id="btnNavForward" class="navBtn" aria-label="Forward" disabled title="Forward">→</button>
+  `;
+
+  sidebar.appendChild(container);
+  return container;
+}
+
+export function updateNavigationControls(state) {
+  const back = document.getElementById('btnNavBack');
+  const forward = document.getElementById('btnNavForward');
+  if (back) back.disabled = !state.canBack;
+  if (forward) forward.disabled = !state.canForward;
 }

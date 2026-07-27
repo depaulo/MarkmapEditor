@@ -794,12 +794,22 @@ function ensureWorkspaceSidebarResizeHandle() {
     handle = document.createElement('div');
     handle.id = 'workspaceSidebarResizeHandle';
     handle.setAttribute('aria-hidden', 'true');
+    // Resize handle belongs to the sidebar container itself, not the scrolling content.
     sidebar.appendChild(handle);
 
     log?.('Workspace: sidebar resize handle recreated');
   }
 
   return handle;
+}
+
+function getWorkspaceSidebarContentHost() {
+  const sidebar = document.getElementById('workspaceSidebar');
+  if (!sidebar) return null;
+
+  // Navigation History V1: if the persistent scroller is present, panels belong there.
+  const scroller = sidebar.querySelector(':scope > .workspaceNavScroller');
+  return scroller || sidebar;
 }
 
 function wireWorkspaceSidebarResize() {
@@ -1007,9 +1017,9 @@ function hasWorkspacePanelMarkup(panelId) {
 }
 
 function ensureWorkspaceSearchPanel() {
-  const sidebar = document.getElementById('workspaceSidebar');
+  const host = getWorkspaceSidebarContentHost();
 
-  if (!sidebar) {
+  if (!host) {
     log?.('Workspace Search: ensure failed; sidebar missing');
     return null;
   }
@@ -1039,15 +1049,15 @@ function ensureWorkspaceSearchPanel() {
     <div id="workspaceSearchResults" hidden></div>
   `;
 
-  const header = sidebar.querySelector('.workspaceHeader');
-  const filesSection = sidebar.querySelector('.workspaceFilesSection');
+  const header = host.querySelector('.workspaceHeader');
+  const filesSection = host.querySelector('.workspaceFilesSection');
 
-  if (header && header.nextSibling) {
-    sidebar.insertBefore(panel, header.nextSibling);
-  } else if (filesSection) {
-    sidebar.insertBefore(panel, filesSection);
+  if (header && header.nextSibling && header.nextSibling.parentNode === host) {
+    host.insertBefore(panel, header.nextSibling);
+  } else if (filesSection && filesSection.parentNode === host) {
+    host.insertBefore(panel, filesSection);
   } else {
-    sidebar.appendChild(panel);
+    host.appendChild(panel);
   }
 
   log?.('Workspace Search: panel created');
@@ -1056,9 +1066,9 @@ function ensureWorkspaceSearchPanel() {
 }
 
 function ensureWorkspaceActivePanel() {
-  const sidebar = document.getElementById('workspaceSidebar');
+  const host = getWorkspaceSidebarContentHost();
 
-  if (!sidebar) {
+  if (!host) {
     log?.('Workspace Active: ensure failed; sidebar missing');
     return null;
   }
@@ -1101,16 +1111,16 @@ function ensureWorkspaceActivePanel() {
 
   const searchPanel = document.getElementById('workspaceSearchPanel');
   const indexPanel = document.getElementById('workspaceIndexPanel');
-  const filesSection = sidebar.querySelector('.workspaceFilesSection');
+  const filesSection = host.querySelector('.workspaceFilesSection');
 
-  if (searchPanel && searchPanel.nextSibling) {
-    sidebar.insertBefore(panel, searchPanel.nextSibling);
-  } else if (indexPanel) {
-    sidebar.insertBefore(panel, indexPanel);
-  } else if (filesSection) {
-    sidebar.insertBefore(panel, filesSection);
+  if (searchPanel && searchPanel.nextSibling && searchPanel.nextSibling.parentNode === host) {
+    host.insertBefore(panel, searchPanel.nextSibling);
+  } else if (indexPanel && indexPanel.parentNode === host) {
+    host.insertBefore(panel, indexPanel);
+  } else if (filesSection && filesSection.parentNode === host) {
+    host.insertBefore(panel, filesSection);
   } else {
-    sidebar.appendChild(panel);
+    host.appendChild(panel);
   }
 
   log?.('Workspace Active: panel created');
@@ -1119,9 +1129,9 @@ function ensureWorkspaceActivePanel() {
 }
 
 function ensureWorkspaceIndexPanel() {
-  const sidebar = document.getElementById('workspaceSidebar');
+  const host = getWorkspaceSidebarContentHost();
 
-  if (!sidebar) {
+  if (!host) {
     log?.('Workspace Index: ensure failed; sidebar missing');
     return null;
   }
@@ -1173,14 +1183,14 @@ function ensureWorkspaceIndexPanel() {
   `;
 
   const searchPanel = document.getElementById('workspaceSearchPanel');
-  const filesSection = sidebar.querySelector('.workspaceFilesSection');
+  const filesSection = host.querySelector('.workspaceFilesSection');
 
-  if (searchPanel && searchPanel.nextSibling) {
-    sidebar.insertBefore(panel, searchPanel.nextSibling);
-  } else if (filesSection) {
-    sidebar.insertBefore(panel, filesSection);
+  if (searchPanel && searchPanel.nextSibling && searchPanel.nextSibling.parentNode === host) {
+    host.insertBefore(panel, searchPanel.nextSibling);
+  } else if (filesSection && filesSection.parentNode === host) {
+    host.insertBefore(panel, filesSection);
   } else {
-    sidebar.appendChild(panel);
+    host.appendChild(panel);
   }
 
   log?.('Workspace Index: panel created');
@@ -1226,9 +1236,9 @@ function toggleWorkspacePanel(panelId) {
 }
 
 function ensureWorkspaceRelatedPanel() {
-  const sidebar = document.getElementById('workspaceSidebar');
+  const host = getWorkspaceSidebarContentHost();
 
-  if (!sidebar) {
+  if (!host) {
     log?.('Workspace Related: ensure failed; sidebar missing');
     return null;
   }
@@ -1269,14 +1279,14 @@ function ensureWorkspaceRelatedPanel() {
   `;
 
   const indexPanel = document.getElementById('workspaceIndexPanel');
-  const filesSection = sidebar.querySelector('.workspaceFilesSection');
+  const filesSection = host.querySelector('.workspaceFilesSection');
 
-  if (indexPanel && indexPanel.nextSibling) {
-    sidebar.insertBefore(panel, indexPanel.nextSibling);
-  } else if (filesSection) {
-    sidebar.insertBefore(panel, filesSection);
+  if (indexPanel && indexPanel.nextSibling && indexPanel.nextSibling.parentNode === host) {
+    host.insertBefore(panel, indexPanel.nextSibling);
+  } else if (filesSection && filesSection.parentNode === host) {
+    host.insertBefore(panel, filesSection);
   } else {
-    sidebar.appendChild(panel);
+    host.appendChild(panel);
   }
 
   log?.('Workspace Related: panel created');
@@ -1284,9 +1294,9 @@ function ensureWorkspaceRelatedPanel() {
 }
 
 function ensureWorkspaceTasksPanel() {
-  const sidebar = document.getElementById('workspaceSidebar');
+  const host = getWorkspaceSidebarContentHost();
 
-  if (!sidebar) {
+  if (!host) {
     log?.('Workspace Tasks: ensure failed; sidebar missing');
     return null;
   }
@@ -1330,14 +1340,14 @@ function ensureWorkspaceTasksPanel() {
   `;
 
   const relatedPanel = document.getElementById('workspaceRelatedPanel');
-  const filesSection = sidebar.querySelector('.workspaceFilesSection');
+  const filesSection = host.querySelector('.workspaceFilesSection');
 
-  if (relatedPanel && relatedPanel.nextSibling) {
-    sidebar.insertBefore(panel, relatedPanel.nextSibling);
-  } else if (filesSection) {
-    sidebar.insertBefore(panel, filesSection);
+  if (relatedPanel && relatedPanel.nextSibling && relatedPanel.nextSibling.parentNode === host) {
+    host.insertBefore(panel, relatedPanel.nextSibling);
+  } else if (filesSection && filesSection.parentNode === host) {
+    host.insertBefore(panel, filesSection);
   } else {
-    sidebar.appendChild(panel);
+    host.appendChild(panel);
   }
 
   log?.('Workspace Tasks: panel created');
@@ -1902,9 +1912,9 @@ function wireWorkspaceIndexRefreshButton() {
 }
 
 function ensureWorkspaceTagsPanel() {
-  const sidebar = document.getElementById('workspaceSidebar');
+  const host = getWorkspaceSidebarContentHost();
 
-  if (!sidebar) {
+  if (!host) {
     log?.('Workspace Tags: ensure failed; sidebar missing');
     return null;
   }
@@ -1950,14 +1960,14 @@ function ensureWorkspaceTagsPanel() {
   `;
 
   const tasksPanel = document.getElementById('workspaceTasksPanel');
-  const filesSection = sidebar.querySelector('.workspaceFilesSection');
+  const filesSection = host.querySelector('.workspaceFilesSection');
 
-  if (tasksPanel && tasksPanel.nextSibling) {
-    sidebar.insertBefore(panel, tasksPanel.nextSibling);
-  } else if (filesSection) {
-    sidebar.insertBefore(panel, filesSection);
+  if (tasksPanel && tasksPanel.nextSibling && tasksPanel.nextSibling.parentNode === host) {
+    host.insertBefore(panel, tasksPanel.nextSibling);
+  } else if (filesSection && filesSection.parentNode === host) {
+    host.insertBefore(panel, filesSection);
   } else {
-    sidebar.appendChild(panel);
+    host.appendChild(panel);
   }
 
   log?.('Workspace Tags: panel created');
@@ -2694,10 +2704,12 @@ async function openWorkspaceSearchResultFile(path, preferredKind = '') {
   return fileRecord;
 }
 
-async function openWorkspaceFile(file, kind = '', reason = 'workspace open file') {
+async function openWorkspaceFile(file, kind = '', reason = 'workspace open file', options = {}) {
   if (!file || !file.handle) {
     throw new Error('Workspace file handle missing');
   }
+
+  const historyMode = options.historyMode === 'restore' ? 'restore' : 'normal';
 
   const fileKind =
     typeof normalizeWorkspaceKindForCompare === 'function'
@@ -2713,6 +2725,29 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
           .pop());
 
   const filePath = file.path || `${fileKind}/${fileName}`;
+
+  // Normal mode: block competing opens during Back/Forward restore.
+  if (historyMode === 'normal' && globalThis.MME_NAVIGATION?.isNavigationInProgress?.()) {
+    globalThis.MME_APP?.showToast?.('Navigation in progress. Try again shortly.', 'warn', 2000);
+    return null;
+  }
+
+  // Normal mode: duplicate-current preflight before file read and dirty prompt.
+  if (historyMode === 'normal' && typeof globalThis.MME_NAVIGATION === 'object') {
+    const current = globalThis.MME_NAVIGATION.getCurrent?.();
+    const target = {
+      type: 'workspace-file',
+      path: filePath,
+      kind: fileKind,
+      name: fileName,
+      source: reason,
+    };
+
+    if (globalThis.MME_NAVIGATION.sameLocation?.(current, target)) {
+      log?.(`Workspace: noop — ${filePath} is already current`);
+      return file;
+    }
+  }
 
   const blob = await file.handle.getFile();
   const text = await blob.text();
@@ -2743,6 +2778,17 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
   scheduleWorkspaceIndexRebuild?.('workspace file opened');
 
   log?.(`Workspace: opened ${filePath}`);
+
+  // Record successful normal navigation after physical lifecycle completes.
+  if (historyMode === 'normal' && typeof globalThis.MME_NAVIGATION === 'object') {
+    globalThis.MME_NAVIGATION.recordSuccessfulNavigation({
+      type: 'workspace-file',
+      path: filePath,
+      kind: fileKind,
+      name: fileName,
+      source: reason,
+    });
+  }
 
   return file;
 }

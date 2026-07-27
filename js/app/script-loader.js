@@ -14,7 +14,9 @@ function appendScript(src, { onload } = {}) {
   return s;
 }
 
-  // Load order: UI overlays/modals -> templates data -> export helpers -> main -> editor visibility -> templates menu
+  // Load order: navigation history -> UI overlays/modals -> templates data -> export helpers -> main -> editor visibility -> templates menu
+  appendScript('./js/navigation/navigation-history.js');
+
   appendScript('./js/ui/welcome.js');
   appendScript('./js/ui/help.js');
   appendScript('./js/templates/templates-data.js');

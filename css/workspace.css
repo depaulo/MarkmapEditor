@@ -2,6 +2,50 @@
 /* Workspace / Journal Sidebar */
 /* =========================== */
 
+/* Navigation History V1 — Back/Forward controls */
+.workspaceNavControls {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--menu-border);
+  background: transparent;
+  flex: 0 0 auto;
+}
+
+.navBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 28px;
+  padding: 2px 8px;
+  font-size: 1.1rem;
+  line-height: 1;
+  border: 1px solid var(--menu-border);
+  border-radius: 4px;
+  background: var(--toolbar-bg);
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.navBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.navBtn:not(:disabled):hover {
+  background: var(--menu-hover);
+}
+
+/* Navigation History V1 — scrollable sidebar content area */
+.workspaceNavScroller {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 #workspaceSidebarResizeHandle {
   position: absolute;
   top: 0;
@@ -64,7 +108,7 @@ html.journal-sidebar-collapsed #workspaceSidebarResizeHandle {
   background: var(--menu-bg);
   color: var(--text);
   border-right: 1px solid var(--menu-border);
-  overflow: auto;
+  overflow: visible;
 
   position: relative;
   z-index: 1;

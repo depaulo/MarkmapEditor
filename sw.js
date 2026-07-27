@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v48-task-search-priority';
+const APP_VERSION = 'markmap-journal-pwa-v49-history-v1';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -29,6 +29,7 @@ const LOCAL_APP_SHELL = [
   './css/menus.css',
   './css/overlays.css',
   './css/workspace.css',
+  './js/navigation/navigation-history.js',
   './js/main.js',
   './js/app/script-loader.js',
   './js/ui/welcome.js',

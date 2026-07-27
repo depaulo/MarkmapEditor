@@ -13,6 +13,9 @@
   let forwardStack = [];
   let navigationInProgress = false;
   let openLocation = null;
+  let generation = 0;
+  let activeOperation = null;
+  let operationCounter = 0;
 
   function normalizePath(value) {
     return String(value || '')
@@ -124,10 +127,12 @@
   }
 
   function clear() {
+    generation++;
     currentLocation = null;
     backStack = [];
     forwardStack = [];
     navigationInProgress = false;
+    activeOperation = null;
     notify();
     return snapshot();
   }
@@ -136,9 +141,12 @@
     const target = normalizeLocation(location);
     if (!target) return makeResult('failed', null, new Error('Invalid seed location'));
 
+    generation++;
     currentLocation = target;
     backStack = [];
     forwardStack = [];
+    navigationInProgress = false;
+    activeOperation = null;
     notify();
     return makeResult('opened', target);
   }
@@ -175,12 +183,17 @@
 
     const target = sourceStack[sourceStack.length - 1];
     const previousCurrent = currentLocation;
+    const token = ++operationCounter;
+    const capturedGeneration = generation;
 
+    activeOperation = token;
     navigationInProgress = true;
     notify();
 
     try {
       const result = await attemptOpen(target, 'restore');
+      if (activeOperation !== token) return makeResult('cancelled', target);
+      if (capturedGeneration !== generation) return makeResult('cancelled', target);
       if (result.status !== 'opened') return result;
 
       sourceStack.pop();
@@ -191,8 +204,11 @@
       currentLocation = target;
       return makeResult('opened', target);
     } finally {
-      navigationInProgress = false;
-      notify();
+      if (activeOperation === token) {
+        navigationInProgress = false;
+        activeOperation = null;
+        notify();
+      }
     }
   }
 

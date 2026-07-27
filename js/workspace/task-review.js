@@ -214,9 +214,18 @@
 
   // ---- Panel UI ----
 
-  function ensureOrUpgradePanel() {
+  function getSidebarContentHost() {
     const sidebar = document.getElementById('workspaceSidebar');
     if (!sidebar) return null;
+
+    // If the persistent navigation footer is present, panels belong inside the scroller.
+    const scroller = sidebar.querySelector(':scope > .workspaceNavScroller');
+    return scroller || sidebar;
+  }
+
+  function ensureOrUpgradePanel() {
+    const host = getSidebarContentHost();
+    if (!host) return null;
 
     let panel = document.getElementById('workspaceTasksPanel');
 
@@ -337,14 +346,14 @@
     `;
 
     const relatedPanel = document.getElementById('workspaceRelatedPanel');
-    const filesSection = sidebar.querySelector('.workspaceFilesSection');
+    const filesSection = host.querySelector('.workspaceFilesSection');
 
-    if (relatedPanel && relatedPanel.nextSibling) {
-      sidebar.insertBefore(panel, relatedPanel.nextSibling);
+    if (relatedPanel && relatedPanel.nextSibling && relatedPanel.nextSibling.parentNode === host) {
+      host.insertBefore(panel, relatedPanel.nextSibling);
     } else if (filesSection) {
-      sidebar.insertBefore(panel, filesSection);
+      host.insertBefore(panel, filesSection);
     } else {
-      sidebar.appendChild(panel);
+      host.appendChild(panel);
     }
 
     panel.dataset.taskReviewUpgraded = '1';

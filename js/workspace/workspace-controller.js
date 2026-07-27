@@ -2,7 +2,7 @@
 
 import { WORKSPACE_STATE, isWorkspaceReady } from './workspace-state.js';
 import { createWorkspaceActions } from './workspace-actions.js';
-import { clearSidebar, renderSidebarFiles } from './workspace-sidebar.js';
+import { clearSidebar, renderSidebarFiles, renderNavigationControls, updateNavigationControls } from './workspace-sidebar.js';
 import { openWorkspaceDirectory, ensureSubfolder } from './workspace-open.js';
 import { scanFolder } from './workspace-scanner.js';
 
@@ -81,13 +81,21 @@ function getLastActiveWorkspacePath() {
   return value;
 }
 
-function findWorkspaceFileByPath(path) {
+function findWorkspaceFileByPath(path, preferredKind = '') {
   const target = String(path || '').trim();
 
   if (!target) return null;
 
   const journals = WORKSPACE_STATE.files?.journals || [];
   const concepts = WORKSPACE_STATE.files?.concepts || [];
+
+  const kind = String(preferredKind || '').trim().toLowerCase();
+
+  if (kind) {
+    const pool = kind === 'journals' ? journals : kind === 'concepts' ? concepts : [];
+    const match = pool.find((file) => file.path === target);
+    if (match) return match;
+  }
 
   return (
     journals.find((file) => file.path === target) ||
@@ -144,6 +152,11 @@ async function reopenLastActiveWorkspaceFileIfPossible() {
 }
 
 async function openWorkspace() {
+  if (globalThis.MME_NAVIGATION?.isNavigationInProgress?.()) {
+    globalThis.MME_APP?.showToast?.('Navigation in progress. Try again shortly.', 'warn', 2000);
+    return;
+  }
+
   const root = await openWorkspaceDirectory();
 
   WORKSPACE_STATE.rootHandle = root;
@@ -158,7 +171,20 @@ async function openWorkspace() {
   updateWorkspaceUiState();
   await refreshWorkspaceSidebar();
 
+  globalThis.MME_NAVIGATION?.clear?.();
+
   await reopenLastActiveWorkspaceFileIfPossible();
+
+  const lastActive = WORKSPACE_STATE.activeFile;
+  if (lastActive?.path) {
+    globalThis.MME_NAVIGATION?.seed?.({
+      type: 'workspace-file',
+      path: lastActive.path,
+      kind: lastActive.kind || '',
+      name: lastActive.name || '',
+      source: 'workspace startup',
+    });
+  }
 
   try {
     restoreWorkspaceSidebarWidth?.();
@@ -271,6 +297,11 @@ function clearActiveWorkspaceFileAfterArchive() {
 }
 
 async function openToday() {
+  if (globalThis.MME_NAVIGATION?.isNavigationInProgress?.()) {
+    globalThis.MME_APP?.log?.('Workspace: Today blocked by active navigation');
+    return;
+  }
+
   if (!WORKSPACE_STATE.rootHandle) {
     globalThis.MME_APP?.showToast?.('Open a workspace first', 'error', 3000);
     return;
@@ -363,6 +394,17 @@ Tags:
   renderWorkspaceRelatedPanel?.();
   renderWorkspaceTasksPanel?.();
   window.scheduleWorkspaceIndexRebuild?.('today');
+  // Record successful navigation for Today.
+  if (typeof globalThis.MME_NAVIGATION === 'object') {
+    globalThis.MME_NAVIGATION.recordSuccessfulNavigation({
+      type: 'workspace-file',
+      path: `journals/${fileName}`,
+      kind: 'journals',
+      name: fileName,
+      source: 'workspace today',
+    });
+  }
+
   globalThis.MME_APP?.showToast?.(`Today opened ✓ ${fileName}`, 'ok');
   globalThis.MME_APP?.log?.(`Today opened: ${fileName}`);
 }
@@ -402,6 +444,7 @@ function handleSidebarClick(event) {
   if (!item) return;
 
   const path = item.dataset.path || '';
+  const kind = item.dataset.kind || '';
   const allFiles = [...WORKSPACE_STATE.files.journals, ...WORKSPACE_STATE.files.concepts];
 
   const fileRecord = allFiles.find((file) => file.path === path);
@@ -410,10 +453,19 @@ function handleSidebarClick(event) {
     return;
   }
 
-  openWorkspaceFile(fileRecord).catch((e) => {
-    globalThis.MME_APP?.showToast?.(`Open file failed: ${e?.message || e}`, 'error');
-    globalThis.MME_APP?.log?.(`Open file failed: ${e?.message || e}`);
-  });
+  // Use globalThis.openWorkspaceFile (main.js) which records navigation history.
+  if (typeof globalThis.openWorkspaceFile === 'function') {
+    globalThis.openWorkspaceFile(fileRecord, kind || fileRecord.kind, 'workspace sidebar click').catch((e) => {
+      globalThis.MME_APP?.showToast?.(`Open file failed: ${e?.message || e}`, 'error');
+      globalThis.MME_APP?.log?.(`Open file failed: ${e?.message || e}`);
+    });
+  } else {
+    // Fallback to local openWorkspaceFile if global is not available.
+    openWorkspaceFile(fileRecord).catch((e) => {
+      globalThis.MME_APP?.showToast?.(`Open file failed: ${e?.message || e}`, 'error');
+      globalThis.MME_APP?.log?.(`Open file failed: ${e?.message || e}`);
+    });
+  }
 }
 
 // R-MULTI4: session-aware last active file key with legacy fallback.
@@ -737,6 +789,49 @@ function initWorkspace() {
 
   document.getElementById('workspaceJournalsList')?.addEventListener('click', handleSidebarClick);
   document.getElementById('workspaceConceptsList')?.addEventListener('click', handleSidebarClick);
+
+  // Navigation History V1 — UI wiring.
+  const controls = renderNavigationControls();
+  globalThis.MME_APP?.log?.(`Workspace: navigation controls rendered = ${Boolean(controls)}`);
+
+  const btnBack = document.getElementById('btnNavBack');
+  const btnForward = document.getElementById('btnNavForward');
+  if (btnBack && !btnBack.__mmeNavigationBound) {
+    btnBack.addEventListener('click', () => globalThis.MME_NAVIGATION?.back?.());
+    btnBack.__mmeNavigationBound = true;
+  }
+  if (btnForward && !btnForward.__mmeNavigationBound) {
+    btnForward.addEventListener('click', () => globalThis.MME_NAVIGATION?.forward?.());
+    btnForward.__mmeNavigationBound = true;
+  }
+
+  let navigationUnsubscribe = null;
+  if (globalThis.MME_NAVIGATION && !navigationUnsubscribe) {
+    navigationUnsubscribe = globalThis.MME_NAVIGATION.subscribe(updateNavigationControls);
+  }
+
+  // Register the authoritative workspace-file opener for Back/Forward restore.
+  if (typeof globalThis.MME_NAVIGATION?.setOpener === 'function') {
+    globalThis.MME_NAVIGATION.setOpener(async function restoreOpen(location) {
+      const fileRecord = findWorkspaceFileByPath(location?.path, location?.kind);
+      if (!fileRecord || !fileRecord.handle) {
+        return { status: 'failed', location, error: new Error('Workspace file not found') };
+      }
+
+      try {
+        const opened = await globalThis.openWorkspaceFile(
+          fileRecord,
+          fileRecord.kind || location.kind,
+          'navigation restore',
+          { historyMode: 'restore' }
+        );
+        if (!opened) return { status: 'cancelled', location };
+        return { status: 'opened', location };
+      } catch (error) {
+        return { status: 'failed', location, error };
+      }
+    });
+  }
 
   globalThis.MME_APP?.log?.('Workspace: actions wired');
 }
