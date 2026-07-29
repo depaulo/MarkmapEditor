@@ -763,6 +763,80 @@ function bindArchiveActiveDirect() {
   globalThis.MME_APP?.log?.('Workspace: Archive Active direct bound');
 }
 
+let journalInitializationState = 'not-started';
+let journalInitializationCount = 0;
+let journalInitializationError = null;
+
+function initializeJournal() {
+  if (journalInitializationState === 'initialized') {
+    return {
+      status: 'noop',
+      initialized: true,
+      initializationState: 'initialized',
+      initializationCount: journalInitializationCount,
+      error: null,
+    };
+  }
+
+  if (journalInitializationState === 'initializing') {
+    return {
+      status: 'busy',
+      initialized: false,
+      initializationState: 'initializing',
+      initializationCount: journalInitializationCount,
+      error: null,
+    };
+  }
+
+  if (journalInitializationState === 'failed') {
+    return {
+      status: 'failed',
+      initialized: false,
+      initializationState: 'failed',
+      initializationCount: journalInitializationCount,
+      error: journalInitializationError,
+    };
+  }
+
+  // State is 'not-started'.
+  journalInitializationState = 'initializing';
+  journalInitializationError = null;
+
+  try {
+    initWorkspace();
+
+    journalInitializationCount++;
+    journalInitializationState = 'initialized';
+
+    window.dispatchEvent(new CustomEvent('mme-journal-workspace-ready', {
+      detail: {
+        initialized: true,
+        initializationState: 'initialized',
+        initializationCount: journalInitializationCount,
+      },
+    }));
+
+    return {
+      status: 'initialized',
+      initialized: true,
+      initializationState: 'initialized',
+      initializationCount: journalInitializationCount,
+      error: null,
+    };
+  } catch (error) {
+    journalInitializationState = 'failed';
+    journalInitializationError = error;
+
+    return {
+      status: 'failed',
+      initialized: false,
+      initializationState: 'failed',
+      initializationCount: journalInitializationCount,
+      error: journalInitializationError,
+    };
+  }
+}
+
 function initWorkspace() {
   if (initWorkspace.__done) return;
   initWorkspace.__done = true;
@@ -838,6 +912,10 @@ function initWorkspace() {
 
 globalThis.WORKSPACE_API = {
   isWorkspaceReady,
+  isJournalInitialized: () => journalInitializationState === 'initialized',
+  getJournalInitializationState: () => journalInitializationState,
+  getJournalInitializationCount: () => journalInitializationCount,
+  initializeJournal,
   createWorkspaceActions,
   clearSidebar,
   renderSidebarFiles,
@@ -853,12 +931,6 @@ globalThis.WORKSPACE_API = {
 globalThis.MME_APP?.log?.(
   `Workspace: stored last active file = ${getLastActiveWorkspacePath() || '(none)'}`
 );
-
-if (globalThis.MME_APP) {
-  initWorkspace();
-} else {
-  window.addEventListener('mme-main-ready', initWorkspace, { once: true });
-}
 
 try {
   window.refreshWorkspaceSidebar = refreshWorkspaceSidebar;

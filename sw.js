@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v49-history-v1';
+const APP_VERSION = 'markmap-journal-pwa-v52-host-journal-authority-v1';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -54,6 +54,8 @@ const LOCAL_APP_SHELL = [
   './js/workspace/workspace-highlight.js',
   './js/workspace/workspace-controller.js',
   './js/workspace/workspace-parser.js',
+  './js/workspace/workspace-host.js',
+  './js/workspace/journal-workspace.js',
   './js/core/mode-session.js',
 ];
 

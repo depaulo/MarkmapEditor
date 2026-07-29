@@ -1,5 +1,16 @@
 # TODO.md
 
+## Workspace Host Foundation (Completed)
+
+- [x] Host runtime skeleton
+- [x] Host loader/PWA integration
+- [x] Journal adapter registration
+- [x] Explicit Journal initialization readiness
+- [x] Host-owned Journal initialization authority
+- [x] Initialization state machine
+- [x] Mobile-visible diagnostics
+- [x] Foundation completion audit
+
 ## PHASE A — Architecture Stabilization
 
 ### R-SPLIT4
@@ -126,3 +137,16 @@
 4. [ ] Task search (R-TASK2)
 5. [ ] Task priorities (R-TASK3)
 6. [ ] Metadata panel (R-META4)
+
+## Workspace Host — Future Work
+
+- [ ] Virtual Workspace Index PLAN
+- [ ] Journal deactivate/visibility contract for second workspace
+- [ ] Journal session enrichment
+- [ ] Journal restore contract
+- [ ] Host/Navigation History behavior across workspace types
+- [ ] Optional workspace selector after a second workspace exists
+- [ ] Workspace-level detach
+- [ ] Report/Slides/Diagram workspaces
+
+**Note:** Internal switching API available; cross-workspace UI/session behavior awaits the second workspace.

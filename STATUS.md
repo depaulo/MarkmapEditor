@@ -465,6 +465,48 @@ PLANNED — NOT IMPLEMENTED — NOT RUNTIME-REACHABLE
 
 ---
 
+# Workspace Host Foundation
+
+**Status:** Completed
+
+## Architecture
+
+Application
+→ MME_WORKSPACE_HOST
+→ JournalWorkspace
+→ WORKSPACE_API.initializeJournal()
+→ existing initWorkspace()
+
+## Completed
+
+- Workspace Host runtime skeleton loaded and validated
+- Journal registered as the first and only workspace
+- Host owns Journal initialization authority
+- JournalWorkspace delegates initialization to WORKSPACE_API.initializeJournal()
+- existing initWorkspace() remains the setup implementation
+- legacy autonomous init removed
+- initialization state machine implemented
+- initializationCount validated as 1
+- app context remains separate from Host workspace identity
+- Navigation History remains shared
+- WORKSPACE_INDEX_STATE remains shared
+- physical workspace root remains optional for Journal initialization
+
+## Current Limitations / Deferred Work
+
+- no second workspace yet
+- no visible workspace selector
+- Journal deactivate remains no-op
+- Journal restoreState remains no-op
+- workspace-level detach deferred
+- real multi-workspace visibility/session switching not yet implemented
+
+## Next Candidate
+
+Virtual Workspace Index as the second Host workspace.
+
+---
+
 # Verification
 
 ## R-LINK1 — Wiki Links

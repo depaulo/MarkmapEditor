@@ -1,5 +1,87 @@
 # Verification Checklist
 
+## Workspace Host Foundation
+
+### Phase 2 — Host Readiness
+
+Directly validated mobile diagnostic:
+
+```
+WorkspaceHost Phase2:
+ready=true
+active=(none)
+registered=0
+transition=false
+missingMethods=none
+```
+
+Note: `registered` may be 0 during the original Phase 2 checkpoint and 1 after the Journal adapter registers before activation.
+
+### Phase 3A — Journal Acknowledgement
+
+Directly validated mobile diagnostic:
+
+```
+WorkspaceHost Phase3A:
+ready=true
+active=journal
+registered=1
+transition=false
+journalInitialized=true
+initializationCount=1
+adapterCalledInit=false
+```
+
+### Phase 3B — Authority Transfer
+
+Directly validated mobile diagnostic:
+
+```
+WorkspaceHost Phase3B:
+ready=true
+active=journal
+registered=1
+transition=false
+journalInitialized=true
+initializationState=initialized
+initializationCount=1
+hostCalledAdapter=true
+adapterCalledInitialize=true
+legacyAutoInit=false
+```
+
+### Directly Validated Runtime Evidence
+
+- [x] Application boot
+- [x] Host loaded
+- [x] Journal registered
+- [x] Host active=journal
+- [x] initializationCount=1
+- [x] legacy auto-init removed
+- [x] Markmap created/rendered
+- [x] Workspace opened after Host activation
+- [x] Populated Workspace Index rebuilt
+- [x] Wiki Links refreshed
+- [x] Task Review refreshed
+- [x] No supplied uncaught error
+- [x] No supplied unhandled rejection
+
+### Manual Checks Still Open
+
+- [ ] Save
+- [ ] Save As
+- [ ] Today
+- [ ] New Concept
+- [ ] Archive
+- [ ] Back
+- [ ] Forward
+- [ ] Physical Wiki Link click
+- [ ] Related item click
+- [ ] Tag item click
+- [ ] Search result click
+
+---
+
 ## Boot
 
 - [ ] App opens in browser preview

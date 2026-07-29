@@ -383,6 +383,8 @@ Do not continue to Phase 2 automatically.
 
 ## Phase 2 — Workspace Host Skeleton
 
+**Status:** Completed
+
 **Starts only after explicit review approval.**
 
 ### New candidate file
@@ -429,6 +431,8 @@ Do not route application boot through the host until the Journal adapter is revi
 ---
 
 ## Phase 3 — Journal Workspace Adapter
+
+**Status:** Completed
 
 ### Recommended new file
 
@@ -516,6 +520,8 @@ Stop if:
 
 ## Phase 4 — Host-Owned Workspace Selection Infrastructure
 
+**Status:** Internal API already present; no additional implementation required before second-workspace design; visible selector deferred.
+
 This phase creates switching capability, not a new workspace UI redesign.
 
 ### Scope
@@ -540,6 +546,8 @@ Do not conflate app context with Workspace Host identity without source proof.
 ---
 
 ## Phase 5 — Detach Capability Promotion
+
+**Status:** Deferred
 
 ### Goal
 
@@ -566,6 +574,8 @@ activeWorkspace.detach(context)
 ---
 
 ## Phase 6 — Documentation and Stable Foundation Checkpoint
+
+**Status:** In Progress
 
 Update repository documentation only after implementation/runtime validation.
 

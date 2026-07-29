@@ -36,6 +36,14 @@ function appendScript(src, { onload } = {}) {
   // MME_RENDER globals are available.
   appendScript('./js/render/render-controller.js');
 
+  // Workspace Host — lifecycle foundation. Loaded before main.js so
+  // MME_WORKSPACE_HOST is available for Journal adapter registration.
+  appendScript('./js/workspace/workspace-host.js');
+
+  // Journal Workspace Adapter — thin acknowledgement adapter. Loaded before
+  // main.js so it can register with the Host and coordinate with legacy init.
+  appendScript('./js/workspace/journal-workspace.js');
+
   appendScript('./js/main.js', {
     onload: function () {
       // main entry notifies other modules that UI actions can be wired

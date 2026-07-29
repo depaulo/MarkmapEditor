@@ -38,28 +38,16 @@
     return typeof value === 'function';
   }
 
-  function cloneSession(value) {
+    function cloneSession(value) {
     if (value == null) return value;
 
     if (typeof structuredClone === 'function') {
-      try {
-        return structuredClone(value);
-      } catch {}
+      return structuredClone(value);
     }
 
-    if (Array.isArray(value)) {
-      return value.map(cloneSession);
-    }
-
-    if (typeof value === 'object') {
-      const clone = {};
-      for (const [key, item] of Object.entries(value)) {
-        clone[key] = cloneSession(item);
-      }
-      return clone;
-    }
-
-    return value;
+    throw new Error(
+      'MME_WORKSPACE_HOST: structuredClone unavailable — snapshot must be cloneable'
+    );
   }
 
   function immutableWorkspaceSummary(workspace) {
@@ -122,9 +110,20 @@
       throw new TypeError('Workspace descriptor must be an object');
     }
 
-    const id = normalizeId(workspace.id);
+    if (typeof workspace.id !== 'string') {
+      throw new TypeError('Workspace id must be a string');
+    }
+
+    const id = workspace.id.trim();
+
     if (!id) {
       throw new Error('Workspace id is required');
+    }
+
+    if (workspace.id !== id) {
+      throw new Error(
+        `Workspace id must already be in canonical form: "${workspace.id}"`
+      );
     }
 
     if (!isFunction(workspace.activate)) {
@@ -135,12 +134,14 @@
   }
 
   function createContext(reason, previousWorkspaceId, nextWorkspaceId, extra = {}) {
+    // Caller metadata in `extra` must not override canonical lifecycle fields.
+    // Canonical fields are assigned last so they always win.
     return Object.freeze({
+      ...extra,
       reason: String(reason || 'workspace lifecycle'),
       previousWorkspaceId: previousWorkspaceId || null,
       nextWorkspaceId: nextWorkspaceId || null,
       host: api,
-      ...extra,
     });
   }
 
@@ -172,7 +173,6 @@
       throw new Error(`Cannot replace active workspace: ${id}`);
     }
 
-    workspace.id = id;
     registry.set(id, workspace);
     notify();
 
@@ -465,4 +465,53 @@
   });
 
   global.MME_WORKSPACE_HOST = api;
+
+  // Phase 2 mobile-visible diagnostic.
+  // Emits one concise validation line through the app's Logs panel.
+  let phase2DiagnosticReported = false;
+
+  function reportWorkspaceHostPhase2Diagnostic() {
+    if (phase2DiagnosticReported) return;
+
+    const log = globalThis.MME_APP?.log;
+    if (typeof log !== 'function') return;
+
+    const snapshot = api.getSnapshot();
+    const registered = api.list();
+    const activeId = snapshot.activeWorkspaceId;
+
+    const requiredMethods = [
+      'register',
+      'unregister',
+      'has',
+      'get',
+      'list',
+      'getActive',
+      'getActiveId',
+      'getSession',
+      'getSnapshot',
+      'isTransitionInProgress',
+      'subscribe',
+      'activate',
+      'switchTo',
+      'deactivate',
+      'refresh',
+      'detach',
+    ];
+
+    const missingMethods = requiredMethods.filter((name) => typeof api[name] !== 'function');
+
+    const activeLabel = activeId ? String(activeId) : '(none)';
+    const missingLabel = missingMethods.length === 0 ? 'none' : missingMethods.join(',');
+
+    log(
+      `WorkspaceHost Phase2: ready=true active=${activeLabel} registered=${registered.length} transition=${snapshot.transitionInProgress} missingMethods=${missingLabel}`
+    );
+
+    phase2DiagnosticReported = true;
+  }
+
+  // Attempt immediately; if MME_APP.log is not yet available, defer to mme-main-ready.
+  reportWorkspaceHostPhase2Diagnostic();
+  window.addEventListener('mme-main-ready', reportWorkspaceHostPhase2Diagnostic, { once: true });
 })(globalThis);
