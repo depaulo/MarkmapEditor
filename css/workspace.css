@@ -1219,6 +1219,35 @@ html.journal-sidebar-collapsed .workspaceIcon {
   display: none;
 }
 
+#btnOpenWorkspaceIndex {
+  flex: 0 0 auto;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 8px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 6px;
+  border: 1px solid var(--toolbar-border);
+
+  background: var(--toolbar-bg);
+  color: var(--text);
+
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#btnOpenWorkspaceIndex:hover {
+  background: var(--menu-hover);
+}
+
+#workspaceIndexPanel.workspacePanelCollapsed #btnOpenWorkspaceIndex {
+  display: none;
+}
+
 /* =========================== */
 /* Workspace Tags Panel        */
 /* =========================== */
@@ -2017,4 +2046,319 @@ html.dark .priority-p3 {
   font-size: 12px;
   opacity: 0.6;
   text-align: center;
+}
+
+/* ============================================================
+   Virtual Workspace Index V1 — Styles
+   ============================================================ */
+
+/* ---- Journal suspended (deactivate hides Journal presentation) ---- */
+html.journal-suspended #editor,
+html.journal-suspended #mapPane,
+html.journal-suspended #htmlPane,
+html.journal-suspended #workspaceSidebar,
+html.journal-suspended #btnHtmlEdgeOpen,
+html.journal-suspended #btnHtmlClose,
+html.journal-suspended #htmlOverlayControls {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* ---- Workspace Index active (command blocking) ---- */
+html.workspace-index-active #btnSave,
+html.workspace-index-active #btnArchiveActive {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* ---- Workspace Index View container ---- */
+.workspaceIndexView {
+  display: none;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 16px;
+  background: var(--bg, #fff);
+  color: var(--fg, #222);
+  -webkit-overflow-scrolling: touch;
+}
+
+.workspaceIndexView:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---- Index sections ---- */
+.wsIndexSection {
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--surface, #fafafa);
+}
+
+.wsIndexSectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+  color: var(--fg, #222);
+  border-bottom: 1px solid var(--border, #eee);
+  padding-bottom: 6px;
+}
+
+/* ---- Metrics ---- */
+.wsIndexMetrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+}
+
+.wsIndexMetricItem {
+  text-align: center;
+  padding: 6px 4px;
+  border-radius: 6px;
+  background: var(--surface2, #f0f0f0);
+}
+
+.wsIndexMetricValue {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent, #4F46E5);
+}
+
+.wsIndexMetricLabel {
+  font-size: 11px;
+  color: var(--fg-muted, #888);
+  margin-top: 2px;
+}
+
+.wsIndexUpdated {
+  font-size: 11px;
+  color: var(--fg-muted, #888);
+  margin-bottom: 8px;
+}
+
+/* ---- File action buttons ---- */
+.wsIndexFileList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wsIndexFileAction {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  cursor: pointer;
+  text-align: left;
+  min-height: 44px;
+  font: inherit;
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.wsIndexFileAction:hover {
+  background: var(--surface-hover, #f5f5f5);
+}
+
+.wsIndexFileAction:active {
+  background: var(--surface-active, #eee);
+}
+
+.wsIndexFileIcon {
+  font-size: 16px;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+.wsIndexFileBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wsIndexFileName {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wsIndexFileTitle {
+  font-size: 12px;
+  color: var(--fg-muted, #888);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wsIndexFileDate {
+  font-size: 11px;
+  color: var(--fg-muted, #aaa);
+}
+
+/* ---- Tag groups ---- */
+.wsIndexTagGroup {
+  margin-bottom: 10px;
+}
+
+.wsIndexTagName {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.wsIndexTagCount {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--fg-muted, #888);
+}
+
+/* ---- Task groups ---- */
+.wsIndexTaskGroup {
+  margin-bottom: 10px;
+}
+
+.wsIndexTaskGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.wsIndexTaskList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wsIndexTaskAction {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  min-height: 36px;
+  font: inherit;
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.wsIndexTaskAction:hover {
+  background: var(--surface-hover, #f5f5f5);
+}
+
+.wsIndexTaskCheckbox {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.wsIndexTaskText {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Link groups ---- */
+.wsIndexLinkGroup {
+  margin-bottom: 10px;
+}
+
+.wsIndexLinkName {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.wsIndexLinkCount {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--fg-muted, #888);
+}
+
+/* ---- Empty / not-ready states ---- */
+.wsIndexEmpty {
+  font-size: 13px;
+  color: var(--fg-muted, #888);
+  padding: 8px 0;
+}
+
+.wsIndexNotReady {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.wsIndexNotReadyMessage {
+  font-size: 16px;
+  color: var(--fg-muted, #888);
+  margin-bottom: 16px;
+}
+
+.wsIndexRefreshAction,
+.wsIndexOpenWorkspaceAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  min-height: 44px;
+  transition: background 0.15s;
+}
+
+.wsIndexRefreshAction:hover,
+.wsIndexOpenWorkspaceAction:hover {
+  background: var(--surface-hover, #f5f5f5);
+}
+
+.wsIndexEmptyWorkspace {
+  text-align: center;
+  padding: 30px 20px;
+}
+
+.wsIndexEmptyTitle {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.wsIndexEmptyText {
+  font-size: 13px;
+  color: var(--fg-muted, #888);
+}
+
+/* ---- Dark mode adjustments ---- */
+html.dark .wsIndexSection {
+  background: var(--surface, #1e1e2e);
+  border-color: var(--border, #333);
+}
+
+html.dark .wsIndexMetricItem {
+  background: var(--surface2, #2a2a3a);
+}
+
+html.dark .wsIndexFileAction {
+  background: var(--surface, #1e1e2e);
+  border-color: var(--border, #333);
+}
+
+html.dark .wsIndexFileAction:hover {
+  background: var(--surface-hover, #2a2a3a);
 }

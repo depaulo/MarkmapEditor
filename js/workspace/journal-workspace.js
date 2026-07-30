@@ -115,6 +115,26 @@
       throw new Error(`JournalWorkspace.activate: unexpected nextWorkspaceId=${nextId}`);
     }
 
+    // Reactivation path: if Journal is already initialized, skip initialization
+    // and only restore visibility. This handles journal → index → journal.
+    if (isJournalInitialized()) {
+      // Remove journal-suspended class to reveal Journal presentation
+      document.documentElement.classList.remove('journal-suspended');
+
+      // Restore presentation from session if restoreState was called by Host
+      // (Host calls restoreState before activate, so visibility is already set)
+
+      safeLog('WorkspaceHost Phase3B: journal workspace reactivated (already initialized)');
+      return Object.freeze({
+        acknowledged: true,
+        adapterCalledInit: false,
+        reactivated: true,
+        initializationState: getJournalInitializationState(),
+        initializationCount: getJournalInitializationCount(),
+      });
+    }
+
+    // First activation path: initialize Journal
     if (typeof globalThis.WORKSPACE_API?.initializeJournal !== 'function') {
       throw new Error('JournalWorkspace.activate: WORKSPACE_API.initializeJournal not available');
     }
@@ -158,8 +178,27 @@
   }
 
   function deactivate() {
-    // Phase 3B safe no-op.
-    return Object.freeze({ status: 'noop' });
+    // Blur editor focus safely (Correction 8)
+    try {
+      if (typeof window.__cm?.blur === 'function') {
+        window.__cm.blur();
+      } else {
+        const mdEl = document.getElementById('md');
+        if (mdEl && typeof mdEl.blur === 'function') {
+          mdEl.blur();
+        }
+      }
+    } catch {}
+
+    // Suspend Journal presentation via CSS class
+    // CSS rules hide #editor, #mapPane, #htmlPane, #workspaceSidebar
+    document.documentElement.classList.add('journal-suspended');
+
+    // Live state is preserved in memory — not touched here:
+    // dirty, currentSaveHandle, md.value, WORKSPACE_STATE.activeFile,
+    // CodeMirror instance, Markmap instance
+
+    return Object.freeze({ status: 'suspended' });
   }
 
   function refresh() {
@@ -173,15 +212,68 @@
   }
 
   function getState() {
+    // Source-proven presentation metadata (Correction 7)
+    const editorVisible = !document.body.classList.contains('editor-hidden');
+    const sidebarCollapsed = document.documentElement.classList.contains('journal-sidebar-collapsed');
+
+    let appContextId = '';
+    try {
+      const select = document.getElementById('appContextSelect');
+      if (select && typeof select.value === 'string' && select.value) {
+        appContextId = select.value;
+      } else if (typeof globalThis.currentAppContextId === 'string' && globalThis.currentAppContextId) {
+        appContextId = globalThis.currentAppContextId;
+      } else {
+        appContextId = document.documentElement.dataset.appContext || '';
+      }
+      if (!appContextId) {
+        appContextId = localStorage.getItem('markmap:appContext') || '';
+      }
+    } catch {}
+
+    const activeFile = globalThis.WORKSPACE_STATE?.activeFile;
+
     return Object.freeze({
       initialized: isJournalInitialized(),
       initializationState: getJournalInitializationState(),
       initializationCount: getJournalInitializationCount(),
+      // Presentation metadata
+      editorVisible,
+      sidebarCollapsed,
+      appContextId: appContextId || 'editor',
+      // Physical file identity (no handle stored)
+      activeFilePath: activeFile?.path || '',
+      activeFileKind: activeFile?.kind || '',
+      activeFileName: activeFile?.name || '',
     });
   }
 
-  function restoreState() {
-    // Phase 3B safe no-op.
+  function restoreState(state) {
+    if (!state) return;
+
+    // Restore presentation visibility from session metadata
+    try {
+      // Restore editor visibility
+      if (typeof state.editorVisible === 'boolean') {
+        document.body.classList.toggle('editor-hidden', !state.editorVisible);
+      }
+
+      // Restore sidebar collapse
+      if (typeof state.sidebarCollapsed === 'boolean') {
+        document.documentElement.classList.toggle('journal-sidebar-collapsed', state.sidebarCollapsed);
+      }
+
+      // Restore app context (do NOT force to journal — Correction 8)
+      if (state.appContextId && typeof globalThis.applyAppContextUi === 'function') {
+        globalThis.applyAppContextUi(state.appContextId, 'journal restoreState');
+      }
+    } catch (e) {
+      safeLog(`JournalWorkspace.restoreState: failed: ${e?.message || e}`);
+    }
+
+    // Note: journal-suspended class is removed in activate(), not here.
+    // Host calls restoreState before activate, so we set up state here
+    // and activate() reveals the presentation.
   }
 
   function reportPhase3BDiagnostic() {
@@ -210,13 +302,27 @@
     phase3BDiagnosticReported = true;
   }
 
+  // ---- Shared activation coordinator ----
+
+  function maybeRequestHostActivation() {
+    if (activationAttempted) return;
+    if (typeof globalThis.MME_WORKSPACE_HOST !== 'object') return;
+    if (typeof globalThis.MME_APP !== 'object') return;
+    if (typeof globalThis.WORKSPACE_API?.initializeJournal !== 'function') return;
+
+    // All dependencies ready — proceed with Host activation
+    requestHostActivation();
+  }
+
   // Orchestrate registration and readiness-aware activation.
+  // Attach one-shot listeners for both readiness events.
+  // The coordinator verifies all dependencies before calling requestHostActivation.
+  window.addEventListener('mme-main-ready', maybeRequestHostActivation, { once: true });
+  window.addEventListener('mme-workspace-api-ready', maybeRequestHostActivation, { once: true });
+
+  // Also attempt immediately after registration in case all deps are already ready.
   const registrationResult = registerJournalWorkspace();
   if (registrationResult) {
-    if (typeof globalThis.MME_APP === 'object' && typeof globalThis.WORKSPACE_API?.initializeJournal === 'function') {
-      requestHostActivation();
-    } else {
-      window.addEventListener('mme-main-ready', requestHostActivation, { once: true });
-    }
+    maybeRequestHostActivation();
   }
 })();

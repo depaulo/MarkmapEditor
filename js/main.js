@@ -1169,6 +1169,15 @@ function ensureWorkspaceIndexPanel() {
       >
         ↻
       </button>
+
+      <button
+        id="btnOpenWorkspaceIndex"
+        type="button"
+        title="Open full Workspace Index"
+        aria-label="Open full Workspace Index"
+      >
+        ▤
+      </button>
     </div>
 
     <div class="workspacePanelBody">
@@ -1911,6 +1920,54 @@ function wireWorkspaceIndexRefreshButton() {
   log?.('Workspace Index: refresh button wired');
 }
 
+function wireWorkspaceIndexOpenButton() {
+  const btn = document.getElementById('btnOpenWorkspaceIndex');
+
+  if (!btn) {
+    log?.('Workspace Index: open button missing');
+    return;
+  }
+
+  if (btn.__workspaceIndexOpenBound) {
+    return;
+  }
+
+  btn.addEventListener('click', async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    try {
+      log?.('WorkspaceIndex: open requested');
+
+      if (typeof globalThis.MME_WORKSPACE_HOST !== 'object') {
+        log?.('WorkspaceIndex: open blocked; Host missing');
+        return;
+      }
+
+      const result = await globalThis.MME_WORKSPACE_HOST.switchTo('workspace-index', {
+        reason: 'open full workspace index',
+      });
+
+      if (result && result.status === globalThis.MME_WORKSPACE_HOST.RESULT_STATUS.ACTIVATED) {
+        if (typeof globalThis.MME_NAVIGATION === 'object') {
+          globalThis.MME_NAVIGATION.recordSuccessfulNavigation({
+            type: 'virtual-workspace-index',
+            id: 'mme://workspace/index',
+          });
+        }
+        log?.('WorkspaceIndex: open success');
+      } else {
+        log?.(`WorkspaceIndex: open unexpected result: ${result?.status || 'unknown'}`);
+      }
+    } catch (e) {
+      log?.(`WorkspaceIndex: open failed: ${e?.message || e}`);
+    }
+  });
+
+  btn.__workspaceIndexOpenBound = true;
+  log?.('Workspace Index: open button wired');
+}
+
 function ensureWorkspaceTagsPanel() {
   const host = getWorkspaceSidebarContentHost();
 
@@ -2276,6 +2333,7 @@ function setupWorkspacePanels() {
     ensureWorkspaceTagsPanel?.();
 
     wireWorkspaceIndexRefreshButton?.();
+    wireWorkspaceIndexOpenButton?.();
     wireWorkspaceActivePanel?.();
     wireWorkspaceRelatedPanel();
     wireWorkspaceTasksPanel();
@@ -4119,6 +4177,7 @@ function getSessionDraftKey(filename) {
 }
 
 function saveDraft() {
+  if (globalThis.MME_WORKSPACE_HOST?.getActiveId?.() !== 'journal') return;
   if (globalThis.__creatingNewDocument) return;
   if (!dirty) return;
   try {
@@ -5245,6 +5304,12 @@ function render(source = 'render()') {
 }
 
 async function toggleHtml() {
+  const host = globalThis.MME_WORKSPACE_HOST;
+  if (host && host.getActiveId?.() === 'workspace-index') {
+    log?.(`HTML Preview: blocked activeWorkspace=${host.getActiveId()}`);
+    return;
+  }
+
   const willShow = htmlPane.style.display !== 'block';
   htmlPane.style.display = willShow ? 'block' : 'none';
   log(`HTML view ${willShow ? 'SHOW' : 'HIDE'}`);
@@ -6901,6 +6966,10 @@ fileInput.addEventListener('change', async (e) => {
 });
 
 async function saveAsSmart(text) {
+  if (globalThis.MME_WORKSPACE_HOST?.getActiveId?.() !== 'journal') {
+    globalThis.MME_APP?.showToast?.('Save As is not available while viewing Workspace Index', 'warn', 2000);
+    return;
+  }
   const suggestedName = normalizeMdName(currentFileName);
   log(`saveAsSmart(): begin (suggestedName="${suggestedName}")`);
   if (savePickerUsable()) {
@@ -6972,6 +7041,10 @@ async function confirmOverwriteExternal() {
 }
 
 async function saveSmart() {
+  if (globalThis.MME_WORKSPACE_HOST?.getActiveId?.() !== 'journal') {
+    globalThis.MME_APP?.showToast?.('Save is not available while viewing Workspace Index', 'warn', 2000);
+    return;
+  }
   log('saveSmart(): begin');
   const text = md.value;
   if (currentSaveHandle) {
@@ -6997,6 +7070,7 @@ document.getElementById('btnOpen').addEventListener('click', () => {
   if (isOpen) hideRecentMenu();
   else showRecentMenu();
 });
+
 document.getElementById('btnSave').addEventListener('click', () =>
   saveSmart().catch((e) => {
     if (e && e.name === 'AbortError') {
@@ -9030,6 +9104,21 @@ function logContextState(reason = 'context') {
 }
 
 function applyAppContextUi(contextId, reason = 'applyAppContextUi') {
+  // Correction 8: Do not reveal Journal while workspace-index is active
+  const host = globalThis.MME_WORKSPACE_HOST;
+  if (host && host.getActiveId?.() === 'workspace-index') {
+    // Store context but do not remove journal-suspended or reveal Journal
+    try {
+      const api = getContextApi();
+      if (api) {
+        api.storeAppContextId(contextId);
+        globalThis.currentAppContextId = contextId;
+        const select = document.getElementById('appContextSelect');
+        if (select) select.value = contextId;
+      }
+    } catch {}
+    return;
+  }
   const api = getContextApi();
 
   if (!api) {

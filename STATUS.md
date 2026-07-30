@@ -501,9 +501,9 @@ Application
 - workspace-level detach deferred
 - real multi-workspace visibility/session switching not yet implemented
 
-## Next Candidate
+## Completed
 
-Virtual Workspace Index as the second Host workspace.
+✅ Virtual Workspace Index V1 — Second Host workspace (read-only, deterministic projection, navigable).
 
 ---
 

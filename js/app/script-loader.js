@@ -43,6 +43,10 @@ function appendScript(src, { onload } = {}) {
   // Journal Workspace Adapter — thin acknowledgement adapter. Loaded before
   // main.js so it can register with the Host and coordinate with legacy init.
   appendScript('./js/workspace/journal-workspace.js');
+  // Virtual Workspace Index V1 — loaded before main.js so it can register
+  // with the Host. Reads WORKSPACE_INDEX_STATE lazily at activation time.
+  appendScript('./js/workspace/workspace-index-workspace.js');
+  appendScript('./js/workspace/workspace-index-document.js');
 
   appendScript('./js/main.js', {
     onload: function () {

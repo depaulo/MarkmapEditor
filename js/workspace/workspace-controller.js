@@ -560,6 +560,12 @@ function initJournalSidebarCollapse() {
 }
 
 async function archiveActiveWorkspaceFile() {
+  // Correction 5: Command guard — block while workspace-index is active
+  if (globalThis.MME_WORKSPACE_HOST?.getActiveId?.() !== 'journal') {
+    globalThis.MME_APP?.showToast?.('Archive is not available while viewing Workspace Index', 'warn', 2000);
+    return;
+  }
+
   globalThis.MME_APP?.log?.('Workspace: archiveActiveWorkspaceFile() begin');
 
   if (!WORKSPACE_STATE.rootHandle) {
@@ -884,12 +890,50 @@ function initWorkspace() {
     navigationUnsubscribe = globalThis.MME_NAVIGATION.subscribe(updateNavigationControls);
   }
 
-  // Register the authoritative workspace-file opener for Back/Forward restore.
+  // Register the authoritative opener for Back/Forward restore.
+  // Correction 9: Branch by location type with rollback on failure.
   if (typeof globalThis.MME_NAVIGATION?.setOpener === 'function') {
     globalThis.MME_NAVIGATION.setOpener(async function restoreOpen(location) {
+      if (!location) return { status: 'failed', location, error: new Error('No location') };
+
+      // Virtual workspace-index: switch Host to workspace-index
+      if (location.type === 'virtual-workspace-index') {
+        const host = globalThis.MME_WORKSPACE_HOST;
+        if (!host || !host.has('workspace-index')) {
+          return { status: 'failed', location, error: new Error('workspace-index not registered') };
+        }
+
+        try {
+          const result = await host.switchTo('workspace-index', { reason: 'navigation restore' });
+          if (!result || result.status !== host.RESULT_STATUS.ACTIVATED) {
+            return { status: 'failed', location, error: new Error('workspace-index switch failed') };
+          }
+          return { status: 'opened', location };
+        } catch (error) {
+          return { status: 'failed', location, error };
+        }
+      }
+
+      // Workspace-file: switch to Journal, attempt canonical restore open
+      // Correction 2: Rollback to previous workspace on failure
+      const host = globalThis.MME_WORKSPACE_HOST;
+      const previousWorkspace = host ? host.getActiveId() : null;
+
       const fileRecord = findWorkspaceFileByPath(location?.path, location?.kind);
       if (!fileRecord || !fileRecord.handle) {
         return { status: 'failed', location, error: new Error('Workspace file not found') };
+      }
+
+      // Switch to Journal first
+      if (host) {
+        try {
+          const switchResult = await host.switchTo('journal', { reason: 'navigation restore' });
+          if (!switchResult || switchResult.status !== host.RESULT_STATUS.ACTIVATED) {
+            return { status: 'failed', location, error: new Error('Journal switch failed') };
+          }
+        } catch (error) {
+          return { status: 'failed', location, error };
+        }
       }
 
       try {
@@ -899,9 +943,23 @@ function initWorkspace() {
           'navigation restore',
           { historyMode: 'restore' }
         );
-        if (!opened) return { status: 'cancelled', location };
+        if (!opened) {
+          // Correction 2: Rollback to previous workspace on cancel/failure
+          if (host && previousWorkspace && previousWorkspace !== 'journal') {
+            try {
+              await host.switchTo(previousWorkspace, { reason: 'navigation restore rollback' });
+            } catch {}
+          }
+          return { status: 'cancelled', location };
+        }
         return { status: 'opened', location };
       } catch (error) {
+        // Correction 2: Rollback to previous workspace on error
+        if (host && previousWorkspace && previousWorkspace !== 'journal') {
+          try {
+            await host.switchTo(previousWorkspace, { reason: 'navigation restore rollback' });
+          } catch {}
+        }
         return { status: 'failed', location, error };
       }
     });
@@ -927,6 +985,19 @@ globalThis.WORKSPACE_API = {
   openToday,
   initWorkspace,
 };
+
+// Dispatch API readiness event for late activation listeners.
+// WORKSPACE_API is now fully assigned and initializeJournal is available.
+try {
+  window.dispatchEvent(
+    new CustomEvent('mme-workspace-api-ready')
+  );
+} catch (error) {
+  console.error(
+    'Workspace: failed to dispatch API readiness',
+    error
+  );
+}
 
 globalThis.MME_APP?.log?.(
   `Workspace: stored last active file = ${getLastActiveWorkspacePath() || '(none)'}`

@@ -140,11 +140,11 @@
 
 ## Workspace Host — Future Work
 
-- [ ] Virtual Workspace Index PLAN
-- [ ] Journal deactivate/visibility contract for second workspace
-- [ ] Journal session enrichment
-- [ ] Journal restore contract
-- [ ] Host/Navigation History behavior across workspace types
+- [x] Virtual Workspace Index V1 Implementation
+- [x] Journal deactivate/visibility contract for second workspace
+- [x] Journal session enrichment
+- [x] Journal restore contract
+- [x] Host/Navigation History behavior across workspace types
 - [ ] Optional workspace selector after a second workspace exists
 - [ ] Workspace-level detach
 - [ ] Report/Slides/Diagram workspaces

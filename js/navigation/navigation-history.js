@@ -5,6 +5,7 @@
   'use strict';
 
   const TYPE_WORKSPACE_FILE = 'workspace-file';
+  const TYPE_VIRTUAL_WORKSPACE_INDEX = 'virtual-workspace-index';
   const VALID_MODES = new Set(['normal', 'restore', 'seed']);
   const listeners = new Set();
 
@@ -29,6 +30,15 @@
     if (!input || typeof input !== 'object') return null;
 
     const type = String(input.type || TYPE_WORKSPACE_FILE).trim();
+
+    // Virtual workspace-index location: uses id instead of path
+    if (type === TYPE_VIRTUAL_WORKSPACE_INDEX) {
+      const id = String(input.id || '').trim();
+      if (!id) return null;
+      return Object.freeze({ type, id });
+    }
+
+    // Workspace-file location: uses path
     const path = normalizePath(input.path || input.id || '');
     if (type !== TYPE_WORKSPACE_FILE || !path) return null;
 
@@ -43,7 +53,15 @@
 
   function sameLocation(a, b) {
     if (!a || !b) return false;
-    return a.type === b.type && normalizePath(a.path) === normalizePath(b.path);
+    if (a.type !== b.type) return false;
+
+    // Virtual workspace-index: compare by id
+    if (a.type === TYPE_VIRTUAL_WORKSPACE_INDEX) {
+      return String(a.id || '') === String(b.id || '');
+    }
+
+    // Workspace-file: compare by path
+    return normalizePath(a.path) === normalizePath(b.path);
   }
 
   function cloneLocation(location) {
@@ -222,6 +240,7 @@
 
   const api = Object.freeze({
     TYPE_WORKSPACE_FILE,
+    TYPE_VIRTUAL_WORKSPACE_INDEX,
     normalizeLocation,
     sameLocation,
     setOpener,
