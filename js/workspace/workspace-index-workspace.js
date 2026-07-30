@@ -11,6 +11,7 @@
 // - refresh() regenerates in place, no history, no dirty state
 // - Actions resolve physical file BEFORE switching to Journal
 // - Rollback to workspace-index on cancelled/failed physical open
+// - Return button switches back to previous workspace preserving live state
 
 (function initWorkspaceIndexWorkspace(global) {
   'use strict';
@@ -24,6 +25,7 @@
   let registered = false;
   let diagnosticReported = false;
   let refreshListenerBound = false;
+  let previousWorkspace = null;
 
   function safeLog(message) {
     try {
@@ -75,6 +77,29 @@
     container.hidden = true;
   }
 
+  // ---- Return button helper ----
+
+  function getPreviousWorkspaceLabel() {
+    // Try to get the active file name from the previous workspace session
+    const session = globalThis.APP_MODE_SESSIONS?.journal;
+    if (session?.fileName) {
+      return session.fileName;
+    }
+    return 'Workspace';
+  }
+
+  function buildReturnButtonHtml() {
+    const label = getPreviousWorkspaceLabel();
+    const escapedLabel = String(label).replace(/</g, '<').replace(/>/g, '>');
+    return `
+      <div class="wsIndexReturnRow">
+        <button type="button" data-action="return-to-workspace" class="wsIndexReturnAction">
+          ← Return to ${escapedLabel}
+        </button>
+      </div>
+    `;
+  }
+
   // ---- Action handling (Corrections 1 & 2) ----
 
   function findWorkspaceFileByPath(path, kind) {
@@ -84,6 +109,16 @@
       }
     } catch {}
     return null;
+  }
+
+  function handleReturnToWorkspace() {
+    const host = getHost();
+    if (!host) return;
+
+    // Switch back to Journal (the only editable workspace registered)
+    host.switchTo('journal', { reason: 'workspace-index return' }).catch((e) => {
+      safeLog(`WorkspaceIndex: return failed: ${e?.message || e}`);
+    });
   }
 
   async function handleOpenWorkspaceFile(path, kind) {
@@ -196,6 +231,8 @@
       handleRefreshIndex();
     } else if (action === 'open-workspace') {
       handleOpenWorkspace();
+    } else if (action === 'return-to-workspace') {
+      handleReturnToWorkspace();
     }
   }
 
@@ -230,6 +267,10 @@
       throw new Error('WorkspaceIndex.activate: MME_WORKSPACE_INDEX_DOCUMENT not available');
     }
 
+    // Store previous workspace for Return button
+    const host = getHost();
+    previousWorkspace = host ? host.getActiveId() : null;
+
     // 2. Build projection while hidden
     let projectionHtml;
     try {
@@ -255,7 +296,11 @@
     // 5. Render projection into container (while still hidden)
     container.innerHTML = projectionHtml;
 
-    // 6. Show Index only as the final non-throwing step
+    // 6. Prepend Return button
+    const returnBtnHtml = buildReturnButtonHtml();
+    container.insertAdjacentHTML('afterbegin', returnBtnHtml);
+
+    // 7. Show Index only as the final non-throwing step
     showContainer(container);
 
     // Add workspace-index-active class for command blocking
@@ -291,6 +336,9 @@
     try {
       const html = docApi.buildProjection();
       container.innerHTML = html;
+      // Re-prepend Return button after refresh
+      const returnBtnHtml = buildReturnButtonHtml();
+      container.insertAdjacentHTML('afterbegin', returnBtnHtml);
     } catch (e) {
       safeLog(`WorkspaceIndex: refresh projection failed: ${e?.message || e}`);
     }

@@ -948,6 +948,8 @@ const WORKSPACE_PANEL_DEFAULT_COLLAPSED = {
   related: false,
   tasks: true,
   tags: true,
+  journals: false,
+  concepts: false,
 };
 
 function getWorkspacePanelCollapsedState() {
@@ -1010,6 +1012,20 @@ function hasWorkspacePanelMarkup(panelId) {
       document.getElementById('workspaceTasksPanel')?.querySelector?.('#workspaceTasksSummary') &&
       document.getElementById('workspaceTasksPanel')?.querySelector?.('#workspaceTasksList') &&
       document.getElementById('workspaceTasksPanel')?.querySelector?.('#workspaceTasksBadge')
+    );
+  }
+
+  if (panelId === 'journals') {
+    return !!(
+      document.getElementById('workspaceJournalsPanel')?.querySelector?.('#workspaceJournalsList') &&
+      document.getElementById('workspaceJournalsPanel')?.querySelector?.('#workspaceJournalsBadge')
+    );
+  }
+
+  if (panelId === 'concepts') {
+    return !!(
+      document.getElementById('workspaceConceptsPanel')?.querySelector?.('#workspaceConceptsList') &&
+      document.getElementById('workspaceConceptsPanel')?.querySelector?.('#workspaceConceptsBadge')
     );
   }
 
@@ -1191,13 +1207,15 @@ function ensureWorkspaceIndexPanel() {
     </div>
   `;
 
-  const searchPanel = document.getElementById('workspaceSearchPanel');
-  const filesSection = host.querySelector('.workspaceFilesSection');
+  // Insert after the last workspaceFilesSection (Concepts panel) to keep
+  // Journals and Concepts above Workspace Index in the sidebar order.
+  const filesSections = host.querySelectorAll('.workspaceFilesSection');
+  const lastFilesSection = filesSections.length > 0 ? filesSections[filesSections.length - 1] : null;
 
-  if (searchPanel && searchPanel.nextSibling && searchPanel.nextSibling.parentNode === host) {
-    host.insertBefore(panel, searchPanel.nextSibling);
-  } else if (filesSection && filesSection.parentNode === host) {
-    host.insertBefore(panel, filesSection);
+  if (lastFilesSection && lastFilesSection.nextSibling && lastFilesSection.nextSibling.parentNode === host) {
+    host.insertBefore(panel, lastFilesSection.nextSibling);
+  } else if (lastFilesSection && lastFilesSection.parentNode === host) {
+    host.insertBefore(panel, lastFilesSection.nextSibling);
   } else {
     host.appendChild(panel);
   }
@@ -1230,7 +1248,11 @@ function toggleWorkspacePanel(panelId) {
             ? document.getElementById('workspaceTasksPanel')
             : panelId === 'tags'
               ? document.getElementById('workspaceTagsPanel')
-              : null;
+              : panelId === 'journals'
+                ? document.getElementById('workspaceJournalsPanel')
+                : panelId === 'concepts'
+                  ? document.getElementById('workspaceConceptsPanel')
+                  : null;
 
   if (!panelEl) return;
 
@@ -2814,12 +2836,22 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
     return null;
   }
 
-  openTextDocument({
-    text,
-    fileName,
-    fileHandle: file.handle,
-    reason,
-  });
+  // Defect 4 fix: suppress programmatic dirty during text assignment
+  if (typeof globalThis.__programmaticTextChange === 'number') {
+    globalThis.__programmaticTextChange++;
+  }
+  try {
+    openTextDocument({
+      text,
+      fileName,
+      fileHandle: file.handle,
+      reason,
+    });
+  } finally {
+    if (typeof globalThis.__programmaticTextChange === 'number') {
+      globalThis.__programmaticTextChange--;
+    }
+  }
 
   WORKSPACE_STATE.activeFile = {
     kind: fileKind || 'journals',
@@ -2937,6 +2969,23 @@ function wireWorkspaceSearch() {
   log?.('Workspace Search: wired');
 }
 
+let __workspacePanelCollapseOwner = null;
+
+function handleWorkspacePanelCollapseClick(event) {
+  const btn = event.target?.closest?.('[data-workspace-panel-toggle]');
+
+  if (!btn) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const panelId = btn.dataset.workspacePanelToggle || '';
+
+  if (!panelId) return;
+
+  toggleWorkspacePanel(panelId);
+}
+
 function wireWorkspacePanelCollapses() {
   const sidebar = document.getElementById('workspaceSidebar');
 
@@ -2945,26 +2994,22 @@ function wireWorkspacePanelCollapses() {
     return;
   }
 
-  // Idempotent: listener is global delegation on the sidebar.
-  if (!sidebar.__workspacePanelCollapseDelegated) {
-    sidebar.addEventListener('click', (event) => {
-      const btn = event.target?.closest?.('[data-workspace-panel-toggle]');
+  if (__workspacePanelCollapseOwner === sidebar) return;
 
-      if (!btn) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      const panelId = btn.dataset.workspacePanelToggle || '';
-
-      if (!panelId) return;
-
-      toggleWorkspacePanel(panelId);
-    });
-
-    sidebar.__workspacePanelCollapseDelegated = true;
-    log?.('Workspace Panels: collapse delegation wired');
+  if (__workspacePanelCollapseOwner) {
+    __workspacePanelCollapseOwner.removeEventListener(
+      'click',
+      handleWorkspacePanelCollapseClick
+    );
   }
+
+  sidebar.addEventListener(
+    'click',
+    handleWorkspacePanelCollapseClick
+  );
+
+  __workspacePanelCollapseOwner = sidebar;
+  log?.('Workspace Panels: collapse delegation wired');
 }
 
 function setStatus(s) {
@@ -3064,6 +3109,53 @@ globalThis.MME_APP = {
   setWritableHandleForCurrentFile,
   showToast,
   log,
+
+  // Runtime bridge for mode-session capture/restore.
+  // Returns clone-safe fields only. saveHandle is a FileSystemHandle
+  // and must NOT be placed in Host snapshots or localStorage.
+  getCurrentDocumentRuntimeState() {
+    return {
+      dirty,
+      fileName: currentFileName || '',
+      saveHandle: currentSaveHandle || null,
+      fileLastSeenModified,
+      externalStale,
+      externalStaleModified,
+      hotReloadEnabled: Boolean(hotEnabledEl?.checked),
+    };
+  },
+
+  applyCurrentDocumentRuntimeState(state) {
+    if (!state || typeof state !== 'object') return;
+
+    if (typeof state.fileName === 'string') {
+      currentFileName = state.fileName || 'markmap.md';
+    }
+
+    if (typeof state.saveHandle !== 'undefined') {
+      currentSaveHandle = state.saveHandle || null;
+    }
+
+    if (typeof state.fileLastSeenModified === 'number') {
+      fileLastSeenModified = state.fileLastSeenModified;
+    }
+
+    if (typeof state.externalStale === 'boolean') {
+      externalStale = state.externalStale;
+    }
+
+    if (typeof state.externalStaleModified === 'number') {
+      externalStaleModified = state.externalStaleModified;
+    }
+
+    if (typeof state.dirty === 'boolean') {
+      dirty = state.dirty;
+    }
+
+    // Update status/title once.
+    setStatus(modeLabel());
+    updateDocumentTitle();
+  },
 };
 
 async function resetServiceWorkerAndCaches() {
@@ -4177,7 +4269,7 @@ function getSessionDraftKey(filename) {
 }
 
 function saveDraft() {
-  if (globalThis.MME_WORKSPACE_HOST?.getActiveId?.() !== 'journal') return;
+  if (!globalThis.MME_WORKSPACE_CAPABILITIES?.canActive?.('draft')) return;
   if (globalThis.__creatingNewDocument) return;
   if (!dirty) return;
   try {
@@ -5304,9 +5396,9 @@ function render(source = 'render()') {
 }
 
 async function toggleHtml() {
-  const host = globalThis.MME_WORKSPACE_HOST;
-  if (host && host.getActiveId?.() === 'workspace-index') {
-    log?.(`HTML Preview: blocked activeWorkspace=${host.getActiveId()}`);
+  if (!globalThis.MME_WORKSPACE_CAPABILITIES?.canActive?.('htmlPreview')) {
+    const activeId = globalThis.MME_WORKSPACE_CAPABILITIES?.getActiveId?.() || 'current workspace';
+    log?.(`HTML Preview: blocked in ${activeId}`);
     return;
   }
 
@@ -6857,6 +6949,11 @@ async function openSmart() {
 // ================================
 let __newDocCounter = 1;
 
+// Programmatic dirty suppression counter.
+// Incremented before programmatic text changes, decremented after.
+// When > 0, the 'input' event listener does not set dirty=true.
+let __programmaticTextChange = 0;
+
 function newDocument() {
   try {
     globalThis.__creatingNewDocument = true;
@@ -6884,9 +6981,9 @@ function newDocument() {
       })}`
     );
 
-    try {
-      clearDraft(currentFileName);
-    } catch {}
+    // Fix 5: Capture previous filename before changing it, so we only clear
+    // the NEW filename's draft, not the previous mode's draft.
+    const previousFileName = currentFileName;
 
     try {
       hotStop('newDocument');
@@ -6898,12 +6995,19 @@ function newDocument() {
     fileLastSeenModified = 0;
 
     currentFileName = starter.defaultFileName;
-    md.value = starter.defaultMarkdown;
 
-    if (typeof window.__cmSetText === 'function') {
-      window.__cmSetText(starter.defaultMarkdown);
-    } else {
-      md.dispatchEvent(new Event('input', { bubbles: true }));
+    // Fix 6: Suppress programmatic dirty while setting text.
+    __programmaticTextChange++;
+    try {
+      md.value = starter.defaultMarkdown;
+
+      if (typeof window.__cmSetText === 'function') {
+        window.__cmSetText(starter.defaultMarkdown);
+      } else {
+        md.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    } finally {
+      __programmaticTextChange--;
     }
 
     dirty = false;
@@ -6913,6 +7017,7 @@ function newDocument() {
     setStatus(modeLabel());
     updateDocumentTitle();
 
+    // Fix 5: Only clear the new document's draft, not the previous one.
     try {
       clearDraft(currentFileName);
     } catch {}
@@ -6966,8 +7071,9 @@ fileInput.addEventListener('change', async (e) => {
 });
 
 async function saveAsSmart(text) {
-  if (globalThis.MME_WORKSPACE_HOST?.getActiveId?.() !== 'journal') {
-    globalThis.MME_APP?.showToast?.('Save As is not available while viewing Workspace Index', 'warn', 2000);
+  if (!globalThis.MME_WORKSPACE_CAPABILITIES?.canActive?.('saveAs')) {
+    const activeId = globalThis.MME_WORKSPACE_CAPABILITIES?.getActiveId?.() || 'current workspace';
+    globalThis.MME_APP?.showToast?.(`Save As is not available in ${activeId}`, 'warn', 2000);
     return;
   }
   const suggestedName = normalizeMdName(currentFileName);
@@ -7041,8 +7147,9 @@ async function confirmOverwriteExternal() {
 }
 
 async function saveSmart() {
-  if (globalThis.MME_WORKSPACE_HOST?.getActiveId?.() !== 'journal') {
-    globalThis.MME_APP?.showToast?.('Save is not available while viewing Workspace Index', 'warn', 2000);
+  if (!globalThis.MME_WORKSPACE_CAPABILITIES?.canActive?.('save')) {
+    const activeId = globalThis.MME_WORKSPACE_CAPABILITIES?.getActiveId?.() || 'current workspace';
+    globalThis.MME_APP?.showToast?.(`Save is not available in ${activeId}`, 'warn', 2000);
     return;
   }
   log('saveSmart(): begin');
@@ -9299,6 +9406,10 @@ maybeShowWelcomeOverlay();
 // Debounced rendering via MME_RENDER (R-SPLIT4 + R-RENDER1)
 const RENDER_DEBOUNCE_MS = 1000;
 md.addEventListener('input', () => {
+  // Fix 6: Suppress programmatic dirty when __programmaticTextChange > 0
+  if (typeof __programmaticTextChange === 'number' && __programmaticTextChange > 0) {
+    return;
+  }
   dirty = true;
   setStatus(modeLabel() + ' (modified)');
   log(`Editor input: dirty=true; scheduling render in ${RENDER_DEBOUNCE_MS}ms`);

@@ -28,23 +28,32 @@ function appendScript(src, { onload } = {}) {
   // globals are available; main.js no longer declares these functions.
   appendScript('./js/workspace/workspace-parser.js');
 
-  // Mode session manager (R-SPLIT1 + R-MULTI3). Loaded before main.js so
-  // captureCurrentModeSession / restoreModeSession globals are available.
+  // Workspace Host — lifecycle foundation. Loaded before capability/runtime
+  // modules and workspace adapters.
+  appendScript('./js/workspace/workspace-host.js');
+
+  // Workspace command capability policy. Must exist before main.js command
+  // guards execute.
+  appendScript('./js/workspace/workspace-capabilities.js');
+
+  // Runtime-only per-mode resources, including non-cloneable file handles.
+  // Must load before mode-session.js and main.js.
+  appendScript('./js/workspace/mode-runtime-sessions.js');
+
+  // Mode session manager. Loaded after the runtime registry so capture and
+  // restore can use the runtime-session API.
   appendScript('./js/core/mode-session.js');
 
   // Render controller (R-SPLIT4 + R-RENDER1). Loaded before main.js so
   // MME_RENDER globals are available.
   appendScript('./js/render/render-controller.js');
 
-  // Workspace Host — lifecycle foundation. Loaded before main.js so
-  // MME_WORKSPACE_HOST is available for Journal adapter registration.
-  appendScript('./js/workspace/workspace-host.js');
-
   // Journal Workspace Adapter — thin acknowledgement adapter. Loaded before
   // main.js so it can register with the Host and coordinate with legacy init.
   appendScript('./js/workspace/journal-workspace.js');
-  // Virtual Workspace Index V1 — loaded before main.js so it can register
-  // with the Host. Reads WORKSPACE_INDEX_STATE lazily at activation time.
+
+  // Virtual Workspace Index V1. Keep the existing relative order of these two
+  // files to avoid changing already-validated Index startup behavior.
   appendScript('./js/workspace/workspace-index-workspace.js');
   appendScript('./js/workspace/workspace-index-document.js');
 

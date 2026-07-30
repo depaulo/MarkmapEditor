@@ -90,19 +90,24 @@
     session.mode = mode;
     session.sessionId = getCurrentModeSessionId(mode);
     session.text = getCurrentEditorTextSafe();
+
+    // Fix: use the MME_APP bridge for fileName instead of nonexistent globals.
+    const bridge = globalThis.MME_APP;
     session.fileName =
+      (bridge && typeof bridge.getCurrentDocumentRuntimeState === 'function'
+        ? bridge.getCurrentDocumentRuntimeState()?.fileName
+        : '') ||
       globalThis.currentFileName ||
-      globalThis.MME_APP?.currentFileName ||
       '';
 
     session.dirty =
       Boolean(globalThis.isDirty) ||
-      Boolean(globalThis.MME_APP?.isDirty?.());
+      Boolean(bridge?.isDirty?.());
 
+    // Fix: use the actual HTML Preview contract (html-preview-open class).
     session.htmlOpen =
-      document.body.classList.contains('html-open') ||
-      document.documentElement.classList.contains('html-open') ||
-      Boolean(document.getElementById('htmlPane')?.classList.contains('open'));
+      document.documentElement.classList.contains('html-preview-open') ||
+      document.getElementById('htmlPane')?.style.display === 'block';
 
     session.editorHidden =
       document.body.classList.contains('editor-hidden') ||
@@ -111,6 +116,12 @@
     session.timestamp = Date.now();
 
     APP_MODE_SESSIONS[mode] = session;
+
+    // Capture runtime live resources (handles, hot reload) into memory-only registry.
+    // These MUST NOT enter the clone-safe session snapshot above.
+    try {
+      globalThis.MME_MODE_RUNTIME_SESSIONS?.captureCurrentRuntime?.(mode);
+    } catch {}
 
     globalThis.log?.(
       `ModeSession: captured mode=${mode} session=${session.sessionId} reason=${reason} file=${session.fileName || '(none)'} dirty=${session.dirty}`
@@ -135,10 +146,63 @@
       return false;
     }
 
+    // 1. Restore runtime live resources (handles, hot reload) first.
+    try {
+      globalThis.MME_MODE_RUNTIME_SESSIONS?.restoreRuntime?.(mode);
+    } catch {}
+
+    // 2. Restore text.
     setCurrentEditorTextSafe(session.text);
 
+    // 3. Restore dirty state via the bridge.
+    const bridge = globalThis.MME_APP;
+    if (bridge && typeof bridge.applyCurrentDocumentRuntimeState === 'function') {
+      try {
+        bridge.applyCurrentDocumentRuntimeState({
+          dirty: session.dirty,
+          fileName: session.fileName || '',
+        });
+      } catch {}
+    }
+
+    // 4. Restore editor visibility.
+    if (typeof session.editorHidden === 'boolean') {
+      try {
+        if (session.editorHidden) {
+          if (!document.body.classList.contains('editor-hidden')) {
+            globalThis.toggleEditor?.();
+          }
+        } else {
+          if (document.body.classList.contains('editor-hidden')) {
+            globalThis.toggleEditor?.();
+          }
+        }
+      } catch {}
+    }
+
+    // 5. Restore HTML preview open/closed state.
+    if (typeof session.htmlOpen === 'boolean') {
+      try {
+        const htmlPane = document.getElementById('htmlPane');
+        const currentlyOpen =
+          document.documentElement.classList.contains('html-preview-open') ||
+          htmlPane?.style.display === 'block';
+
+        if (session.htmlOpen !== currentlyOpen) {
+          globalThis.toggleHtml?.();
+        }
+      } catch {}
+    }
+
+    // 6. Update title/status once.
+    try {
+      if (typeof globalThis.updateDocumentTitle === 'function') {
+        globalThis.updateDocumentTitle();
+      }
+    } catch {}
+
     globalThis.log?.(
-      `ModeSession: restored mode=${mode} session=${getCurrentModeSessionId(mode)} reason=${reason} file=${session.fileName || '(none)'}`
+      `ModeSession: restored mode=${mode} session=${getCurrentModeSessionId(mode)} reason=${reason} file=${session.fileName || '(none)'} dirty=${session.dirty}`
     );
 
     return true;

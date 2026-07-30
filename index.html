@@ -198,14 +198,52 @@
           <div id="workspaceTasksList" class="workspaceTasksList"></div>
         </div>
 
-        <div class="workspaceSection workspaceFilesSection">
-          <div class="workspaceSectionTitle">Journals</div>
-          <div id="workspaceJournalsList"></div>
+        <div id="workspaceJournalsPanel" class="workspaceSection workspaceFilesSection">
+          <div class="workspaceJournalsHeader">
+            <button
+              type="button"
+              class="workspacePanelHeaderButton"
+              data-workspace-panel-toggle="journals"
+              aria-expanded="true"
+            >
+              <span class="workspacePanelHeaderLeft">
+                <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+                <span class="workspaceJournalsTitle">Journals</span>
+              </span>
+
+              <span id="workspaceJournalsBadge" class="workspacePanelBadge">
+                0
+              </span>
+            </button>
+          </div>
+
+          <div class="workspacePanelBody">
+            <div id="workspaceJournalsList"></div>
+          </div>
         </div>
 
-        <div class="workspaceSection workspaceFilesSection">
-          <div class="workspaceSectionTitle">Concepts</div>
-          <div id="workspaceConceptsList"></div>
+        <div id="workspaceConceptsPanel" class="workspaceSection workspaceFilesSection">
+          <div class="workspaceConceptsHeader">
+            <button
+              type="button"
+              class="workspacePanelHeaderButton"
+              data-workspace-panel-toggle="concepts"
+              aria-expanded="true"
+            >
+              <span class="workspacePanelHeaderLeft">
+                <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+                <span class="workspaceConceptsTitle">Concepts</span>
+              </span>
+
+              <span id="workspaceConceptsBadge" class="workspacePanelBadge">
+                0
+              </span>
+            </button>
+          </div>
+
+          <div class="workspacePanelBody">
+            <div id="workspaceConceptsList"></div>
+          </div>
         </div>
 
         <div id="workspaceSidebarResizeHandle" aria-hidden="true"></div>

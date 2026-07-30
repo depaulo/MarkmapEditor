@@ -41,6 +41,36 @@ async function refreshWorkspaceSidebar() {
   renderSidebarFiles(WORKSPACE_STATE.files.concepts, 'workspaceConceptsList', 'concepts');
   renderWorkspaceJournalTimeline?.();
 
+  // Update collapsible panel count badges
+  const journalsBadge = document.getElementById('workspaceJournalsBadge');
+  const conceptsBadge = document.getElementById('workspaceConceptsBadge');
+
+  if (journalsBadge) {
+    journalsBadge.textContent = String(WORKSPACE_STATE.files.journals.length);
+  }
+
+  if (conceptsBadge) {
+    conceptsBadge.textContent = String(WORKSPACE_STATE.files.concepts.length);
+  }
+
+  // Apply persisted collapsed state to Journals/Concepts panels
+  const journalsPanel = document.getElementById('workspaceJournalsPanel');
+  const conceptsPanel = document.getElementById('workspaceConceptsPanel');
+
+  if (journalsPanel && typeof window.isWorkspacePanelCollapsed === 'function') {
+    const collapsed = window.isWorkspacePanelCollapsed('journals');
+    journalsPanel.classList.toggle('workspacePanelCollapsed', collapsed);
+    const btn = journalsPanel.querySelector('[data-workspace-panel-toggle]');
+    if (btn) btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  }
+
+  if (conceptsPanel && typeof window.isWorkspacePanelCollapsed === 'function') {
+    const collapsed = window.isWorkspacePanelCollapsed('concepts');
+    conceptsPanel.classList.toggle('workspacePanelCollapsed', collapsed);
+    const btn = conceptsPanel.querySelector('[data-workspace-panel-toggle]');
+    if (btn) btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  }
+
   window.updateWorkspaceActiveFileHighlight?.();
   window.scheduleWorkspaceIndexRebuild?.('sidebar refreshed');
 }
@@ -560,9 +590,10 @@ function initJournalSidebarCollapse() {
 }
 
 async function archiveActiveWorkspaceFile() {
-  // Correction 5: Command guard — block while workspace-index is active
-  if (globalThis.MME_WORKSPACE_HOST?.getActiveId?.() !== 'journal') {
-    globalThis.MME_APP?.showToast?.('Archive is not available while viewing Workspace Index', 'warn', 2000);
+  // Capability guard — block when the active workspace cannot archive.
+  if (!globalThis.MME_WORKSPACE_CAPABILITIES?.canActive?.('archive')) {
+    const activeId = globalThis.MME_WORKSPACE_CAPABILITIES?.getActiveId?.() || 'current workspace';
+    globalThis.MME_APP?.showToast?.(`Archive is not available in ${activeId}`, 'warn', 2000);
     return;
   }
 
