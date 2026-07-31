@@ -2341,25 +2341,76 @@ function wireWorkspaceTagsPanel() {
   log?.('Workspace Tags: panel wired');
 }
 
-function setupWorkspacePanels() {
-  const workspaceState = globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
+// ACT A: Idempotent panel order normalizer.
+// Moves existing nodes into canonical order using insertBefore/appendChild.
+// Tolerates absent panels; preserves listeners and collapse state.
+function normalizeWorkspacePanelOrder() {
+  const host = getWorkspaceSidebarContentHost();
+  if (!host) return;
 
+  // Canonical order (by panel ID). Header and Navigation History are anchors.
+  const order = [
+    'workspaceSearchPanel',
+    'workspaceActivePanel',
+    'workspaceJournalsPanel',
+    'workspaceConceptsPanel',
+    'workspaceRelatedPanel',
+    'workspaceTasksPanel',
+    'workspaceTagsPanel',
+    'workspaceIndexPanel',
+  ];
+
+  // Anchor: insert after header, or at top if header absent.
+  const header = host.querySelector('.workspaceHeader');
+  let anchor = header || null;
+
+  for (const id of order) {
+    const panel = document.getElementById(id);
+    if (!panel || panel.parentNode !== host) continue;
+
+    if (anchor) {
+      if (anchor.nextSibling !== panel) {
+        host.insertBefore(panel, anchor.nextSibling);
+      }
+    } else {
+      if (host.firstChild !== panel) {
+        host.insertBefore(panel, host.firstChild);
+      }
+    }
+    anchor = panel;
+  }
+
+  // Navigation History controls remain last (workspaceNavControls).
+  // It is created by workspace-sidebar.js and appended at the end already.
+}
+
+// ACT A: Idempotent post-readiness finalizer.
+// Called from mme-workspace-index-ready listener.
+// Does NOT call buildWorkspaceIndex() — no recursion risk.
+function finalizeWorkspaceSidebar() {
+  const workspaceState = globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
   if (!workspaceState) {
-    globalThis.log?.('Workspace: panels setup skipped; WORKSPACE_STATE not ready');
+    globalThis.log?.('Workspace: finalize skipped; WORKSPACE_STATE not ready');
     return;
   }
 
   try {
+    // Phase 1: ensure canonical panel markup.
     forceUpgradeWorkspacePanelMarkup('index');
     forceUpgradeWorkspacePanelMarkup('related');
     forceUpgradeWorkspacePanelMarkup('tasks');
 
-    ensureWorkspaceIndexPanel();
+    ensureWorkspaceSearchPanel?.();
     ensureWorkspaceActivePanel?.();
     ensureWorkspaceRelatedPanel();
     ensureWorkspaceTasksPanel();
     ensureWorkspaceTagsPanel?.();
+    ensureWorkspaceIndexPanel();
 
+    // Phase 2: normalize panel order.
+    normalizeWorkspacePanelOrder();
+
+    // Phase 3: wire actions and collapse delegation.
     wireWorkspaceIndexRefreshButton?.();
     wireWorkspaceIndexOpenButton?.();
     wireWorkspaceActivePanel?.();
@@ -2373,15 +2424,44 @@ function setupWorkspacePanels() {
       globalThis.MME_TASK_REVIEW?.wire?.();
     } catch {}
 
+    // Phase 4: render current panel state.
     renderWorkspaceIndexSummary();
     renderWorkspaceActivePanel?.();
     renderWorkspaceTasksPanel();
     renderWorkspaceRelatedPanel();
     renderWorkspaceTagsPanel?.();
+
     log?.('Workspace: panels setup complete');
   } catch (e) {
-    log?.(`Workspace: panels setup failed: ${e?.message || e}`);
+    log?.(`Workspace: panels finalize failed: ${e?.message || e}`);
   }
+}
+
+function setupWorkspacePanels() {
+  const workspaceState = globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
+
+  if (!workspaceState) {
+    globalThis.log?.('Workspace: panels setup skipped; WORKSPACE_STATE not ready');
+    return;
+  }
+
+  // Delegate to the idempotent finalizer.
+  finalizeWorkspaceSidebar();
+}
+
+// ACT A: Post-readiness finalization listener.
+// Fires when buildWorkspaceIndex() completes and dispatches mme-workspace-index-ready.
+// This is the canonical re-entry point that ensures panels are wired after reload.
+// Guard against duplicate listener registration.
+if (!window.__mmeWorkspaceIndexReadyFinalizerBound) {
+  window.addEventListener('mme-workspace-index-ready', () => {
+    try {
+      finalizeWorkspaceSidebar();
+    } catch (e) {
+      log?.(`Workspace: index-ready finalizer failed: ${e?.message || e}`);
+    }
+  });
+  window.__mmeWorkspaceIndexReadyFinalizerBound = true;
 }
 
 function getWorkspaceParsedActiveFile() {
@@ -2842,22 +2922,15 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
     return null;
   }
 
-  // Defect 4 fix: suppress programmatic dirty during text assignment
-  if (typeof globalThis.__programmaticTextChange === 'number') {
-    globalThis.__programmaticTextChange++;
-  }
-  try {
+  // ACT B: Use the shared suppression helper (lexical counter) instead of globalThis.
+  runProgrammaticTextChange(() => {
     openTextDocument({
       text,
       fileName,
       fileHandle: file.handle,
       reason,
     });
-  } finally {
-    if (typeof globalThis.__programmaticTextChange === 'number') {
-      globalThis.__programmaticTextChange--;
-    }
-  }
+  });
 
   WORKSPACE_STATE.activeFile = {
     kind: fileKind || 'journals',
@@ -3087,15 +3160,30 @@ function setWritableHandleForCurrentFile(handle) {
   setStatus(modeLabel());
 }
 
+// ACT B: Shared programmatic text suppression helper.
+// Uses the same lexical counter that the input handler reads.
+// Supports nested calls; try/finally prevents stuck suppression after exceptions.
+function runProgrammaticTextChange(callback) {
+  __programmaticTextChange += 1;
+  try {
+    return callback();
+  } finally {
+    __programmaticTextChange -= 1;
+  }
+}
+
 function openTextDocument({ text, fileName, fileHandle = null, reason = 'openTextDocument' }) {
   currentFileName = fileName || 'journal.md';
   currentSaveHandle = fileHandle || null;
 
-  md.value = text || '';
+  // ACT B: Wrap text mutation with suppression helper to prevent false dirty.
+  runProgrammaticTextChange(() => {
+    md.value = text || '';
 
-  if (typeof window.__cmSetText === 'function') {
-    window.__cmSetText(md.value);
-  }
+    if (typeof window.__cmSetText === 'function') {
+      window.__cmSetText(md.value);
+    }
+  });
 
   dirty = false;
   externalStale = false;
@@ -3115,6 +3203,8 @@ globalThis.MME_APP = {
   setWritableHandleForCurrentFile,
   showToast,
   log,
+  // ACT B: Expose the programmatic text suppression helper for mode-session.js.
+  runProgrammaticTextChange,
 
   // Runtime bridge for mode-session capture/restore.
   // Returns clone-safe fields only. saveHandle is a FileSystemHandle
