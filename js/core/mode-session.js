@@ -152,7 +152,17 @@
     } catch {}
 
     // 2. Restore text.
-    setCurrentEditorTextSafe(session.text);
+    // ACT B: Use the shared suppression helper to prevent false dirty=true
+    // during programmatic text mutation. The helper increments the lexical
+    // counter that the input handler reads, so the synthetic input event
+    // dispatched by CodeMirror's updateListener is suppressed.
+    if (typeof globalThis.MME_APP?.runProgrammaticTextChange === 'function') {
+      globalThis.MME_APP.runProgrammaticTextChange(() => {
+        globalThis.__cmSetText(String(session.text || ''));
+      });
+    } else {
+      setCurrentEditorTextSafe(session.text);
+    }
 
     // 3. Restore dirty state via the bridge.
     const bridge = globalThis.MME_APP;
