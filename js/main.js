@@ -1207,15 +1207,21 @@ function ensureWorkspaceIndexPanel() {
     </div>
   `;
 
-  // Insert after the last workspaceFilesSection (Concepts panel) to keep
-  // Journals and Concepts above Workspace Index in the sidebar order.
-  const filesSections = host.querySelectorAll('.workspaceFilesSection');
-  const lastFilesSection = filesSections.length > 0 ? filesSections[filesSections.length - 1] : null;
+  // Insert after Tags and before Navigation History so the sidebar order is:
+  // Header, Search, Active, Journals, Concepts, Related, Open Tasks, Tags,
+  // Workspace Index, Navigation History.
+  const tagsPanel = host.querySelector('#workspaceTagsPanel');
+  const navControls = host.querySelector('.workspaceNavControls');
 
-  if (lastFilesSection && lastFilesSection.nextSibling && lastFilesSection.nextSibling.parentNode === host) {
-    host.insertBefore(panel, lastFilesSection.nextSibling);
-  } else if (lastFilesSection && lastFilesSection.parentNode === host) {
-    host.insertBefore(panel, lastFilesSection.nextSibling);
+  let insertAnchor = null;
+  if (tagsPanel && tagsPanel.nextElementSibling && tagsPanel.nextElementSibling.parentNode === host) {
+    insertAnchor = tagsPanel.nextElementSibling;
+  } else if (navControls && navControls.parentNode === host) {
+    insertAnchor = navControls;
+  }
+
+  if (insertAnchor) {
+    host.insertBefore(panel, insertAnchor);
   } else {
     host.appendChild(panel);
   }
