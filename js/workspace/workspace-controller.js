@@ -907,12 +907,64 @@ function initWorkspace() {
 
   const btnBack = document.getElementById('btnNavBack');
   const btnForward = document.getElementById('btnNavForward');
+
   if (btnBack && !btnBack.__mmeNavigationBound) {
-    btnBack.addEventListener('click', () => globalThis.MME_NAVIGATION?.back?.());
+    btnBack.addEventListener('click', async () => {
+      globalThis.MME_APP?.log?.('NavigationTrace: Back clicked');
+
+      try {
+        const result = await globalThis.MME_NAVIGATION?.back?.();
+
+        globalThis.MME_APP?.log?.(
+          `NavigationTrace: Back result status=${
+            result?.status || 'missing'
+          }`
+        );
+
+        if (result?.error) {
+          globalThis.MME_APP?.log?.(
+            `NavigationTrace: Back error=${
+              result.error?.message || result.error
+            }`
+          );
+        }
+      } catch (error) {
+        globalThis.MME_APP?.log?.(
+          `NavigationTrace: Back threw=${error?.message || error}`
+        );
+      }
+    });
+
     btnBack.__mmeNavigationBound = true;
   }
+
   if (btnForward && !btnForward.__mmeNavigationBound) {
-    btnForward.addEventListener('click', () => globalThis.MME_NAVIGATION?.forward?.());
+    btnForward.addEventListener('click', async () => {
+      globalThis.MME_APP?.log?.('NavigationTrace: Forward clicked');
+
+      try {
+        const result = await globalThis.MME_NAVIGATION?.forward?.();
+
+        globalThis.MME_APP?.log?.(
+          `NavigationTrace: Forward result status=${
+            result?.status || 'missing'
+          }`
+        );
+
+        if (result?.error) {
+          globalThis.MME_APP?.log?.(
+            `NavigationTrace: Forward error=${
+              result.error?.message || result.error
+            }`
+          );
+        }
+      } catch (error) {
+        globalThis.MME_APP?.log?.(
+          `NavigationTrace: Forward threw=${error?.message || error}`
+        );
+      }
+    });
+
     btnForward.__mmeNavigationBound = true;
   }
 
@@ -922,48 +974,200 @@ function initWorkspace() {
   }
 
   // Register the authoritative opener for Back/Forward restore.
-  // Correction 9: Branch by location type with rollback on failure.
+  // Host ACTIVATED and validated NOOP are both successful restore states.
   if (typeof globalThis.MME_NAVIGATION?.setOpener === 'function') {
     globalThis.MME_NAVIGATION.setOpener(async function restoreOpen(location) {
-      if (!location) return { status: 'failed', location, error: new Error('No location') };
+      if (!location) {
+        return {
+          status: 'failed',
+          location,
+          error: new Error('No location'),
+        };
+      }
 
-      // Virtual workspace-index: switch Host to workspace-index
-      if (location.type === 'virtual-workspace-index') {
-        const host = globalThis.MME_WORKSPACE_HOST;
-        if (!host || !host.has('workspace-index')) {
-          return { status: 'failed', location, error: new Error('workspace-index not registered') };
+      const host = globalThis.MME_WORKSPACE_HOST;
+
+      function isSuccessfulHostSwitch(result, targetWorkspaceId) {
+        return Boolean(
+          host &&
+            (result?.status === host.RESULT_STATUS.ACTIVATED ||
+              (result?.status === host.RESULT_STATUS.NOOP &&
+                host.getActiveId?.() === targetWorkspaceId))
+        );
+      }
+
+      async function rollbackWorkspace(previousWorkspace, cause = null) {
+        if (
+          !host ||
+          !previousWorkspace ||
+          host.getActiveId?.() === previousWorkspace
+        ) {
+          return;
         }
 
         try {
-          const result = await host.switchTo('workspace-index', { reason: 'navigation restore' });
-          if (!result || result.status !== host.RESULT_STATUS.ACTIVATED) {
-            return { status: 'failed', location, error: new Error('workspace-index switch failed') };
+          const rollbackResult = await host.switchTo(previousWorkspace, {
+            reason: 'navigation restore rollback',
+          });
+
+          if (!isSuccessfulHostSwitch(rollbackResult, previousWorkspace)) {
+            globalThis.MME_APP?.log?.(
+              `Workspace: navigation rollback returned status=${
+                rollbackResult?.status || 'unknown'
+              } target=${previousWorkspace} cause=${
+                cause?.message || cause || 'unknown'
+              }`
+            );
           }
-          return { status: 'opened', location };
-        } catch (error) {
-          return { status: 'failed', location, error };
+        } catch (rollbackError) {
+          globalThis.MME_APP?.log?.(
+            `Workspace: navigation rollback failed target=${previousWorkspace}: ${
+              rollbackError?.message || rollbackError
+            }`
+          );
         }
       }
 
-      // Workspace-file: switch to Journal, attempt canonical restore open
-      // Correction 2: Rollback to previous workspace on failure
-      const host = globalThis.MME_WORKSPACE_HOST;
-      const previousWorkspace = host ? host.getActiveId() : null;
+      // Virtual Workspace Index restoration.
+      if (location.type === 'virtual-workspace-index') {
+        if (!host || !host.has?.('workspace-index')) {
+          return {
+            status: 'failed',
+            location,
+            error: new Error('workspace-index not registered'),
+          };
+        }
 
-      const fileRecord = findWorkspaceFileByPath(location?.path, location?.kind);
-      if (!fileRecord || !fileRecord.handle) {
-        return { status: 'failed', location, error: new Error('Workspace file not found') };
+        try {
+          const result = await host.switchTo('workspace-index', {
+            reason: 'navigation restore',
+          });
+
+          if (!isSuccessfulHostSwitch(result, 'workspace-index')) {
+            const error = new Error(
+              `workspace-index switch failed: ${
+                result?.status || 'unknown'
+              }`
+            );
+
+            globalThis.MME_APP?.log?.(
+              `Workspace: navigation restore failed type=virtual-workspace-index status=${
+                result?.status || 'unknown'
+              }`
+            );
+
+            return {
+              status: 'failed',
+              location,
+              error,
+            };
+          }
+
+          return {
+            status: 'opened',
+            location,
+          };
+        } catch (error) {
+          globalThis.MME_APP?.log?.(
+            `Workspace: navigation restore Workspace Index switch threw: ${
+              error?.message || error
+            }`
+          );
+
+          return {
+            status: 'failed',
+            location,
+            error,
+          };
+        }
       }
 
-      // Switch to Journal first
+      if (location.type !== 'workspace-file') {
+        const error = new Error(
+          `Unsupported navigation location type: ${
+            location.type || '(missing)'
+          }`
+        );
+
+        globalThis.MME_APP?.log?.(
+          `Workspace: navigation restore rejected unsupported type=${
+            location.type || '(missing)'
+          }`
+        );
+
+        return {
+          status: 'failed',
+          location,
+          error,
+        };
+      }
+
+      // Resolve the physical file before switching workspace presentation.
+      const previousWorkspace = host?.getActiveId?.() || null;
+
+      const fileRecord = findWorkspaceFileByPath(
+        location.path,
+        location.kind
+      );
+
+      if (!fileRecord || !fileRecord.handle) {
+        const error = new Error('Workspace file not found');
+
+        globalThis.MME_APP?.log?.(
+          `Workspace: navigation restore file not found path=${
+            location.path || '(missing)'
+          } kind=${location.kind || '(missing)'}`
+        );
+
+        return {
+          status: 'failed',
+          location,
+          error,
+        };
+      }
+
+      // Switch to Journal. NOOP is valid when Journal is already active.
       if (host) {
         try {
-          const switchResult = await host.switchTo('journal', { reason: 'navigation restore' });
-          if (!switchResult || switchResult.status !== host.RESULT_STATUS.ACTIVATED) {
-            return { status: 'failed', location, error: new Error('Journal switch failed') };
+          const switchResult = await host.switchTo('journal', {
+            reason: 'navigation restore',
+          });
+
+          if (!isSuccessfulHostSwitch(switchResult, 'journal')) {
+            const error = new Error(
+              `Journal switch failed: ${
+                switchResult?.status || 'unknown'
+              }`
+            );
+
+            globalThis.MME_APP?.log?.(
+              `Workspace: navigation restore Journal switch failed status=${
+                switchResult?.status || 'unknown'
+              } path=${location.path || '(missing)'}`
+            );
+
+            await rollbackWorkspace(previousWorkspace, error);
+
+            return {
+              status: 'failed',
+              location,
+              error,
+            };
           }
         } catch (error) {
-          return { status: 'failed', location, error };
+          globalThis.MME_APP?.log?.(
+            `Workspace: navigation restore Journal switch threw path=${
+              location.path || '(missing)'
+            }: ${error?.message || error}`
+          );
+
+          await rollbackWorkspace(previousWorkspace, error);
+
+          return {
+            status: 'failed',
+            location,
+            error,
+          };
         }
       }
 
@@ -974,24 +1178,44 @@ function initWorkspace() {
           'navigation restore',
           { historyMode: 'restore' }
         );
+
         if (!opened) {
-          // Correction 2: Rollback to previous workspace on cancel/failure
-          if (host && previousWorkspace && previousWorkspace !== 'journal') {
-            try {
-              await host.switchTo(previousWorkspace, { reason: 'navigation restore rollback' });
-            } catch {}
-          }
-          return { status: 'cancelled', location };
+          const error = new Error(
+            'Workspace file restore was cancelled or returned no result'
+          );
+
+          globalThis.MME_APP?.log?.(
+            `Workspace: navigation restore cancelled path=${
+              location.path || '(missing)'
+            }`
+          );
+
+          await rollbackWorkspace(previousWorkspace, error);
+
+          return {
+            status: 'cancelled',
+            location,
+          };
         }
-        return { status: 'opened', location };
+
+        return {
+          status: 'opened',
+          location,
+        };
       } catch (error) {
-        // Correction 2: Rollback to previous workspace on error
-        if (host && previousWorkspace && previousWorkspace !== 'journal') {
-          try {
-            await host.switchTo(previousWorkspace, { reason: 'navigation restore rollback' });
-          } catch {}
-        }
-        return { status: 'failed', location, error };
+        globalThis.MME_APP?.log?.(
+          `Workspace: navigation restore open failed path=${
+            location.path || '(missing)'
+          }: ${error?.message || error}`
+        );
+
+        await rollbackWorkspace(previousWorkspace, error);
+
+        return {
+          status: 'failed',
+          location,
+          error,
+        };
       }
     });
   }
