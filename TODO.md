@@ -1,152 +1,89 @@
 # TODO.md
 
-## Workspace Host Foundation (Completed)
+## Completed Core Modules (v58 Functional Recovery)
 
-- [x] Host runtime skeleton
-- [x] Host loader/PWA integration
-- [x] Journal adapter registration
-- [x] Explicit Journal initialization readiness
-- [x] Host-owned Journal initialization authority
-- [x] Initialization state machine
-- [x] Mobile-visible diagnostics
-- [x] Foundation completion audit
-
-## PHASE A — Architecture Stabilization
-
-### R-SPLIT4
-- [ ] Extract render debounce, Markmap setData, HTML refresh, and scroll sync into render controller
-- [ ] Prevent stale overlapping renders
-
-### R-RENDER1
-- [ ] Centralize render orchestration
-- [ ] Validate render controller integration
+- [x] Workspace Host Foundation & Registry (registered=2: Journal and Workspace-Index)
+- [x] Idempotent Event-Driven Sidebar Panel Lifecycle Finalization (mme-workspace-index-ready)
+- [x] Programmatic Text Mutation suppression helper (runProgrammaticTextChange)
+- [x] Navigation History V1 Engine (Back & Forward with restore stack protection)
+- [x] Journal initialization constraint (initializationCount = 1, legacyAutoInit = false)
+- [x] Virtual Workspace Index V1 return-to-workspace and rollback
 
 ---
 
-## PHASE B — Metadata Foundation
+## Short-term Priorities & Remaining Verification
 
-### R-META2 (Completed)
-- [x] Separate metadata generation from body templates
-- [x] Compose metadata + body at creation/insertion time
-- [x] Avoid duplicated frontmatter across templates
+### 1. Mode Session Bridge Verification (Required)
+- [ ] Verify Editor and Slides Mode Session text/filename/dirty independence
+- [ ] Validate switch sequence: Editor → Slides → Editor → Slides
+- [ ] Confirm no state bleed or duplicate registers on DeX/mobile
 
-### R-META3 (Completed)
-- [x] Keep frontmatter in saved Markdown files
-- [x] Hide/collapse frontmatter in normal editor view
-- [x] Add Show Metadata toggle
+### 2. Edge Cases and Resilience Validation
+- [ ] Validate dirty cancellation and save confirmation rollback edge cases
+- [ ] Final security/capabilities audit on the Workspace Host boundary
+- [ ] Encapsulate the global runtime registry securely (prevent window pollution)
 
-### R-META4
-- [ ] Editable metadata UI for type/date/created/updated/status/tags
-- [ ] Tags editable as chips
-- [ ] Save recomposes frontmatter + body
-
----
-
-## PHASE C — Knowledge Navigation
-
-### R-LINK1
-- [ ] Parse [[WikiLinks]] syntax including [[target|label]] aliases
-- [ ] Resolve [[target]] to workspace file via path, filename, basename, H1 title
-- [ ] Detect missing targets (no file found)
-- [ ] Detect ambiguous targets (multiple matches)
-- [ ] CodeMirror: decorate wiki links with visual styles
-- [ ] CodeMirror: Ctrl/Cmd+Click opens resolved target
-- [ ] HTML Preview: render wiki links as clickable anchors
-- [ ] Markmap: wiki link click integration (postponed if unsafe)
-- [ ] Open resolved target via existing workspace file-open flow
-- [ ] Preserve dirty confirmation, active highlight, Render Controller, lastActiveFile
-- [ ] Compatible with R-META3 hidden frontmatter
-
-### R-LINK2
-- [ ] Provide reverse references (backlinks)
-- [ ] Display "Referenced By" section
-- [ ] Update backlinks correctly
-- [ ] Handle renames safely
-- [ ] Depends on R-LINK1
+### 3. Optimization Phase (Deferred)
+- [ ] Navigation History performance optimization:
+  - Distinguish active-file-only history restoration from workspace-content changes
+  - Avoid redundant index rebuilding when workspace files have not mutated
+  - Scope presentation-only updates (e.g. active-file highlights) narrowly and safely
 
 ---
 
-## PHASE D — Task Management
+## Deferred Roadmap (Future Features)
 
-### R-TASK2 (Completed)
-- [x] Search open tasks
-- [x] Search completed tasks
-- [x] Search all tasks
-- [x] Filter by text
-- [x] Filter by file
-- [x] Filter by tag
+### 1. Projects Workflow (Standalone-First)
+- [ ] Implement standalone Markdown project records with structured YAML frontmatter:
+  - `type` (project)
+  - `id` (unique identifier)
+  - `title`
+  - `status`
+  - `value`
+  - `currency`
+  - `expected_date` / `order_date`
+  - `delivery_date`
+  - `group` (optional)
+  - `tags`
+  - `created`
+  - `updated`
+- [ ] Render Markdown narrative body as description and notes
+- [ ] Group and aggregate totals dynamically by currency
+- [ ] Standardize project archiving instead of deletion
+- [ ] Decouple from Journal or Groups requirements
+- [ ] Integrate optionally with Tasks, Knowledge Base/Journals, or Group filters
+- [ ] Export structured source data for Report Mode
 
-### R-TASK3 (Completed)
-- [x] Support #p1, #p2, #p3 priority tags
-- [x] Detect P1 tasks
-- [x] Detect P2 tasks
-- [x] Detect P3 tasks
-- [x] Priority filters (All, Open, Completed, P1, P2, P3)
+### 2. Report Mode & Draw.io
+- [ ] Keep Draw.io as the primary editable report template asset (.drawio / .svg)
+- [ ] Implement structured template tags to map Markdown data source directly into reports
+- [ ] Export filtered/selected project data as CSV for external spreadsheet processing
+- [ ] Support round-trip of enriched data to populate Draw.io text layers
+- [ ] Keep Markdown narrative available as primary textual content
+- [ ] Output presentation-ready PPTX (deferred format, not the primary edit source)
+- [ ] Expose dynamic calculations and interactive input fields in Report sidebar
 
-### R-TASK4
-- [ ] Support #waiting tag
-- [ ] Waiting filter
-- [ ] Delegated task tracking
-- [ ] Depends on R-TASK2
+### 3. Reveal.js Presentations
+- [ ] Draft specification and build isolated presentation prototype
+- [ ] Postpone full runtime integration (deferred PWA integration, script loader additions, Service Worker caching, and SlidesWorkspace alignment)
 
----
+### 4. Mermaid Diagrams
+- [ ] Support Markdown-native Mermaid code-block parsing first
+- [ ] Render diagrams within Markmap nodes and HTML preview where feasible
+- [ ] Consider a separate standalone Mermaid export workflow in subsequent updates
 
-## PHASE E — Business Knowledge Layer
+### 5. Workspace Migrations
+- [ ] Migrate the legacy EditorWorkspace, SlidesWorkspace, and future ReportWorkspace to run on top of the centralized Workspace Host foundation.
 
-### R-BIZ1
-- [ ] Support type: company in frontmatter
+### Metadata UI, deferred
 
-### R-BIZ2
-- [ ] Company knowledge views
-- [ ] Specialized concept treatment for companies
+- [ ] Provide an optional visual editor for supported frontmatter fields.
+- [ ] Preserve the complete Markdown source and hidden-frontmatter behavior.
+- [ ] Avoid making metadata UI mandatory for standalone Markdown editing.
+`
+### Relationships and backlinks
 
-### R-BIZ3
-- [ ] Aggregate meetings, tasks, contacts, projects
-- [ ] Company rollup views
-- [ ] Depends on R-LINK1, R-LINK2, R-META4
+- [ ] Audit which R-LINK2 backlink requirements are already covered by Related.
+- [ ] Define remaining explicit Referenced By behavior.
+- [ ] Defer rename-safe link migration until file rename ownership is defined.
 
----
-
-## PHASE F — Diagram Layer
-
-### R-DIAGRAM1
-- [ ] Mermaid diagram support in Markdown
-- [ ] Render Mermaid in HTML Preview
-- [ ] Export Mermaid in HTML export
-- [ ] Dark/light mode support
-
-### R-DIAGRAM2
-- [ ] Draw.io asset support (.drawio + .svg)
-- [ ] Double-click to edit workflow
-- [ ] Refresh SVG after save
-
----
-
-## PHASE G — Canvas Layer
-
-### R-CANVAS1
-- [ ] Separate visual diagram workspace
-
----
-
-## Short-term Priorities
-
-1. [ ] Render stabilization (R-SPLIT4, R-RENDER1)
-2. [x] Metadata foundation (R-META2, R-META3)
-3. [ ] Wiki links (R-LINK1)
-4. [ ] Task search (R-TASK2)
-5. [ ] Task priorities (R-TASK3)
-6. [ ] Metadata panel (R-META4)
-
-## Workspace Host — Future Work
-
-- [x] Virtual Workspace Index V1 Implementation
-- [x] Journal deactivate/visibility contract for second workspace
-- [x] Journal session enrichment
-- [x] Journal restore contract
-- [x] Host/Navigation History behavior across workspace types
-- [ ] Optional workspace selector after a second workspace exists
-- [ ] Workspace-level detach
-- [ ] Report/Slides/Diagram workspaces
-
-**Note:** Internal switching API available; cross-workspace UI/session behavior awaits the second workspace.

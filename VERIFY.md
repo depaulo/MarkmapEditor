@@ -1,46 +1,17 @@
-# Verification Checklist
+# VERIFY.md — Verification Checklist & Procedures
 
-## Workspace Host Foundation
+This document outlines short, repeatable verification procedures suitable for DeX/mobile and desktop validation.
 
-### Phase 2 — Host Readiness
+---
 
-Directly validated mobile diagnostic:
+## 1. Diagnostics & Runtime Checks
 
+### A. Host Diagnostic Output
+Ensure globalThis diagnostics match exactly:
 ```
-WorkspaceHost Phase2:
-ready=true
-active=(none)
-registered=0
-transition=false
-missingMethods=none
-```
-
-Note: `registered` may be 0 during the original Phase 2 checkpoint and 1 after the Journal adapter registers before activation.
-
-### Phase 3A — Journal Acknowledgement
-
-Directly validated mobile diagnostic:
-
-```
-WorkspaceHost Phase3A:
 ready=true
 active=journal
-registered=1
-transition=false
-journalInitialized=true
-initializationCount=1
-adapterCalledInit=false
-```
-
-### Phase 3B — Authority Transfer
-
-Directly validated mobile diagnostic:
-
-```
-WorkspaceHost Phase3B:
-ready=true
-active=journal
-registered=1
+registered=2
 transition=false
 journalInitialized=true
 initializationState=initialized
@@ -50,169 +21,67 @@ adapterCalledInitialize=true
 legacyAutoInit=false
 ```
 
-### Directly Validated Runtime Evidence
-
-- [x] Application boot
-- [x] Host loaded
-- [x] Journal registered
-- [x] Host active=journal
-- [x] initializationCount=1
-- [x] legacy auto-init removed
-- [x] Markmap created/rendered
-- [x] Workspace opened after Host activation
-- [x] Populated Workspace Index rebuilt
-- [x] Wiki Links refreshed
-- [x] Task Review refreshed
-- [x] No supplied uncaught error
-- [x] No supplied unhandled rejection
-
-### Manual Checks Still Open
-
-- [ ] Save
-- [ ] Save As
-- [ ] Today
-- [ ] New Concept
-- [ ] Archive
-- [ ] Back
-- [ ] Forward
-- [ ] Physical Wiki Link click
-- [ ] Related item click
-- [ ] Tag item click
-- [ ] Search result click
+### B. Directly Validated Evidence
+- [x] Application boots without uncaught exceptions or unhandled rejections.
+- [x] Service Worker (`sw.js`) registers successfully.
+- [x] Host loaded, active=journal, and initializationCount=1 precisely.
+- [x] Populated Workspace Index successfully rebuilt.
+- [x] Sidebar panel order matches canonical ordering.
 
 ---
 
-## Boot
+## 2. Structured Verification Groups
 
-- [ ] App opens in browser preview
-- [ ] No red console errors
-- [ ] Markmap renders
-- [ ] CodeMirror loads
-- [ ] Editor typing updates map
-- [ ] Logs panel opens
+### Group A: Startup and Ownership
+- [ ] **Host Registration**: Confirm `MME_WORKSPACE_HOST.getSnapshot().registeredWorkspaces.length === 2` (Journal and Workspace Index).
+- [ ] **Authority Check**: Verify Journal doesn't run legacy self-init (`legacyAutoInit = false`).
+- [ ] **No Duplicate Workspaces**: Assert no multiple workspace controllers or duplicate registered listeners.
 
-## Existing features
+### Group B: Sidebar Reload & Panel Idempotency
+- [ ] **Same-Tab Reload**: Perform a clean tab reload while workspace is active.
+- [ ] **Index Readiness**: Wait for `mme-workspace-index-ready` event dispatch.
+- [ ] **Order Normalization**: Verify panels follow canonical order:
+  1. Search
+  2. Active File
+  3. Journals
+  4. Concepts
+  5. Related
+  6. Open Tasks
+  7. Tags
+  8. Workspace Index
+  9. Navigation History
+- [ ] **Panel Toggles**: Toggle every panel section exactly once.
+- [ ] **Preference Persistence**: Refresh page; confirm previous collapsed/expanded preferences persist correctly.
+- [ ] **Open Full Index**: Click "Open Full Index" button; verify it transitions to the Workspace Index View.
 
-- [ ] Open file
-- [ ] Save file
-- [ ] Save fallback/download
-- [ ] Recent files menu
-- [ ] Templates menu
-- [ ] Pandoc templates menu
-- [ ] Add image menu
-- [ ] Export Markdown
-- [ ] Export SVG
-- [ ] Export HTML Preview
-- [ ] HTML Preview opens/closes
-- [ ] Dark mode
-- [ ] Compact mode
-- [ ] Map style modal
+### Group C: Programmatic Dirty Behavior
+- [ ] **Reopen Suppression**: Automatic active-file reopen on boot leaves the file non-dirty (`isDirty = false`).
+- [ ] **Sidebar Select Suppression**: Double-click file in sidebar; verify document opens without triggering a false dirty event.
+- [ ] **Index Select Suppression**: Open file from Virtual Workspace Index; verify document opens cleanly with `isDirty = false`.
+- [ ] **History Restore Suppression**: Trigger Back/Forward; verify restored file doesn't set false dirty state.
+- [ ] **Genuine Typing**: Type in CodeMirror; verify `isDirty = true` immediately, followed by one debounced render and autosave.
+- [ ] **Draft Restore**: Open a previously unsaved draft; verify it is correctly flagged as dirty.
 
-## PWA
+### Group D: Mode Session (Required - Unverified)
+*Note: This group is marked REQUIRED as manual validation has not yet been explicitly completed.*
+- [ ] **Text Independence**: Write text in Editor mode; switch to Slides mode and write different text. Switch back and forth; verify unique texts.
+- [ ] **Filename Independence**: Verify independent file names for Editor vs Slides mode.
+- [ ] **Dirty State Capture**: Capture `isDirty = true` in Editor, switch to Slides and verify Slides can be non-dirty, switch back to Editor and verify dirty state is restored.
+- [ ] **Physical File Authority**: Verify that switching to Journal workspace respects the physical active file as the single source of truth.
 
-- [ ] manifest loads
-- [ ] sw.js registers
-- [ ] css loaded/cached
-- [ ] js/main.js loaded/cached
-- [ ] js/editor/* loaded/cached
-- [ ] js/core/* loaded/cached
-- [ ] js/workspace/* loaded/cached
-- [ ] js/export/* loaded/cached
+### Group E: Navigation History
+- [ ] **Physical Walk**: Open File A → File B → File C.
+- [ ] **Back-Forward Actions**: Click Back twice (re-opens B, then A). Click Forward twice (re-opens B, then C).
+- [ ] **Virtual Walk**: Open File A → click "Open Full Index" (Virtual index opens) → click Back (A restored) → click Forward (Index restored).
+- [ ] **Return Action**: Click Return button from Virtual Workspace Index; verify it returns to File A.
+- [ ] **Cancelled Dirty Rollback**: Try to navigate away while active file is dirty; cancel the navigation confirm dialog. Verify history stack is NOT committed and current position is preserved.
+- [ ] **Navigation Log**: Inspect console; verify logged actions correctly report: `opened`, `cancelled`, `failed`, or `noop`.
 
-## UX-MODE1.2 — Welcome / Help Navigation
-
-- [ ] Welcome opens on first visit
-- [ ] Welcome Reference (Editor) → Help opens, Welcome hides
-- [ ] Welcome Reference (Journal) → Help opens, Welcome hides
-- [ ] Welcome Reference (Slides) → Help opens, Welcome hides
-- [ ] Help Back to Welcome button visible
-- [ ] Help → Back to Welcome → Welcome appears, Help closes
-- [ ] Repeated Welcome→Help→Back cycle works without errors
-- [ ] Toolbar Help opens correctly
-- [ ] Toolbar Help → Back to Welcome works
-- [ ] No overlay overlap or click-through
-- [ ] Mode/document/dirty state preserved after navigation
-
-## R-LINK1 — Wiki Links
-
-### Parser
-- [ ] [[Target]] parsed correctly
-- [ ] [[Target|Label]] parsed correctly (alias support)
-- [ ] Source preserved (no mutation)
-- [ ] Multiple links per line supported
-- [ ] Empty targets rejected
-- [ ] Code fence exclusion attempted if safe
-
-### Resolver
-- [ ] Exact workspace-relative path resolves
-- [ ] Exact filename (with .md) resolves
-- [ ] Exact basename (without .md) resolves
-- [ ] H1/title match resolves
-- [ ] Case-insensitive fallback works
-- [ ] Missing target detected (status: missing)
-- [ ] Ambiguous target detected (status: ambiguous)
-- [ ] Existing workspace index reused (no second scanner)
-
-### CodeMirror
-- [ ] Wiki links decorated with visual style
-- [ ] Normal editing preserved (no forced navigation)
-- [ ] Ctrl/Cmd+Click opens target
-- [ ] Missing link style distinct
-- [ ] Ambiguous link style distinct
-- [ ] No dirty state changes from decoration
-- [ ] Decoration refresh after document change
-
-### HTML Preview
-- [ ] Wiki links rendered as clickable elements
-- [ ] data-wiki-target attribute used for delegation
-- [ ] Normal Markdown links preserved
-- [ ] No HTML injection
-- [ ] Standalone export behavior safe
-
-### Markmap
-- [ ] MarkmapJump preserved (normal click)
-- [ ] Node folding preserved
-- [ ] Wiki link integration implemented or postponed with documentation
-- [ ] If implemented: Ctrl/Cmd+Click opens target
-- [ ] If postponed: STATUS.md documents pending status
-
-### Opening
-- [ ] Existing workspace file-open path reused (openWorkspaceFile)
-- [ ] Dirty confirmation preserved
-- [ ] Active highlight updated
-- [ ] Render Controller preserved
-- [ ] lastActiveFile preserved
-
-### Metadata Compatibility
-- [ ] R-META2 composed documents work with links
-- [ ] R-META3 hidden frontmatter preserved
-- [ ] Show/Hide Metadata continues working
-- [ ] Complete source preserved in editor
-
-## R-LINK2 — Backlinks
-
-- [ ] Backlinks update correctly
-- [ ] Renames handled safely
-- [ ] Depends on R-LINK1
-
-## R-TASK2 — Task Search
-
-- [x] Completed tasks searchable
-- [x] Open tasks searchable
-- [x] Filters correct
-- [x] Text search implemented
-- [x] Source navigation implemented
-
-## R-TASK3 — Task Priority
-
-- [x] P1 detected
-- [x] P2 detected
-- [x] P3 detected
-- [x] Priority filters work
-- [x] Set/Clear Priority actions implemented
-
-## R-TASK4 — Waiting / Delegated
-
-- [ ] #waiting detected
-- [ ] Waiting filter works
-- [ ] Depends on R-TASK2
+### Group F: Regression Checks
+- [ ] **Wiki Links**: Decorated links display, double-clicking them redirects to resolved physical target.
+- [ ] **Task Review**: Open tasks parsed correctly, filters and status changes apply seamlessly.
+- [ ] **Return Button**: Independent of Back and Forward buttons.
+- [ ] **Dirty Rollback**: Reverts correctly when dirty edits are discarded.
+- [ ] **Sidebar Width**: Sidebar resize handle operates smoothly; width persists across refreshes.
+- [ ] **Save / Save As**: Standard file system handlers preserve document content securely.
+- [ ] **PWA Cache**: Offline operations and cache hits verified via DevTools Application tab.
