@@ -155,6 +155,7 @@ html[data-app-context='journal'] #workspaceSidebar {
   width: 100%;
   height: 30px;
   padding: 0 8px;
+  box-sizing: border-box;
 
   border-radius: 6px;
   border: 1px solid var(--toolbar-border);
@@ -450,13 +451,23 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
   justify-content: space-between;
   gap: 8px;
 
-  padding: 0;
+  padding: 6px 4px;
   border: none;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
 
   cursor: pointer;
   text-align: left;
+}
+
+.workspacePanelHeaderButton:hover {
+  background: var(--menu-hover);
+}
+
+.workspacePanelHeaderButton:focus-visible {
+  outline: 2px solid rgba(34, 197, 94, 0.45);
+  outline-offset: 1px;
 }
 
 .workspacePanelHeaderLeft {
@@ -485,10 +496,16 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
 .workspacePanelBadge {
   flex: 0 0 auto;
 
+  min-width: 22px;
+  min-height: 20px;
   max-width: 145px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 
   font-size: 11px;
   font-weight: 600;
