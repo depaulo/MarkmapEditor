@@ -74,7 +74,7 @@
       : '';
 
     return `
-      <section class="wsIndexSection" aria-label="Summary">
+      <section class="wsIndexSection" id="workspaceIndexSummarySection" aria-label="Summary">
         <h2 class="wsIndexSectionTitle">Summary</h2>
         ${updated}
         <div class="wsIndexMetrics">${metricsHtml}</div>
@@ -107,7 +107,7 @@
 
     if (!journals.length) {
       return `
-        <section class="wsIndexSection" aria-label="Journals">
+        <section class="wsIndexSection" id="workspaceIndexJournalsSection" aria-label="Journals">
           <h2 class="wsIndexSectionTitle">Journals</h2>
           <div class="wsIndexEmpty">No journals indexed</div>
         </section>
@@ -117,7 +117,7 @@
     const items = journals.map(buildFileActionButton).join('');
 
     return `
-      <section class="wsIndexSection" aria-label="Journals">
+      <section class="wsIndexSection" id="workspaceIndexJournalsSection" aria-label="Journals">
         <h2 class="wsIndexSectionTitle">Journals (${journals.length})</h2>
         <div class="wsIndexFileList">${items}</div>
       </section>
@@ -131,7 +131,7 @@
 
     if (!concepts.length) {
       return `
-        <section class="wsIndexSection" aria-label="Concepts">
+        <section class="wsIndexSection" id="workspaceIndexConceptsSection" aria-label="Concepts">
           <h2 class="wsIndexSectionTitle">Concepts</h2>
           <div class="wsIndexEmpty">No concepts indexed</div>
         </section>
@@ -141,7 +141,7 @@
     const items = concepts.map(buildFileActionButton).join('');
 
     return `
-      <section class="wsIndexSection" aria-label="Concepts">
+      <section class="wsIndexSection" id="workspaceIndexConceptsSection" aria-label="Concepts">
         <h2 class="wsIndexSectionTitle">Concepts (${concepts.length})</h2>
         <div class="wsIndexFileList">${items}</div>
       </section>
@@ -152,7 +152,7 @@
     const tags = index.tags;
     if (!tags || tags.size === 0) {
       return `
-        <section class="wsIndexSection" aria-label="Tags">
+        <section class="wsIndexSection" id="workspaceIndexTagsSection" aria-label="Tags">
           <h2 class="wsIndexSectionTitle">Tags</h2>
           <div class="wsIndexEmpty">No tags indexed</div>
         </section>
@@ -188,9 +188,9 @@
       .join('');
 
     return `
-      <section class="wsIndexSection" aria-label="Tags">
+      <section class="wsIndexSection" id="workspaceIndexTagsSection" aria-label="Tags">
         <h2 class="wsIndexSectionTitle">Tags (${sortedTags.length})</h2>
-        ${items}
+        <div class="wsIndexTagGrid">${items}</div>
       </section>
     `;
   }
@@ -201,7 +201,7 @@
     if (!tasks.length) {
       const label = done ? 'Completed Tasks' : 'Open Tasks';
       return `
-        <section class="wsIndexSection" aria-label="${label}">
+        <section class="wsIndexSection" id="${done ? 'workspaceIndexCompletedTasksSection' : 'workspaceIndexOpenTasksSection'}" aria-label="${label}">
           <h2 class="wsIndexSectionTitle">${label}</h2>
           <div class="wsIndexEmpty">No ${done ? 'completed' : 'open'} tasks</div>
         </section>
@@ -258,7 +258,7 @@
     const label = done ? 'Completed Tasks' : 'Open Tasks';
 
     return `
-      <section class="wsIndexSection" aria-label="${label}">
+      <section class="wsIndexSection" id="${done ? 'workspaceIndexCompletedTasksSection' : 'workspaceIndexOpenTasksSection'}" aria-label="${label}">
         <h2 class="wsIndexSectionTitle">${label} (${tasks.length})</h2>
         ${groupHtml}
       </section>
@@ -269,7 +269,7 @@
     const links = index.links;
     if (!links || links.size === 0) {
       return `
-        <section class="wsIndexSection" aria-label="Relationships">
+        <section class="wsIndexSection" id="workspaceIndexRelationshipsSection" aria-label="Relationships">
           <h2 class="wsIndexSectionTitle">Relationships / Links</h2>
           <div class="wsIndexEmpty">No concept links indexed</div>
         </section>
@@ -305,11 +305,44 @@
       .join('');
 
     return `
-      <section class="wsIndexSection" aria-label="Relationships">
+      <section class="wsIndexSection" id="workspaceIndexRelationshipsSection" aria-label="Relationships">
         <h2 class="wsIndexSectionTitle">Relationships / Links (${sortedConcepts.length})</h2>
-        ${items}
+        <div class="wsIndexLinkGrid">${items}</div>
       </section>
     `;
+  }
+
+  // ---- Body wrapper ----
+
+  function buildBody(nav, content) {
+    return `<div class="wsIndexBody">${nav}${content}</div>`;
+  }
+
+  function buildContent(children) {
+    return `<main class="wsIndexContent">${children}</main>`;
+  }
+
+  // ---- Navigator ----
+
+  function buildNavigator() {
+    const links = [
+      { id: 'workspaceIndexSummarySection', label: 'Summary' },
+      { id: 'workspaceIndexJournalsSection', label: 'Journals' },
+      { id: 'workspaceIndexConceptsSection', label: 'Concepts' },
+      { id: 'workspaceIndexTagsSection', label: 'Tags' },
+      { id: 'workspaceIndexOpenTasksSection', label: 'Open Tasks' },
+      { id: 'workspaceIndexCompletedTasksSection', label: 'Completed Tasks' },
+      { id: 'workspaceIndexRelationshipsSection', label: 'Relationships' },
+    ];
+
+    const anchors = links
+      .map(
+        (l) =>
+          `<a href="#${escapeAttr(l.id)}" class="wsIndexNavLink">${escapeHtml(l.label)}</a>`
+      )
+      .join('');
+
+    return `<nav class="wsIndexNavigator" aria-label="Workspace Index sections">${anchors}</nav>`;
   }
 
   // ---- Main projection ----
@@ -346,7 +379,8 @@
       return buildSummarySection(index) + buildEmptyWorkspaceHtml();
     }
 
-    return [
+    const nav = buildNavigator();
+    const sections = [
       buildSummarySection(index),
       buildJournalsSection(index),
       buildConceptsSection(index),
@@ -355,6 +389,9 @@
       buildTasksSection(index, true),
       buildRelationshipsSection(index),
     ].join('\n');
+
+    const content = buildContent(sections);
+    return buildBody(nav, content);
   }
 
   const api = Object.freeze({
