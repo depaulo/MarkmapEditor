@@ -2095,11 +2095,20 @@ html.workspace-index-active .splitter::before {
   content: none;
 }
 
+/* ---- Full Workspace Index: suspend Journal/editor/viewer layout children ---- */
+html.workspace-index-active #workspaceSidebar,
+html.workspace-index-active #editor,
+html.workspace-index-active #splitEditor,
+html.workspace-index-active #viewer {
+  display: none !important;
+}
+
 /* ---- Workspace Index View container ---- */
 .workspaceIndexView {
   display: none;
   flex: 1 1 auto;
   width: 100%;
+  min-width: 0;
   max-width: 1200px;
   box-sizing: border-box;
   overflow-y: auto;
