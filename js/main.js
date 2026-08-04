@@ -979,6 +979,7 @@ const WORKSPACE_PANEL_DEFAULT_COLLAPSED = {
   tags: true,
   journals: false,
   concepts: false,
+  projects: false,
 };
 
 function getWorkspacePanelCollapsedState() {
@@ -1055,6 +1056,13 @@ function hasWorkspacePanelMarkup(panelId) {
     return !!(
       document.getElementById('workspaceConceptsPanel')?.querySelector?.('#workspaceConceptsList') &&
       document.getElementById('workspaceConceptsPanel')?.querySelector?.('#workspaceConceptsBadge')
+    );
+  }
+
+  if (panelId === 'projects') {
+    return !!(
+      document.getElementById('workspaceProjectsPanel')?.querySelector?.('#workspaceProjectsBadge') &&
+      document.getElementById('workspaceProjectsPanel')?.querySelector?.('#workspaceProjectsList')
     );
   }
 
@@ -1285,9 +1293,11 @@ function toggleWorkspacePanel(panelId) {
               ? document.getElementById('workspaceTagsPanel')
               : panelId === 'journals'
                 ? document.getElementById('workspaceJournalsPanel')
-                : panelId === 'concepts'
-                  ? document.getElementById('workspaceConceptsPanel')
-                  : null;
+            : panelId === 'concepts'
+              ? document.getElementById('workspaceConceptsPanel')
+              : panelId === 'projects'
+                ? document.getElementById('workspaceProjectsPanel')
+                : null;
 
   if (!panelEl) return;
 
@@ -1921,7 +1931,9 @@ function forceUpgradeWorkspacePanelMarkup(panelId) {
           ? document.getElementById('workspaceRelatedPanel')
           : panelId === 'tasks'
             ? document.getElementById('workspaceTasksPanel')
-            : null;
+            : panelId === 'projects'
+              ? document.getElementById('workspaceProjectsPanel')
+              : null;
 
     if (panel) {
       log?.(`Workspace: upgrading ${panelId} panel markup`);
@@ -2367,6 +2379,331 @@ function wireWorkspaceTagsPanel() {
   log?.('Workspace Tags: panel wired');
 }
 
+// ================================
+// Workspace Projects Panel — ACT C
+// ================================
+
+function ensureWorkspaceProjectsPanel() {
+  const host = getWorkspaceSidebarContentHost();
+
+  if (!host) {
+    log?.('Workspace Projects: ensure failed; sidebar missing');
+    return null;
+  }
+
+  let panel = document.getElementById('workspaceProjectsPanel');
+  if (panel) return panel;
+
+  panel = document.createElement('div');
+  panel.id = 'workspaceProjectsPanel';
+  panel.className = 'workspaceSection workspaceProjectsPanel';
+  panel.hidden = true;
+
+  panel.innerHTML = `
+    <div class="workspaceProjectsHeader">
+      <button
+        type="button"
+        class="workspacePanelHeaderButton"
+        data-workspace-panel-toggle="projects"
+        aria-expanded="false"
+      >
+        <span class="workspacePanelHeaderLeft">
+          <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+          <span class="workspaceProjectsTitle">Projects</span>
+        </span>
+
+        <span id="workspaceProjectsBadge" class="workspacePanelBadge">
+          0
+        </span>
+      </button>
+
+      <button
+        id="workspaceProjectsOpenButton"
+        type="button"
+        title="Open full Workspace Index"
+        aria-label="Open full Workspace Index"
+      >
+        ▤
+      </button>
+    </div>
+
+    <div class="workspacePanelBody">
+      <div id="workspaceProjectsSummary" class="workspaceProjectsSummary">
+        No Projects found
+      </div>
+
+      <div id="workspaceProjectsList" class="workspaceProjectsList">
+        <div class="workspaceProjectsEmpty">No Projects found</div>
+      </div>
+    </div>
+  `;
+
+  const conceptsPanel = document.getElementById('workspaceConceptsPanel');
+  const relatedPanel = document.getElementById('workspaceRelatedPanel');
+  const filesSection = host.querySelector('.workspaceFilesSection');
+
+  // Insert between Concepts and Related
+  if (conceptsPanel && conceptsPanel.nextSibling && conceptsPanel.nextSibling.parentNode === host) {
+    host.insertBefore(panel, conceptsPanel.nextSibling);
+  } else if (relatedPanel && relatedPanel.parentNode === host) {
+    host.insertBefore(panel, relatedPanel);
+  } else if (filesSection && filesSection.parentNode === host) {
+    host.insertBefore(panel, filesSection);
+  } else {
+    host.appendChild(panel);
+  }
+
+  log?.('Workspace Projects: panel created');
+  return panel;
+}
+
+function renderWorkspaceProjectsPanel() {
+  const panel = ensureWorkspaceProjectsPanel();
+  const badge = document.getElementById('workspaceProjectsBadge');
+  const summary = document.getElementById('workspaceProjectsSummary');
+  const list = document.getElementById('workspaceProjectsList');
+
+  if (!panel || !badge || !summary || !list) {
+    forceUpgradeWorkspacePanelMarkup('projects');
+    log?.('Workspace Projects: render skipped; panel elements missing');
+    return;
+  }
+
+  panel.hidden = false;
+
+  if (!WORKSPACE_STATE?.rootHandle) {
+    badge.textContent = '0';
+    summary.textContent = 'Open a workspace first';
+    list.innerHTML = '<div class="workspaceProjectsEmpty">Open a workspace first</div>';
+    applyWorkspacePanelCollapsed(panel, 'projects', isWorkspacePanelCollapsed('projects'));
+    return;
+  }
+
+  if (!WORKSPACE_INDEX_STATE?.ready) {
+    badge.textContent = '0';
+    summary.textContent = 'Index not ready';
+    list.innerHTML = '<div class="workspaceProjectsEmpty">Index not ready</div>';
+    applyWorkspacePanelCollapsed(panel, 'projects', isWorkspacePanelCollapsed('projects'));
+    return;
+  }
+
+  const projects = WORKSPACE_INDEX_STATE.projects || [];
+  const count = projects.length;
+
+  badge.textContent = String(count);
+
+  if (!count) {
+    summary.textContent = 'No Projects found';
+    list.innerHTML = '<div class="workspaceProjectsEmpty">No Projects found</div>';
+    applyWorkspacePanelCollapsed(panel, 'projects', isWorkspacePanelCollapsed('projects'));
+    return;
+  }
+
+  summary.textContent = `${count} Project${count !== 1 ? 's' : ''}`;
+
+  // Group projects by period
+  const groups = new Map();
+  const unscheduled = [];
+
+  for (const project of projects) {
+    const order = project.expectedOrder;
+    if (order && order.valid === true) {
+      const key = order.canonical || 'UNSCHEDULED';
+      const display = order.display || key;
+      if (!groups.has(key)) {
+        groups.set(key, { display, projects: [] });
+      }
+      groups.get(key).projects.push(project);
+    } else {
+      unscheduled.push(project);
+    }
+  }
+
+  // Sort scheduled groups by canonical key
+  const sortedKeys = Array.from(groups.keys()).sort();
+
+  let html = '';
+
+  for (const key of sortedKeys) {
+    const group = groups.get(key);
+    const items = group.projects
+      .map((p) => {
+        const name = escapeHtml(p.name || '');
+        const path = escapeHtml(p.sourcePath || '');
+        const kind = escapeHtml(p.sourceKind || '');
+
+        let valueDisplay = '';
+        if (p.value !== null && p.value !== undefined) {
+          if (p.currency) {
+            valueDisplay = p.currency + ' ' + Number(p.value).toLocaleString();
+          } else {
+            valueDisplay = Number(p.value).toLocaleString() + ' \u00b7 no currency';
+          }
+        } else {
+          valueDisplay = '\u2014';
+        }
+
+        return `
+          <button
+            type="button"
+            class="workspaceProjectItem"
+            data-workspace-project-item="1"
+            data-path="${path}"
+            data-kind="${kind}"
+            title="${path}"
+          >
+            <span class="workspaceProjectName">${name}</span>
+            <span class="workspaceProjectValue">${escapeHtml(valueDisplay)}</span>
+          </button>
+        `;
+      })
+      .join('');
+
+    html += `
+      <div class="workspaceProjectGroup">
+        <div class="workspaceProjectGroupHeader">
+          <span class="workspaceProjectGroupTitle">${escapeHtml(group.display)}</span>
+        </div>
+        <div class="workspaceProjectList">${items}</div>
+      </div>
+    `;
+  }
+
+  if (unscheduled.length) {
+    const items = unscheduled
+      .map((p) => {
+        const name = escapeHtml(p.name || '');
+        const path = escapeHtml(p.sourcePath || '');
+        const kind = escapeHtml(p.sourceKind || '');
+
+        let valueDisplay = '';
+        if (p.value !== null && p.value !== undefined) {
+          if (p.currency) {
+            valueDisplay = p.currency + ' ' + Number(p.value).toLocaleString();
+          } else {
+            valueDisplay = Number(p.value).toLocaleString() + ' \u00b7 no currency';
+          }
+        } else {
+          valueDisplay = '\u2014';
+        }
+
+        return `
+          <button
+            type="button"
+            class="workspaceProjectItem"
+            data-workspace-project-item="1"
+            data-path="${path}"
+            data-kind="${kind}"
+            title="${path}"
+          >
+            <span class="workspaceProjectName">${name}</span>
+            <span class="workspaceProjectValue">${escapeHtml(valueDisplay)}</span>
+          </button>
+        `;
+      })
+      .join('');
+
+    html += `
+      <div class="workspaceProjectGroup">
+        <div class="workspaceProjectGroupHeader">
+          <span class="workspaceProjectGroupTitle">Unscheduled</span>
+        </div>
+        <div class="workspaceProjectList">${items}</div>
+      </div>
+    `;
+  }
+
+  list.innerHTML = html;
+  applyWorkspacePanelCollapsed(panel, 'projects', isWorkspacePanelCollapsed('projects'));
+}
+
+function wireWorkspaceProjectsPanel() {
+  ensureWorkspaceProjectsPanel();
+
+  const panel = document.getElementById('workspaceProjectsPanel');
+  if (!panel) {
+    log?.('Workspace Projects: panel missing');
+    return;
+  }
+
+  if (panel.__workspaceProjectsBound) {
+    return;
+  }
+
+  // Open button: transition to workspace-index
+  const openBtn = document.getElementById('workspaceProjectsOpenButton');
+  if (openBtn && !openBtn.__workspaceProjectsOpenBound) {
+    openBtn.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      try {
+        log?.('Workspace Projects: open requested');
+
+        if (typeof globalThis.MME_WORKSPACE_HOST !== 'object') {
+          log?.('Workspace Projects: open blocked; Host missing');
+          return;
+        }
+
+        const result = await globalThis.MME_WORKSPACE_HOST.switchTo('workspace-index', {
+          reason: 'open projects view',
+        });
+
+        if (result && result.status === globalThis.MME_WORKSPACE_HOST.RESULT_STATUS.ACTIVATED) {
+          if (typeof globalThis.MME_NAVIGATION === 'object') {
+            globalThis.MME_NAVIGATION.recordSuccessfulNavigation({
+              type: 'virtual-workspace-index',
+              id: 'mme://workspace/index',
+            });
+          }
+          log?.('Workspace Projects: open success');
+        } else {
+          log?.(`Workspace Projects: open unexpected result: ${result?.status || 'unknown'}`);
+        }
+      } catch (e) {
+        log?.(`Workspace Projects: open failed: ${e?.message || e}`);
+      }
+    });
+
+    openBtn.__workspaceProjectsOpenBound = true;
+  }
+
+  // Source file opening on row click
+  panel.addEventListener('click', async (event) => {
+    const btn = event.target?.closest?.('[data-workspace-project-item="1"]');
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const path = btn.dataset.path || '';
+    const kind = btn.dataset.kind || '';
+
+    const file =
+      typeof findWorkspaceFileByPath === 'function' ? findWorkspaceFileByPath(path, kind) : null;
+
+    if (!file) {
+      log?.(`Workspace Projects: source file not found path=${path} kind=${kind}`);
+      if (typeof showToast === 'function') {
+        showToast?.('Project source file not found', 'error', 2200);
+      }
+      return;
+    }
+
+    log?.(`Workspace Projects: opening ${path}`);
+
+    if (typeof globalThis.openWorkspaceFile === 'function') {
+      await globalThis.openWorkspaceFile(file, kind || file.kind, 'workspace project source open');
+      return;
+    }
+
+    log?.('Workspace Projects: openWorkspaceFile missing');
+  });
+
+  panel.__workspaceProjectsBound = true;
+  log?.('Workspace Projects: panel wired');
+}
+
 // ACT A: Idempotent panel order normalizer.
 // Moves existing nodes into canonical order using insertBefore/appendChild.
 // Tolerates absent panels; preserves listeners and collapse state.
@@ -2380,6 +2717,7 @@ function normalizeWorkspacePanelOrder() {
     'workspaceActivePanel',
     'workspaceJournalsPanel',
     'workspaceConceptsPanel',
+    'workspaceProjectsPanel',
     'workspaceRelatedPanel',
     'workspaceTasksPanel',
     'workspaceTagsPanel',
@@ -2431,6 +2769,7 @@ function finalizeWorkspaceSidebar() {
     ensureWorkspaceRelatedPanel();
     ensureWorkspaceTasksPanel();
     ensureWorkspaceTagsPanel?.();
+    ensureWorkspaceProjectsPanel();
     ensureWorkspaceIndexPanel();
 
     // Phase 2: normalize panel order.
@@ -2443,6 +2782,7 @@ function finalizeWorkspaceSidebar() {
     wireWorkspaceRelatedPanel();
     wireWorkspaceTasksPanel();
     wireWorkspaceTagsPanel?.();
+    wireWorkspaceProjectsPanel();
     wireWorkspacePanelCollapses();
 
     // R-TASK2 + R-TASK3: wire task review module.
@@ -2456,6 +2796,7 @@ function finalizeWorkspaceSidebar() {
     renderWorkspaceTasksPanel();
     renderWorkspaceRelatedPanel();
     renderWorkspaceTagsPanel?.();
+    renderWorkspaceProjectsPanel();
 
     log?.('Workspace: panels setup complete');
   } catch (e) {

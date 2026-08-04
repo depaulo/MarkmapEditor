@@ -1479,6 +1479,163 @@ html.journal-sidebar-collapsed #workspaceTagsPanel {
   display: none !important;
 }
 
+/* ---- Workspace Projects Panel ---- */
+.workspaceProjectsPanel {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--menu-border);
+  padding: 0;
+}
+
+#workspaceProjectsPanel[hidden] {
+  display: none !important;
+}
+
+html.journal-sidebar-collapsed #workspaceProjectsPanel {
+  display: none !important;
+}
+
+.workspaceProjectsHeader {
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.workspaceProjectsHeader .workspacePanelHeaderButton {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+  text-align: left;
+  min-width: 0;
+}
+
+.workspaceProjectsHeader .workspacePanelHeaderButton:hover {
+  background: var(--menu-hover);
+}
+
+#workspaceProjectsOpenButton {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0.7;
+  line-height: 1;
+}
+
+#workspaceProjectsOpenButton:hover {
+  opacity: 1;
+  background: var(--menu-hover);
+}
+
+.workspaceProjectsTitle {
+  font-weight: 600;
+  text-transform: none !important;
+}
+
+#workspaceProjectsBadge {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.workspaceProjectsSummary {
+  padding: 4px 8px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.workspaceProjectsList {
+  display: flex;
+  flex-direction: column;
+}
+
+.workspaceProjectsEmpty {
+  padding: 8px;
+  font-size: 11px;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.workspaceProjectGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.workspaceProjectGroupHeader {
+  display: flex;
+  align-items: center;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.8;
+  border-top: 1px solid var(--menu-border);
+}
+
+.workspaceProjectGroup:first-child .workspaceProjectGroupHeader {
+  border-top: none;
+}
+
+.workspaceProjectGroupTitle {
+  flex: 1;
+}
+
+.workspaceProjectList {
+  display: flex;
+  flex-direction: column;
+}
+
+.workspaceProjectItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px 4px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+  text-align: left;
+  min-width: 0;
+}
+
+.workspaceProjectItem:hover {
+  background: var(--menu-hover);
+}
+
+.workspaceProjectItem:focus-visible {
+  outline: 1px solid var(--text);
+  outline-offset: -1px;
+}
+
+.workspaceProjectName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.workspaceProjectValue {
+  flex: 0 0 auto;
+  font-size: 11px;
+  opacity: 0.7;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
 /* Context-aware visibility */
 .contextSlidesOnly {
   display: none !important;
