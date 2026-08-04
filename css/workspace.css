@@ -2927,6 +2927,122 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
   }
 }
 
+/* ---- Workspace Index: Projects register ---- */
+.wsIndexProjectRegister {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wsIndexProjectHeader {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.6fr) minmax(90px, 0.8fr) minmax(60px, 0.5fr) minmax(60px, 0.5fr) minmax(60px, 0.5fr) minmax(80px, 0.7fr) minmax(100px, 1fr);
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  opacity: 0.65;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--menu-border);
+}
+
+.wsIndexProjectRow {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.6fr) minmax(90px, 0.8fr) minmax(60px, 0.5fr) minmax(60px, 0.5fr) minmax(60px, 0.5fr) minmax(80px, 0.7fr) minmax(100px, 1fr);
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  box-sizing: border-box;
+  min-width: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.wsIndexProjectRow:hover {
+  background: var(--menu-hover);
+  border-color: var(--menu-border);
+}
+
+.wsIndexProjectRow:focus-visible {
+  outline: 2px solid rgba(34, 197, 94, 0.45);
+  outline-offset: 1px;
+}
+
+.wsIndexProjectCell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.wsIndexProjectName {
+  font-weight: 600;
+}
+
+.wsIndexProjectValue {
+  font-variant-numeric: tabular-nums;
+}
+
+.wsIndexProjectSource {
+  opacity: 0.75;
+}
+
+/* Portrait mobile: stacked Project cards */
+@media (max-width: 767px) {
+  .wsIndexProjectHeader {
+    display: none;
+  }
+
+  .wsIndexProjectRow {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+    padding: 10px 12px;
+    border: 1px solid var(--menu-border);
+    border-radius: 8px;
+    background: var(--toolbar-bg);
+    min-height: 0;
+  }
+
+  .wsIndexProjectRow:hover {
+    background: var(--menu-hover);
+    border-color: var(--menu-border);
+  }
+
+  .wsIndexProjectCell {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+  }
+
+  .wsIndexProjectName {
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .wsIndexProjectValue {
+    font-size: 12px;
+  }
+
+  .wsIndexProjectSource {
+    font-size: 11px;
+    opacity: 0.7;
+  }
+}
+
 /* ---- Workspace Index: Relationships responsive grid ---- */
 .wsIndexLinkGrid {
   display: grid;

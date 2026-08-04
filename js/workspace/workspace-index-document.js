@@ -55,6 +55,7 @@
       { label: 'Files', value: (index.files || []).length },
       { label: 'Journals', value: journals },
       { label: 'Concepts', value: concepts },
+      { label: 'Projects', value: (index.projects || []).length },
       { label: 'Tags', value: index.tags?.size || 0 },
       { label: 'Tasks', value: (index.tasks || []).length },
       { label: 'Open', value: openTasks },
@@ -144,6 +145,98 @@
       <section class="wsIndexSection" id="workspaceIndexConceptsSection" aria-label="Concepts">
         <h2 class="wsIndexSectionTitle">Concepts (${concepts.length})</h2>
         <div class="wsIndexFileList">${items}</div>
+      </section>
+    `;
+  }
+
+  function buildProjectsSection(index) {
+    const projects = index.projects || [];
+
+    if (!projects.length) {
+      return `
+        <section class="wsIndexSection" id="workspaceIndexProjectsSection" aria-label="Projects">
+          <h2 class="wsIndexSectionTitle">Projects</h2>
+          <div class="wsIndexEmpty">No Projects found.</div>
+        </section>
+      `;
+    }
+
+    const rows = projects
+      .map((project) => {
+        const name = escapeHtml(project.name || '');
+        const path = escapeAttr(project.sourcePath || '');
+        const kind = escapeAttr(project.sourceKind || '');
+        const line = Number(project.sourceLine) || 0;
+        const lineAttr = line ? `data-line="${escapeAttr(String(line))}"` : '';
+
+        // Value
+        let valueDisplay = '\u2014';
+        if (project.value !== null && project.value !== undefined) {
+          if (project.currency) {
+            valueDisplay = project.currency + ' ' + Number(project.value).toLocaleString();
+          } else {
+            valueDisplay = Number(project.value).toLocaleString() + ' \u00b7 no currency';
+          }
+        }
+
+        // Periods
+        const orderDisplay =
+          project.expectedOrder && project.expectedOrder.valid === true
+            ? project.expectedOrder.display
+            : '\u2014';
+        const deliveryDisplay =
+          project.expectedDelivery && project.expectedDelivery.valid === true
+            ? project.expectedDelivery.display
+            : '\u2014';
+        const billingDisplay =
+          project.expectedBilling && project.expectedBilling.valid === true
+            ? project.expectedBilling.display
+            : '\u2014';
+
+        // Status
+        const statusDisplay = project.status ? project.status : '\u2014';
+
+        // Source label
+        const sourceLabel = project.sourceName || project.sourcePath || '\u2014';
+
+        return `
+          <button
+            type="button"
+            class="wsIndexProjectRow"
+            data-action="open-workspace-file"
+            data-path="${path}"
+            data-kind="${kind}"
+            ${lineAttr}
+            title="${path}"
+            aria-label="Open source: ${path}"
+          >
+            <span class="wsIndexProjectCell wsIndexProjectName">${name}</span>
+            <span class="wsIndexProjectCell wsIndexProjectValue">${escapeHtml(valueDisplay)}</span>
+            <span class="wsIndexProjectCell wsIndexProjectOrder">${escapeHtml(orderDisplay)}</span>
+            <span class="wsIndexProjectCell wsIndexProjectDelivery">${escapeHtml(deliveryDisplay)}</span>
+            <span class="wsIndexProjectCell wsIndexProjectBilling">${escapeHtml(billingDisplay)}</span>
+            <span class="wsIndexProjectCell wsIndexProjectStatus">${escapeHtml(statusDisplay)}</span>
+            <span class="wsIndexProjectCell wsIndexProjectSource">${escapeHtml(sourceLabel)}</span>
+          </button>
+        `;
+      })
+      .join('');
+
+    return `
+      <section class="wsIndexSection" id="workspaceIndexProjectsSection" aria-label="Projects">
+        <h2 class="wsIndexSectionTitle">Projects (${projects.length})</h2>
+        <div class="wsIndexProjectRegister">
+          <div class="wsIndexProjectHeader" aria-hidden="true">
+            <span class="wsIndexProjectCell wsIndexProjectName">Project</span>
+            <span class="wsIndexProjectCell wsIndexProjectValue">Value</span>
+            <span class="wsIndexProjectCell wsIndexProjectOrder">Order</span>
+            <span class="wsIndexProjectCell wsIndexProjectDelivery">Delivery</span>
+            <span class="wsIndexProjectCell wsIndexProjectBilling">Billing</span>
+            <span class="wsIndexProjectCell wsIndexProjectStatus">Status</span>
+            <span class="wsIndexProjectCell wsIndexProjectSource">Source</span>
+          </div>
+          ${rows}
+        </div>
       </section>
     `;
   }
@@ -329,6 +422,7 @@
       { id: 'workspaceIndexSummarySection', label: 'Summary' },
       { id: 'workspaceIndexJournalsSection', label: 'Journals' },
       { id: 'workspaceIndexConceptsSection', label: 'Concepts' },
+      { id: 'workspaceIndexProjectsSection', label: 'Projects' },
       { id: 'workspaceIndexTagsSection', label: 'Tags' },
       { id: 'workspaceIndexOpenTasksSection', label: 'Open Tasks' },
       { id: 'workspaceIndexCompletedTasksSection', label: 'Completed Tasks' },
@@ -384,6 +478,7 @@
       buildSummarySection(index),
       buildJournalsSection(index),
       buildConceptsSection(index),
+      buildProjectsSection(index),
       buildTagsSection(index),
       buildTasksSection(index, false),
       buildTasksSection(index, true),
