@@ -406,6 +406,7 @@ const WORKSPACE_INDEX_STATE = {
   tags: new Map(),
   tasks: [],
   links: new Map(),
+  projects: [],
 };
 
 try {
@@ -595,6 +596,7 @@ async function buildWorkspaceIndex() {
     WORKSPACE_INDEX_STATE.tags = new Map();
     WORKSPACE_INDEX_STATE.tasks = [];
     WORKSPACE_INDEX_STATE.links = new Map();
+    WORKSPACE_INDEX_STATE.projects = [];
 
     log?.('Workspace Index: skipped; workspace not open');
     return WORKSPACE_INDEX_STATE;
@@ -639,6 +641,7 @@ async function buildWorkspaceIndex() {
   const tags = new Map();
   const tasks = [];
   const links = new Map();
+  const projects = [];
 
   for (const parsed of parsedFiles) {
     byPath.set(parsed.path, parsed);
@@ -667,7 +670,48 @@ async function buildWorkspaceIndex() {
       if (!links.has(concept)) links.set(concept, []);
       links.get(concept).push(parsed.path);
     }
+
+    const parsedProjects = Array.isArray(parsed.projects) ? parsed.projects : [];
+    for (const project of parsedProjects) {
+      // Enrich source metadata when missing
+      if (!project.sourcePath) project.sourcePath = parsed.path || '';
+      if (!project.sourceKind) project.sourceKind = parsed.kind || '';
+      if (!project.sourceName) project.sourceName = parsed.name || '';
+      projects.push(project);
+    }
   }
+
+  // Deterministic sort for projects
+  projects.sort(function (a, b) {
+    const orderA = a.expectedOrder;
+    const orderB = b.expectedOrder;
+    const validA = orderA && orderA.valid === true;
+    const validB = orderB && orderB.valid === true;
+
+    // Scheduled before unscheduled
+    if (validA && !validB) return -1;
+    if (!validA && validB) return 1;
+
+    // Valid canonical ascending
+    if (validA && validB) {
+      const canA = orderA.canonical || '';
+      const canB = orderB.canonical || '';
+      if (canA !== canB) return canA < canB ? -1 : 1;
+    }
+
+    // Name tiebreaker (case-insensitive, stable)
+    const nameA = String(a.name || '').toLowerCase();
+    const nameB = String(b.name || '').toLowerCase();
+    if (nameA !== nameB) return nameA < nameB ? -1 : 1;
+
+    // Source path tiebreaker
+    const pathA = String(a.sourcePath || '');
+    const pathB = String(b.sourcePath || '');
+    if (pathA !== pathB) return pathA < pathB ? -1 : 1;
+
+    // Source line tiebreaker (numeric)
+    return (a.sourceLine || 0) - (b.sourceLine || 0);
+  });
 
   WORKSPACE_INDEX_STATE.ready = true;
   WORKSPACE_INDEX_STATE.lastBuiltAt = Date.now();
@@ -677,6 +721,7 @@ async function buildWorkspaceIndex() {
   WORKSPACE_INDEX_STATE.tags = tags;
   WORKSPACE_INDEX_STATE.tasks = tasks;
   WORKSPACE_INDEX_STATE.links = links;
+  WORKSPACE_INDEX_STATE.projects = projects;
 
   // Dispatch workspace index ready event for late modules
   try {
@@ -706,7 +751,7 @@ async function buildWorkspaceIndex() {
       byKind.journals.length
     } concepts=${byKind.concepts.length} tags=${tags.size} tasks=${
       tasks.length
-    } openTasks=${openTasks} doneTasks=${doneTasks} links=${links.size}`
+    } openTasks=${openTasks} doneTasks=${doneTasks} links=${links.size} projects=${projects.length}`
   );
 
   return WORKSPACE_INDEX_STATE;
@@ -748,7 +793,7 @@ function logWorkspaceIndexSummary() {
       index.byKind.journals.length
     } concepts=${index.byKind.concepts.length} tags=${index.tags.size} tasks=${
       index.tasks.length
-    } openTasks=${openTasks} doneTasks=${doneTasks} links=${index.links.size}`
+    } openTasks=${openTasks} doneTasks=${doneTasks} links=${index.links.size} projects=${index.projects.length}`
   );
 }
 
