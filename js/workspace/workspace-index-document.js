@@ -43,6 +43,146 @@
     return globalThis.WORKSPACE_STATE || null;
   }
 
+  // ---- Project filter helpers (ACT E) ----
+
+  const DEFAULT_PROJECT_FILTERS = Object.freeze({
+    valueMode: 'all',
+    year: 'all',
+    quarter: 'all',
+  });
+
+  function applyProjectFilters(projects, filters) {
+    const f = filters || DEFAULT_PROJECT_FILTERS;
+    const valueMode = f.valueMode || 'all';
+    const year = f.year || 'all';
+    const quarter = f.quarter || 'all';
+
+    return (projects || []).filter((project) => {
+      // Value filter
+      if (valueMode === 'with-value') {
+        if (!Number.isFinite(project.value)) return false;
+      } else if (valueMode === 'without-value') {
+        if (Number.isFinite(project.value)) return false;
+      }
+
+      const order = project.expectedOrder;
+      const valid = Boolean(order && order.valid === true);
+
+      // Quarter filter
+      if (quarter === 'unscheduled') {
+        if (valid) return false;
+        // Unscheduled ignores Year
+        return true;
+      }
+
+      if (quarter !== 'all') {
+        if (!valid) return false;
+        const q = Number(quarter.replace('q', ''));
+        if (order.quarter !== q) return false;
+      }
+
+      // Year filter (only meaningful for scheduled)
+      if (year !== 'all') {
+        if (!valid) return false;
+        if (order.year !== Number(year)) return false;
+      }
+
+      return true;
+    });
+  }
+
+  function buildProjectTotals(visibleProjects) {
+    const totals = new Map();
+    let valuedWithoutCurrency = 0;
+
+    for (const project of visibleProjects || []) {
+      if (!Number.isFinite(project.value)) continue;
+
+      const currency = String(project.currency || '').trim().toUpperCase();
+
+      if (!currency) {
+        valuedWithoutCurrency += 1;
+        continue;
+      }
+
+      if (!totals.has(currency)) totals.set(currency, 0);
+      totals.set(currency, totals.get(currency) + project.value);
+    }
+
+    const sortedCurrencies = Array.from(totals.keys()).sort();
+
+    return {
+      totals: sortedCurrencies.map((currency) => ({
+        currency,
+        value: totals.get(currency),
+      })),
+      valuedWithoutCurrency,
+    };
+  }
+
+  function buildProjectFilterControls(filters, projects) {
+    const f = filters || DEFAULT_PROJECT_FILTERS;
+    const valueMode = f.valueMode || 'all';
+    const year = f.year || 'all';
+    const quarter = f.quarter || 'all';
+
+    // Derive available years from valid expectedOrder.year
+    const years = new Set();
+    for (const project of projects || []) {
+      const order = project.expectedOrder;
+      if (order && order.valid === true && Number.isFinite(order.year)) {
+        years.add(order.year);
+      }
+    }
+    const sortedYears = Array.from(years).sort((a, b) => a - b);
+
+    const yearOptions = sortedYears
+      .map(
+        (y) =>
+          `<option value="${escapeAttr(String(y))}"${String(y) === String(year) ? ' selected' : ''}>${escapeHtml(String(y))}</option>`
+      )
+      .join('');
+
+    const quarterOptions = ['q1', 'q2', 'q3', 'q4']
+      .map(
+        (q) =>
+          `<option value="${q}"${q === quarter ? ' selected' : ''}>${escapeHtml(q.toUpperCase())}</option>`
+      )
+      .join('');
+
+    const valueBtn = (mode, label) =>
+      `<button type="button" class="wsIndexProjectFilterBtn${valueMode === mode ? ' __active' : ''}" data-project-filter="value" data-project-filter-value="${mode}" aria-pressed="${valueMode === mode ? 'true' : 'false'}">${escapeHtml(label)}</button>`;
+
+    return `
+      <div class="wsIndexProjectsToolbar">
+        <div class="wsIndexProjectsFilters">
+          <div class="wsIndexProjectFilterGroup" role="group" aria-label="Value filter">
+            ${valueBtn('all', 'All')}
+            ${valueBtn('with-value', 'With Value')}
+            ${valueBtn('without-value', 'Without Value')}
+          </div>
+
+          <label class="wsIndexProjectFilterSelect">
+            <span class="wsIndexProjectFilterLabel">Year</span>
+            <select data-project-filter="year" aria-label="Expected Order Year">
+              <option value="all"${year === 'all' ? ' selected' : ''}>All Years</option>
+              ${yearOptions}
+            </select>
+          </label>
+
+          <label class="wsIndexProjectFilterSelect">
+            <span class="wsIndexProjectFilterLabel">Quarter</span>
+            <select data-project-filter="quarter" aria-label="Expected Order Quarter">
+              <option value="all"${quarter === 'all' ? ' selected' : ''}>All Quarters</option>
+              ${quarterOptions}
+              <option value="unscheduled"${quarter === 'unscheduled' ? ' selected' : ''}>Unscheduled</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    `;
+  }
+
   // ---- Section builders ----
 
   function buildSummarySection(index) {
@@ -149,7 +289,7 @@
     `;
   }
 
-  function buildProjectsSection(index) {
+  function buildProjectsSection(index, filters) {
     const projects = index.projects || [];
 
     if (!projects.length) {
@@ -161,70 +301,109 @@
       `;
     }
 
-    const rows = projects
-      .map((project) => {
-        const name = escapeHtml(project.name || '');
-        const path = escapeAttr(project.sourcePath || '');
-        const kind = escapeAttr(project.sourceKind || '');
-        const line = Number(project.sourceLine) || 0;
-        const lineAttr = line ? `data-line="${escapeAttr(String(line))}"` : '';
+    const visibleProjects = applyProjectFilters(projects, filters);
+    const total = projects.length;
+    const visibleCount = visibleProjects.length;
+    const totals = buildProjectTotals(visibleProjects);
 
-        // Value
-        let valueDisplay = '\u2014';
-        if (project.value !== null && project.value !== undefined) {
-          if (project.currency) {
-            valueDisplay = project.currency + ' ' + Number(project.value).toLocaleString();
-          } else {
-            valueDisplay = Number(project.value).toLocaleString() + ' \u00b7 no currency';
+    const controlsHtml = buildProjectFilterControls(filters, projects);
+
+    let countHtml = '';
+    if (total > 0) {
+      countHtml = `<div class="wsIndexProjectCount">Visible Projects: ${visibleCount} of ${total}</div>`;
+    }
+
+    let totalsHtml = '';
+    if (visibleCount === 0) {
+      totalsHtml = '<div class="wsIndexProjectTotalsEmpty">No currency totals for the current filters.</div>';
+    } else if (totals.totals.length === 0 && totals.valuedWithoutCurrency === 0) {
+      totalsHtml = '<div class="wsIndexProjectTotalsEmpty">No currency totals for the current filters.</div>';
+    } else {
+      const totalItems = totals.totals
+        .map(
+          (t) =>
+            `<div class="wsIndexProjectTotal"><span class="wsIndexProjectTotalCurrency">${escapeHtml(t.currency)}</span> <span class="wsIndexProjectTotalValue">${escapeHtml(Number(t.value).toLocaleString())}</span></div>`
+        )
+        .join('');
+      const missingCurrencyHtml =
+        totals.valuedWithoutCurrency > 0
+          ? `<div class="wsIndexProjectTotalMissing">Valued without currency: ${totals.valuedWithoutCurrency}</div>`
+          : '';
+      totalsHtml = `<div class="wsIndexProjectTotals">${totalItems}${missingCurrencyHtml}</div>`;
+    }
+
+    let rowsHtml = '';
+    if (visibleCount === 0) {
+      rowsHtml = '<div class="wsIndexEmpty">No Projects match the current filters.</div>';
+    } else {
+      rowsHtml = visibleProjects
+        .map((project) => {
+          const name = escapeHtml(project.name || '');
+          const path = escapeAttr(project.sourcePath || '');
+          const kind = escapeAttr(project.sourceKind || '');
+          const line = Number(project.sourceLine) || 0;
+          const lineAttr = line ? `data-line="${escapeAttr(String(line))}"` : '';
+
+          // Value
+          let valueDisplay = '\u2014';
+          if (project.value !== null && project.value !== undefined) {
+            if (project.currency) {
+              valueDisplay = project.currency + ' ' + Number(project.value).toLocaleString();
+            } else {
+              valueDisplay = Number(project.value).toLocaleString() + ' \u00b7 no currency';
+            }
           }
-        }
 
-        // Periods
-        const orderDisplay =
-          project.expectedOrder && project.expectedOrder.valid === true
-            ? project.expectedOrder.display
-            : '\u2014';
-        const deliveryDisplay =
-          project.expectedDelivery && project.expectedDelivery.valid === true
-            ? project.expectedDelivery.display
-            : '\u2014';
-        const billingDisplay =
-          project.expectedBilling && project.expectedBilling.valid === true
-            ? project.expectedBilling.display
-            : '\u2014';
+          // Periods
+          const orderDisplay =
+            project.expectedOrder && project.expectedOrder.valid === true
+              ? project.expectedOrder.display
+              : '\u2014';
+          const deliveryDisplay =
+            project.expectedDelivery && project.expectedDelivery.valid === true
+              ? project.expectedDelivery.display
+              : '\u2014';
+          const billingDisplay =
+            project.expectedBilling && project.expectedBilling.valid === true
+              ? project.expectedBilling.display
+              : '\u2014';
 
-        // Status
-        const statusDisplay = project.status ? project.status : '\u2014';
+          // Status
+          const statusDisplay = project.status ? project.status : '\u2014';
 
-        // Source label
-        const sourceLabel = project.sourceName || project.sourcePath || '\u2014';
+          // Source label
+          const sourceLabel = project.sourceName || project.sourcePath || '\u2014';
 
-        return `
-          <button
-            type="button"
-            class="wsIndexProjectRow"
-            data-action="open-workspace-file"
-            data-path="${path}"
-            data-kind="${kind}"
-            ${lineAttr}
-            title="${path}"
-            aria-label="Open source: ${path}"
-          >
-            <span class="wsIndexProjectCell wsIndexProjectName">${name}</span>
-            <span class="wsIndexProjectCell wsIndexProjectValue">${escapeHtml(valueDisplay)}</span>
-            <span class="wsIndexProjectCell wsIndexProjectOrder">${escapeHtml(orderDisplay)}</span>
-            <span class="wsIndexProjectCell wsIndexProjectDelivery">${escapeHtml(deliveryDisplay)}</span>
-            <span class="wsIndexProjectCell wsIndexProjectBilling">${escapeHtml(billingDisplay)}</span>
-            <span class="wsIndexProjectCell wsIndexProjectStatus">${escapeHtml(statusDisplay)}</span>
-            <span class="wsIndexProjectCell wsIndexProjectSource">${escapeHtml(sourceLabel)}</span>
-          </button>
-        `;
-      })
-      .join('');
+          return `
+            <button
+              type="button"
+              class="wsIndexProjectRow"
+              data-action="open-workspace-file"
+              data-path="${path}"
+              data-kind="${kind}"
+              ${lineAttr}
+              title="${path}"
+              aria-label="Open source: ${path}"
+            >
+              <span class="wsIndexProjectCell wsIndexProjectName">${name}</span>
+              <span class="wsIndexProjectCell wsIndexProjectValue">${escapeHtml(valueDisplay)}</span>
+              <span class="wsIndexProjectCell wsIndexProjectOrder">${escapeHtml(orderDisplay)}</span>
+              <span class="wsIndexProjectCell wsIndexProjectDelivery">${escapeHtml(deliveryDisplay)}</span>
+              <span class="wsIndexProjectCell wsIndexProjectBilling">${escapeHtml(billingDisplay)}</span>
+              <span class="wsIndexProjectCell wsIndexProjectStatus">${escapeHtml(statusDisplay)}</span>
+              <span class="wsIndexProjectCell wsIndexProjectSource">${escapeHtml(sourceLabel)}</span>
+            </button>
+          `;
+        })
+        .join('');
+    }
 
     return `
       <section class="wsIndexSection" id="workspaceIndexProjectsSection" aria-label="Projects">
         <h2 class="wsIndexSectionTitle">Projects (${projects.length})</h2>
+        ${controlsHtml}
+        ${countHtml}
+        ${totalsHtml}
         <div class="wsIndexProjectRegister">
           <div class="wsIndexProjectHeader" aria-hidden="true">
             <span class="wsIndexProjectCell wsIndexProjectName">Project</span>
@@ -235,7 +414,7 @@
             <span class="wsIndexProjectCell wsIndexProjectStatus">Status</span>
             <span class="wsIndexProjectCell wsIndexProjectSource">Source</span>
           </div>
-          ${rows}
+          ${rowsHtml}
         </div>
       </section>
     `;
@@ -460,7 +639,7 @@
     </div>`;
   }
 
-  function buildProjection() {
+  function buildProjection(filters) {
     const index = safeIndex();
     const wsState = safeWorkspaceState();
     const hasWorkspace = Boolean(wsState?.rootHandle);
@@ -478,7 +657,7 @@
       buildSummarySection(index),
       buildJournalsSection(index),
       buildConceptsSection(index),
-      buildProjectsSection(index),
+      buildProjectsSection(index, filters),
       buildTagsSection(index),
       buildTasksSection(index, false),
       buildTasksSection(index, true),

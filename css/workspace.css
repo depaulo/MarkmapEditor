@@ -2927,6 +2927,137 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
   }
 }
 
+/* ---- Workspace Index: Projects filter toolbar ---- */
+.wsIndexProjectsToolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 0 10px 0;
+  border-bottom: 1px solid var(--menu-border);
+  margin-bottom: 10px;
+}
+
+.wsIndexProjectsFilters {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.wsIndexProjectFilterGroup {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.wsIndexProjectFilterBtn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--menu-border);
+  background: var(--toolbar-bg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.wsIndexProjectFilterBtn:hover {
+  background: var(--menu-hover);
+}
+
+.wsIndexProjectFilterBtn.__active {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(34, 197, 94, 0.5);
+  border-width: 2px;
+  padding: 0 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.wsIndexProjectFilterBtn:focus-visible {
+  outline: 2px solid rgba(34, 197, 94, 0.45);
+  outline-offset: 1px;
+}
+
+.wsIndexProjectFilterSelect {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.wsIndexProjectFilterLabel {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.wsIndexProjectFilterSelect select {
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--menu-border);
+  background: var(--toolbar-bg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  min-width: 110px;
+}
+
+.wsIndexProjectFilterSelect select:focus-visible {
+  outline: 2px solid rgba(34, 197, 94, 0.45);
+  outline-offset: 1px;
+}
+
+.wsIndexProjectCount {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+
+/* ---- Workspace Index: Projects totals ---- */
+.wsIndexProjectTotals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  margin-bottom: 8px;
+}
+
+.wsIndexProjectTotal {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--menu-border);
+  background: var(--menu-hover);
+  font-size: 12px;
+}
+
+.wsIndexProjectTotalCurrency {
+  font-weight: 700;
+}
+
+.wsIndexProjectTotalValue {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.wsIndexProjectTotalMissing {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.wsIndexProjectTotalsEmpty {
+  font-size: 12px;
+  opacity: 0.65;
+  padding: 6px 0;
+  margin-bottom: 8px;
+}
+
 /* ---- Workspace Index: Projects register ---- */
 .wsIndexProjectRegister {
   display: flex;

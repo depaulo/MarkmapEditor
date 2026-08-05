@@ -27,6 +27,22 @@
   let refreshListenerBound = false;
   let previousWorkspace = null;
 
+  // ---- ACT E: local Project filter presentation state ----
+  // Owned by this workspace module only. Never written to
+  // WORKSPACE_INDEX_STATE / WORKSPACE_STATE / Host / Navigation /
+  // localStorage / sessionStorage / globalThis / URL.
+  const DEFAULT_PROJECT_FILTERS = {
+    valueMode: 'all',
+    year: 'all',
+    quarter: 'all',
+  };
+
+  let projectFilters = { ...DEFAULT_PROJECT_FILTERS };
+
+  function resetProjectFilters() {
+    projectFilters = { ...DEFAULT_PROJECT_FILTERS };
+  }
+
   function safeLog(message) {
     try {
       if (typeof globalThis.MME_APP?.log === 'function') {
@@ -272,9 +288,12 @@
     previousWorkspace = host ? host.getActiveId() : null;
 
     // 2. Build projection while hidden
+    // ACT E: reset filter state at the start of a fresh Index session.
+    resetProjectFilters();
+
     let projectionHtml;
     try {
-      projectionHtml = docApi.buildProjection();
+      projectionHtml = docApi.buildProjection(projectFilters);
     } catch (e) {
       throw new Error(`WorkspaceIndex.activate: projection failed: ${e?.message || e}`);
     }
@@ -291,6 +310,14 @@
     if (!container.__wsIndexActionBound) {
       container.addEventListener('click', onActionClick);
       container.__wsIndexActionBound = true;
+    }
+
+    // ACT E: filter change handling. Native controls (buttons + selects)
+    // update local state and rerender the projection.
+    if (!container.__wsIndexProjectFilterBound) {
+      container.addEventListener('change', onProjectFilterChange);
+      container.addEventListener('click', onProjectFilterClick);
+      container.__wsIndexProjectFilterBound = true;
     }
 
     // 5. Render projection into container (while still hidden)
@@ -325,6 +352,70 @@
     return Object.freeze({ status: 'deactivated' });
   }
 
+  // ---- ACT E: Project filter handlers ----
+
+  function onProjectFilterClick(event) {
+    const btn = event.target.closest('button[data-project-filter="value"]');
+    if (!btn) return;
+    if (!containerContainsProjectFilter(event)) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const value = btn.dataset.projectFilterValue || 'all';
+    projectFilters.valueMode = value;
+
+    // Re-render and stay anchored near the Projects section.
+    rerenderProjectionWithAnchor();
+  }
+
+  function onProjectFilterChange(event) {
+    const control = event.target.closest('select[data-project-filter]');
+    if (!control) return;
+    if (!containerContainsProjectFilter(event)) return;
+
+    const filterType = control.dataset.projectFilter || '';
+    const value = control.value || 'all';
+
+    if (filterType === 'year') {
+      projectFilters.year = value;
+    } else if (filterType === 'quarter') {
+      projectFilters.quarter = value;
+    } else {
+      return;
+    }
+
+    rerenderProjectionWithAnchor();
+  }
+
+  function containerContainsProjectFilter(event) {
+    const container = document.getElementById(CONTAINER_ID);
+    return Boolean(container && container.contains(event.target));
+  }
+
+  function rerenderProjectionWithAnchor() {
+    const docApi = getDocumentApi();
+    if (!docApi) return;
+
+    const container = document.getElementById(CONTAINER_ID);
+    if (!container) return;
+
+    try {
+      const html = docApi.buildProjection(projectFilters);
+      container.innerHTML = html;
+      const returnBtnHtml = buildReturnButtonHtml();
+      container.insertAdjacentHTML('afterbegin', returnBtnHtml);
+
+      // Keep the user near the Projects section using the native section ID.
+      const projectsSection = document.getElementById('workspaceIndexProjectsSection');
+      if (projectsSection && typeof projectsSection.scrollIntoView === 'function') {
+        projectsSection.scrollIntoView({ block: 'start' });
+      }
+    } catch (e) {
+      safeLog(`WorkspaceIndex: Project filter rerender failed: ${e?.message || e}`);
+    }
+  }
+
   function refresh() {
     const docApi = getDocumentApi();
     if (!docApi) return;
@@ -334,7 +425,7 @@
 
     // Regenerate projection and swap in a single innerHTML assignment
     try {
-      const html = docApi.buildProjection();
+      const html = docApi.buildProjection(projectFilters);
       container.innerHTML = html;
       // Re-prepend Return button after refresh
       const returnBtnHtml = buildReturnButtonHtml();
