@@ -76,7 +76,7 @@
     return {
       ...task,
       priority,
-      displayText,
+      displayText: escapeHtml(displayText || ''),
       filePath: task.filePath || task.path || '',
       fileKind: task.fileKind || task.kind || '',
       fileName: task.fileName || task.name || task.filePath || '',
@@ -607,11 +607,30 @@
 
   // ---- Priority actions ----
 
+  function getCanonicalTaskText(rawLine) {
+    try {
+      const parsed = globalThis.parseMarkdownTasks?.(rawLine);
+      if (parsed && parsed[0] && typeof parsed[0].text === 'string') {
+        return parsed[0].text;
+      }
+    } catch {}
+
+    const text = String(rawLine || '');
+    const match = text.match(/^(\s*[-*+]\s+\[[ xX]\]\s+)(.*)$/);
+    if (!match) return text;
+
+    let content = match[2] || '';
+    content = content.replace(/<!--\s*mme-task:[\s\S]*?-->/gi, '').trim();
+    content = content.replace(/#p[123]\b/gi, '').replace(/\s+/g, ' ').trim();
+    return content;
+  }
+
   // Normalize task text for comparison (preserves identity-bearing content)
   function normalizeTaskTextForComparison(text) {
     return String(text || '')
       .replace(/^(\s*[-*+]\s+\[[ xX]\]\s+)/, '') // Remove checkbox prefix
       .replace(/#p[123]\b/gi, '') // Remove priority tokens
+      .replace(/<!--\s*mme-task:[\s\S]*?-->/gi, '') // Remove recognized metadata comments
       .replace(/\s+/g, ' ') // Normalize whitespace
       .trim()
       .toLowerCase();
@@ -938,6 +957,11 @@
           safeLog('TaskReview: group-header click skipped; empty path');
           return;
         }
+        if (groupHeader.dataset.taskReviewHandled === '1') {
+          safeLog('TaskReview: group-header click delegated to task source');
+          groupHeader.dataset.taskReviewHandled = '';
+          return;
+        }
         safeLog(`TaskReview: group-header click path=${path}`);
         await openSourceFile(path, kind, 'workspace task group open');
         return;
@@ -985,6 +1009,42 @@
   }
 
   // ---- Task completion ----
+
+  function getLocalIsoDate() {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function rewriteTaskMetadataComment(text, desiredChecked) {
+    const str = String(text || '');
+    const commentMatch = str.match(/(<!--\s*mme-task:)([\s\S]*?)(\s*-->)/i);
+
+    if (!commentMatch) {
+      if (!desiredChecked) return str;
+      const today = getLocalIsoDate();
+      return `${str.trim()} <!-- mme-task: completed=${today} -->`;
+    }
+
+    let inner = String(commentMatch[2] || '').trim();
+
+    if (desiredChecked) {
+      const hasCompleted = /(?:^|;\s*)completed\s*=/i.test(inner);
+      if (!hasCompleted) {
+        inner = inner ? `completed=${getLocalIsoDate()}; ${inner}` : `completed=${getLocalIsoDate()}`;
+      }
+    } else {
+      inner = inner.replace(/(?:^|;\s*)completed\s*=\s*[^;]+/i, '').replace(/^;\s*/, '').replace(/;\s*$/, '').trim();
+    }
+
+    if (!inner) {
+      return str.replace(commentMatch[0], '').trim();
+    }
+
+    return `${str.slice(0, commentMatch.index)}<!-- mme-task: ${inner} -->${str.slice(commentMatch.index + commentMatch[0].length)}`;
+  }
 
   async function setTaskCompletion(path, kind, line, desiredChecked) {
     if (taskStatusInProgress) {
@@ -1056,7 +1116,7 @@
       }
 
       const indexedTask = index.tasks?.find((t) => t.filePath === path && t.line === line);
-      const expectedText = indexedTask?.text || '';
+      const expectedText = getCanonicalTaskText(indexedTask?.text || '');
 
       const actualLine = findActualTaskLine(getLineText, line, expectedText);
 
@@ -1093,7 +1153,8 @@
       }
 
       const newCheckbox = desiredChecked ? 'x' : ' ';
-      const newLine = taskMatch[1] + newCheckbox + taskMatch[3] + taskMatch[4];
+      const newText = rewriteTaskMetadataComment(taskMatch[4], desiredChecked);
+      const newLine = taskMatch[1] + newCheckbox + taskMatch[3] + newText;
 
       const success = replaceLine(actualLine, newLine, { scrollTo: false });
       if (!success) {
