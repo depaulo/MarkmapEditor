@@ -7610,6 +7610,151 @@ let __newDocCounter = 1;
 // When > 0, the 'input' event listener does not set dirty=true.
 let __programmaticTextChange = 0;
 
+// ---- ACT D: Conservative pre-save Task reconciliation ----
+
+// Canonical Task text cleaner (uses canonical parser when available).
+function getCanonicalTaskText(rawLine) {
+  try {
+    const parsed = globalThis.parseMarkdownTasks?.(rawLine);
+    if (parsed && parsed[0] && typeof parsed[0].text === 'string') {
+      return parsed[0].text;
+    }
+  } catch {}
+
+  const text = String(rawLine || '');
+  const match = text.match(/^(\s*[-*+]\s+\[[ xX]\]\s+)(.*)$/);
+  if (!match) return text;
+
+  let content = match[2] || '';
+  content = content.replace(/<!--\s*mme-task:[\s\S]*?-->/gi, '').trim();
+  content = content.replace(/#p[123]\b/gi, '').replace(/\s+/g, ' ').trim();
+  return content;
+}
+
+function getLocalIsoDate() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function rewriteTaskMetadataComment(text, desiredChecked) {
+  const str = String(text || '');
+  const commentMatch = str.match(/(<!--\s*mme-task:)([\s\S]*?)(\s*-->)/i);
+
+  if (!commentMatch) {
+    if (!desiredChecked) return str;
+    const today = getLocalIsoDate();
+    return `${str.trim()} <!-- mme-task: completed=${today} -->`;
+  }
+
+  let inner = String(commentMatch[2] || '').trim();
+
+  if (desiredChecked) {
+    const hasCompleted = /(?:^|;\s*)completed\s*=/i.test(inner);
+    if (!hasCompleted) {
+      inner = inner ? `completed=${getLocalIsoDate()}; ${inner}` : `completed=${getLocalIsoDate()}`;
+    }
+  } else {
+    inner = inner.replace(/(?:^|;\s*)completed\s*=\s*[^;]+/i, '').replace(/^;\s*/, '').replace(/;\s*$/, '').trim();
+  }
+
+  if (!inner) {
+    return str.replace(commentMatch[0], '').trim();
+  }
+
+  return `${str.slice(0, commentMatch.index)}<!-- mme-task: ${inner} -->${str.slice(commentMatch.index + commentMatch[0].length)}`;
+}
+
+// Task baseline for pre-save reconciliation.
+let __taskBaseline = null;
+
+function captureTaskBaseline() {
+  try {
+    const text = String(md.value || '');
+    const tasks = globalThis.parseMarkdownTasks?.(text) || [];
+    __taskBaseline = tasks.map((t) => ({
+      line: t.line,
+      done: t.done,
+      text: t.text,
+      raw: t.raw,
+    }));
+  } catch {
+    __taskBaseline = null;
+  }
+}
+
+function reconcileTasksBeforeSave() {
+  if (!__taskBaseline) {
+    return { changed: false, text: md.value, skippedReason: 'no-baseline' };
+  }
+
+  const currentText = String(md.value || '');
+  const currentTasks = globalThis.parseMarkdownTasks?.(currentText) || [];
+  if (currentTasks.length === 0) {
+    return { changed: false, text: currentText, skippedReason: 'no-tasks' };
+  }
+
+  const baselineByLine = new Map();
+  for (const t of __taskBaseline) {
+    baselineByLine.set(t.line, t);
+  }
+
+  const lines = currentText.split('\n');
+  let changed = false;
+  let completedAdded = 0;
+  let completedRemoved = 0;
+  let ambiguous = 0;
+
+  for (const current of currentTasks) {
+    const baseline = baselineByLine.get(current.line);
+    if (!baseline) continue;
+
+    // Compare canonical clean text only (ignores metadata comments)
+    if (current.text !== baseline.text) continue;
+
+    const currentDone = current.done;
+    const baselineDone = baseline.done;
+
+    // Same completion state: nothing to do
+    if (currentDone === baselineDone) continue;
+
+    const lineIndex = current.line - 1;
+    if (lineIndex < 0 || lineIndex >= lines.length) continue;
+
+    const rawLine = lines[lineIndex];
+    const taskMatch = rawLine.match(/^(\s*[-*+]\s+\[)([ xX])(\]\s+)(.*)$/);
+    if (!taskMatch) continue;
+
+    // CURRENT checkbox is authoritative
+    const currentChecked = taskMatch[2].toLowerCase() === 'x';
+    if (currentChecked !== currentDone) continue;
+
+    // IDEMPOTENCE: skip if already reconciled
+    const hasCompletedMeta = /<!--\s*mme-task:[\s\S]*?\bcompleted\s*=/i.test(rawLine);
+    if (currentDone && hasCompletedMeta) continue;
+    if (!currentDone && !hasCompletedMeta) continue;
+
+    // Rewrite ONLY the metadata comment on the CURRENT raw line
+    const newText = rewriteTaskMetadataComment(taskMatch[4], currentDone);
+    const newLine = taskMatch[1] + taskMatch[2] + taskMatch[3] + newText;
+
+    if (newLine !== rawLine) {
+      lines[lineIndex] = newLine;
+      changed = true;
+      if (currentDone) completedAdded++;
+      else completedRemoved++;
+    }
+  }
+
+  if (!changed) {
+    return { changed: false, text: currentText, completedAdded, completedRemoved, ambiguous };
+  }
+
+  return { changed: true, text: lines.join('\n'), completedAdded, completedRemoved, ambiguous };
+}
+
 function newDocument() {
   try {
     globalThis.__creatingNewDocument = true;
@@ -7748,6 +7893,7 @@ async function saveAsSmart(text) {
       });
       await saveToHandle(handle, text);
       currentSaveHandle = handle;
+      captureTaskBaseline();
       dirty = false;
       setStatus(modeLabel());
       log('saveAsSmart(): saved via picker; currentSaveHandle updated');
@@ -7809,12 +7955,33 @@ async function saveSmart() {
     return;
   }
   log('saveSmart(): begin');
-  const text = md.value;
+
+  // ACT D: Conservative pre-save Task reconciliation.
+  const reconciled = reconcileTasksBeforeSave();
+  let text = md.value;
+  if (reconciled.changed) {
+    __programmaticTextChange++;
+    try {
+      md.value = reconciled.text;
+      if (typeof window.__cmSetText === 'function') {
+        window.__cmSetText(reconciled.text);
+      }
+      text = reconciled.text;
+    } finally {
+      __programmaticTextChange--;
+    }
+    log(`TaskReconcile: result changed=true completed=${reconciled.completedAdded} reopened=${reconciled.completedRemoved} ambiguous=${reconciled.ambiguous}`);
+  } else if (reconciled.completedAdded === 0 && reconciled.completedRemoved === 0) {
+    log('TaskReconcile: result changed=false completed=0 reopened=0 ambiguous=0');
+  }
+
   if (currentSaveHandle) {
     try {
       log('saveSmart(): attempting overwrite via currentSaveHandle');
       if (!(await confirmOverwriteExternal())) return;
       await saveToHandle(currentSaveHandle, text);
+      captureTaskBaseline();
+      log('TaskReconcile: baseline refreshed after successful save');
       log('saveSmart(): overwrite OK');
       return;
     } catch (e) {
