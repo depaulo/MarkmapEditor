@@ -10,6 +10,19 @@
 (function () {
   'use strict';
 
+  function safeLog(message) {
+    try {
+      if (typeof globalThis.log === 'function') {
+        globalThis.log(message);
+        return;
+      }
+
+      if (typeof console !== 'undefined' && typeof console.info === 'function') {
+        console.info(message);
+      }
+    } catch {}
+  }
+
   const APP_MODE_IDS = ['editor', 'journal', 'slides'];
 
   const APP_MODE_SESSIONS = globalThis.APP_MODE_SESSIONS || {
@@ -123,7 +136,7 @@
       globalThis.MME_MODE_RUNTIME_SESSIONS?.captureCurrentRuntime?.(mode);
     } catch {}
 
-    globalThis.log?.(
+    safeLog(
       `ModeSession: captured mode=${mode} session=${session.sessionId} reason=${reason} file=${session.fileName || '(none)'} dirty=${session.dirty}`
     );
 
@@ -135,14 +148,14 @@
     const session = APP_MODE_SESSIONS[mode];
 
     if (!session || typeof session.text !== 'string') {
-      globalThis.log?.(`ModeSession: no session to restore mode=${mode} reason=${reason}`);
+      safeLog(`ModeSession: no session to restore mode=${mode} reason=${reason}`);
       return false;
     }
 
     // Conservative Journal restore protection:
     // Do not restore stale text over an active workspace file.
     if (mode === 'journal' && globalThis.WORKSPACE_STATE?.activeFile) {
-      globalThis.log?.('ModeSession: journal restore skipped because workspace activeFile exists');
+      safeLog('ModeSession: journal restore skipped because workspace activeFile exists');
       return false;
     }
 
@@ -211,7 +224,7 @@
       }
     } catch {}
 
-    globalThis.log?.(
+    safeLog(
       `ModeSession: restored mode=${mode} session=${getCurrentModeSessionId(mode)} reason=${reason} file=${session.fileName || '(none)'} dirty=${session.dirty}`
     );
 
@@ -250,13 +263,13 @@
 
       // Only reuse URL session if URL mode matches current mode.
       if (rawSession && urlMode === mode) {
-        globalThis.log?.(`ModeSession: resolve currentMode=${mode} urlMode=${urlMode} urlSession=${rawSession} resolved=${normalizeModeSessionId(rawSession, mode)}`);
+        safeLog(`ModeSession: resolve currentMode=${mode} urlMode=${urlMode} urlSession=${rawSession} resolved=${normalizeModeSessionId(rawSession, mode)}`);
         return normalizeModeSessionId(rawSession, mode);
       }
 
       // Log when URL session is present but mode doesn't match
       if (rawSession && urlMode !== mode) {
-        globalThis.log?.(`ModeSession: resolve currentMode=${mode} urlMode=${urlMode} urlSession=${rawSession} resolved=${mode}-main (mode mismatch)`);
+        safeLog(`ModeSession: resolve currentMode=${mode} urlMode=${urlMode} urlSession=${rawSession} resolved=${mode}-main (mode mismatch)`);
       }
     } catch {}
 
@@ -331,7 +344,7 @@
 
     const url = buildSeparateModeUrl(mode);
 
-    globalThis.log?.(`ModeWindow: opening mode=${mode} url=${url}`);
+    safeLog(`ModeWindow: opening mode=${mode} url=${url}`);
 
     const win = window.open(url, '_blank', 'noopener,noreferrer');
 
@@ -341,7 +354,7 @@
         'error',
         5000
       );
-      globalThis.log?.('ModeWindow: window.open blocked');
+      safeLog('ModeWindow: window.open blocked');
       return false;
     }
 
@@ -360,7 +373,7 @@
     });
 
     btn.__separateModeBound = true;
-    globalThis.log?.('ModeWindow: Separate Mode button wired');
+    safeLog('ModeWindow: Separate Mode button wired');
   }
 
   // Expose module API.
@@ -411,7 +424,7 @@
   try {
     const sessionParam = getUrlSessionParam();
     if (sessionParam) {
-      globalThis.log?.(`ModeWindow: session=${sessionParam}`);
+      safeLog(`ModeWindow: session=${sessionParam}`);
     }
   } catch {}
 
@@ -420,7 +433,7 @@
     try {
       wireSeparateModeButton();
     } catch (e) {
-      globalThis.log?.(`ModeWindow: wire failed: ${e?.message || e}`);
+      safeLog(`ModeWindow: wire failed: ${e?.message || e}`);
     }
   }
 

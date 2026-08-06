@@ -1137,23 +1137,21 @@ function ensureWorkspaceActivePanel() {
   panel.hidden = true;
 
   panel.innerHTML = `
-    <div class="workspaceActiveHeader">
-      <button
-        type="button"
-        class="workspacePanelHeaderButton"
-        data-workspace-panel-toggle="active"
-        aria-expanded="true"
-      >
-        <span class="workspacePanelHeaderLeft">
-          <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-          <span class="workspaceActiveTitle">Active</span>
-        </span>
+    <button
+      type="button"
+      class="workspacePanelHeaderButton"
+      data-workspace-panel-toggle="active"
+      aria-expanded="true"
+    >
+      <span class="workspacePanelHeaderLeft">
+        <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+        <span class="workspaceActiveTitle">Active</span>
+      </span>
 
-        <span id="workspaceActiveBadge" class="workspaceActiveBadge">
-          No file
-        </span>
-      </button>
-    </div>
+      <span id="workspaceActiveBadge" class="workspaceActiveBadge">
+        No file
+      </span>
+    </button>
 
     <div class="workspacePanelBody">
       <div id="workspaceActiveBody" class="workspaceActiveBody">
@@ -2400,32 +2398,32 @@ function ensureWorkspaceProjectsPanel() {
   panel.hidden = true;
 
   panel.innerHTML = `
-    <div class="workspaceProjectsHeader">
-      <button
-        type="button"
-        class="workspacePanelHeaderButton"
-        data-workspace-panel-toggle="projects"
-        aria-expanded="false"
-      >
-        <span class="workspacePanelHeaderLeft">
-          <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-          <span class="workspaceProjectsTitle">Projects</span>
-        </span>
+    <button
+      type="button"
+      class="workspacePanelHeaderButton"
+      data-workspace-panel-toggle="projects"
+      aria-expanded="false"
+    >
+      <span class="workspacePanelHeaderLeft">
+        <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+        <span class="workspaceProjectsTitle">Projects</span>
+      </span>
 
+      <span class="workspacePanelHeaderRight">
         <span id="workspaceProjectsBadge" class="workspacePanelBadge">
           0
         </span>
-      </button>
-
-      <button
-        id="workspaceProjectsOpenButton"
-        type="button"
-        title="Open full Workspace Index"
-        aria-label="Open full Workspace Index"
-      >
-        ▤
-      </button>
-    </div>
+        <button
+          id="workspaceProjectsOpenButton"
+          type="button"
+          title="Open full Workspace Index"
+          aria-label="Open full Workspace Index"
+          data-workspace-action="open-index"
+        >
+          ▤
+        </button>
+      </span>
+    </button>
 
     <div class="workspacePanelBody">
       <div id="workspaceProjectsSummary" class="workspaceProjectsSummary">

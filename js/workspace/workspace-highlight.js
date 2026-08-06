@@ -2,6 +2,19 @@
 
 import { WORKSPACE_STATE } from './workspace-state.js';
 
+function safeLog(message) {
+  try {
+    if (typeof globalThis.log === 'function') {
+      globalThis.log(message);
+      return;
+    }
+
+    if (typeof console !== 'undefined' && typeof console.info === 'function') {
+      console.info(message);
+    }
+  } catch {}
+}
+
 function normalizeWorkspacePathForCompare(value) {
   return String(value || '')
     .trim()
@@ -95,21 +108,21 @@ function updateWorkspaceActiveFileHighlight() {
 
       });
 
-    globalThis.log?.(
+    safeLog(
       `Workspace: highlight updated active=${
         activePath || activeName || '(none)'
       } kind=${activeKind || '(none)'} matched=${matched}/${total}`
     );
 
     if (active && total > 0 && matched === 0) {
-      globalThis.log?.(
+      safeLog(
         `Workspace: highlight active debug kind=${activeKind} path=${activePath} name=${activeName}`
       );
 
       document
         .querySelectorAll('.workspaceFileItem[data-workspace-file="1"]')
         .forEach((btn) => {
-globalThis.log?.(
+          safeLog(
             `Workspace: highlight miss btn kind=${normalizeWorkspaceKindForCompare(
               btn.dataset.kind || ''
             )} path=${normalizeWorkspacePathForCompare(
@@ -119,7 +132,7 @@ globalThis.log?.(
         });
     }
   } catch (e) {
-    globalThis.log?.(
+    safeLog(
       `Workspace: active highlight update failed: ${e?.message || e}`
     );
   }
@@ -137,7 +150,7 @@ try {
 } catch {}
 
 
-globalThis.log?.(
+safeLog(
   `Workspace: active highlight function ready = ${
     typeof window.updateWorkspaceActiveFileHighlight === 'function'
   }`

@@ -602,9 +602,9 @@
       { id: 'workspaceIndexJournalsSection', label: 'Journals' },
       { id: 'workspaceIndexConceptsSection', label: 'Concepts' },
       { id: 'workspaceIndexProjectsSection', label: 'Projects' },
-      { id: 'workspaceIndexTagsSection', label: 'Tags' },
       { id: 'workspaceIndexOpenTasksSection', label: 'Open Tasks' },
       { id: 'workspaceIndexCompletedTasksSection', label: 'Completed Tasks' },
+      { id: 'workspaceIndexTagsSection', label: 'Tags' },
       { id: 'workspaceIndexRelationshipsSection', label: 'Relationships' },
     ];
 
@@ -658,9 +658,9 @@
       buildJournalsSection(index),
       buildConceptsSection(index),
       buildProjectsSection(index, filters),
-      buildTagsSection(index),
       buildTasksSection(index, false),
       buildTasksSection(index, true),
+      buildTagsSection(index),
       buildRelationshipsSection(index),
     ].join('\n');
 

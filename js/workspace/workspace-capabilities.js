@@ -11,6 +11,19 @@
 (function () {
   'use strict';
 
+  function safeLog(message) {
+    try {
+      if (typeof globalThis.log === 'function') {
+        globalThis.log(message);
+        return;
+      }
+
+      if (typeof console !== 'undefined' && typeof console.info === 'function') {
+        console.info(message);
+      }
+    } catch {}
+  }
+
   // Capability records are frozen to prevent accidental mutation.
   const JOURNAL_CAPABILITIES = Object.freeze({
     edit: true,
@@ -110,5 +123,5 @@
     globalThis.MME_WORKSPACE_CAPABILITIES = MME_WORKSPACE_CAPABILITIES;
   } catch {}
 
-  globalThis.log?.('WorkspaceCapabilities: ready');
+  safeLog('WorkspaceCapabilities: ready');
 })();

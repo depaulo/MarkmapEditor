@@ -2,6 +2,85 @@
 /* Workspace / Journal Sidebar */
 /* =========================== */
 
+/* ---- Light-theme neutral-gray surface hierarchy ----
+   Conservative multi-level neutral-gray contract with green as the
+   restrained accent. Scoped to workspace surfaces so the rest of the
+   app (toolbar, editor, viewer) keeps its existing variables. */
+:root {
+  --surface-page: #f4f4f5;
+  --surface-sidebar: #ececee;
+  --surface-panel: #e4e4e7;
+  --surface-raised: #fafafa;
+  --surface-hover: #dcdce0;
+  --surface-selected: #e6f4ea;
+  --border-subtle: #d4d4d8;
+  --border-strong: #a1a1aa;
+  --accent: #16a34a;
+  --accent-hover: #15803d;
+  --accent-soft: rgba(22, 163, 74, 0.12);
+}
+
+html.dark {
+  --surface-page: #1e1e1e;
+  --surface-sidebar: #252526;
+  --surface-panel: #2d2d2d;
+  --surface-raised: #2a2a2a;
+  --surface-hover: #3a3a3d;
+  --surface-selected: rgba(22, 163, 74, 0.18);
+  --border-subtle: #3e3e42;
+  --border-strong: #555555;
+  --accent: #4ade80;
+  --accent-hover: #86efac;
+  --accent-soft: rgba(74, 222, 128, 0.14);
+}
+
+/* ---- Shared application scrollbar grammar ----
+   Quiet while idle, easier to locate on hover. Rounded thumbs.
+   Firefox uses scrollbar-width/scrollbar-color; Chromium uses
+   ::-webkit-scrollbar. Dark thumb is never white. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 8px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-hover);
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: var(--accent);
+}
+
+html.dark * {
+  scrollbar-color: #4a4a4f transparent;
+}
+
+html.dark *::-webkit-scrollbar-thumb {
+  background: #4a4a4f;
+}
+
+html.dark *::-webkit-scrollbar-thumb:hover {
+  background: #6b6b72;
+}
+
+html.dark *::-webkit-scrollbar-thumb:active {
+  background: var(--accent);
+}
+
 /* Navigation History V1 — Back/Forward controls */
 .workspaceNavControls {
   display: flex;
@@ -37,6 +116,23 @@
 
 .navBtn:not(:disabled):hover {
   background: var(--menu-hover);
+}
+
+/* Collapsed sidebar: keep Back/Forward as compact icon-only controls in
+   the narrow rail. No text labels, touch-safe 36px hit areas, tooltips
+   and aria-labels intact. Disabled states preserved via .navBtn:disabled. */
+html.journal-sidebar-collapsed .workspaceNavControls {
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+}
+
+html.journal-sidebar-collapsed .navBtn {
+  min-width: 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 1.1rem;
 }
 
 /* Navigation History V1 — scrollable sidebar content area */
@@ -105,9 +201,9 @@ html.journal-sidebar-collapsed #workspaceSidebarResizeHandle {
   max-width: 420px;
 
   flex-direction: column;
-  background: var(--menu-bg);
+  background: var(--surface-sidebar);
   color: var(--text);
-  border-right: 1px solid var(--menu-border);
+  border-right: 1px solid var(--border-subtle);
   overflow: visible;
 
   position: relative;
@@ -188,9 +284,11 @@ html[data-app-context='journal'] #workspaceSidebar {
 /* Workspace Active Panel      */
 /* =========================== */
 
+/* Active uses the same complete panel geometry as the canonical panels:
+   padding: 10px, flex column, gap: 8px, and a single top separator. */
 #workspaceActivePanel {
   padding: 10px;
-  border-bottom: 1px solid var(--menu-border);
+  border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -205,6 +303,7 @@ html[data-app-context='journal'] #workspaceSidebar {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-height: 32px;
 }
 
 .workspaceActiveTitle {
@@ -230,8 +329,8 @@ html[data-app-context='journal'] #workspaceSidebar {
 
   padding: 2px 6px;
   border-radius: 999px;
-  border: 1px solid var(--menu-border);
-  background: rgba(127, 127, 127, 0.06);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
 }
 
 .workspaceActiveBody {
@@ -339,12 +438,12 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
 
 #workspaceIndexPanel {
   padding: 10px;
-  border-bottom: 1px solid var(--menu-border);
+  border-top: 1px solid var(--menu-border);
 }
 
 #workspaceRelatedPanel {
   padding: 10px;
-  border-bottom: 1px solid var(--menu-border);
+  border-top: 1px solid var(--menu-border);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -462,7 +561,7 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
 }
 
 .workspacePanelHeaderButton:hover {
-  background: var(--menu-hover);
+  background: var(--surface-hover);
 }
 
 .workspacePanelHeaderButton:focus-visible {
@@ -513,8 +612,8 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
 
   padding: 2px 6px;
   border-radius: 999px;
-  border: 1px solid var(--menu-border);
-  background: rgba(127, 127, 127, 0.06);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
 }
 
 .workspacePanelBody {
@@ -529,17 +628,27 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
 
 .workspaceIndexHeader,
 .workspaceRelatedHeader,
-.workspaceTasksHeader {
+.workspaceTasksHeader,
+.workspaceJournalsHeader,
+.workspaceConceptsHeader,
+.workspaceTagsHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-height: 32px;
 }
 
 .workspaceTasksPanel {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Shared top-level panel separator contract: Tasks inherits the same
+   border-top as the other top-level collapsible panels. */
+#workspaceTasksPanel {
+  border-top: 1px solid var(--menu-border);
 }
 
 #workspaceTasksPanel[hidden] {
@@ -549,6 +658,9 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
 #workspaceTagsPanel {
   border-top: 1px solid var(--menu-border);
 }
+
+/* Projects top separator is owned by .workspaceProjectsPanel above.
+   No separate ID rule is needed, avoiding a double border. */
 
 .workspaceTasksSummary {
   font-size: 12px;
@@ -971,14 +1083,6 @@ html.journal-sidebar-collapsed #workspaceSearchPanel {
   margin-bottom: 6px;
 }
 
-#workspaceJournalsList,
-#workspaceConceptsList {
-  min-height: 40px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
 .workspaceEmpty {
   font-size: 12px;
   opacity: 0.55;
@@ -1271,7 +1375,7 @@ html.journal-sidebar-collapsed .workspaceIcon {
 
 #workspaceTagsPanel {
   padding: 10px;
-  border-bottom: 1px solid var(--menu-border);
+  border-top: 1px solid var(--menu-border);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1479,12 +1583,14 @@ html.journal-sidebar-collapsed #workspaceTagsPanel {
   display: none !important;
 }
 
-/* ---- Workspace Projects Panel ---- */
+/* ---- Workspace Projects Panel ----
+   Uses the same complete panel geometry as the canonical panels:
+   padding: 10px, flex column, and a single top separator. */
 .workspaceProjectsPanel {
   display: flex;
   flex-direction: column;
+  padding: 10px;
   border-top: 1px solid var(--menu-border);
-  padding: 0;
 }
 
 #workspaceProjectsPanel[hidden] {
@@ -1498,15 +1604,18 @@ html.journal-sidebar-collapsed #workspaceProjectsPanel {
 .workspaceProjectsHeader {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 0;
+  min-height: 32px;
 }
 
 .workspaceProjectsHeader .workspacePanelHeaderButton {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
+  gap: 8px;
+  padding: 6px 4px;
   border: none;
   background: none;
   cursor: pointer;
@@ -1520,21 +1629,45 @@ html.journal-sidebar-collapsed #workspaceProjectsPanel {
   background: var(--menu-hover);
 }
 
+/* Projects Open action uses the same button grammar as the Workspace
+   Index Open button (#btnOpenWorkspaceIndex): same dimensions, border,
+   radius, background, hover, focus-visible, and icon sizing. */
 #workspaceProjectsOpenButton {
   flex: 0 0 auto;
-  padding: 6px 8px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  font-size: 13px;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 8px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 6px;
+  border: 1px solid var(--toolbar-border);
+
+  background: var(--toolbar-bg);
   color: var(--text);
-  opacity: 0.7;
+
+  font-size: 13px;
   line-height: 1;
+  cursor: pointer;
 }
 
 #workspaceProjectsOpenButton:hover {
-  opacity: 1;
   background: var(--menu-hover);
+}
+
+#workspaceProjectsOpenButton:focus-visible {
+  outline: 2px solid rgba(34, 197, 94, 0.45);
+  outline-offset: 1px;
+}
+
+/* Collapsed Projects: show only chevron, title, and count. display:none
+   removes the Open action from layout (no reserved width) and from tab
+   order (not focusable). Expanding restores the same button and its
+   existing __workspaceProjectsOpenBound listener. */
+#workspaceProjectsPanel.workspacePanelCollapsed #workspaceProjectsOpenButton {
+  display: none;
 }
 
 .workspaceProjectsTitle {
@@ -2271,7 +2404,7 @@ html.workspace-index-active #viewer {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 10px 12px;
-  background: var(--bg);
+  background: var(--surface-page);
   color: var(--text);
   -webkit-overflow-scrolling: touch;
   margin: 0 auto;
@@ -2294,10 +2427,10 @@ html.workspace-index-active #viewer {
   width: 100%;
   box-sizing: border-box;
   min-width: 0;
-  border: 1px solid var(--menu-border);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   padding: 12px 14px;
-  background: var(--toolbar-bg);
+  background: var(--surface-raised);
 }
 
 .wsIndexSectionTitle {
@@ -2722,11 +2855,13 @@ html.workspace-index-active #viewer {
   }
 }
 
-/* ---- Journals / Concepts panel layout ---- */
+/* ---- Journals / Concepts panel layout ----
+   Shared top-level separator contract: use border-top like the other
+   top-level collapsible panels instead of the previous border-bottom. */
 #workspaceJournalsPanel,
 #workspaceConceptsPanel {
   padding: 10px;
-  border-bottom: 1px solid var(--menu-border);
+  border-top: 1px solid var(--menu-border);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2743,6 +2878,35 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 6px;
+}
+
+/* ---- Journals / Concepts sidebar list density ----
+   Only the list bodies scroll (panel headers stay visible and fixed).
+   Desktop caps at a compact-but-useful height; mobile is
+   viewport-sensitive. No horizontal scrolling. */
+#workspaceJournalsList,
+#workspaceConceptsList {
+  min-height: 40px;
+  max-height: 260px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Direct list items must not shrink inside the bounded scroll viewport.
+   Preserve original row height, padding, icon size, and readability. */
+#workspaceJournalsList > .workspaceFileItem,
+#workspaceConceptsList > .workspaceFileItem {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 767px) {
+  #workspaceJournalsList,
+  #workspaceConceptsList {
+    max-height: 40vh;
+  }
 }
 
 @media (max-width: 767px) {
@@ -2793,14 +2957,18 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
   box-sizing: border-box;
 }
 
-/* ---- Workspace Index navigator ---- */
+/* ---- Workspace Index navigator ----
+   Restrained outer border matching .wsIndexSection (surface parity).
+   box-sizing keeps the added border inside the allocated 170px column
+   so navigator/content allocation and sticky behavior are preserved. */
 .wsIndexNavigator {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--menu-border);
-  background: var(--toolbar-bg);
+  border: 1px solid var(--border-subtle);
+  box-sizing: border-box;
+  background: var(--surface-panel);
   border-radius: 8px;
 }
 
@@ -2834,7 +3002,6 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
     width: 170px;
     flex: 0 0 170px;
     border-radius: 8px;
-    border-bottom: 1px solid var(--menu-border);
     position: sticky;
     top: 8px;
     max-height: none;

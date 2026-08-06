@@ -19,6 +19,19 @@
 (function () {
   'use strict';
 
+  function safeLog(message) {
+    try {
+      if (typeof globalThis.log === 'function') {
+        globalThis.log(message);
+        return;
+      }
+
+      if (typeof console !== 'undefined' && typeof console.info === 'function') {
+        console.info(message);
+      }
+    } catch {}
+  }
+
   const MODE_IDS = ['editor', 'journal', 'slides'];
 
   const RUNTIME_SESSIONS = {
@@ -73,11 +86,11 @@
           entry.hotReloadEnabled = Boolean(state.hotReloadEnabled);
         }
       } catch (e) {
-        globalThis.log?.(`ModeRuntime: capture failed for ${m}: ${e?.message || e}`);
+        safeLog(`ModeRuntime: capture failed for ${m}: ${e?.message || e}`);
       }
     }
 
-    globalThis.log?.(
+    safeLog(
       `ModeRuntime: captured mode=${m} hasHandle=${Boolean(entry.saveHandle)} stale=${entry.externalStale}`
     );
 
@@ -100,13 +113,13 @@
           hotReloadEnabled: entry.hotReloadEnabled,
         });
 
-        globalThis.log?.(
+        safeLog(
           `ModeRuntime: restored mode=${m} hasHandle=${Boolean(entry.saveHandle)} stale=${entry.externalStale}`
         );
 
         return true;
       } catch (e) {
-        globalThis.log?.(`ModeRuntime: restore failed for ${m}: ${e?.message || e}`);
+        safeLog(`ModeRuntime: restore failed for ${m}: ${e?.message || e}`);
       }
     }
 
@@ -124,7 +137,7 @@
     entry.externalStaleModified = 0;
     entry.hotReloadEnabled = false;
 
-    globalThis.log?.(`ModeRuntime: cleared mode=${m}`);
+    safeLog(`ModeRuntime: cleared mode=${m}`);
   }
 
   const MME_MODE_RUNTIME_SESSIONS = {
@@ -145,5 +158,5 @@
     globalThis.MME_MODE_RUNTIME_SESSIONS = MME_MODE_RUNTIME_SESSIONS;
   } catch {}
 
-  globalThis.log?.('ModeRuntime: registry ready');
+  safeLog('ModeRuntime: registry ready');
 })();
