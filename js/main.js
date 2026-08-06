@@ -68,6 +68,34 @@ async function initShiki() {
   return __shikiHighlighterPromise;
 }
 
+// ---- Render source cleaner (ACT B correction) ----
+// Removes recognized mme-task metadata comments from the rendering copy only.
+// Physical Markdown source is never modified.
+// Preserves unrelated HTML comments and code blocks.
+function stripMmeTaskMetadataForRender(mdText) {
+  const text = String(mdText || '');
+  const lines = text.split('\n');
+  const out = [];
+  let inFence = false;
+
+  for (const line of lines) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      out.push(line);
+      continue;
+    }
+
+    if (inFence) {
+      out.push(line);
+      continue;
+    }
+
+    out.push(line.replace(/<!--\s*mme-task:[\s\S]*?-->/gi, ''));
+  }
+
+  return out.join('\n');
+}
+
 async function renderHtmlWithShiki(mdText) {
   const highlighter = await initShiki();
 
@@ -174,7 +202,8 @@ async function renderHtmlWithShiki(mdText) {
     return result || str;
   };
 
-  return marked.parse(mdText, { renderer });
+  const renderSource = stripMmeTaskMetadataForRender(mdText);
+  return marked.parse(renderSource, { renderer });
 }
 
 function slugifyHeading(text) {
@@ -499,6 +528,66 @@ function stripYamlFrontmatterForTags(text) {
 
 // normalizeFrontmatterTags moved to js/workspace/workspace-parser.js
 // parseMarkdownTags moved to js/workspace/workspace-parser.js
+// ---- Task metadata parser (ACT B) ----
+
+function isLeapYear(year) {
+  const y = Number(year);
+  if (!Number.isInteger(y) || y < 1) return false;
+  return (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+}
+
+function isValidIsoDate(value) {
+  const str = String(value || '').trim();
+  if (!str) return false;
+  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return false;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (month < 1 || month > 12) return false;
+  const maxDay = new Date(year, month, 0).getDate();
+  if (day < 1 || day > maxDay) return false;
+  if (year < 1900 || year > 2100) return false;
+  return true;
+}
+
+function normalizeMetadataKey(key) {
+  return String(key || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[-\s]+/g, '_');
+}
+
+function parseMmeTaskMetadata(rawLine) {
+  const line = String(rawLine || '');
+  const commentMatch = line.match(/<!--\s*mme-task:\s*([\s\S]*?)\s*-->/i);
+  if (!commentMatch) return null;
+
+  const inner = String(commentMatch[1] || '').trim();
+  if (!inner) return { metadata: {} };
+
+  const parts = inner.split(';').map((p) => p.trim()).filter(Boolean);
+  const metadata = {};
+
+  for (const part of parts) {
+    const kv = part.match(/^([^=]+?)\s*=\s*(.*)$/);
+    if (!kv) continue;
+    const key = normalizeMetadataKey(kv[1]);
+    const value = String(kv[2] || '').trim();
+    if (!key) continue;
+    metadata[key] = value;
+  }
+
+  if (Object.keys(metadata).length === 0) return { metadata: {} };
+  return { metadata };
+}
+
+function cleanTaskText(rawMatch3) {
+  const text = String(rawMatch3 || '').trim();
+  const cleaned = text.replace(/<!--\s*mme-task:[\s\S]*?-->/gi, '').trim();
+  return cleaned;
+}
+
 function parseMarkdownTasks(text) {
   const lines = normalizeParserText(text).split('\n');
   const tasks = [];
@@ -508,15 +597,121 @@ function parseMarkdownTasks(text) {
 
     if (!match) return;
 
-    tasks.push({
+    const rawLine = line;
+    const rawContent = match[3] || '';
+    const cleanText = cleanTaskText(rawContent);
+    const metaResult = parseMmeTaskMetadata(rawLine);
+
+    const task = {
       line: index + 1,
       done: String(match[2] || '').toLowerCase() === 'x',
-      text: String(match[3] || '').trim(),
-      raw: line,
-    });
+      text: cleanText,
+      raw: rawLine,
+      metadata: metaResult?.metadata || {},
+      completedDate: null,
+      priority: null,
+      owner: null,
+      dueDate: null,
+    };
+
+    const meta = task.metadata;
+
+    if (task.done && meta.completed) {
+      const val = String(meta.completed || '').trim();
+      if (isValidIsoDate(val)) {
+        task.completedDate = val;
+      }
+    }
+
+    if (meta.priority) {
+      task.priority = String(meta.priority).trim() || null;
+    }
+    if (meta.owner) {
+      task.owner = String(meta.owner).trim() || null;
+    }
+    if (meta.due) {
+      const dueVal = String(meta.due).trim();
+      if (isValidIsoDate(dueVal)) {
+        task.dueDate = dueVal;
+      }
+    }
+
+    tasks.push(task);
   });
 
   return tasks;
+}
+
+// ---- Dormant Task metadata parser validator (ACT B) ----
+// Does not run during normal application startup.
+// To execute, open browser console and call: window.__validateTaskMetadataParser()
+if (typeof window !== 'undefined') {
+  try {
+    window.__validateTaskMetadataParser = function validateTaskMetadataParser() {
+      const cases = [
+        { label: 'Open without metadata', line: '- [ ] Update quotation', expected: { done: false, text: 'Update quotation', metadata: {}, completedDate: null, priority: null, owner: null, dueDate: null } },
+        { label: 'Completed without metadata', line: '- [x] Historical task', expected: { done: true, text: 'Historical task', metadata: {}, completedDate: null, priority: null, owner: null, dueDate: null } },
+        { label: 'Valid completed date', line: '- [x] Update quotation <!-- mme-task: completed=2026-08-05 -->', expected: { done: true, text: 'Update quotation', metadata: { completed: '2026-08-05' }, completedDate: '2026-08-05', priority: null, owner: null, dueDate: null } },
+        { label: 'Invalid completed date', line: '- [x] Bad <!-- mme-task: completed=2026-02-30 -->', expected: { done: true, text: 'Bad', metadata: { completed: '2026-02-30' }, completedDate: null } },
+        { label: 'Impossible date', line: '- [x] Bad <!-- mme-task: completed=26-08-05 -->', expected: { done: true, text: 'Bad', metadata: { completed: '26-08-05' }, completedDate: null } },
+        { label: 'Valid due date', line: '- [ ] Task <!-- mme-task: due=2026-08-10 -->', expected: { done: false, text: 'Task', metadata: { due: '2026-08-10' }, completedDate: null, dueDate: '2026-08-10' } },
+        { label: 'Invalid due date', line: '- [ ] Task <!-- mme-task: due=2026-13-01 -->', expected: { done: false, text: 'Task', metadata: { due: '2026-13-01' }, completedDate: null, dueDate: null } },
+        { label: 'Priority', line: '- [ ] Task <!-- mme-task: priority=high -->', expected: { done: false, text: 'Task', metadata: { priority: 'high' }, priority: 'high' } },
+        { label: 'Owner', line: '- [ ] Task <!-- mme-task: owner=Adelson -->', expected: { done: false, text: 'Task', metadata: { owner: 'Adelson' }, owner: 'Adelson' } },
+        { label: 'Multiple fields', line: '- [x] Task <!-- mme-task: completed=2026-08-05; priority=high; owner=Adelson; due=2026-08-10 -->', expected: { done: true, text: 'Task', metadata: { completed: '2026-08-05', priority: 'high', owner: 'Adelson', due: '2026-08-10' }, completedDate: '2026-08-05', priority: 'high', owner: 'Adelson', dueDate: '2026-08-10' } },
+        { label: 'Unknown field preserved', line: '- [x] Task <!-- mme-task: completed=2026-08-05; unknown=value -->', expected: { metadata: { completed: '2026-08-05', unknown: 'value' }, completedDate: '2026-08-05' } },
+        { label: 'Duplicate key last wins', line: '- [x] Task <!-- mme-task: completed=2026-08-05; completed=2026-08-06 -->', expected: { metadata: { completed: '2026-08-06' }, completedDate: '2026-08-06' } },
+        { label: 'Metadata removed from text', line: '- [x] Update quotation <!-- mme-task: completed=2026-08-05; owner=Adelson -->', expected: { text: 'Update quotation' } },
+        { label: 'Raw line preserved', line: '- [x] Task <!-- mme-task: completed=2026-08-05 -->', expected: { raw: '- [x] Task <!-- mme-task: completed=2026-08-05 -->' } },
+        { label: 'Unrelated HTML comment not parsed', line: '- [ ] Task <!-- some-other: value -->', expected: { metadata: {}, text: 'Task <!-- some-other: value -->' } },
+        { label: 'Spacing tolerance', line: '- [x] Task <!-- mme-task: completed = 2026-08-05; owner = Adelson -->', expected: { metadata: { completed: '2026-08-05', owner: 'Adelson' }, completedDate: '2026-08-05', owner: 'Adelson' } },
+        { label: 'Duplicate task text lines separate', line: '- [ ] Task\n- [ ] Task', expected: { count: 2 } },
+      ];
+
+      const results = [];
+      let passCount = 0;
+      let failCount = 0;
+
+      for (const c of cases) {
+        if (c.label === 'Duplicate task text lines separate') {
+          const parsed = parseMarkdownTasks(c.line);
+          const ok = parsed.length === 2;
+          results.push({ label: c.label, pass: ok, actual: parsed.length, expected: 2 });
+          if (ok) passCount++; else failCount++;
+          continue;
+        }
+
+        const parsed = parseMarkdownTasks(c.line);
+        const task = parsed[0];
+        if (!task) {
+          results.push({ label: c.label, pass: false, actual: 'no task parsed', expected: c.expected });
+          failCount++;
+          continue;
+        }
+
+        let ok = true;
+        for (const key of Object.keys(c.expected)) {
+          if (key === 'count') continue;
+          const actual = task[key];
+          const expected = c.expected[key];
+          if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+            ok = false;
+            break;
+          }
+        }
+        results.push({ label: c.label, pass: ok, actual: task, expected: c.expected });
+        if (ok) passCount++; else failCount++;
+      }
+
+      return {
+        ok: failCount === 0,
+        total: results.length,
+        passed: passCount,
+        failed: failCount,
+        results,
+      };
+    };
+  } catch {}
 }
 
 function normalizeConceptName(value) {
