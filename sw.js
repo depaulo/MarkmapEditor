@@ -9,7 +9,7 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v59-refine sidebar and index presentation';
+const APP_VERSION = 'markmap-journal-pwa-v60-task-metadata-v1';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -61,6 +61,21 @@ const LOCAL_APP_SHELL = [
   './js/workspace/workspace-index-workspace.js',
   './js/workspace/workspace-index-document.js',
   './js/core/mode-session.js',
+
+  // Dynamically loaded workspace modules (script-loader.js)
+  './js/workspace/workspace-parser.js',
+  './js/workspace/workspace-host.js',
+  './js/workspace/workspace-capabilities.js',
+  './js/workspace/mode-runtime-sessions.js',
+  './js/render/render-controller.js',
+  './js/editor/editor-visibility.js',
+  './js/editor/frontmatter-visibility.js',
+  './js/links/wiki-links.js',
+  './js/workspace/task-review.js',
+  './js/templates/metadata-templates.js',
+  './js/templates/templates-menu.js',
+  './js/export/export-actions.js',
+  './js/export/export-menu.js',
 ];
 
 const CDN_APP_SHELL = [
