@@ -135,11 +135,14 @@ html.journal-sidebar-collapsed .navBtn {
   font-size: 1.1rem;
 }
 
-/* Navigation History V1 — scrollable sidebar content area */
+/* Navigation History V1 — scrollable sidebar content area.
+   container-type enables the Projects narrow-layout @container query
+   to respond to the sidebar's own width, not the browser viewport. */
 .workspaceNavScroller {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  container-type: inline-size;
 }
 
 #workspaceSidebarResizeHandle {
@@ -1689,8 +1692,9 @@ html.journal-sidebar-collapsed #workspaceProjectsPanel {
 }
 
 .workspaceProjectsList {
-  display: flex;
-  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 260px;
 }
 
 .workspaceProjectsEmpty {
@@ -1724,17 +1728,68 @@ html.journal-sidebar-collapsed #workspaceProjectsPanel {
   flex: 1;
 }
 
+.workspaceProjectGroupChevron {
+  flex: 0 0 auto;
+  font-size: 10px;
+  opacity: 0.7;
+  margin-right: 4px;
+}
+
+.workspaceProjectGroupCount {
+  flex: 0 0 auto;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--menu-border);
+  background: rgba(127, 127, 127, 0.08);
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.85;
+  line-height: 1;
+}
+
+.workspaceProjectLabelRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  gap: 8px;
+  padding: 2px 8px 2px 16px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.5;
+  color: var(--text);
+}
+
+.workspaceProjectLabelName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceProjectLabelValue {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.workspaceProjectLabelOrder {
+  text-align: right;
+  white-space: nowrap;
+}
+
 .workspaceProjectList {
   display: flex;
   flex-direction: column;
 }
 
 .workspaceProjectItem {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  display: block;
   width: 100%;
-  padding: 4px 8px 4px 16px;
+  padding: 6px 8px 6px 16px;
   border: none;
   background: none;
   cursor: pointer;
@@ -1753,8 +1808,16 @@ html.journal-sidebar-collapsed #workspaceProjectsPanel {
   outline-offset: -1px;
 }
 
+.workspaceProjectRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
 .workspaceProjectName {
-  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1762,11 +1825,51 @@ html.journal-sidebar-collapsed #workspaceProjectsPanel {
 }
 
 .workspaceProjectValue {
-  flex: 0 0 auto;
+  text-align: right;
   font-size: 11px;
   opacity: 0.7;
   white-space: nowrap;
-  margin-left: auto;
+}
+
+.workspaceProjectOrder {
+  text-align: right;
+  font-size: 11px;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.workspaceProjectSource {
+  display: block;
+  font-size: 10px;
+  opacity: 0.55;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 0;
+}
+
+/* Narrow sidebar: stacked presentation via container query.
+   Applies when the sidebar itself is resized narrowly, even if the
+   browser viewport is wide. */
+@container (max-width: 260px) {
+  .workspaceProjectLabelRow {
+    display: none;
+  }
+
+  .workspaceProjectRow {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .workspaceProjectValue,
+  .workspaceProjectOrder {
+    text-align: left;
+  }
+
+  .workspaceProjectItem {
+    padding: 8px 8px 8px 16px;
+  }
 }
 
 /* Context-aware visibility */
@@ -3172,6 +3275,45 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
 /* ---- Workspace Index: Tasks responsive card grid ----
    The 3/2/1 card grid is owned by .wsIndexTaskCardGrid above.
    Task lists inside cards are always one vertical column. */
+
+/* ---- Workspace Index: Tasks filter controls ---- */
+.wsIndexTaskFilters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 0 0 10px 0;
+  border-bottom: 1px solid var(--menu-border);
+  margin-bottom: 10px;
+}
+
+.wsIndexTaskFilterBtn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--menu-border);
+  background: var(--toolbar-bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.wsIndexTaskFilterBtn:hover {
+  background: var(--menu-hover);
+}
+
+.wsIndexTaskFilterBtn.__active {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(34, 197, 94, 0.45);
+  font-weight: 650;
+}
+
+.wsIndexTaskFilterBtn:focus-visible {
+  outline: 2px solid rgba(34, 197, 94, 0.45);
+  outline-offset: 1px;
+}
 
 /* ---- Workspace Index: Projects filter toolbar ---- */
 .wsIndexProjectsToolbar {

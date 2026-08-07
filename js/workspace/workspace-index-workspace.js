@@ -46,6 +46,12 @@
   // Keys use the shared grammar: "kind:stable-card-key".
   const expandedDisclosureCards = new Set();
 
+  // ---- Local Task filter state (Unified Tasks section) ----
+  // Module-local only. Never written to WORKSPACE_INDEX_STATE,
+  // WORKSPACE_STATE / Host / Navigation / localStorage / sessionStorage /
+  // globalThis / URL.
+  let taskFilter = 'open';
+
   function resetProjectFilters() {
     projectFilters = { ...DEFAULT_PROJECT_FILTERS };
   }
@@ -260,7 +266,7 @@
 
     // Rerender the existing projection from current indexed state.
     // Preserve the user's location near the toggled card.
-    const anchorSelector = `[data-index-disclosure-kind="${kind}"][data-index-disclosure-key="${key}"]`;
+    const anchorSelector = `[data-index-card-kind="${kind}"][data-index-card-key="${key}"]`;
     rerenderProjectionWithAnchor(anchorSelector);
   }
 
@@ -272,6 +278,25 @@
     // They must never trigger document source opening.
     if (event.target.closest('button[data-index-disclosure]')) {
       handleDisclosureClick(event);
+      return;
+    }
+
+    // Unified Tasks filter buttons.
+    const filterBtn = event.target.closest('button[data-index-task-filter]');
+    if (filterBtn && container.contains(filterBtn)) {
+      event.preventDefault();
+      event.stopPropagation();
+      const value = filterBtn.dataset.indexTaskFilter || 'open';
+      if (value === 'open' || value === 'completed' || value === 'all') {
+        taskFilter = value;
+        // Clear only Task-card expansion state; preserve Tag and Relationship expansion.
+        for (const key of expandedDisclosureCards) {
+          if (key.startsWith('tasks-open:') || key.startsWith('tasks-completed:') || key.startsWith('tasks-all:')) {
+            expandedDisclosureCards.delete(key);
+          }
+        }
+        rerenderProjectionWithAnchor('#workspaceIndexTasksSection');
+      }
       return;
     }
 
@@ -338,6 +363,7 @@
     // 2. Build projection while hidden
     // ACT E: reset filter state at the start of a fresh Index session.
     resetProjectFilters();
+    taskFilter = 'open';
 
     let projectionHtml;
     try {
@@ -448,19 +474,35 @@
     const container = document.getElementById(CONTAINER_ID);
     if (!container) return;
 
+    // Measure the disclosure card's viewport position before rerender.
+    const scrollContainer = container;
+    const oldTop = anchorSelector
+      ? (() => {
+          const oldCard = container.querySelector(anchorSelector);
+          if (oldCard && typeof oldCard.getBoundingClientRect === 'function') {
+            return oldCard.getBoundingClientRect().top;
+          }
+          return null;
+        })()
+      : null;
+
     try {
-      const html = docApi.buildProjection(projectFilters, expandedDisclosureCards);
+      const html = docApi.buildProjection(projectFilters, expandedDisclosureCards, taskFilter);
       container.innerHTML = html;
       const returnBtnHtml = buildReturnButtonHtml();
       container.insertAdjacentHTML('afterbegin', returnBtnHtml);
 
-      // Keep the user near the toggled card or the Projects section.
-      const anchor = anchorSelector
-        ? container.querySelector(anchorSelector)
-        : document.getElementById('workspaceIndexProjectsSection');
-
-      if (anchor && typeof anchor.scrollIntoView === 'function') {
-        anchor.scrollIntoView({ block: 'start' });
+      // Restore scroll position relative to the replacement card.
+      if (oldTop !== null && typeof oldTop === 'number') {
+        const newCard = container.querySelector(anchorSelector);
+        if (newCard && typeof newCard.getBoundingClientRect === 'function') {
+          const newTop = newCard.getBoundingClientRect().top;
+          const delta = newTop - oldTop;
+          if (delta !== 0) {
+            scrollContainer.scrollTop += delta;
+          }
+        }
+        // If replacement card cannot be located, fail safely without throwing.
       }
     } catch (e) {
       safeLog(`WorkspaceIndex: projection rerender failed: ${e?.message || e}`);

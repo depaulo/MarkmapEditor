@@ -2701,73 +2701,117 @@ function renderWorkspaceProjectsPanel() {
 
   summary.textContent = `${count} Project${count !== 1 ? 's' : ''}`;
 
-  // Group projects by period
-  const groups = new Map();
+  // Group projects by year
+  const yearGroups = new Map();
   const unscheduled = [];
 
   for (const project of projects) {
     const order = project.expectedOrder;
-    if (order && order.valid === true) {
-      const key = order.canonical || 'UNSCHEDULED';
-      const display = order.display || key;
-      if (!groups.has(key)) {
-        groups.set(key, { display, projects: [] });
+    if (order && order.valid === true && Number.isFinite(order.year)) {
+      const yearKey = String(order.year);
+      if (!yearGroups.has(yearKey)) {
+        yearGroups.set(yearKey, { display: yearKey, projects: [] });
       }
-      groups.get(key).projects.push(project);
+      yearGroups.get(yearKey).projects.push(project);
     } else {
       unscheduled.push(project);
     }
   }
 
-  // Sort scheduled groups by canonical key
-  const sortedKeys = Array.from(groups.keys()).sort();
+  // Sort year groups by year ascending, Unscheduled last
+  const sortedYearKeys = Array.from(yearGroups.keys())
+    .map((y) => Number(y))
+    .sort((a, b) => a - b)
+    .map((y) => String(y));
 
   let html = '';
 
-  for (const key of sortedKeys) {
-    const group = groups.get(key);
-    const items = group.projects
-      .map((p) => {
-        const name = escapeHtml(p.name || '');
-        const path = escapeHtml(p.sourcePath || '');
-        const kind = escapeHtml(p.sourceKind || '');
+  for (const yearKey of sortedYearKeys) {
+    const group = yearGroups.get(yearKey);
+    if (!group) continue;
+    const groupCount = group.projects.length;
 
-        let valueDisplay = '';
-        if (p.value !== null && p.value !== undefined) {
-          if (p.currency) {
-            valueDisplay = p.currency + ' ' + Number(p.value).toLocaleString();
-          } else {
-            valueDisplay = Number(p.value).toLocaleString() + ' \u00b7 no currency';
-          }
-        } else {
-          valueDisplay = '\u2014';
-        }
+    // Sort projects within year by canonical order, then name
+    const sortedProjects = group.projects.slice().sort((a, b) => {
+      const orderA = a.expectedOrder;
+      const orderB = b.expectedOrder;
+      const canA = orderA?.canonical || '';
+      const canB = orderB?.canonical || '';
+      if (canA !== canB) return canA < canB ? -1 : 1;
+      const nameA = String(a.name || '').toLowerCase();
+      const nameB = String(b.name || '').toLowerCase();
+      if (nameA !== nameB) return nameA < nameB ? -1 : 1;
+      return (a.sourceLine || 0) - (b.sourceLine || 0);
+    });
 
-        return `
-          <button
-            type="button"
-            class="workspaceProjectItem"
-            data-workspace-project-item="1"
-            data-path="${path}"
-            data-kind="${kind}"
-            title="${path}"
-          >
-            <span class="workspaceProjectName">${name}</span>
-            <span class="workspaceProjectValue">${escapeHtml(valueDisplay)}</span>
-          </button>
-        `;
-      })
-      .join('');
+        const items = sortedProjects
+          .map((p) => {
+            const name = escapeHtml(p.name || '');
+            const path = escapeHtml(p.sourcePath || '');
+            const kind = escapeHtml(p.sourceKind || '');
+            const line = Number(p.sourceLine) || 0;
+            const lineAttr = line ? ` data-line="${escapeHtml(String(line))}"` : '';
 
-    html += `
-      <div class="workspaceProjectGroup">
-        <div class="workspaceProjectGroupHeader">
-          <span class="workspaceProjectGroupTitle">${escapeHtml(group.display)}</span>
+            // Order from expectedOrder
+            let orderDisplay = '\u2014';
+            if (p.expectedOrder && p.expectedOrder.valid === true) {
+              orderDisplay = escapeHtml(p.expectedOrder.display || p.expectedOrder.canonical || '');
+            }
+
+            // Value with currency
+            let valueDisplay = '\u2014';
+            if (p.value !== null && p.value !== undefined) {
+              if (p.currency) {
+                valueDisplay = escapeHtml(p.currency + ' ' + Number(p.value).toLocaleString());
+              } else {
+                valueDisplay = escapeHtml(Number(p.value).toLocaleString() + ' \u00b7 no currency');
+              }
+            }
+
+            // Source provenance
+            const sourceLabel = p.sourceName || p.sourcePath || '\u2014';
+            const sourceDisplay = line > 0
+              ? `${escapeHtml(sourceLabel)} \u00b7 line ${line}`
+              : escapeHtml(sourceLabel);
+
+            return `
+              <button
+                type="button"
+                class="workspaceProjectItem"
+                data-workspace-project-item="1"
+                data-path="${path}"
+                data-kind="${kind}"
+                ${lineAttr}
+                title="${path}"
+                aria-label="Open Project ${name}, value ${valueDisplay}, expected order ${orderDisplay}, source ${sourceLabel}${line ? ' line ' + line : ''}"
+              >
+                <span class="workspaceProjectRow">
+                  <span class="workspaceProjectName">${name}</span>
+                  <span class="workspaceProjectValue">${valueDisplay}</span>
+                  <span class="workspaceProjectOrder">${orderDisplay}</span>
+                </span>
+                <span class="workspaceProjectSource">${sourceDisplay}</span>
+              </button>
+            `;
+          })
+          .join('');
+
+      html += `
+        <div class="workspaceProjectGroup">
+          <div class="workspaceProjectGroupHeader">
+            <span class="workspaceProjectGroupChevron" aria-hidden="true">▾</span>
+            <span class="workspaceProjectGroupTitle">${escapeHtml(group.display)}</span>
+            <span class="workspaceProjectGroupCount">${groupCount}</span>
+          </div>
+          <div class="workspaceProjectLabelRow" aria-hidden="true">
+            <span class="workspaceProjectLabelName">Project name</span>
+            <span class="workspaceProjectLabelValue">Value</span>
+            <span class="workspaceProjectLabelOrder">Order</span>
+          </div>
+          <div class="workspaceProjectList">${items}</div>
         </div>
-        <div class="workspaceProjectList">${items}</div>
-      </div>
-    `;
-  }
+      `;
+    }
 
   if (unscheduled.length) {
     const items = unscheduled
@@ -2775,17 +2819,24 @@ function renderWorkspaceProjectsPanel() {
         const name = escapeHtml(p.name || '');
         const path = escapeHtml(p.sourcePath || '');
         const kind = escapeHtml(p.sourceKind || '');
+        const line = Number(p.sourceLine) || 0;
+        const lineAttr = line ? ` data-line="${escapeHtml(String(line))}"` : '';
 
-        let valueDisplay = '';
+        // Value with currency
+        let valueDisplay = '\u2014';
         if (p.value !== null && p.value !== undefined) {
           if (p.currency) {
-            valueDisplay = p.currency + ' ' + Number(p.value).toLocaleString();
+            valueDisplay = escapeHtml(p.currency + ' ' + Number(p.value).toLocaleString());
           } else {
-            valueDisplay = Number(p.value).toLocaleString() + ' \u00b7 no currency';
+            valueDisplay = escapeHtml(Number(p.value).toLocaleString() + ' \u00b7 no currency');
           }
-        } else {
-          valueDisplay = '\u2014';
         }
+
+        // Source provenance
+        const sourceLabel = p.sourceName || p.sourcePath || '\u2014';
+        const sourceDisplay = line > 0
+          ? `${escapeHtml(sourceLabel)} \u00b7 line ${line}`
+          : escapeHtml(sourceLabel);
 
         return `
           <button
@@ -2794,10 +2845,15 @@ function renderWorkspaceProjectsPanel() {
             data-workspace-project-item="1"
             data-path="${path}"
             data-kind="${kind}"
+            ${lineAttr}
             title="${path}"
+            aria-label="Open Project ${name}, value ${valueDisplay}, expected order Unscheduled, source ${sourceLabel}${line ? ' line ' + line : ''}"
           >
-            <span class="workspaceProjectName">${name}</span>
-            <span class="workspaceProjectValue">${escapeHtml(valueDisplay)}</span>
+            <span class="workspaceProjectRow">
+              <span class="workspaceProjectName">${name}</span>
+              <span class="workspaceProjectValue">${valueDisplay}</span>
+            </span>
+            <span class="workspaceProjectSource">${sourceDisplay}</span>
           </button>
         `;
       })
@@ -2806,7 +2862,13 @@ function renderWorkspaceProjectsPanel() {
     html += `
       <div class="workspaceProjectGroup">
         <div class="workspaceProjectGroupHeader">
+          <span class="workspaceProjectGroupChevron" aria-hidden="true">▾</span>
           <span class="workspaceProjectGroupTitle">Unscheduled</span>
+          <span class="workspaceProjectGroupCount">${unscheduled.length}</span>
+        </div>
+        <div class="workspaceProjectLabelRow" aria-hidden="true">
+          <span class="workspaceProjectLabelName">Project name</span>
+          <span class="workspaceProjectLabelValue">Value</span>
         </div>
         <div class="workspaceProjectList">${items}</div>
       </div>
@@ -2878,6 +2940,7 @@ function wireWorkspaceProjectsPanel() {
 
     const path = btn.dataset.path || '';
     const kind = btn.dataset.kind || '';
+    const line = Number(btn.dataset.line || 0);
 
     const file =
       typeof findWorkspaceFileByPath === 'function' ? findWorkspaceFileByPath(path, kind) : null;
@@ -2890,14 +2953,30 @@ function wireWorkspaceProjectsPanel() {
       return;
     }
 
-    log?.(`Workspace Projects: opening ${path}`);
+    log?.(`Workspace Projects: opening ${path} line=${line}`);
 
     if (typeof globalThis.openWorkspaceFile === 'function') {
       await globalThis.openWorkspaceFile(file, kind || file.kind, 'workspace project source open');
+    } else {
+      log?.('Workspace Projects: openWorkspaceFile missing');
       return;
     }
 
-    log?.('Workspace Projects: openWorkspaceFile missing');
+    // Wait for file activation, then scroll to line
+    if (line > 0) {
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve();
+          });
+        });
+      });
+
+      const scrollToLine = typeof window.__cmScrollToLine === 'function' ? window.__cmScrollToLine : null;
+      if (scrollToLine) {
+        scrollToLine(line - 1); // Convert 1-based to 0-based
+      }
+    }
   });
 
   panel.__workspaceProjectsBound = true;

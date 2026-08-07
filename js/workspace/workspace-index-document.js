@@ -246,7 +246,7 @@
   // Tags, and Relationships. Local state owned by the Workspace Index
   // presentation host (workspace-index-workspace.js). No Index rebuild,
   // no Navigation History, no shared record mutation.
-  const DISCLOSURE_LIMIT = 6;
+  const DISCLOSURE_LIMIT = 5;
 
   function disclosureKey(kind, key) {
     return `${kind}:${key}`;
@@ -498,7 +498,7 @@
           listId
         );
 
-        return `<div class="wsIndexTagGroup">
+        return `<div class="wsIndexTagGroup" data-index-card-kind="tags" data-index-card-key="${escapeAttr(tag)}">
           <div class="wsIndexTagName">#${escapeHtml(tag)} <span class="wsIndexTagCount">(${parts.total})</span></div>
           <div class="wsIndexFileList" id="${escapeAttr(listId)}">${fileButtons}</div>
           ${disclosure}
@@ -514,20 +514,28 @@
     `;
   }
 
-  function buildTasksSection(index, done, expanded) {
-    const tasks = (index.tasks || []).filter((t) => Boolean(t.done) === done);
+  function buildTasksSection(index, filter, expanded) {
+    let tasks = (index.tasks || []).slice();
+
+    // Apply filter
+    if (filter === 'open') {
+      tasks = tasks.filter((t) => !t.done);
+    } else if (filter === 'completed') {
+      tasks = tasks.filter((t) => t.done);
+    }
+    // 'all' — no filter
 
     if (!tasks.length) {
-      const label = done ? 'Completed Tasks' : 'Open Tasks';
+      const label = filter === 'completed' ? 'Completed Tasks' : filter === 'all' ? 'All Tasks' : 'Open Tasks';
       return `
-        <section class="wsIndexSection" id="${done ? 'workspaceIndexCompletedTasksSection' : 'workspaceIndexOpenTasksSection'}" aria-label="${label}">
+        <section class="wsIndexSection" id="workspaceIndexTasksSection" aria-label="Tasks">
           <h2 class="wsIndexSectionTitle">${label}</h2>
-          <div class="wsIndexEmpty">No ${done ? 'completed' : 'open'} tasks</div>
+          <div class="wsIndexEmpty">No ${filter === 'completed' ? 'completed' : filter === 'all' ? '' : 'open'} tasks</div>
         </section>
       `;
     }
 
-    // Sort by filePath ascending, then line ascending
+    // Sort by filePath ascending, then line ascending (preserve source-line order)
     const sorted = tasks.slice().sort((a, b) => {
       const ap = String(a.filePath || '');
       const bp = String(b.filePath || '');
@@ -544,7 +552,7 @@
     }
 
     const sortedKeys = Array.from(groups.keys()).sort();
-    const kind = done ? 'tasks-completed' : 'tasks-open';
+    const kind = 'tasks-all';
 
     const cardHtml = sortedKeys
       .map((filePath) => {
@@ -576,7 +584,7 @@
           listId
         );
 
-        return `<div class="wsIndexTaskCard">
+        return `<div class="wsIndexTaskCard" data-index-card-kind="tasks-all" data-index-card-key="${escapeAttr(filePath)}">
           <button type="button" class="wsIndexTaskCardHeader" data-action="open-workspace-file" data-path="${escapeAttr(filePath)}" data-kind="${escapeAttr(fileKind)}" title="${escapeAttr(filePath)}">
             <span class="wsIndexFileIcon" aria-hidden="true">${icon}</span>
             <span class="wsIndexTaskCardName">${escapeHtml(fileName)}</span>
@@ -588,11 +596,26 @@
       })
       .join('');
 
-    const label = done ? 'Completed Tasks' : 'Open Tasks';
+    const label = filter === 'completed' ? 'Completed Tasks' : filter === 'all' ? 'All Tasks' : 'Open Tasks';
+    const sectionId = 'workspaceIndexTasksSection';
+
+    // Build filter controls
+    const openCount = (index.tasks || []).filter((t) => !t.done).length;
+    const completedCount = (index.tasks || []).filter((t) => t.done).length;
+    const totalCount = (index.tasks || []).length;
+
+    const filterHtml = `
+      <div class="wsIndexTaskFilters">
+        <button type="button" class="wsIndexTaskFilterBtn${filter === 'open' ? ' __active' : ''}" data-index-task-filter="open" aria-pressed="${filter === 'open' ? 'true' : 'false'}">Open ${openCount}</button>
+        <button type="button" class="wsIndexTaskFilterBtn${filter === 'completed' ? ' __active' : ''}" data-index-task-filter="completed" aria-pressed="${filter === 'completed' ? 'true' : 'false'}">Completed ${completedCount}</button>
+        <button type="button" class="wsIndexTaskFilterBtn${filter === 'all' ? ' __active' : ''}" data-index-task-filter="all" aria-pressed="${filter === 'all' ? 'true' : 'false'}">All ${totalCount}</button>
+      </div>
+    `;
 
     return `
-      <section class="wsIndexSection" id="${done ? 'workspaceIndexCompletedTasksSection' : 'workspaceIndexOpenTasksSection'}" aria-label="${label}">
-        <h2 class="wsIndexSectionTitle">${label} (${tasks.length})</h2>
+      <section class="wsIndexSection" id="${sectionId}" aria-label="Tasks">
+        <h2 class="wsIndexSectionTitle">${label} (${totalCount})</h2>
+        ${filterHtml}
         <div class="wsIndexTaskCardGrid">${cardHtml}</div>
       </section>
     `;
@@ -642,7 +665,7 @@
           listId
         );
 
-        return `<div class="wsIndexLinkGroup">
+        return `<div class="wsIndexLinkGroup" data-index-card-kind="relationships" data-index-card-key="${escapeAttr(concept)}">
           <div class="wsIndexLinkName">${escapeHtml(concept)} <span class="wsIndexLinkCount">(${parts.total})</span></div>
           <div class="wsIndexFileList" id="${escapeAttr(listId)}">${fileButtons}</div>
           ${disclosure}
@@ -676,8 +699,7 @@
       { id: 'workspaceIndexJournalsSection', label: 'Journals' },
       { id: 'workspaceIndexConceptsSection', label: 'Concepts' },
       { id: 'workspaceIndexProjectsSection', label: 'Projects' },
-      { id: 'workspaceIndexOpenTasksSection', label: 'Open Tasks' },
-      { id: 'workspaceIndexCompletedTasksSection', label: 'Completed Tasks' },
+      { id: 'workspaceIndexTasksSection', label: 'Tasks' },
       { id: 'workspaceIndexTagsSection', label: 'Tags' },
       { id: 'workspaceIndexRelationshipsSection', label: 'Relationships' },
     ];
@@ -713,11 +735,12 @@
     </div>`;
   }
 
-  function buildProjection(filters, expanded) {
+  function buildProjection(filters, expanded, taskFilterValue) {
     const index = safeIndex();
     const wsState = safeWorkspaceState();
     const hasWorkspace = Boolean(wsState?.rootHandle);
     const expandedSet = expanded instanceof Set ? expanded : new Set();
+    const filter = taskFilterValue || 'open';
 
     if (!index || !index.ready) {
       return buildNotReadyHtml(hasWorkspace);
@@ -733,8 +756,7 @@
       buildJournalsSection(index),
       buildConceptsSection(index),
       buildProjectsSection(index, filters),
-      buildTasksSection(index, false, expandedSet),
-      buildTasksSection(index, true, expandedSet),
+      buildTasksSection(index, filter, expandedSet),
       buildTagsSection(index, expandedSet),
       buildRelationshipsSection(index, expandedSet),
     ].join('\n');
