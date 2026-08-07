@@ -241,6 +241,40 @@
     </button>`;
   }
 
+  // ---- Shared Disclosure Contract (Parts 4-6) ----
+  // First-six disclosure grammar shared by Open Tasks, Completed Tasks,
+  // Tags, and Relationships. Local state owned by the Workspace Index
+  // presentation host (workspace-index-workspace.js). No Index rebuild,
+  // no Navigation History, no shared record mutation.
+  const DISCLOSURE_LIMIT = 6;
+
+  function disclosureKey(kind, key) {
+    return `${kind}:${key}`;
+  }
+
+  function disclosureParts(kind, key, items, expanded) {
+    const total = items.length;
+    const limit = DISCLOSURE_LIMIT;
+    const isExpanded = expanded.has(disclosureKey(kind, key));
+    const visible = isExpanded ? items : items.slice(0, limit);
+    const hiddenCount = total > limit ? total - limit : 0;
+    return { visible, hiddenCount, isExpanded, total };
+  }
+
+  function buildDisclosureButton(kind, key, hiddenCount, isExpanded, controlsId) {
+    if (hiddenCount <= 0) return '';
+    const label = isExpanded ? 'Show less' : `+ ${hiddenCount} more`;
+    return `<button
+      type="button"
+      class="wsIndexDisclosure"
+      data-index-disclosure="1"
+      data-index-disclosure-kind="${escapeAttr(kind)}"
+      data-index-disclosure-key="${escapeAttr(key)}"
+      aria-expanded="${isExpanded ? 'true' : 'false'}"
+      aria-controls="${escapeAttr(controlsId)}"
+    >${escapeHtml(label)}</button>`;
+  }
+
   function buildJournalsSection(index) {
     const journals = (index.byKind?.journals || []).slice().sort((a, b) => {
       return String(b.path || '').localeCompare(String(a.path || ''));
@@ -420,7 +454,7 @@
     `;
   }
 
-  function buildTagsSection(index) {
+  function buildTagsSection(index, expanded) {
     const tags = index.tags;
     if (!tags || tags.size === 0) {
       return `
@@ -432,11 +466,15 @@
     }
 
     const sortedTags = Array.from(tags.keys()).sort();
+    const kind = 'tags';
 
     const items = sortedTags
       .map((tag) => {
         const paths = (tags.get(tag) || []).slice().sort();
-        const fileButtons = paths
+        const parts = disclosureParts(kind, tag, paths, expanded);
+        const listId = `wsIndexTagList-${String(tag).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
+        const fileButtons = parts.visible
           .map((path) => {
             const parsed = index.byPath?.get(path);
             if (!parsed) return '';
@@ -452,9 +490,18 @@
           </div>`;
         }
 
+        const disclosure = buildDisclosureButton(
+          kind,
+          tag,
+          parts.hiddenCount,
+          parts.isExpanded,
+          listId
+        );
+
         return `<div class="wsIndexTagGroup">
-          <div class="wsIndexTagName">#${escapeHtml(tag)} <span class="wsIndexTagCount">(${paths.length})</span></div>
-          <div class="wsIndexFileList">${fileButtons}</div>
+          <div class="wsIndexTagName">#${escapeHtml(tag)} <span class="wsIndexTagCount">(${parts.total})</span></div>
+          <div class="wsIndexFileList" id="${escapeAttr(listId)}">${fileButtons}</div>
+          ${disclosure}
         </div>`;
       })
       .join('');
@@ -467,7 +514,7 @@
     `;
   }
 
-  function buildTasksSection(index, done) {
+  function buildTasksSection(index, done, expanded) {
     const tasks = (index.tasks || []).filter((t) => Boolean(t.done) === done);
 
     if (!tasks.length) {
@@ -497,32 +544,46 @@
     }
 
     const sortedKeys = Array.from(groups.keys()).sort();
+    const kind = done ? 'tasks-completed' : 'tasks-open';
 
-    const groupHtml = sortedKeys
+    const cardHtml = sortedKeys
       .map((filePath) => {
         const fileTasks = groups.get(filePath);
         const parsed = index.byPath?.get(filePath);
         const fileName = parsed?.name || filePath;
-        const kind = parsed?.kind || '';
-        const icon = kind === 'journals' ? '📝' : kind === 'concepts' ? '🧠' : '📄';
+        const fileKind = parsed?.kind || '';
+        const icon = fileKind === 'journals' ? '📝' : fileKind === 'concepts' ? '🧠' : '📄';
 
-        const taskItems = fileTasks
+        const parts = disclosureParts(kind, filePath, fileTasks, expanded);
+        const listId = `wsIndexTaskList-${kind}-${String(filePath).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
+        const taskItems = parts.visible
           .map((task) => {
             const checkbox = task.done ? '✅' : '⬜';
             const lineAttr = task.line ? `data-line="${escapeAttr(String(task.line))}"` : '';
-            return `<button type="button" class="wsIndexTaskAction" data-action="open-workspace-file" data-path="${escapeAttr(filePath)}" data-kind="${escapeAttr(kind)}" ${lineAttr}>
+            return `<button type="button" class="wsIndexTaskAction" data-action="open-workspace-file" data-path="${escapeAttr(filePath)}" data-kind="${escapeAttr(fileKind)}" ${lineAttr}>
               <span class="wsIndexTaskCheckbox" aria-hidden="true">${checkbox}</span>
               <span class="wsIndexTaskText">${escapeHtml(task.text || '(empty task)')}</span>
             </button>`;
           })
           .join('');
 
-        return `<div class="wsIndexTaskGroup">
-          <div class="wsIndexTaskGroupHeader">
+        const disclosure = buildDisclosureButton(
+          kind,
+          filePath,
+          parts.hiddenCount,
+          parts.isExpanded,
+          listId
+        );
+
+        return `<div class="wsIndexTaskCard">
+          <button type="button" class="wsIndexTaskCardHeader" data-action="open-workspace-file" data-path="${escapeAttr(filePath)}" data-kind="${escapeAttr(fileKind)}" title="${escapeAttr(filePath)}">
             <span class="wsIndexFileIcon" aria-hidden="true">${icon}</span>
-            <span class="wsIndexTaskGroupName">${escapeHtml(fileName)}</span>
-          </div>
-          <div class="wsIndexTaskList">${taskItems}</div>
+            <span class="wsIndexTaskCardName">${escapeHtml(fileName)}</span>
+            <span class="wsIndexTaskCardCount">${parts.total}</span>
+          </button>
+          <div class="wsIndexTaskList" id="${escapeAttr(listId)}">${taskItems}</div>
+          ${disclosure}
         </div>`;
       })
       .join('');
@@ -532,12 +593,12 @@
     return `
       <section class="wsIndexSection" id="${done ? 'workspaceIndexCompletedTasksSection' : 'workspaceIndexOpenTasksSection'}" aria-label="${label}">
         <h2 class="wsIndexSectionTitle">${label} (${tasks.length})</h2>
-        ${groupHtml}
+        <div class="wsIndexTaskCardGrid">${cardHtml}</div>
       </section>
     `;
   }
 
-  function buildRelationshipsSection(index) {
+  function buildRelationshipsSection(index, expanded) {
     const links = index.links;
     if (!links || links.size === 0) {
       return `
@@ -549,11 +610,15 @@
     }
 
     const sortedConcepts = Array.from(links.keys()).sort();
+    const kind = 'relationships';
 
     const items = sortedConcepts
       .map((concept) => {
         const sourcePaths = (links.get(concept) || []).slice().sort();
-        const fileButtons = sourcePaths
+        const parts = disclosureParts(kind, concept, sourcePaths, expanded);
+        const listId = `wsIndexLinkList-${String(concept).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
+        const fileButtons = parts.visible
           .map((path) => {
             const parsed = index.byPath?.get(path);
             if (!parsed) return '';
@@ -569,9 +634,18 @@
           </div>`;
         }
 
+        const disclosure = buildDisclosureButton(
+          kind,
+          concept,
+          parts.hiddenCount,
+          parts.isExpanded,
+          listId
+        );
+
         return `<div class="wsIndexLinkGroup">
-          <div class="wsIndexLinkName">${escapeHtml(concept)} <span class="wsIndexLinkCount">(${sourcePaths.length})</span></div>
-          <div class="wsIndexFileList">${fileButtons}</div>
+          <div class="wsIndexLinkName">${escapeHtml(concept)} <span class="wsIndexLinkCount">(${parts.total})</span></div>
+          <div class="wsIndexFileList" id="${escapeAttr(listId)}">${fileButtons}</div>
+          ${disclosure}
         </div>`;
       })
       .join('');
@@ -639,10 +713,11 @@
     </div>`;
   }
 
-  function buildProjection(filters) {
+  function buildProjection(filters, expanded) {
     const index = safeIndex();
     const wsState = safeWorkspaceState();
     const hasWorkspace = Boolean(wsState?.rootHandle);
+    const expandedSet = expanded instanceof Set ? expanded : new Set();
 
     if (!index || !index.ready) {
       return buildNotReadyHtml(hasWorkspace);
@@ -658,10 +733,10 @@
       buildJournalsSection(index),
       buildConceptsSection(index),
       buildProjectsSection(index, filters),
-      buildTasksSection(index, false),
-      buildTasksSection(index, true),
-      buildTagsSection(index),
-      buildRelationshipsSection(index),
+      buildTasksSection(index, false, expandedSet),
+      buildTasksSection(index, true, expandedSet),
+      buildTagsSection(index, expandedSet),
+      buildRelationshipsSection(index, expandedSet),
     ].join('\n');
 
     const content = buildContent(sections);

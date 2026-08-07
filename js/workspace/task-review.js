@@ -947,6 +947,9 @@
       }
 
       // Open group header (source file) — file-level open only
+      // Task Review is the sole owner of Task group-header opening. The legacy
+      // Workspace Tasks handler returns early whenever MME_TASK_REVIEW exists,
+      // so this handler opens the source exactly once per click.
       const groupHeader = event.target?.closest?.('.workspaceTaskGroupHeader');
       if (groupHeader) {
         event.preventDefault();
@@ -955,11 +958,6 @@
         const kind = groupHeader.dataset.kind || '';
         if (!path) {
           safeLog('TaskReview: group-header click skipped; empty path');
-          return;
-        }
-        if (groupHeader.dataset.taskReviewHandled === '1') {
-          safeLog('TaskReview: group-header click delegated to task source');
-          groupHeader.dataset.taskReviewHandled = '';
           return;
         }
         safeLog(`TaskReview: group-header click path=${path}`);

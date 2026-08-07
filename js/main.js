@@ -1845,6 +1845,13 @@ function wireWorkspaceTasksPanel() {
       event.preventDefault();
       event.stopPropagation();
 
+      // Task Review is the sole owner of Task group-header opening when active.
+      // This guards the race where this legacy handler was bound before Task
+      // Review loaded. Returning here lets Task Review open the source once.
+      if (globalThis.MME_TASK_REVIEW) {
+        return;
+      }
+
       const path = groupBtn.dataset.path || '';
       const kind = groupBtn.dataset.kind || '';
 

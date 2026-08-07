@@ -39,6 +39,13 @@
 
   let projectFilters = { ...DEFAULT_PROJECT_FILTERS };
 
+  // ---- Local disclosure state (Parts 4-6) ----
+  // Module-local Set of expanded card keys. Never written to
+  // WORKSPACE_INDEX_STATE / WORKSPACE_STATE / Host / Navigation /
+  // localStorage / sessionStorage / globalThis / URL.
+  // Keys use the shared grammar: "kind:stable-card-key".
+  const expandedDisclosureCards = new Set();
+
   function resetProjectFilters() {
     projectFilters = { ...DEFAULT_PROJECT_FILTERS };
   }
@@ -161,7 +168,11 @@
       });
     } catch (e) {
       safeLog(`WorkspaceIndex: switch to journal failed: ${e?.message || e}`);
-      globalThis.MME_APP?.showToast?.(`Failed to switch to Journal: ${e?.message || e}`, 'error', 3000);
+      globalThis.MME_APP?.showToast?.(
+        `Failed to switch to Journal: ${e?.message || e}`,
+        'error',
+        3000
+      );
       return;
     }
 
@@ -220,16 +231,53 @@
     }
   }
 
+  // ---- Disclosure handling (Parts 4-6) ----
+  // Toggles only the selected card's expansion state in the module-local
+  // Set, then rerenders the existing projection from current indexed state.
+  // No Index rebuild, no workspace scanning, no source parsing, no
+  // Navigation History, no shared record mutation.
+
+  function handleDisclosureClick(event) {
+    const btn = event.target.closest('button[data-index-disclosure]');
+    if (!btn) return;
+
+    const container = document.getElementById(CONTAINER_ID);
+    if (!container || !container.contains(btn)) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const kind = btn.dataset.indexDisclosureKind || '';
+    const key = btn.dataset.indexDisclosureKey || '';
+    if (!kind || !key) return;
+
+    const disclosureKey = `${kind}:${key}`;
+    if (expandedDisclosureCards.has(disclosureKey)) {
+      expandedDisclosureCards.delete(disclosureKey);
+    } else {
+      expandedDisclosureCards.add(disclosureKey);
+    }
+
+    // Rerender the existing projection from current indexed state.
+    // Preserve the user's location near the toggled card.
+    const anchorSelector = `[data-index-disclosure-kind="${kind}"][data-index-disclosure-key="${key}"]`;
+    rerenderProjectionWithAnchor(anchorSelector);
+  }
+
   function onActionClick(event) {
     const container = document.getElementById(CONTAINER_ID);
     if (!container) return;
 
+    // Disclosure buttons are separate from data-action buttons.
+    // They must never trigger document source opening.
+    if (event.target.closest('button[data-index-disclosure]')) {
+      handleDisclosureClick(event);
+      return;
+    }
+
     const actionElement = event.target.closest('button[data-action]');
 
-    if (
-      !actionElement ||
-      !container.contains(actionElement)
-    ) {
+    if (!actionElement || !container.contains(actionElement)) {
       return;
     }
 
@@ -293,7 +341,7 @@
 
     let projectionHtml;
     try {
-      projectionHtml = docApi.buildProjection(projectFilters);
+      projectionHtml = docApi.buildProjection(projectFilters, expandedDisclosureCards);
     } catch (e) {
       throw new Error(`WorkspaceIndex.activate: projection failed: ${e?.message || e}`);
     }
@@ -393,7 +441,7 @@
     return Boolean(container && container.contains(event.target));
   }
 
-  function rerenderProjectionWithAnchor() {
+  function rerenderProjectionWithAnchor(anchorSelector) {
     const docApi = getDocumentApi();
     if (!docApi) return;
 
@@ -401,18 +449,21 @@
     if (!container) return;
 
     try {
-      const html = docApi.buildProjection(projectFilters);
+      const html = docApi.buildProjection(projectFilters, expandedDisclosureCards);
       container.innerHTML = html;
       const returnBtnHtml = buildReturnButtonHtml();
       container.insertAdjacentHTML('afterbegin', returnBtnHtml);
 
-      // Keep the user near the Projects section using the native section ID.
-      const projectsSection = document.getElementById('workspaceIndexProjectsSection');
-      if (projectsSection && typeof projectsSection.scrollIntoView === 'function') {
-        projectsSection.scrollIntoView({ block: 'start' });
+      // Keep the user near the toggled card or the Projects section.
+      const anchor = anchorSelector
+        ? container.querySelector(anchorSelector)
+        : document.getElementById('workspaceIndexProjectsSection');
+
+      if (anchor && typeof anchor.scrollIntoView === 'function') {
+        anchor.scrollIntoView({ block: 'start' });
       }
     } catch (e) {
-      safeLog(`WorkspaceIndex: Project filter rerender failed: ${e?.message || e}`);
+      safeLog(`WorkspaceIndex: projection rerender failed: ${e?.message || e}`);
     }
   }
 
@@ -425,7 +476,7 @@
 
     // Regenerate projection and swap in a single innerHTML assignment
     try {
-      const html = docApi.buildProjection(projectFilters);
+      const html = docApi.buildProjection(projectFilters, expandedDisclosureCards);
       container.innerHTML = html;
       // Re-prepend Return button after refresh
       const returnBtnHtml = buildReturnButtonHtml();
