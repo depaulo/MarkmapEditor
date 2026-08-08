@@ -82,5 +82,13 @@ function appendScript(src, { onload } = {}) {
   appendScript('./js/workspace/task-review.js');
 
   appendScript('./js/templates/templates-menu.js');
+
+  // ACT E + ACT F — Quick Report modules. Order: dictionary, generator, panel.
+  // The panel tolerates an absent Workspace Index at load and dispatches a
+  // narrow module-ready event; main.js ensures the panel during sidebar
+  // finalization when the module is available.
+  appendScript('./js/report/report-dictionary.js');
+  appendScript('./js/report/quick-report-generator.js');
+  appendScript('./js/report/report-panel.js');
 })();
 

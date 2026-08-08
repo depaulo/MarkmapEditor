@@ -3612,3 +3612,302 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ================================
+   ACT F — Quick Report configuration panel
+   Reuses existing sidebar panel grammar.
+   ================================ */
+
+.workspaceReportPanel {
+  display: block;
+}
+
+.workspaceReportPanel .workspacePanelBody {
+  padding: 8px 10px 10px;
+}
+
+.workspaceReportBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.reportFieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.reportFieldsetLegend {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #888);
+  margin-bottom: 4px;
+  padding: 0;
+}
+
+.reportDateRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.reportFieldLabel {
+  flex: 0 0 34px;
+  font-size: 12px;
+  color: var(--muted, #888);
+}
+
+.reportInput {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-subtle, #ccc);
+  border-radius: 4px;
+  background: var(--surface-raised, #fff);
+  color: var(--text, #1a1a1a);
+}
+
+.reportDateInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  color-scheme: light;
+}
+
+html.dark .reportDateInput {
+  color-scheme: dark;
+  background: var(--surface-panel, #2d2d2d);
+  border-color: var(--border-strong, #555555);
+  color: var(--text, #d4d4d4);
+}
+
+html.dark .reportDateInput:focus {
+  border-color: var(--accent, #4ade80);
+  outline: 2px solid rgba(74, 222, 128, 0.35);
+  outline-offset: 1px;
+}
+
+html.dark .reportDateInput:disabled {
+  opacity: 0.5;
+  background: var(--surface-panel, #2d2d2d);
+  color: var(--muted, #888);
+}
+
+.reportRadioRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 2px 0;
+  cursor: pointer;
+}
+
+.reportRadioRow input[type='radio'] {
+  margin: 0;
+  accent-color: var(--accent, #1976d2);
+}
+
+.workspaceReportSections {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.workspaceReportSectionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.reportSectionCheckLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  min-width: 0;
+  flex: 1 1 auto;
+  cursor: pointer;
+}
+
+.reportSectionCheckLabel input[type='checkbox'] {
+  margin: 0;
+  accent-color: var(--accent, #1976d2);
+  flex: 0 0 auto;
+}
+
+.reportSectionLabelText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reportSectionOrderControls {
+  display: inline-flex;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.reportOrderButton {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-subtle, #ccc);
+  border-radius: 4px;
+  background: var(--surface-raised, #fff);
+  color: var(--text, #1a1a1a);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reportOrderButton:hover:not(:disabled) {
+  background: var(--surface-hover, #f0f0f0);
+  border-color: var(--border-strong, #a1a1aa);
+}
+
+.reportOrderButton:focus-visible {
+  outline: 2px solid var(--accent, #1976d2);
+  outline-offset: 1px;
+}
+
+.reportOrderButton:disabled {
+  opacity: 0.35;
+  color: var(--muted, #999);
+  border-color: var(--border-subtle, #d4d4d8);
+  background: var(--surface-panel, #e4e4e7);
+  cursor: default;
+}
+
+html.dark .reportOrderButton {
+  background: var(--surface-panel, #2d2d2d);
+  border-color: var(--border-strong, #555555);
+  color: var(--text, #d4d4d4);
+}
+
+html.dark .reportOrderButton:hover:not(:disabled) {
+  background: var(--surface-hover, #3a3a3d);
+  border-color: var(--accent-hover, #86efac);
+}
+
+html.dark .reportOrderButton:disabled {
+  opacity: 0.4;
+  color: var(--muted, #888);
+  border-color: var(--border-subtle, #3e3e42);
+  background: var(--surface-panel, #2d2d2d);
+}
+
+.reportNotesInput {
+  resize: vertical;
+  min-height: 48px;
+  font-family: inherit;
+}
+
+.reportNotesHelper {
+  font-size: 11px;
+  color: var(--muted, #888);
+  margin-top: 2px;
+}
+
+.reportGenerateButton {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border-strong, #a1a1aa);
+  border-radius: 4px;
+  background: var(--surface-raised, #fafafa);
+  color: var(--text, #1a1a1a);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.reportGenerateButton:hover:not(:disabled) {
+  background: var(--surface-hover, #dcdce0);
+  border-color: var(--accent, #16a34a);
+}
+
+.reportGenerateButton:active:not(:disabled) {
+  background: var(--surface-panel, #e4e4e7);
+}
+
+.reportGenerateButton:focus-visible {
+  outline: 2px solid var(--accent, #16a34a);
+  outline-offset: 1px;
+}
+
+.reportGenerateButton:disabled {
+  opacity: 0.45;
+  color: var(--muted, #999);
+  border-color: var(--border-subtle, #d4d4d8);
+  background: var(--surface-panel, #e4e4e7);
+  cursor: default;
+}
+
+html.dark .reportGenerateButton {
+  background: var(--surface-panel, #2d2d2d);
+  border-color: var(--border-strong, #555555);
+  color: var(--text, #d4d4d4);
+}
+
+html.dark .reportGenerateButton:hover:not(:disabled) {
+  background: var(--surface-hover, #3a3a3d);
+  border-color: var(--accent, #4ade80);
+}
+
+html.dark .reportGenerateButton:active:not(:disabled) {
+  background: var(--surface-panel, #2d2d2d);
+}
+
+html.dark .reportGenerateButton:disabled {
+  opacity: 0.4;
+  color: var(--muted, #888);
+  border-color: var(--border-subtle, #3e3e42);
+  background: var(--surface-panel, #2d2d2d);
+}
+
+.workspaceReportStatus {
+  font-size: 12px;
+  color: var(--muted, #888);
+  min-height: 16px;
+  line-height: 1.3;
+}
+
+.workspaceReportStatus.reportPanelStatus--error {
+  color: var(--danger, #c62828);
+}
+
+.workspaceReportStatus.reportPanelStatus--ok {
+  color: var(--success, #2e7d32);
+}
+
+/* Narrow sidebar: keep controls compact and avoid horizontal overflow. */
+@media (max-width: 260px) {
+  .workspaceReportBody {
+    max-height: 280px;
+  }
+
+  .reportDateRow {
+    flex-wrap: wrap;
+  }
+
+  .reportFieldLabel {
+    flex-basis: 100%;
+  }
+
+  .reportDateInput {
+    flex-basis: 100%;
+  }
+}

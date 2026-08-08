@@ -2999,6 +2999,7 @@ function normalizeWorkspacePanelOrder() {
     'workspaceProjectsPanel',
     'workspaceRelatedPanel',
     'workspaceTasksPanel',
+    'workspaceReportPanel',
     'workspaceTagsPanel',
     'workspaceIndexPanel',
   ];
@@ -3050,6 +3051,14 @@ function finalizeWorkspaceSidebar() {
     ensureWorkspaceTagsPanel?.();
     ensureWorkspaceProjectsPanel();
     ensureWorkspaceIndexPanel();
+
+    // ACT F: ensure the Quick Report configuration panel (idempotent).
+    try {
+      globalThis.MME_REPORT_PANEL?.ensure?.({
+        getWorkspaceIndexState: () => WORKSPACE_INDEX_STATE,
+        onPreparedReport: null,
+      });
+    } catch {}
 
     // Phase 2: normalize panel order.
     normalizeWorkspacePanelOrder();
@@ -3108,6 +3117,23 @@ if (!window.__mmeWorkspaceIndexReadyFinalizerBound) {
     }
   });
   window.__mmeWorkspaceIndexReadyFinalizerBound = true;
+}
+
+// ACT F: late-load Report module signal. Ensures the panel once after the
+// module files load (they are appended after main.js in script-loader).
+if (!window.__mmeReportPanelReadyFinalizerBound) {
+  window.addEventListener('mme-report-panel-ready', () => {
+    try {
+      globalThis.MME_REPORT_PANEL?.ensure?.({
+        getWorkspaceIndexState: () => WORKSPACE_INDEX_STATE,
+        onPreparedReport: null,
+      });
+      log?.('Report: panel ready-signal handled');
+    } catch (e) {
+      log?.(`Report: ready-signal handling failed: ${e?.message || e}`);
+    }
+  });
+  window.__mmeReportPanelReadyFinalizerBound = true;
 }
 
 function getWorkspaceParsedActiveFile() {
