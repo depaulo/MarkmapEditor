@@ -34,6 +34,18 @@
     notes: 'report.management_notes',
   });
 
+  // Canonical brace-token normalization: {{field name}} -> field name (lowercase, collapsed spaces).
+  function normalizeBraceToken(rawKey) {
+    const str = String(rawKey || '').trim();
+    const m = str.match(/^\{\{\s*([\s\S]*?)\s*\}\}$/);
+    if (!m) return null;
+    const inner = String(m[1] || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+    return inner || null;
+  }
+
   const PROJECT_MODES = Object.freeze(['all', 'with-value', 'without-value']);
 
   function isValidCalendarDate(v) {
@@ -75,6 +87,13 @@
       .toLowerCase()
       .replace(/\s+/g, ' ');
     if (!key) return null;
+    // Brace-token canonical form: {{summary}} -> report.summary via aliases.
+    const braceInner = normalizeBraceToken(key);
+    if (braceInner) {
+      if (NOTE_ALIASES[braceInner]) return NOTE_ALIASES[braceInner];
+      // Unknown custom brace token preserved as its normalized name.
+      return braceInner.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    }
     if (NOTE_ALIASES[key]) return NOTE_ALIASES[key];
     return key.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   }
@@ -312,7 +331,7 @@
       e.projectCount += 1;
       e.totalValue += p.value;
     }
-    const totals = Array.from(totalsByCurrency.values()).sort((a, b) =>
+    const totals = Array.from(totalsByCurrency.values()).sort((a
       a.currency < b.currency ? -1 : 1
     );
     return { totals, valuedWithoutCurrencyCount };

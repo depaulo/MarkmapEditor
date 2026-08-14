@@ -160,9 +160,10 @@ async function renderHtmlWithShiki(mdText) {
   // R-LINK1: Transform wiki links in HTML Preview
   renderer.text = function (text) {
     // Support both newer (token object) and older (string) marked API
-    const str = typeof text === 'object' && text !== null
-      ? String(text.text ?? text.raw ?? '')
-      : String(text || '');
+    const str =
+      typeof text === 'object' && text !== null
+        ? String(text.text ?? text.raw ?? '')
+        : String(text || '');
     const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
 
     let result = '';
@@ -533,7 +534,7 @@ function stripYamlFrontmatterForTags(text) {
 function isLeapYear(year) {
   const y = Number(year);
   if (!Number.isInteger(y) || y < 1) return false;
-  return (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+  return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
 }
 
 function isValidIsoDate(value) {
@@ -566,7 +567,10 @@ function parseMmeTaskMetadata(rawLine) {
   const inner = String(commentMatch[1] || '').trim();
   if (!inner) return { metadata: {} };
 
-  const parts = inner.split(';').map((p) => p.trim()).filter(Boolean);
+  const parts = inner
+    .split(';')
+    .map((p) => p.trim())
+    .filter(Boolean);
   const metadata = {};
 
   for (const part of parts) {
@@ -649,23 +653,157 @@ if (typeof window !== 'undefined') {
   try {
     window.__validateTaskMetadataParser = function validateTaskMetadataParser() {
       const cases = [
-        { label: 'Open without metadata', line: '- [ ] Update quotation', expected: { done: false, text: 'Update quotation', metadata: {}, completedDate: null, priority: null, owner: null, dueDate: null } },
-        { label: 'Completed without metadata', line: '- [x] Historical task', expected: { done: true, text: 'Historical task', metadata: {}, completedDate: null, priority: null, owner: null, dueDate: null } },
-        { label: 'Valid completed date', line: '- [x] Update quotation <!-- mme-task: completed=2026-08-05 -->', expected: { done: true, text: 'Update quotation', metadata: { completed: '2026-08-05' }, completedDate: '2026-08-05', priority: null, owner: null, dueDate: null } },
-        { label: 'Invalid completed date', line: '- [x] Bad <!-- mme-task: completed=2026-02-30 -->', expected: { done: true, text: 'Bad', metadata: { completed: '2026-02-30' }, completedDate: null } },
-        { label: 'Impossible date', line: '- [x] Bad <!-- mme-task: completed=26-08-05 -->', expected: { done: true, text: 'Bad', metadata: { completed: '26-08-05' }, completedDate: null } },
-        { label: 'Valid due date', line: '- [ ] Task <!-- mme-task: due=2026-08-10 -->', expected: { done: false, text: 'Task', metadata: { due: '2026-08-10' }, completedDate: null, dueDate: '2026-08-10' } },
-        { label: 'Invalid due date', line: '- [ ] Task <!-- mme-task: due=2026-13-01 -->', expected: { done: false, text: 'Task', metadata: { due: '2026-13-01' }, completedDate: null, dueDate: null } },
-        { label: 'Priority', line: '- [ ] Task <!-- mme-task: priority=high -->', expected: { done: false, text: 'Task', metadata: { priority: 'high' }, priority: 'high' } },
-        { label: 'Owner', line: '- [ ] Task <!-- mme-task: owner=Adelson -->', expected: { done: false, text: 'Task', metadata: { owner: 'Adelson' }, owner: 'Adelson' } },
-        { label: 'Multiple fields', line: '- [x] Task <!-- mme-task: completed=2026-08-05; priority=high; owner=Adelson; due=2026-08-10 -->', expected: { done: true, text: 'Task', metadata: { completed: '2026-08-05', priority: 'high', owner: 'Adelson', due: '2026-08-10' }, completedDate: '2026-08-05', priority: 'high', owner: 'Adelson', dueDate: '2026-08-10' } },
-        { label: 'Unknown field preserved', line: '- [x] Task <!-- mme-task: completed=2026-08-05; unknown=value -->', expected: { metadata: { completed: '2026-08-05', unknown: 'value' }, completedDate: '2026-08-05' } },
-        { label: 'Duplicate key last wins', line: '- [x] Task <!-- mme-task: completed=2026-08-05; completed=2026-08-06 -->', expected: { metadata: { completed: '2026-08-06' }, completedDate: '2026-08-06' } },
-        { label: 'Metadata removed from text', line: '- [x] Update quotation <!-- mme-task: completed=2026-08-05; owner=Adelson -->', expected: { text: 'Update quotation' } },
-        { label: 'Raw line preserved', line: '- [x] Task <!-- mme-task: completed=2026-08-05 -->', expected: { raw: '- [x] Task <!-- mme-task: completed=2026-08-05 -->' } },
-        { label: 'Unrelated HTML comment not parsed', line: '- [ ] Task <!-- some-other: value -->', expected: { metadata: {}, text: 'Task <!-- some-other: value -->' } },
-        { label: 'Spacing tolerance', line: '- [x] Task <!-- mme-task: completed = 2026-08-05; owner = Adelson -->', expected: { metadata: { completed: '2026-08-05', owner: 'Adelson' }, completedDate: '2026-08-05', owner: 'Adelson' } },
-        { label: 'Duplicate task text lines separate', line: '- [ ] Task\n- [ ] Task', expected: { count: 2 } },
+        {
+          label: 'Open without metadata',
+          line: '- [ ] Update quotation',
+          expected: {
+            done: false,
+            text: 'Update quotation',
+            metadata: {},
+            completedDate: null,
+            priority: null,
+            owner: null,
+            dueDate: null,
+          },
+        },
+        {
+          label: 'Completed without metadata',
+          line: '- [x] Historical task',
+          expected: {
+            done: true,
+            text: 'Historical task',
+            metadata: {},
+            completedDate: null,
+            priority: null,
+            owner: null,
+            dueDate: null,
+          },
+        },
+        {
+          label: 'Valid completed date',
+          line: '- [x] Update quotation <!-- mme-task: completed=2026-08-05 -->',
+          expected: {
+            done: true,
+            text: 'Update quotation',
+            metadata: { completed: '2026-08-05' },
+            completedDate: '2026-08-05',
+            priority: null,
+            owner: null,
+            dueDate: null,
+          },
+        },
+        {
+          label: 'Invalid completed date',
+          line: '- [x] Bad <!-- mme-task: completed=2026-02-30 -->',
+          expected: {
+            done: true,
+            text: 'Bad',
+            metadata: { completed: '2026-02-30' },
+            completedDate: null,
+          },
+        },
+        {
+          label: 'Impossible date',
+          line: '- [x] Bad <!-- mme-task: completed=26-08-05 -->',
+          expected: {
+            done: true,
+            text: 'Bad',
+            metadata: { completed: '26-08-05' },
+            completedDate: null,
+          },
+        },
+        {
+          label: 'Valid due date',
+          line: '- [ ] Task <!-- mme-task: due=2026-08-10 -->',
+          expected: {
+            done: false,
+            text: 'Task',
+            metadata: { due: '2026-08-10' },
+            completedDate: null,
+            dueDate: '2026-08-10',
+          },
+        },
+        {
+          label: 'Invalid due date',
+          line: '- [ ] Task <!-- mme-task: due=2026-13-01 -->',
+          expected: {
+            done: false,
+            text: 'Task',
+            metadata: { due: '2026-13-01' },
+            completedDate: null,
+            dueDate: null,
+          },
+        },
+        {
+          label: 'Priority',
+          line: '- [ ] Task <!-- mme-task: priority=high -->',
+          expected: { done: false, text: 'Task', metadata: { priority: 'high' }, priority: 'high' },
+        },
+        {
+          label: 'Owner',
+          line: '- [ ] Task <!-- mme-task: owner=Adelson -->',
+          expected: { done: false, text: 'Task', metadata: { owner: 'Adelson' }, owner: 'Adelson' },
+        },
+        {
+          label: 'Multiple fields',
+          line: '- [x] Task <!-- mme-task: completed=2026-08-05; priority=high; owner=Adelson; due=2026-08-10 -->',
+          expected: {
+            done: true,
+            text: 'Task',
+            metadata: {
+              completed: '2026-08-05',
+              priority: 'high',
+              owner: 'Adelson',
+              due: '2026-08-10',
+            },
+            completedDate: '2026-08-05',
+            priority: 'high',
+            owner: 'Adelson',
+            dueDate: '2026-08-10',
+          },
+        },
+        {
+          label: 'Unknown field preserved',
+          line: '- [x] Task <!-- mme-task: completed=2026-08-05; unknown=value -->',
+          expected: {
+            metadata: { completed: '2026-08-05', unknown: 'value' },
+            completedDate: '2026-08-05',
+          },
+        },
+        {
+          label: 'Duplicate key last wins',
+          line: '- [x] Task <!-- mme-task: completed=2026-08-05; completed=2026-08-06 -->',
+          expected: { metadata: { completed: '2026-08-06' }, completedDate: '2026-08-06' },
+        },
+        {
+          label: 'Metadata removed from text',
+          line: '- [x] Update quotation <!-- mme-task: completed=2026-08-05; owner=Adelson -->',
+          expected: { text: 'Update quotation' },
+        },
+        {
+          label: 'Raw line preserved',
+          line: '- [x] Task <!-- mme-task: completed=2026-08-05 -->',
+          expected: { raw: '- [x] Task <!-- mme-task: completed=2026-08-05 -->' },
+        },
+        {
+          label: 'Unrelated HTML comment not parsed',
+          line: '- [ ] Task <!-- some-other: value -->',
+          expected: { metadata: {}, text: 'Task <!-- some-other: value -->' },
+        },
+        {
+          label: 'Spacing tolerance',
+          line: '- [x] Task <!-- mme-task: completed = 2026-08-05; owner = Adelson -->',
+          expected: {
+            metadata: { completed: '2026-08-05', owner: 'Adelson' },
+            completedDate: '2026-08-05',
+            owner: 'Adelson',
+          },
+        },
+        {
+          label: 'Duplicate task text lines separate',
+          line: '- [ ] Task\n- [ ] Task',
+          expected: { count: 2 },
+        },
       ];
 
       const results = [];
@@ -677,14 +815,20 @@ if (typeof window !== 'undefined') {
           const parsed = parseMarkdownTasks(c.line);
           const ok = parsed.length === 2;
           results.push({ label: c.label, pass: ok, actual: parsed.length, expected: 2 });
-          if (ok) passCount++; else failCount++;
+          if (ok) passCount++;
+          else failCount++;
           continue;
         }
 
         const parsed = parseMarkdownTasks(c.line);
         const task = parsed[0];
         if (!task) {
-          results.push({ label: c.label, pass: false, actual: 'no task parsed', expected: c.expected });
+          results.push({
+            label: c.label,
+            pass: false,
+            actual: 'no task parsed',
+            expected: c.expected,
+          });
           failCount++;
           continue;
         }
@@ -700,7 +844,8 @@ if (typeof window !== 'undefined') {
           }
         }
         results.push({ label: c.label, pass: ok, actual: task, expected: c.expected });
-        if (ok) passCount++; else failCount++;
+        if (ok) passCount++;
+        else failCount++;
       }
 
       return {
@@ -1242,21 +1387,27 @@ function hasWorkspacePanelMarkup(panelId) {
 
   if (panelId === 'journals') {
     return !!(
-      document.getElementById('workspaceJournalsPanel')?.querySelector?.('#workspaceJournalsList') &&
+      document
+        .getElementById('workspaceJournalsPanel')
+        ?.querySelector?.('#workspaceJournalsList') &&
       document.getElementById('workspaceJournalsPanel')?.querySelector?.('#workspaceJournalsBadge')
     );
   }
 
   if (panelId === 'concepts') {
     return !!(
-      document.getElementById('workspaceConceptsPanel')?.querySelector?.('#workspaceConceptsList') &&
+      document
+        .getElementById('workspaceConceptsPanel')
+        ?.querySelector?.('#workspaceConceptsList') &&
       document.getElementById('workspaceConceptsPanel')?.querySelector?.('#workspaceConceptsBadge')
     );
   }
 
   if (panelId === 'projects') {
     return !!(
-      document.getElementById('workspaceProjectsPanel')?.querySelector?.('#workspaceProjectsBadge') &&
+      document
+        .getElementById('workspaceProjectsPanel')
+        ?.querySelector?.('#workspaceProjectsBadge') &&
       document.getElementById('workspaceProjectsPanel')?.querySelector?.('#workspaceProjectsList')
     );
   }
@@ -1444,7 +1595,11 @@ function ensureWorkspaceIndexPanel() {
   const navControls = host.querySelector('.workspaceNavControls');
 
   let insertAnchor = null;
-  if (tagsPanel && tagsPanel.nextElementSibling && tagsPanel.nextElementSibling.parentNode === host) {
+  if (
+    tagsPanel &&
+    tagsPanel.nextElementSibling &&
+    tagsPanel.nextElementSibling.parentNode === host
+  ) {
     insertAnchor = tagsPanel.nextElementSibling;
   } else if (navControls && navControls.parentNode === host) {
     insertAnchor = navControls;
@@ -1486,11 +1641,11 @@ function toggleWorkspacePanel(panelId) {
               ? document.getElementById('workspaceTagsPanel')
               : panelId === 'journals'
                 ? document.getElementById('workspaceJournalsPanel')
-            : panelId === 'concepts'
-              ? document.getElementById('workspaceConceptsPanel')
-              : panelId === 'projects'
-                ? document.getElementById('workspaceProjectsPanel')
-                : null;
+                : panelId === 'concepts'
+                  ? document.getElementById('workspaceConceptsPanel')
+                  : panelId === 'projects'
+                    ? document.getElementById('workspaceProjectsPanel')
+                    : null;
 
   if (!panelEl) return;
 
@@ -2744,37 +2899,36 @@ function renderWorkspaceProjectsPanel() {
       return (a.sourceLine || 0) - (b.sourceLine || 0);
     });
 
-        const items = sortedProjects
-          .map((p) => {
-            const name = escapeHtml(p.name || '');
-            const path = escapeHtml(p.sourcePath || '');
-            const kind = escapeHtml(p.sourceKind || '');
-            const line = Number(p.sourceLine) || 0;
-            const lineAttr = line ? ` data-line="${escapeHtml(String(line))}"` : '';
+    const items = sortedProjects
+      .map((p) => {
+        const name = escapeHtml(p.name || '');
+        const path = escapeHtml(p.sourcePath || '');
+        const kind = escapeHtml(p.sourceKind || '');
+        const line = Number(p.sourceLine) || 0;
+        const lineAttr = line ? ` data-line="${escapeHtml(String(line))}"` : '';
 
-            // Order from expectedOrder
-            let orderDisplay = '\u2014';
-            if (p.expectedOrder && p.expectedOrder.valid === true) {
-              orderDisplay = escapeHtml(p.expectedOrder.display || p.expectedOrder.canonical || '');
-            }
+        // Order from expectedOrder
+        let orderDisplay = '\u2014';
+        if (p.expectedOrder && p.expectedOrder.valid === true) {
+          orderDisplay = escapeHtml(p.expectedOrder.display || p.expectedOrder.canonical || '');
+        }
 
-            // Value with currency
-            let valueDisplay = '\u2014';
-            if (p.value !== null && p.value !== undefined) {
-              if (p.currency) {
-                valueDisplay = escapeHtml(p.currency + ' ' + Number(p.value).toLocaleString());
-              } else {
-                valueDisplay = escapeHtml(Number(p.value).toLocaleString() + ' \u00b7 no currency');
-              }
-            }
+        // Value with currency
+        let valueDisplay = '\u2014';
+        if (p.value !== null && p.value !== undefined) {
+          if (p.currency) {
+            valueDisplay = escapeHtml(p.currency + ' ' + Number(p.value).toLocaleString());
+          } else {
+            valueDisplay = escapeHtml(Number(p.value).toLocaleString() + ' \u00b7 no currency');
+          }
+        }
 
-            // Source provenance
-            const sourceLabel = p.sourceName || p.sourcePath || '\u2014';
-            const sourceDisplay = line > 0
-              ? `${escapeHtml(sourceLabel)} \u00b7 line ${line}`
-              : escapeHtml(sourceLabel);
+        // Source provenance
+        const sourceLabel = p.sourceName || p.sourcePath || '\u2014';
+        const sourceDisplay =
+          line > 0 ? `${escapeHtml(sourceLabel)} \u00b7 line ${line}` : escapeHtml(sourceLabel);
 
-            return `
+        return `
               <button
                 type="button"
                 class="workspaceProjectItem"
@@ -2793,10 +2947,10 @@ function renderWorkspaceProjectsPanel() {
                 <span class="workspaceProjectSource">${sourceDisplay}</span>
               </button>
             `;
-          })
-          .join('');
+      })
+      .join('');
 
-      html += `
+    html += `
         <div class="workspaceProjectGroup">
           <div class="workspaceProjectGroupHeader">
             <span class="workspaceProjectGroupChevron" aria-hidden="true">▾</span>
@@ -2811,7 +2965,7 @@ function renderWorkspaceProjectsPanel() {
           <div class="workspaceProjectList">${items}</div>
         </div>
       `;
-    }
+  }
 
   if (unscheduled.length) {
     const items = unscheduled
@@ -2834,9 +2988,8 @@ function renderWorkspaceProjectsPanel() {
 
         // Source provenance
         const sourceLabel = p.sourceName || p.sourcePath || '\u2014';
-        const sourceDisplay = line > 0
-          ? `${escapeHtml(sourceLabel)} \u00b7 line ${line}`
-          : escapeHtml(sourceLabel);
+        const sourceDisplay =
+          line > 0 ? `${escapeHtml(sourceLabel)} \u00b7 line ${line}` : escapeHtml(sourceLabel);
 
         return `
           <button
@@ -2972,7 +3125,8 @@ function wireWorkspaceProjectsPanel() {
         });
       });
 
-      const scrollToLine = typeof window.__cmScrollToLine === 'function' ? window.__cmScrollToLine : null;
+      const scrollToLine =
+        typeof window.__cmScrollToLine === 'function' ? window.__cmScrollToLine : null;
       if (scrollToLine) {
         scrollToLine(line - 1); // Convert 1-based to 0-based
       }
@@ -3056,7 +3210,8 @@ function finalizeWorkspaceSidebar() {
     try {
       globalThis.MME_REPORT_PANEL?.ensure?.({
         getWorkspaceIndexState: () => WORKSPACE_INDEX_STATE,
-        onPreparedReport: null,
+        onPreparedReport: openVirtualReport,
+        canGenerateReport,
       });
     } catch {}
 
@@ -3126,7 +3281,8 @@ if (!window.__mmeReportPanelReadyFinalizerBound) {
     try {
       globalThis.MME_REPORT_PANEL?.ensure?.({
         getWorkspaceIndexState: () => WORKSPACE_INDEX_STATE,
-        onPreparedReport: null,
+        onPreparedReport: openVirtualReport,
+        canGenerateReport,
       });
       log?.('Report: panel ready-signal handled');
     } catch (e) {
@@ -3748,16 +3904,10 @@ function wireWorkspacePanelCollapses() {
   if (__workspacePanelCollapseOwner === sidebar) return;
 
   if (__workspacePanelCollapseOwner) {
-    __workspacePanelCollapseOwner.removeEventListener(
-      'click',
-      handleWorkspacePanelCollapseClick
-    );
+    __workspacePanelCollapseOwner.removeEventListener('click', handleWorkspacePanelCollapseClick);
   }
 
-  sidebar.addEventListener(
-    'click',
-    handleWorkspacePanelCollapseClick
-  );
+  sidebar.addEventListener('click', handleWorkspacePanelCollapseClick);
 
   __workspacePanelCollapseOwner = sidebar;
   log?.('Workspace Panels: collapse delegation wired');
@@ -3867,6 +4017,174 @@ function openTextDocument({ text, fileName, fileHandle = null, reason = 'openTex
   hasAutoFitted = false;
   render(reason);
 }
+
+// ACT G: Open a virtual unsaved Report document.
+// Transaction order: capture previous session -> validate -> clear physical state -> set editor -> render.
+// ACT G: Report document identity check. Returns false when a Report is active.
+function canGenerateReport() {
+  return !(__virtualReportSession && __virtualReportSession.kind === 'report');
+}
+
+function openVirtualReport(preparedResult) {
+  if (!preparedResult || typeof preparedResult !== 'object') {
+    showToast?.('Report preparation failed: invalid result', 'error', 3000);
+    log?.('Report: openVirtualReport blocked — invalid preparedResult');
+    return;
+  }
+
+  const markdown = String(preparedResult.markdown || '');
+  const suggestedFilename = String(preparedResult.suggestedFilename || 'quick-report.md');
+
+  if (!markdown) {
+    showToast?.('Report preparation failed: empty markdown', 'error', 3000);
+    log?.('Report: openVirtualReport blocked — empty markdown');
+    return;
+  }
+
+  // 0. Defensive guard: a Report document is already active.
+  //    Do not capture the current Report into journal-main, do not replace
+  //    editor content, do not clear handles or Task baseline.
+  if (__virtualReportSession && __virtualReportSession.kind === 'report') {
+    log?.('Report: generation blocked reason=report-already-active');
+    showToast?.('Return to the workspace before generating another Report.', 'warn', 3000);
+    return {
+      ok: false,
+      reason: 'report-already-active',
+      error: 'Return to the workspace before generating another Report.',
+    };
+  }
+
+  // 1. Dirty-source guard: reuse existing confirmDiscardIfDirty.
+  if (!globalThis.MME_APP?.confirmDiscardIfDirty?.()) {
+    log?.('Report: activation canceled by dirty guard');
+    return;
+  }
+
+  // 2. Capture previous source session BEFORE clearing anything.
+  let previousSession = null;
+  try {
+    if (typeof globalThis.captureCurrentModeSession === 'function') {
+      previousSession = globalThis.captureCurrentModeSession('before virtual report');
+    }
+  } catch (e) {
+    log?.(`Report: previous session capture failed: ${e?.message || e}`);
+  }
+
+  // 3. Verify required editor/session APIs.
+  if (!md || typeof md.value === 'undefined') {
+    showToast?.('Report activation failed: editor unavailable', 'error', 3000);
+    log?.('Report: activation failed — md element missing');
+    if (previousSession && typeof globalThis.restoreModeSession === 'function') {
+      try {
+        globalThis.restoreModeSession(previousSession.mode || 'journal');
+      } catch {}
+    }
+    return;
+  }
+
+  // 4. Prepare Report identity.
+  const reportIdentity = {
+    kind: 'report',
+    virtual: true,
+    sourcePath: null,
+    suggestedFilename,
+    generatedAt: new Date().toISOString(),
+    reportRange: {
+      startDate: preparedResult.dictionary?.range?.startDate || '',
+      endDate: preparedResult.dictionary?.range?.endDate || '',
+    },
+  };
+
+  // 5-8. Clear physical state inside try so rollback can restore it.
+  let activationFailed = false;
+  let rolledBack = false;
+
+  try {
+    // 5. Clear active workspace source identity.
+    if (globalThis.WORKSPACE_STATE) {
+      globalThis.WORKSPACE_STATE.activeFile = null;
+    }
+
+    // 6. Clear physical handle.
+    currentSaveHandle = null;
+
+    // 7. Clear Task baseline (Report documents are excluded from ACT D).
+    __taskBaseline = null;
+
+    // 8. Set virtual Report session identity.
+    __virtualReportSession = reportIdentity;
+
+    // 9. Replace editor content.
+    runProgrammaticTextChange(() => {
+      md.value = markdown;
+      if (typeof window.__cmSetText === 'function') {
+        window.__cmSetText(markdown);
+      }
+    });
+
+    // 10. Set Report filename.
+    currentFileName = suggestedFilename;
+
+    // 11. Mark dirty (Report is unsaved).
+    dirty = true;
+
+    // 12. Update UI and render.
+    setStatus(modeLabel());
+    updateDocumentTitle();
+    render('openVirtualReport');
+
+    // 13. Refresh workspace panels to reflect no active workspace file.
+    globalThis.persistActiveWorkspaceFile?.();
+    window.updateWorkspaceActiveFileHighlight?.();
+    renderWorkspaceActivePanel?.();
+    renderWorkspaceRelatedPanel?.();
+    renderWorkspaceTasksPanel?.();
+
+    log?.(`Report: opened virtual report filename=${suggestedFilename}`);
+  } catch (e) {
+    activationFailed = true;
+    rolledBack = true;
+    const msg = e?.message || String(e);
+    log?.(`Report: activation failed: ${msg}`);
+
+    // Rollback: restore previous session.
+    try {
+      if (previousSession && typeof globalThis.restoreModeSession === 'function') {
+        globalThis.restoreModeSession(previousSession.mode || 'journal');
+      }
+    } catch (rollbackErr) {
+      log?.(`Report: rollback failed: ${rollbackErr?.message || rollbackErr}`);
+      rolledBack = false;
+    }
+
+    // Restore physical handle if rollback couldn't.
+    if (!rolledBack && previousSession) {
+      try {
+        if (previousSession.saveHandle) {
+          currentSaveHandle = previousSession.saveHandle;
+        }
+        if (typeof previousSession.fileName === 'string') {
+          currentFileName = previousSession.fileName;
+        }
+        if (typeof previousSession.dirty === 'boolean') {
+          dirty = previousSession.dirty;
+        }
+      } catch {}
+
+      // Clear failed Report identity.
+      __virtualReportSession = null;
+    }
+
+    showToast?.('Report activation failed — previous source restored', 'error', 3500);
+    return;
+  } finally {
+    // Clear temporary previous session after successful activation or failed rollback.
+    if (!activationFailed) {
+      previousSession = null;
+    }
+  }
+}
+
 
 globalThis.MME_APP = {
   isDirty: () => dirty,
@@ -5027,9 +5345,7 @@ function getSessionDraftKey(filename) {
   const fileId = String(filename || '').trim();
   if (!fileId) return '';
   try {
-    const key = globalThis.getModeSessionStorageKey?.(
-      undefined, undefined, 'draft:' + fileId
-    );
+    const key = globalThis.getModeSessionStorageKey?.(undefined, undefined, 'draft:' + fileId);
     return key || draftKey(filename);
   } catch {
     return draftKey(filename);
@@ -5632,9 +5948,10 @@ function getCurrentMapLayoutOptions() {
 // R-MULTI4: session-aware viewState key with legacy fallback.
 function getViewStateKey() {
   try {
-    return globalThis.getModeSessionStorageKey?.(
-      undefined, undefined, 'viewState'
-    ) || 'markmap:viewState:v1';
+    return (
+      globalThis.getModeSessionStorageKey?.(undefined, undefined, 'viewState') ||
+      'markmap:viewState:v1'
+    );
   } catch {
     return 'markmap:viewState:v1';
   }
@@ -5782,14 +6099,20 @@ function loadViewState() {
 
     if (!safeState) {
       console.warn('Invalid stored view state removed:', parsed);
-      try { localStorage.removeItem(newKey); } catch {}
+      try {
+        localStorage.removeItem(newKey);
+      } catch {}
       return null;
     }
 
     return safeState;
   } catch {
-    try { localStorage.removeItem(newKey); } catch {}
-    try { localStorage.removeItem(VIEW_STATE_KEY_LEGACY); } catch {}
+    try {
+      localStorage.removeItem(newKey);
+    } catch {}
+    try {
+      localStorage.removeItem(VIEW_STATE_KEY_LEGACY);
+    } catch {}
     return null;
   }
 }
@@ -5975,12 +6298,12 @@ function __ensureMarkmapBoot() {
   const tick = () => {
     tries++;
     const ok = !!(window.markmap && window.markmap.Transformer && window.markmap.Markmap);
-      if (ok) {
-        try {
-          globalThis.MME_RENDER?.renderNow?.('boot ensureMarkmapBoot');
-        } catch {}
-        return;
-      }
+    if (ok) {
+      try {
+        globalThis.MME_RENDER?.renderNow?.('boot ensureMarkmapBoot');
+      } catch {}
+      return;
+    }
     if (tries >= maxTries) {
       try {
         setStatus('⚠ markmap engine not loaded (check console / network)');
@@ -7739,7 +8062,10 @@ function getCanonicalTaskText(rawLine) {
 
   let content = match[2] || '';
   content = content.replace(/<!--\s*mme-task:[\s\S]*?-->/gi, '').trim();
-  content = content.replace(/#p[123]\b/gi, '').replace(/\s+/g, ' ').trim();
+  content = content
+    .replace(/#p[123]\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   return content;
 }
 
@@ -7769,7 +8095,11 @@ function rewriteTaskMetadataComment(text, desiredChecked) {
       inner = inner ? `completed=${getLocalIsoDate()}; ${inner}` : `completed=${getLocalIsoDate()}`;
     }
   } else {
-    inner = inner.replace(/(?:^|;\s*)completed\s*=\s*[^;]+/i, '').replace(/^;\s*/, '').replace(/;\s*$/, '').trim();
+    inner = inner
+      .replace(/(?:^|;\s*)completed\s*=\s*[^;]+/i, '')
+      .replace(/^;\s*/, '')
+      .replace(/;\s*$/, '')
+      .trim();
   }
 
   if (!inner) {
@@ -7782,7 +8112,14 @@ function rewriteTaskMetadataComment(text, desiredChecked) {
 // Task baseline for pre-save reconciliation.
 let __taskBaseline = null;
 
+// ACT G: Virtual Report session identity.
+let __virtualReportSession = null;
+
 function captureTaskBaseline() {
+  // ACT G: Skip baseline capture for Report documents.
+  if (__virtualReportSession?.kind === 'report') {
+    return;
+  }
   try {
     const text = String(md.value || '');
     const tasks = globalThis.parseMarkdownTasks?.(text) || [];
@@ -7798,6 +8135,11 @@ function captureTaskBaseline() {
 }
 
 function reconcileTasksBeforeSave() {
+  // ACT G: Report documents are excluded from Task reconciliation by identity.
+  if (__virtualReportSession?.kind === 'report') {
+    return { changed: false, text: md.value, skippedReason: 'report-document' };
+  }
+
   if (!__taskBaseline) {
     return { changed: false, text: md.value, skippedReason: 'no-baseline' };
   }
@@ -7987,7 +8329,7 @@ async function saveAsSmart(text) {
   if (!globalThis.MME_WORKSPACE_CAPABILITIES?.canActive?.('saveAs')) {
     const activeId = globalThis.MME_WORKSPACE_CAPABILITIES?.getActiveId?.() || 'current workspace';
     globalThis.MME_APP?.showToast?.(`Save As is not available in ${activeId}`, 'warn', 2000);
-    return;
+    return { ok: false, reason: 'unavailable' };
   }
   const suggestedName = normalizeMdName(currentFileName);
   log(`saveAsSmart(): begin (suggestedName="${suggestedName}")`);
@@ -8009,12 +8351,12 @@ async function saveAsSmart(text) {
       dirty = false;
       setStatus(modeLabel());
       log('saveAsSmart(): saved via picker; currentSaveHandle updated');
-      return;
+      return { ok: true };
     } catch (e) {
       if (e && e.name === 'AbortError') {
         log('saveAsSmart(): user canceled Save As dialog (AbortError). No fallback download.');
         setStatus('Save As canceled');
-        return;
+        return { ok: false, reason: 'canceled' };
       }
       log(`saveAsSmart(): picker failed -> ${e?.name || ''} ${e?.message || e}`);
       log('saveAsSmart(): falling back to download...');
@@ -8025,6 +8367,7 @@ async function saveAsSmart(text) {
     );
   }
   downloadFallback(text, suggestedName);
+  return { ok: true, reason: 'download' };
 }
 
 async function confirmOverwriteExternal() {
@@ -8064,7 +8407,7 @@ async function saveSmart() {
   if (!globalThis.MME_WORKSPACE_CAPABILITIES?.canActive?.('save')) {
     const activeId = globalThis.MME_WORKSPACE_CAPABILITIES?.getActiveId?.() || 'current workspace';
     globalThis.MME_APP?.showToast?.(`Save is not available in ${activeId}`, 'warn', 2000);
-    return;
+    return { ok: false, reason: 'unavailable' };
   }
   log('saveSmart(): begin');
 
@@ -8082,7 +8425,9 @@ async function saveSmart() {
     } finally {
       __programmaticTextChange--;
     }
-    log(`TaskReconcile: result changed=true completed=${reconciled.completedAdded} reopened=${reconciled.completedRemoved} ambiguous=${reconciled.ambiguous}`);
+    log(
+      `TaskReconcile: result changed=true completed=${reconciled.completedAdded} reopened=${reconciled.completedRemoved} ambiguous=${reconciled.ambiguous}`
+    );
   } else if (reconciled.completedAdded === 0 && reconciled.completedRemoved === 0) {
     log('TaskReconcile: result changed=false completed=0 reopened=0 ambiguous=0');
   }
@@ -8090,12 +8435,12 @@ async function saveSmart() {
   if (currentSaveHandle) {
     try {
       log('saveSmart(): attempting overwrite via currentSaveHandle');
-      if (!(await confirmOverwriteExternal())) return;
+      if (!(await confirmOverwriteExternal())) return { ok: false, reason: 'canceled' };
       await saveToHandle(currentSaveHandle, text);
       captureTaskBaseline();
       log('TaskReconcile: baseline refreshed after successful save');
       log('saveSmart(): overwrite OK');
-      return;
+      return { ok: true };
     } catch (e) {
       log(`saveSmart(): overwrite failed -> ${e?.message || e}`);
       log('saveSmart(): falling back to Save As...');
@@ -8103,7 +8448,20 @@ async function saveSmart() {
   } else {
     log('saveSmart(): no writable handle -> using Save As');
   }
-  await saveAsSmart(text);
+  const result = await saveAsSmart(text);
+
+  // ACT G: After a successful Save As, mark the Report as saved.
+  if (
+    result &&
+    result.ok === true &&
+    __virtualReportSession &&
+    __virtualReportSession.kind === 'report'
+  ) {
+    __virtualReportSession.virtual = false;
+    __virtualReportSession.saved = true;
+    log('Report: marked saved after Save As');
+  }
+  return result;
 }
 
 // Wiring buttons
@@ -8126,7 +8484,7 @@ document.getElementById('btnSave').addEventListener('click', () =>
   })
 );
 
-  const btnCopyMd = document.getElementById('btnCopyMd');
+const btnCopyMd = document.getElementById('btnCopyMd');
 if (btnCopyMd) {
   btnCopyMd.addEventListener('click', copyMarkdownToClipboard);
 }
@@ -8338,7 +8696,10 @@ document.getElementById('btnHtmlEdgeOpen')?.addEventListener('click', toggleHtml
 
 // Editor visibility (hide/show) is now owned by js/editor/editor-visibility.js (R-SPLIT3).
 // The module wires btnToggleEditor / editorBtnHide / btnEditorEdgeOpen itself.
-if (window.MME_EDITOR_VISIBILITY && !document.getElementById('btnToggleEditor').__editorVisibilityBound) {
+if (
+  window.MME_EDITOR_VISIBILITY &&
+  !document.getElementById('btnToggleEditor').__editorVisibilityBound
+) {
   window.MME_EDITOR_VISIBILITY.wireEditorVisibilityControls();
 }
 

@@ -3815,6 +3815,54 @@ html.dark .reportOrderButton:disabled {
   font-family: inherit;
 }
 
+.reportNotesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.reportNotesLegend {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text, #1a1a1a);
+}
+
+.reportResetNotesButton {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid var(--border-strong, #a1a1aa);
+  border-radius: 4px;
+  background: var(--surface-raised, #fafafa);
+  color: var(--text, #1a1a1a);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.reportResetNotesButton:hover {
+  background: var(--surface-hover, #dcdce0);
+  border-color: var(--border-strong, #a1a1aa);
+}
+
+.reportResetNotesButton:focus-visible {
+  outline: 2px solid var(--accent, #16a34a);
+  outline-offset: 1px;
+}
+
+html.dark .reportResetNotesButton {
+  background: var(--surface-panel, #2d2d2d);
+  border-color: var(--border-strong, #555555);
+  color: var(--text, #d4d4d4);
+}
+
+html.dark .reportResetNotesButton:hover {
+  background: var(--surface-hover, #3a3a3d);
+  border-color: var(--border-strong, #555555);
+}
+
 .reportNotesHelper {
   font-size: 11px;
   color: var(--muted, #888);

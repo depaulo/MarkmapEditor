@@ -6,19 +6,30 @@
 (function () {
   'use strict';
 
+  // ---- Canonical editable Report Notes template ----
+  const DEFAULT_REPORT_NOTES_TEMPLATE = [
+    '{{title}}:',
+    '{{summary}}:',
+    '{{highlights}}:',
+    '{{risks}}:',
+    '{{next steps}}:',
+    '{{management notes}}:',
+  ].join('\n');
+
   // ---- Temporary configuration (module-local, never persisted) ----
   let temporaryConfig = {
     startDate: '',
     endDate: '',
     projectMode: 'all',
     sections: [],
-    reportNotes: '',
+    reportNotes: DEFAULT_REPORT_NOTES_TEMPLATE,
   };
 
   // ---- Adapters injected via ensure() ----
   let adapters = {
     getWorkspaceIndexState: null,
     onPreparedReport: null,
+    canGenerateReport: null,
   };
 
   let attachedWorkspaceKey = null;
@@ -120,10 +131,18 @@
 
   function ensure(options) {
     options = options || {};
-    adapters = {
-      getWorkspaceIndexState: options.getWorkspaceIndexState || null,
-      onPreparedReport: options.onPreparedReport || null,
-    };
+
+    // Adapter update contract: update before any early return, and do not
+    // erase a previously valid adapter when a later call omits it.
+    if (typeof options.getWorkspaceIndexState === 'function') {
+      adapters.getWorkspaceIndexState = options.getWorkspaceIndexState;
+    }
+    if (typeof options.onPreparedReport === 'function') {
+      adapters.onPreparedReport = options.onPreparedReport;
+    }
+    if (typeof options.canGenerateReport === 'function') {
+      adapters.canGenerateReport = options.canGenerateReport;
+    }
 
     const host = getSidebarBodyHost();
     if (!host) {
@@ -231,14 +250,22 @@
 
           <fieldset class="reportFieldset">
             <legend class="reportFieldsetLegend">Report Notes</legend>
+            <div class="reportNotesHeader">
+              <button
+                type="button"
+                id="reportResetNotesButton"
+                class="reportResetNotesButton"
+                aria-label="Reset Report Notes"
+                title="Reset Report Notes"
+              >Reset Notes</button>
+            </div>
             <textarea
               id="workspaceReportNotes"
               class="reportInput reportNotesInput"
-              rows="3"
-              placeholder="Summary: Main weekly activity"
+              rows="6"
               aria-label="Report Notes (dictionary pairs)"
             ></textarea>
-            <div class="reportNotesHelper">Optional dictionary pairs, e.g. “Next Steps: …”</div>
+            <div class="reportNotesHelper">Complete only the fields needed. Blank fields are ignored.</div>
           </fieldset>
 
           <button type="button" id="reportGenerateButton" class="reportGenerateButton">
@@ -304,6 +331,13 @@
       notes.value = temporaryConfig.reportNotes;
       notes.addEventListener('input', () => {
         temporaryConfig.reportNotes = notes.value || '';
+      });
+    }
+
+    const resetNotesBtn = document.getElementById('reportResetNotesButton');
+    if (resetNotesBtn) {
+      resetNotesBtn.addEventListener('click', () => {
+        resetReportNotes();
       });
     }
 
@@ -573,6 +607,14 @@
   }
 
   function handleGenerate() {
+    // Click-time defense: read the current canGenerateReport adapter.
+    // Do not rely only on the disabled button.
+    if (typeof adapters.canGenerateReport === 'function' && !adapters.canGenerateReport()) {
+      safeStatus('Return to the workspace before generating another Report.', 'error');
+      log('Report: generation blocked reason=report-already-active');
+      return;
+    }
+
     const prepared = prepareReport();
 
     if (!prepared.ok) {
@@ -610,6 +652,10 @@
       return;
     }
 
+    // A Report document is currently active: block generation.
+    const reportActive =
+      typeof adapters.canGenerateReport === 'function' && !adapters.canGenerateReport();
+
     const wsState = workspaceState || getCurrentWorkspaceState();
     const workspaceReady = Boolean(wsState && wsState.ready === true);
 
@@ -621,6 +667,7 @@
     const enabledCount = (temporaryConfig.sections || []).filter((s) => s.enabled).length;
 
     const valid =
+      !reportActive &&
       rangeResult.ok === true &&
       workspaceReady &&
       enabledCount > 0 &&
@@ -628,10 +675,16 @@
 
     if (generate) {
       generate.disabled = !valid;
-      generate.title = valid ? '' : 'Configure a valid range, scope, and at least one section';
+      generate.title = reportActive
+        ? 'Return to the workspace before generating another Report.'
+        : valid
+          ? ''
+          : 'Configure a valid range, scope, and at least one section';
     }
 
-    if (!workspaceReady) {
+    if (reportActive) {
+      safeStatus('Return to the workspace before generating another Report.', 'error');
+    } else if (!workspaceReady) {
       safeStatus('Open a workspace to generate a Report.');
     } else if (!rangeResult.ok) {
       safeStatus(rangeResult.message || 'Invalid date range.', 'error');
@@ -648,12 +701,50 @@
       endDate: '',
       projectMode: 'all',
       sections: [],
-      reportNotes: '',
+      reportNotes: DEFAULT_REPORT_NOTES_TEMPLATE,
     };
     const defaults = getDefaultLocalWeek();
     temporaryConfig.startDate = defaults.startDate;
     temporaryConfig.endDate = defaults.endDate;
     temporaryConfig.sections = getDefaultSectionConfig();
+  }
+
+  // ---- Report Notes reset ----
+
+  function isReportNotesEdited() {
+    const current = String(temporaryConfig.reportNotes || '');
+    return current !== DEFAULT_REPORT_NOTES_TEMPLATE;
+  }
+
+  function resetReportNotes() {
+    const notes = document.getElementById('workspaceReportNotes');
+    const current = notes ? notes.value : String(temporaryConfig.reportNotes || '');
+
+    // Empty or identical to clean template: reset immediately without confirmation.
+    if (!current || current === DEFAULT_REPORT_NOTES_TEMPLATE) {
+      applyReportNotesReset();
+      return;
+    }
+
+    // Edited content: confirm before replacing.
+    const ok = window.confirm(
+      'Reset Report Notes?\n\nThis will replace the current Report Notes with the blank field template.'
+    );
+
+    if (!ok) {
+      log('Report: Reset Notes canceled');
+      return;
+    }
+    applyReportNotesReset();
+  }
+
+  function applyReportNotesReset() {
+    temporaryConfig.reportNotes = DEFAULT_REPORT_NOTES_TEMPLATE;
+    const notes = document.getElementById('workspaceReportNotes');
+    if (notes) {
+      notes.value = DEFAULT_REPORT_NOTES_TEMPLATE;
+    }
+    log('Report: Report Notes reset to template');
   }
 
   function escapeHtml(text) {

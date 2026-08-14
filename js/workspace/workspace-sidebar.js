@@ -92,6 +92,6 @@ export function renderNavigationControls() {
 export function updateNavigationControls(state) {
   const back = document.getElementById('btnNavBack');
   const forward = document.getElementById('btnNavForward');
-  if (back) back.disabled = !state.canBack;
-  if (forward) forward.disabled = !state.canForward;
+  if (back instanceof HTMLButtonElement) back.disabled = !state.canBack;
+  if (forward instanceof HTMLButtonElement) forward.disabled = !state.canForward;
 }
