@@ -3977,6 +3977,27 @@ function confirmDiscardIfDirty() {
   return confirm('Current document has unsaved changes. Discard?');
 }
 
+// ACT G1: Decision helper for Report generation when the current source is dirty.
+// Uses two sequential window.confirm calls and returns one of:
+//   { action: 'save' }    — Save before generating the Report
+//   { action: 'discard' } — Discard current unsaved changes and generate the Report
+//   { action: 'cancel' }  — Cancel Report generation (no changes)
+// Does not use window.prompt, modals, or CSS.
+function resolveSaveDiscardCancelDecision() {
+  // First confirmation: save first, or handle unsaved changes.
+  if (confirm('Save before generating the Report?')) {
+    return { action: 'save' };
+  }
+
+  // Second confirmation: discard current unsaved changes and generate.
+  if (confirm('Discard the current unsaved changes and generate the Report?')) {
+    return { action: 'discard' };
+  }
+
+  // Cancel: no changes.
+  return { action: 'cancel' };
+}
+
 function setWritableHandleForCurrentFile(handle) {
   currentSaveHandle = handle || null;
   setStatus(modeLabel());
@@ -4019,17 +4040,19 @@ function openTextDocument({ text, fileName, fileHandle = null, reason = 'openTex
 }
 
 // ACT G: Open a virtual unsaved Report document.
-// Transaction order: capture previous session -> validate -> clear physical state -> set editor -> render.
+// Transaction order: validate -> dirty decision -> clear physical state -> set editor -> render.
+// ACT G1: No previous source session is captured. The physical source file is
+// handled directly by saveSmart() (save action) or left untouched (discard action).
 // ACT G: Report document identity check. Returns false when a Report is active.
 function canGenerateReport() {
   return !(__virtualReportSession && __virtualReportSession.kind === 'report');
 }
 
-function openVirtualReport(preparedResult) {
+async function openVirtualReport(preparedResult) {
   if (!preparedResult || typeof preparedResult !== 'object') {
     showToast?.('Report preparation failed: invalid result', 'error', 3000);
     log?.('Report: openVirtualReport blocked — invalid preparedResult');
-    return;
+    return { ok: false, reason: 'invalid-result', error: 'Report preparation failed: invalid result' };
   }
 
   const markdown = String(preparedResult.markdown || '');
@@ -4038,12 +4061,12 @@ function openVirtualReport(preparedResult) {
   if (!markdown) {
     showToast?.('Report preparation failed: empty markdown', 'error', 3000);
     log?.('Report: openVirtualReport blocked — empty markdown');
-    return;
+    return { ok: false, reason: 'empty-markdown', error: 'Report preparation failed: empty markdown' };
   }
 
   // 0. Defensive guard: a Report document is already active.
-  //    Do not capture the current Report into journal-main, do not replace
-  //    editor content, do not clear handles or Task baseline.
+  //    Do not capture the current Report, do not replace editor content,
+  //    do not clear handles or Task baseline.
   if (__virtualReportSession && __virtualReportSession.kind === 'report') {
     log?.('Report: generation blocked reason=report-already-active');
     showToast?.('Return to the workspace before generating another Report.', 'warn', 3000);
@@ -4054,38 +4077,46 @@ function openVirtualReport(preparedResult) {
     };
   }
 
-  // 1. Dirty-source guard: reuse existing confirmDiscardIfDirty.
-  if (!globalThis.MME_APP?.confirmDiscardIfDirty?.()) {
-    log?.('Report: activation canceled by dirty guard');
-    return;
-  }
+  // 1. Dirty-source decision using resolveSaveDiscardCancelDecision().
+  //    - clean source: no confirmation needed, proceed directly.
+  //    - save:       await saveSmart(); continue only if result.ok === true.
+  //    - discard:    continue without saving the current source edits.
+  //    - cancel:     change nothing; do NOT open the Report.
+  if (dirty) {
+    const decision = resolveSaveDiscardCancelDecision();
 
-  // 2. Capture previous source session BEFORE clearing anything.
-  let previousSession = null;
-  try {
-    if (typeof globalThis.captureCurrentModeSession === 'function') {
-      previousSession = globalThis.captureCurrentModeSession('before virtual report');
+    if (decision.action === 'cancel') {
+      log?.('Report: activation canceled by user');
+      showToast?.('Report generation canceled', 'warn', 2000);
+      return { ok: false, reason: 'canceled', error: 'Report generation canceled by user' };
     }
-  } catch (e) {
-    log?.(`Report: previous session capture failed: ${e?.message || e}`);
+
+    if (decision.action === 'save') {
+      log?.('Report: saving current source before activation');
+      const saveResult = await saveSmart();
+      if (!saveResult || saveResult.ok !== true) {
+        log?.('Report: activation blocked — save did not succeed');
+        showToast?.('Report generation canceled — current document was not saved', 'warn', 2600);
+        return { ok: false, reason: 'save-failed', error: 'Current document was not saved' };
+      }
+      log?.('Report: current source saved OK; proceeding with activation');
+    }
+
+    // decision.action === 'discard': continue without saving.
   }
 
-  // 3. Verify required editor/session APIs.
+  // 2. Verify required editor/session APIs.
   if (!md || typeof md.value === 'undefined') {
     showToast?.('Report activation failed: editor unavailable', 'error', 3000);
     log?.('Report: activation failed — md element missing');
-    if (previousSession && typeof globalThis.restoreModeSession === 'function') {
-      try {
-        globalThis.restoreModeSession(previousSession.mode || 'journal');
-      } catch {}
-    }
-    return;
+    return { ok: false, reason: 'editor-unavailable', error: 'Editor unavailable' };
   }
 
-  // 4. Prepare Report identity.
+  // 3. Prepare Report identity (ACT G1: saved=false for virtual Reports).
   const reportIdentity = {
     kind: 'report',
     virtual: true,
+    saved: false,
     sourcePath: null,
     suggestedFilename,
     generatedAt: new Date().toISOString(),
@@ -4095,26 +4126,22 @@ function openVirtualReport(preparedResult) {
     },
   };
 
-  // 5-8. Clear physical state inside try so rollback can restore it.
-  let activationFailed = false;
-  let rolledBack = false;
-
   try {
-    // 5. Clear active workspace source identity.
+    // 4. Clear active workspace source identity.
     if (globalThis.WORKSPACE_STATE) {
       globalThis.WORKSPACE_STATE.activeFile = null;
     }
 
-    // 6. Clear physical handle.
+    // 5. Clear physical handle.
     currentSaveHandle = null;
 
-    // 7. Clear Task baseline (Report documents are excluded from ACT D).
+    // 6. Clear Task baseline (Report documents are excluded from ACT D).
     __taskBaseline = null;
 
-    // 8. Set virtual Report session identity.
+    // 7. Set virtual Report session identity.
     __virtualReportSession = reportIdentity;
 
-    // 9. Replace editor content.
+    // 8. Replace editor content using the canonical setter.
     runProgrammaticTextChange(() => {
       md.value = markdown;
       if (typeof window.__cmSetText === 'function') {
@@ -4122,18 +4149,18 @@ function openVirtualReport(preparedResult) {
       }
     });
 
-    // 10. Set Report filename.
+    // 9. Set Report filename.
     currentFileName = suggestedFilename;
 
-    // 11. Mark dirty (Report is unsaved).
+    // 10. Mark dirty (Report is unsaved).
     dirty = true;
 
-    // 12. Update UI and render.
+    // 11. Update UI and render.
     setStatus(modeLabel());
     updateDocumentTitle();
     render('openVirtualReport');
 
-    // 13. Refresh workspace panels to reflect no active workspace file.
+    // 12. Refresh workspace panels to reflect no active workspace file.
     globalThis.persistActiveWorkspaceFile?.();
     window.updateWorkspaceActiveFileHighlight?.();
     renderWorkspaceActivePanel?.();
@@ -4141,47 +4168,24 @@ function openVirtualReport(preparedResult) {
     renderWorkspaceTasksPanel?.();
 
     log?.(`Report: opened virtual report filename=${suggestedFilename}`);
+
+    return {
+      ok: true,
+      identity: reportIdentity,
+      filename: suggestedFilename,
+      virtual: true,
+      saved: false,
+    };
   } catch (e) {
-    activationFailed = true;
-    rolledBack = true;
     const msg = e?.message || String(e);
     log?.(`Report: activation failed: ${msg}`);
 
-    // Rollback: restore previous session.
-    try {
-      if (previousSession && typeof globalThis.restoreModeSession === 'function') {
-        globalThis.restoreModeSession(previousSession.mode || 'journal');
-      }
-    } catch (rollbackErr) {
-      log?.(`Report: rollback failed: ${rollbackErr?.message || rollbackErr}`);
-      rolledBack = false;
-    }
+    // Defensive rollback: release the Report identity so a retry is possible.
+    __virtualReportSession = null;
+    currentSaveHandle = null;
 
-    // Restore physical handle if rollback couldn't.
-    if (!rolledBack && previousSession) {
-      try {
-        if (previousSession.saveHandle) {
-          currentSaveHandle = previousSession.saveHandle;
-        }
-        if (typeof previousSession.fileName === 'string') {
-          currentFileName = previousSession.fileName;
-        }
-        if (typeof previousSession.dirty === 'boolean') {
-          dirty = previousSession.dirty;
-        }
-      } catch {}
-
-      // Clear failed Report identity.
-      __virtualReportSession = null;
-    }
-
-    showToast?.('Report activation failed — previous source restored', 'error', 3500);
-    return;
-  } finally {
-    // Clear temporary previous session after successful activation or failed rollback.
-    if (!activationFailed) {
-      previousSession = null;
-    }
+    showToast?.('Report activation failed', 'error', 3500);
+    return { ok: false, reason: 'activation-error', error: msg };
   }
 }
 

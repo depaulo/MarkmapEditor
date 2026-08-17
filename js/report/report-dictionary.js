@@ -331,7 +331,7 @@
       e.projectCount += 1;
       e.totalValue += p.value;
     }
-    const totals = Array.from(totalsByCurrency.values()).sort((a
+    const totals = Array.from(totalsByCurrency.values()).sort((a, b) =>
       a.currency < b.currency ? -1 : 1
     );
     return { totals, valuedWithoutCurrencyCount };
