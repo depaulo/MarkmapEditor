@@ -3720,6 +3720,21 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
 
   const filePath = file.path || `${fileKind}/${fileName}`;
 
+  // ACT G2: One guard at the global openWorkspaceFile() boundary only.
+  // If an unsaved virtual Report is active, require Save, Discard, or Cancel
+  // before the physical target may replace it.
+  const guard = await guardUnsavedReportBeforePhysicalOpen();
+  if (!guard || guard.ok !== true) {
+    log?.(
+      `Report: G2 physical open blocked reason=${guard?.reason || 'unknown'} target=${filePath}`
+    );
+    return {
+      ok: false,
+      cancelled: guard?.cancelled === true,
+      reason: guard?.reason || 'report-guard',
+    };
+  }
+
   // Normal mode: block competing opens during Back/Forward restore.
   if (historyMode === 'normal' && globalThis.MME_NAVIGATION?.isNavigationInProgress?.()) {
     globalThis.MME_APP?.showToast?.('Navigation in progress. Try again shortly.', 'warn', 2000);
@@ -3766,6 +3781,14 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
     path: filePath,
     handle: file.handle,
   };
+
+  // ACT G: A successfully opened physical source is authoritative.
+  // Clear any stale virtual Report identity so the Report panel does not
+  // remain in "report-already-active" state after opening a Journal/Concept.
+  if (__virtualReportSession && __virtualReportSession.kind === 'report') {
+    __virtualReportSession = null;
+    log?.('Report: identity cleared on physical source open');
+  }
 
   globalThis.persistActiveWorkspaceFile?.();
   window.updateWorkspaceActiveFileHighlight?.();
@@ -3983,19 +4006,91 @@ function confirmDiscardIfDirty() {
 //   { action: 'discard' } — Discard current unsaved changes and generate the Report
 //   { action: 'cancel' }  — Cancel Report generation (no changes)
 // Does not use window.prompt, modals, or CSS.
-function resolveSaveDiscardCancelDecision() {
+// ACT G2: Accepts optional alternate messages so the same helper can be reused
+// when leaving an unsaved Report through openWorkspaceFile().
+function resolveSaveDiscardCancelDecision(options) {
+  options = options || {};
+  const saveMessage = options.saveMessage || 'Save before generating the Report?';
+  const discardMessage =
+    options.discardMessage || 'Discard the current unsaved changes and generate the Report?';
+
   // First confirmation: save first, or handle unsaved changes.
-  if (confirm('Save before generating the Report?')) {
+  if (confirm(saveMessage)) {
     return { action: 'save' };
   }
 
-  // Second confirmation: discard current unsaved changes and generate.
-  if (confirm('Discard the current unsaved changes and generate the Report?')) {
+  // Second confirmation: discard current unsaved changes and continue.
+  if (confirm(discardMessage)) {
     return { action: 'discard' };
   }
 
   // Cancel: no changes.
   return { action: 'cancel' };
+}
+
+// ACT G2: Guard for leaving an unsaved virtual Report through a physical open.
+// Called at the global main.js openWorkspaceFile() boundary only.
+// Qualification: Report identity must be an unsaved virtual Report.
+// Returns:
+//   { ok: true,  action: 'saved' | 'discarded' | 'not-report' }
+//   { ok: false, cancelled: true,  reason: 'report-navigation-cancelled' }
+//   { ok: false, cancelled: false, reason: 'report-save-failed' }
+// This helper never opens the requested physical target.
+async function guardUnsavedReportBeforePhysicalOpen() {
+  const session = __virtualReportSession;
+
+  const isUnsavedVirtualReport = Boolean(
+    session &&
+      session.kind === 'report' &&
+      session.virtual === true &&
+      session.saved === false
+  );
+
+  if (!isUnsavedVirtualReport) {
+    return { ok: true, action: 'not-report' };
+  }
+
+  const decision = resolveSaveDiscardCancelDecision({
+    saveMessage: 'The current Report has not been saved.\n\nSave before leaving?',
+    discardMessage: 'Discard this Report and continue?',
+  });
+
+  if (decision.action === 'save') {
+    // Preserve current identity values; they are only mutated after a real save.
+    const saveResult = await saveSmart();
+
+    if (!saveResult || saveResult.ok !== true) {
+      log?.(`Report: G2 guard save did not succeed — physical open blocked (${saveResult?.reason || 'unknown'})`);
+      return {
+        ok: false,
+        cancelled: false,
+        reason: 'report-save-failed',
+      };
+    }
+
+    // saveSmart() already updates Report identity to virtual=false, saved=true (ACT G1).
+    return { ok: true, action: 'saved' };
+  }
+
+  if (decision.action === 'discard') {
+    // Intentionally discard the current Report draft.
+    // Clear only the current Report draft; never Journal/Concept drafts.
+    try {
+      clearDraft(currentFileName);
+    } catch (e) {
+      log?.(`Report: G2 draft clear failed: ${e?.message || e}`);
+    }
+    log?.('Report: G2 discard approved — draft discarded');
+    return { ok: true, action: 'discarded' };
+  }
+
+  // decision.action === 'cancel'
+  log?.('Report: G2 physical open cancelled by user');
+  return {
+    ok: false,
+    cancelled: true,
+    reason: 'report-navigation-cancelled',
+  };
 }
 
 function setWritableHandleForCurrentFile(handle) {

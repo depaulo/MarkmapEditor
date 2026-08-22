@@ -87,12 +87,11 @@
       .toLowerCase()
       .replace(/\s+/g, ' ');
     if (!key) return null;
-    // Brace-token canonical form: {{summary}} -> report.summary via aliases.
+    // Brace-token canonical form: {{summary}} -> summary (canonical key, no report. prefix).
     const braceInner = normalizeBraceToken(key);
     if (braceInner) {
-      if (NOTE_ALIASES[braceInner]) return NOTE_ALIASES[braceInner];
-      // Unknown custom brace token preserved as its normalized name.
-      return braceInner.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      // Canonical key is the normalized inner content (e.g. 'next steps', 'ali summary').
+      return braceInner;
     }
     if (NOTE_ALIASES[key]) return NOTE_ALIASES[key];
     return key.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -106,6 +105,12 @@
       'report.risks': 'Risks and Attention Points',
       'report.next_steps': 'Next Steps',
       'report.management_notes': 'Management Notes',
+      title: 'Report Title',
+      summary: 'Summary',
+      highlights: 'Highlights',
+      risks: 'Risks and Attention Points',
+      'next steps': 'Next Steps',
+      'management notes': 'Management Notes',
     };
     return m[nk] || nk;
   }
@@ -114,15 +119,55 @@
     const notes = [];
     const diagnostics = [];
     let pairs = injectedPairs;
+    let order = 0;
 
     if (!Array.isArray(pairs)) {
+      // Pre-scan: extract {{field name}}: tokenized lines BEFORE parser dispatch.
+      // This is independent of WORKSPACE_PARSER availability.
+      const lines = String(reportNotes || '').split(/\r?\n/);
+      const nonBraceLines = [];
+
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t || /^#{1,6}\s/.test(t)) continue;
+
+        // Handle {{field name}}: tokenized format
+        const braceMatch = t.match(/^\{\{\s*([\s\S]*?)\s*\}\}\s*:\s*(.*)$/);
+        if (braceMatch) {
+          const inner = String(braceMatch[1] || '').trim();
+          // Normalize the inner content directly:
+          // lowercase, trim whitespace, collapse repeated internal spaces.
+          // (normalizeBraceToken expects the full {{...}} form, not the bare inner text.)
+          const nk = inner.toLowerCase().replace(/\s+/g, ' ').trim();
+          if (!nk) {
+            diagnostics.push({
+              code: 'note-invalid-key',
+              message: 'Invalid report note key: ' + inner,
+            });
+            continue;
+          }
+          notes.push({
+            key: nk,
+            token: '{{' + nk + '}}',
+            label: getNoteLabel(nk),
+            value: (braceMatch[2] || '').trim(),
+            order,
+          });
+          order += 1;
+          continue;
+        }
+
+        // Friendly format: keep for parser or regex fallback.
+        nonBraceLines.push(t);
+      }
+
       const parser =
         (typeof globalThis !== 'undefined' && globalThis.WORKSPACE_PARSER?.parseDictionaryPairs) ||
         (typeof window !== 'undefined' && window.WORKSPACE_PARSER?.parseDictionaryPairs) ||
         null;
-      if (parser) {
-        try {
-          pairs = parser(reportNotes);
+        if (parser) {
+          try {
+            pairs = parser(nonBraceLines.join('\n'));
         } catch (e) {
           diagnostics.push({
             code: 'notes-parse-failed',
@@ -132,10 +177,7 @@
         }
       } else {
         pairs = [];
-        const lines = String(reportNotes || '').split(/\r?\n/);
-        for (const line of lines) {
-          const t = line.trim();
-          if (!t || /^#{1,6}\s/.test(t)) continue;
+        for (const t of nonBraceLines) {
           const m = t.match(/^([A-Za-z][A-Za-z0-9 _-]*)\s*:\s*(.*)$/);
           if (m) pairs.push({ key: m[1].trim(), value: m[2].trim() });
           else diagnostics.push({ code: 'note-malformed', message: 'Malformed note line: ' + t });
@@ -143,7 +185,6 @@
       }
     }
 
-    let order = 0;
     for (const pair of pairs || []) {
       const rawKey = pair?.key;
       const rawValue = pair?.value;

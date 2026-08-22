@@ -28,10 +28,26 @@
     return n ? n.value : '';
   }
 
+  function getStandardNoteValue(dict, canonicalKey) {
+    // Canonical lookup: the dictionary stores notes with canonical keys
+    // (e.g. 'next steps'). The internal standard field owner is 'report.next_steps'.
+    const aliases = {
+      title: 'report.title',
+      summary: 'report.summary',
+      highlights: 'report.highlights',
+      risks: 'report.risks',
+      'next steps': 'report.next_steps',
+      'management notes': 'report.management_notes',
+    };
+    const lookupKey = aliases[canonicalKey] || canonicalKey;
+    const n = (dict.notes || []).find((x) => x.key === lookupKey || x.key === canonicalKey);
+    return n ? n.value : '';
+  }
+
   function renderSummary(dict) {
     const lines = [];
-    const summary = getNoteValue(dict, 'report.summary');
-    const highlights = getNoteValue(dict, 'report.highlights');
+    const summary = getStandardNoteValue(dict, 'summary');
+    const highlights = getStandardNoteValue(dict, 'highlights');
     if (summary) lines.push('## Summary', '', summary, '');
     if (highlights) lines.push('## Highlights', '', highlights, '');
     if (!summary && !highlights)
@@ -102,7 +118,7 @@
 
   function renderRisks(dict) {
     const lines = ['## Risks and Attention Points', ''];
-    const risks = getNoteValue(dict, 'report.risks');
+    const risks = getStandardNoteValue(dict, 'risks');
     if (risks) lines.push(risks, '');
     else lines.push('_No risks recorded._', '');
     return lines.join('\n');
@@ -110,7 +126,7 @@
 
   function renderNextSteps(dict) {
     const lines = ['## Next Steps', ''];
-    const next = getNoteValue(dict, 'report.next_steps');
+    const next = getStandardNoteValue(dict, 'next steps');
     if (next) lines.push(next, '');
     else lines.push('_No next steps recorded._', '');
     return lines.join('\n');
@@ -146,7 +162,7 @@
     }
 
     const range = dictionary.reportRange || {};
-    const title = getNoteValue(dictionary, 'report.title') || 'Weekly Business Report';
+    const title = getStandardNoteValue(dictionary, 'title') || 'Weekly Business Report';
     const lines = [];
 
     lines.push('---');
@@ -173,7 +189,7 @@
       }
     }
 
-    const managementNotes = getNoteValue(dictionary, 'report.management_notes');
+    const managementNotes = getStandardNoteValue(dictionary, 'management notes');
     if (managementNotes) {
       lines.push('## Management Notes', '', managementNotes, '');
     }

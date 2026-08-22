@@ -484,7 +484,8 @@
     );
   }
 
-  function validateConfiguration() {
+  function validateConfiguration(config) {
+    const cfg = config || temporaryConfig;
     const diagnostics = [];
     const dict = getDictionaryModule();
 
@@ -497,8 +498,8 @@
     }
 
     const rangeResult = dict.normalizeReportRange(
-      temporaryConfig.startDate || '',
-      temporaryConfig.endDate || ''
+      cfg.startDate || '',
+      cfg.endDate || ''
     );
     if (!rangeResult.ok) {
       diagnostics.push({
@@ -507,11 +508,11 @@
       });
     }
 
-    if (!['all', 'with-value', 'without-value'].includes(temporaryConfig.projectMode)) {
+    if (!['all', 'with-value', 'without-value'].includes(cfg.projectMode)) {
       diagnostics.push({ code: 'invalid-project-mode', message: 'Invalid Project mode.' });
     }
 
-    const enabledSections = (temporaryConfig.sections || []).filter((s) => s.enabled);
+    const enabledSections = (cfg.sections || []).filter((s) => s.enabled);
     if (enabledSections.length === 0) {
       diagnostics.push({ code: 'no-enabled-sections', message: 'Enable at least one Report section.' });
     }
@@ -530,6 +531,13 @@
   }
 
   function readConfiguration() {
+    // Read the current textarea DOM value at click time so configuration
+    // always reflects exactly what the user sees in the panel.
+    // This guarantees the textarea value reaches the dictionary even if
+    // the last 'input' event was not processed yet.
+    const notesEl = document.getElementById('workspaceReportNotes');
+    const reportNotes = notesEl ? notesEl.value : temporaryConfig.reportNotes;
+
     return {
       startDate: temporaryConfig.startDate,
       endDate: temporaryConfig.endDate,
@@ -539,7 +547,7 @@
         label: s.label,
         enabled: s.enabled,
       })),
-      reportNotes: temporaryConfig.reportNotes,
+      reportNotes,
     };
   }
 
@@ -552,7 +560,11 @@
       return { ok: false, diagnostics, error: 'report-modules-unavailable' };
     }
 
-    const validation = validateConfiguration();
+    // Read the current configuration snapshot at click time.
+    // This ensures reportNotes exactly equals the textarea value at Generate click.
+    const configuration = readConfiguration();
+
+    const validation = validateConfiguration(configuration);
     if (!validation.ok) {
       return { ok: false, diagnostics: validation.diagnostics, error: 'validation-failed' };
     }
@@ -567,11 +579,11 @@
 
     const dictionary = dict.buildReportDictionary({
       indexState: wsState,
-      startDate: temporaryConfig.startDate,
-      endDate: temporaryConfig.endDate,
-      sections: temporaryConfig.sections.map((s) => ({ id: s.id, enabled: s.enabled })),
-      projectMode: temporaryConfig.projectMode,
-      reportNotes: temporaryConfig.reportNotes,
+      startDate: configuration.startDate,
+      endDate: configuration.endDate,
+      sections: configuration.sections.map((s) => ({ id: s.id, enabled: s.enabled })),
+      projectMode: configuration.projectMode,
+      reportNotes: configuration.reportNotes,
       generatedAt,
     });
 
@@ -581,6 +593,25 @@
       ];
       return { ok: false, diagnostics, error: 'dictionary-build-failed' };
     }
+
+    // Narrow development diagnostics at the preparation boundary.
+    // Structural only — never logs full business content.
+    try {
+      const rawLines = String(configuration.reportNotes || '')
+        .split(/\r?\n/)
+        .filter((l) => l.trim()).length;
+      const parsedKeys = (dictionary.notes || []).map((n) => n.key);
+      const standard = parsedKeys.filter((k) =>
+        ['title', 'summary', 'highlights', 'risks', 'next steps', 'management notes'].includes(k)
+      );
+      const custom = parsedKeys.filter(
+        (k) => !['title', 'summary', 'highlights', 'risks', 'next steps', 'management notes'].includes(k)
+      );
+      log(`Report: notes raw lines=${rawLines}`);
+      log(`Report: notes parsed keys=${standard.join(',')}`);
+      log(`Report: dictionary standard fields=${standard.join(',')}`);
+      if (custom.length) log(`Report: dictionary custom fields=${custom.join(',')}`);
+    } catch {}
 
     const markdown =
       typeof gen?.buildMarkdown === 'function'
