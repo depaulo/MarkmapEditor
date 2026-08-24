@@ -332,6 +332,16 @@ async function openToday() {
     return;
   }
 
+  // ACT G2B: Before Today replaces editor content, run the Report leave
+  // decision. Cancel does nothing. Save or Discard proceeds once.
+  if (typeof globalThis.guardUnsavedReportBeforeDocumentSwitch === 'function') {
+    const guard = await globalThis.guardUnsavedReportBeforeDocumentSwitch();
+    if (!guard || guard.ok !== true) {
+      globalThis.MME_APP?.log?.('Workspace: Today blocked by Report guard');
+      return;
+    }
+  }
+
   if (!WORKSPACE_STATE.rootHandle) {
     globalThis.MME_APP?.showToast?.('Open a workspace first', 'error', 3000);
     return;
@@ -409,6 +419,9 @@ Tags:
     fileHandle,
     reason: 'workspace today',
   });
+
+  // ACT G2B: Clear Report identity at the safe target-activation boundary.
+  globalThis.clearReportIdentityAfterTransition?.();
 
   WORKSPACE_STATE.activeFile = {
     kind: 'journals',
@@ -912,6 +925,19 @@ function initWorkspace() {
     btnBack.addEventListener('click', async () => {
       globalThis.MME_APP?.log?.('NavigationTrace: Back clicked');
 
+      // ACT G2B: Block Back while an unsaved Report is active. The History
+      // contract cannot safely await the Report decision without modifying
+      // Navigation History, so we block and show the required message.
+      if (typeof globalThis.isUnsavedReportActive === 'function' && globalThis.isUnsavedReportActive()) {
+        globalThis.MME_APP?.showToast?.(
+          'Save or discard the current Report before navigating.',
+          'warn',
+          3000
+        );
+        globalThis.MME_APP?.log?.('NavigationTrace: Back blocked by unsaved Report');
+        return;
+      }
+
       try {
         const result = await globalThis.MME_NAVIGATION?.back?.();
 
@@ -941,6 +967,17 @@ function initWorkspace() {
   if (btnForward && !btnForward.__mmeNavigationBound) {
     btnForward.addEventListener('click', async () => {
       globalThis.MME_APP?.log?.('NavigationTrace: Forward clicked');
+
+      // ACT G2B: Block Forward while an unsaved Report is active.
+      if (typeof globalThis.isUnsavedReportActive === 'function' && globalThis.isUnsavedReportActive()) {
+        globalThis.MME_APP?.showToast?.(
+          'Save or discard the current Report before navigating.',
+          'warn',
+          3000
+        );
+        globalThis.MME_APP?.log?.('NavigationTrace: Forward blocked by unsaved Report');
+        return;
+      }
 
       try {
         const result = await globalThis.MME_NAVIGATION?.forward?.();

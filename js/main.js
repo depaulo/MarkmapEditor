@@ -3822,6 +3822,15 @@ try {
   globalThis.findWorkspaceFileByPath = findWorkspaceFileByPath;
 } catch {}
 
+// ACT G2B: Expose the auxiliary document-switch guard and helpers so
+// workspace-controller.js (loaded as a module after main.js) can reuse them.
+try {
+  globalThis.guardUnsavedReportBeforeDocumentSwitch =
+    guardUnsavedReportBeforeDocumentSwitch;
+  globalThis.isUnsavedReportActive = isUnsavedReportActive;
+  globalThis.clearReportIdentityAfterTransition = clearReportIdentityAfterTransition;
+} catch {}
+
 function wireWorkspaceSearch() {
   ensureWorkspaceSearchPanel();
 
@@ -4091,6 +4100,75 @@ async function guardUnsavedReportBeforePhysicalOpen() {
     cancelled: true,
     reason: 'report-navigation-cancelled',
   };
+}
+
+// ACT G2B: Thin wrapper so auxiliary document-switch paths (context selector,
+// Today, New Concept) can reuse the exact same Report leave decision without
+// renaming the existing physical-open guard. Delegates directly.
+async function guardUnsavedReportBeforeDocumentSwitch() {
+  return guardUnsavedReportBeforePhysicalOpen();
+}
+
+// ACT G2B: Qualification helper for an unsaved virtual Report.
+// Returns true only when Report identity is kind=report, virtual=true, saved=false.
+function isUnsavedReportActive() {
+  const session = __virtualReportSession;
+  return Boolean(
+    session &&
+      session.kind === 'report' &&
+      session.virtual === true &&
+      session.saved === false
+  );
+}
+
+// ACT G2B: Clear Report identity at the safe target-activation boundary and
+// refresh Report panel visibility so Generate re-enables. Preserves Report
+// panel configuration (dates, Project mode, sections, Report Notes).
+function clearReportIdentityAfterTransition() {
+  if (__virtualReportSession && __virtualReportSession.kind === 'report') {
+    __virtualReportSession = null;
+    log?.('Report: identity cleared after auxiliary transition');
+  }
+  try {
+    globalThis.MME_REPORT_PANEL?.refresh?.();
+  } catch (e) {
+    log?.(`Report: panel refresh after transition failed: ${e?.message || e}`);
+  }
+}
+
+// ACT G2C: Narrow saved-Report recognition helper.
+// Returns true only when the Markdown begins with a valid leading frontmatter
+// block that explicitly contains the exact field "type: report".
+// Reuses the existing frontmatter parser (parseSimpleYamlFrontmatter) when
+// available. Does NOT identify Reports from filename, title, headings, or
+// suggested-filename patterns. Does NOT parse Report sections, tables, Tasks,
+// Projects, or Template Fields.
+function isSavedReportMarkdown(text) {
+  const source = String(text || '');
+
+  // Require a leading frontmatter block.
+  if (!/^\uFEFF?\s*---\s*\n/.test(source)) {
+    return false;
+  }
+
+  let data = null;
+
+  try {
+    if (typeof globalThis.parseSimpleYamlFrontmatter === 'function') {
+      const parsed = globalThis.parseSimpleYamlFrontmatter(source);
+      data = parsed && typeof parsed === 'object' ? parsed.data : null;
+    }
+  } catch (e) {
+    log?.(`Report: G2C frontmatter parse failed: ${e?.message || e}`);
+  }
+
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+
+  // Exact field match: type: report (case-insensitive value, trimmed).
+  const typeValue = String(data.type ?? '').trim().toLowerCase();
+  return typeValue === 'report';
 }
 
 function setWritableHandleForCurrentFile(handle) {
@@ -4667,7 +4745,15 @@ async function createNewConcept() {
     return;
   }
 
-  if (typeof confirmDiscardIfDirty === 'function') {
+  // ACT G2B: Before New Concept replaces editor content, run the Report leave
+  // decision. Cancel creates/opens nothing. Save or Discard proceeds once.
+  if (typeof globalThis.guardUnsavedReportBeforeDocumentSwitch === 'function') {
+    const guard = await globalThis.guardUnsavedReportBeforeDocumentSwitch();
+    if (!guard || guard.ok !== true) {
+      log?.('Workspace: New Concept blocked by Report guard');
+      return;
+    }
+  } else if (typeof confirmDiscardIfDirty === 'function') {
     if (!confirmDiscardIfDirty()) {
       log?.('Workspace: New Concept cancelled by dirty document prompt');
       return;
@@ -4720,6 +4806,9 @@ async function createNewConcept() {
     fileHandle: conceptHandle,
     reason: 'workspace new concept',
   });
+
+  // ACT G2B: Clear Report identity at the safe target-activation boundary.
+  globalThis.clearReportIdentityAfterTransition?.();
 
   if (typeof globalThis.refreshWorkspaceSidebar === 'function') {
     await globalThis.refreshWorkspaceSidebar();
@@ -8102,11 +8191,47 @@ async function openSmart() {
       updateDocumentTitle();
       await addRecentFile(handle, currentFileName);
       log(`🕘 Recents: added ${currentFileName}`);
-      md.value = await f.text();
+      const openedText = await f.text();
+      md.value = openedText;
       if (window.__cmSetText) window.__cmSetText(md.value);
       dirty = false;
       setStatus(modeLabel());
       log(`openSmart(): loaded WRITABLE "${currentFileName}" (${f.size} bytes)`);
+
+      // ACT G2C: When a saved Report is reopened through the normal Open
+      // workflow, classify it as a Report, clear stale workspace activeFile,
+      // establish saved Report identity, and keep ACT D exclusion active.
+      if (typeof isSavedReportMarkdown === 'function' && isSavedReportMarkdown(openedText)) {
+        __virtualReportSession = {
+          kind: 'report',
+          virtual: false,
+          saved: true,
+          sourcePath: null,
+          suggestedFilename: currentFileName,
+        };
+        // Clear stale workspace activeFile (previous Journal/Concept).
+        if (globalThis.WORKSPACE_STATE) {
+          globalThis.WORKSPACE_STATE.activeFile = null;
+        }
+        globalThis.persistActiveWorkspaceFile?.();
+        window.updateWorkspaceActiveFileHighlight?.();
+        // Clear Task baseline so ACT D stays excluded for the Report.
+        __taskBaseline = null;
+        // Refresh Report panel availability (Generate stays disabled).
+        try {
+          globalThis.MME_REPORT_PANEL?.refresh?.();
+        } catch (e) {
+          log?.(`Report: G2C panel refresh failed: ${e?.message || e}`);
+        }
+        log?.(`Report: G2C reopened saved Report identity kind=report virtual=false saved=true filename=${currentFileName}`);
+      } else {
+        // Normal external document: clear any stale Report identity.
+        if (__virtualReportSession && __virtualReportSession.kind === 'report') {
+          __virtualReportSession = null;
+          log?.('Report: G2C identity cleared on normal external document open');
+        }
+      }
+
       const restored = maybeRestoreDraftAfterOpen('openSmart(writable)');
       if (!restored) {
         hasAutoFitted = false;
@@ -8409,11 +8534,21 @@ fileInput.addEventListener('change', async (e) => {
     currentFileName = f.name || 'markmap.md';
     updateDocumentTitle();
     currentSaveHandle = null;
-    md.value = await f.text();
+    const openedText = await f.text();
+    md.value = openedText;
     if (window.__cmSetText) window.__cmSetText(md.value);
     dirty = false;
     setStatus(modeLabel());
     log(`read-only open: loaded "${currentFileName}" (${f.size} bytes)`);
+
+    // ACT G2C: A normal external document opened read-only must clear any
+    // stale Report identity so the Report panel does not remain in
+    // "report-already-active" state.
+    if (__virtualReportSession && __virtualReportSession.kind === 'report') {
+      __virtualReportSession = null;
+      log?.('Report: G2C identity cleared on read-only external document open');
+    }
+
     const restored = maybeRestoreDraftAfterOpen('openSmart(read-only)');
     if (!restored) {
       hasAutoFitted = false;
@@ -10727,12 +10862,31 @@ function wireAppContextSelector() {
 
   applyAppContextUi(initialId, 'context boot');
 
-  select.addEventListener('change', () => {
+  select.addEventListener('change', async () => {
     const nextId = select.value || 'editor';
 
     try {
       log(`CTX selector change: nextId=${nextId}`);
     } catch {}
+
+    // ACT G2B: Before a context switch that replaces editor content, run the
+    // Report leave decision. Cancel keeps the Report active and resets the
+    // selector to the actual current context.
+    if (typeof globalThis.guardUnsavedReportBeforeDocumentSwitch === 'function') {
+      const guard = await globalThis.guardUnsavedReportBeforeDocumentSwitch();
+      if (!guard || guard.ok !== true) {
+        try {
+          log(`CTX selector change: blocked reason=${guard?.reason || 'unknown'}`);
+        } catch {}
+        const actual = globalThis.currentAppContextId || 'editor';
+        if (select.value !== actual) {
+          select.value = actual;
+        }
+        return;
+      }
+      // Approved transition: clear Report identity at the safe activation boundary.
+      globalThis.clearReportIdentityAfterTransition?.();
+    }
 
     // R-MULTI1: switching modes must NOT prompt to save/discard.
     // Each mode keeps its own unsaved session state.
