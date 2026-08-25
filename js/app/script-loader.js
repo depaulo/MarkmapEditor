@@ -83,6 +83,11 @@ function appendScript(src, { onload } = {}) {
 
   appendScript('./js/templates/templates-menu.js');
 
+  // ACT H1 — pure Reviewed Report Markdown importer. Loaded first among the
+  // Report modules; it is independent and exposes MME_REPORT_MARKDOWN_IMPORT
+  // without DOM, file handles, or workspace scan.
+  appendScript('./js/report/report-markdown-import.js');
+
   // ACT E + ACT F — Quick Report modules. Order: dictionary, generator, panel.
   // The panel tolerates an absent Workspace Index at load and dispatches a
   // narrow module-ready event; main.js ensures the panel during sidebar
