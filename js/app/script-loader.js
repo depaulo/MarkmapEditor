@@ -88,6 +88,11 @@ function appendScript(src, { onload } = {}) {
   // without DOM, file handles, or workspace scan.
   appendScript('./js/report/report-markdown-import.js');
 
+  // ACT H2 — pure Draw.io template reconciliation engine. Loaded after the
+  // H1 importer so the reconciler can consume its fields projection; before
+  // the Quick Report dictionary/generator/panel so its global is available.
+  appendScript('./js/report/drawio-report-reconciler.js');
+
   // ACT E + ACT F — Quick Report modules. Order: dictionary, generator, panel.
   // The panel tolerates an absent Workspace Index at load and dispatches a
   // narrow module-ready event; main.js ensures the panel during sidebar

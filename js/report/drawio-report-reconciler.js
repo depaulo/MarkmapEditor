@@ -73,6 +73,7 @@
         code: 'template-not-xml',
         message: 'The first MVP requires uncompressed Draw.io XML.',
       });
+      return { ok: false, compressed: false, diagnostics };
     }
 
     const compressedDiagram = /<diagram\b[^>]*>\s*[^<\s][\s\S]*?<\/diagram>/i.test(source);
@@ -93,24 +94,27 @@
 
   function extractPlaceholders(xml) {
     const source = String(xml == null ? '' : xml);
-    const placeholders = [];
-    const seen = new Set();
     const regex = /\{\{\s*([^{}]+?)\s*\}\}/g;
     let match;
+    const counts = Object.create(null);
+    const firstSeen = [];
+    const rawTokens = Object.create(null);
 
     while ((match = regex.exec(source)) !== null) {
       const key = normalizeFieldName(match[1]);
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      placeholders.push({
-        key,
-        token: tokenFromFieldName(key),
-        rawToken: match[0],
-        order: placeholders.length,
-      });
+      if (!key) continue;
+      counts[key] = (counts[key] || 0) + 1;
+      if (!rawTokens[key]) rawTokens[key] = match[0];
+      if (counts[key] === 1) firstSeen.push(key);
     }
 
-    return placeholders;
+    return firstSeen.map((key, index) => ({
+      key,
+      token: tokenFromFieldName(key),
+      rawToken: rawTokens[key],
+      occurrences: counts[key],
+      order: index,
+    }));
   }
 
   function reconcile(templateXml, fieldInput) {
@@ -154,25 +158,35 @@
   }
 
   function buildMissingTemplateFieldsMarkdown(reconciliation) {
+    const placeholders = reconciliation?.placeholders || [];
+    const unknownKeys = new Set(
+      (reconciliation?.unknownPlaceholders || []).map((item) => item.key)
+    );
+    const missingKeys = new Set(
+      (reconciliation?.missingValues || []).map(
+        (item) => item.field?.key || item.placeholder?.key
+      )
+    );
+
     const keys = [];
     const seen = new Set();
-    const add = (key) => {
-      const normalized = normalizeFieldName(key);
-      if (!normalized || seen.has(normalized)) return;
-      seen.add(normalized);
-      keys.push(normalized);
-    };
-
-    for (const item of reconciliation?.unknownPlaceholders || []) add(item.key);
-    for (const item of reconciliation?.missingValues || []) add(item.field?.key || item.placeholder?.key);
+    for (const placeholder of placeholders) {
+      const key = placeholder.key;
+      if (!unknownKeys.has(key) && !missingKeys.has(key)) continue;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      keys.push(key);
+    }
 
     if (!keys.length) return '';
 
     return [
       '## Template Fields',
       '',
-      ...keys.map((key) => `${tokenFromFieldName(key)}:`),
-    ].join('\n');
+      ...keys.map((key) => `${tokenFromFieldName(key)}:`)
+    ].join(
+      '\n'
+    );
   }
 
   function escapeXmlReplacement(value) {
@@ -207,7 +221,7 @@
       const rawValue = String(field.value == null ? '' : field.value);
       if (!rawValue.trim() && !replaceBlank) continue;
       const escaped = escapeXmlReplacement(rawValue);
-      const pattern = new RegExp(`\\{\\{\\s*${escapeRegExp(placeholder.key).replace(/\\ /g, '\\s+')}\\s*\\}\\}`, 'gi');
+      const pattern = new RegExp(`\\{\\{\\s*${escapeRegExp(placeholder.key).replace(/ /g, '\\s+')}\\s*\\}\\}`, 'gi');
       output = output.replace(pattern, escaped);
     }
 
@@ -223,65 +237,234 @@
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
+  function buildDrawioTemplateFixture() {
+    return [
+      '<mxfile host="app.diagrams.net">',
+      '<diagram id="page-1" name="Page-1">',
+      '<mxGraphModel><root>',
+      '<mxCell id="0"/>',
+      '<mxCell id="1" parent="0"/>',
+      '<mxCell id="2" value="{{title}}" vertex="1" parent="1"/>',
+      '<mxCell id="3" value="{{summary}}" vertex="1" parent="1"/>',
+      '<mxCell id="4" value="{{summary}}" vertex="1" parent="1"/>',
+      '<mxCell id="5" value="{{customer}}" vertex="1" parent="1"/>',
+      '<mxCell id="6" value="{{customer decision}}" vertex="1" parent="1"/>',
+      '<mxCell id="7" value="{{regional sponsor}}" vertex="1" parent="1"/>',
+      '<mxCell id="8" value="&lt;div&gt;{{next steps}}&lt;/div&gt;" vertex="1" parent="1"/>',
+      '<mxCell id="9" value="{{region}}" vertex="1" parent="1"/>',
+      '</root></mxGraphModel>',
+      '</diagram>',
+      '</mxfile>',
+    ].join('');
+  }
+
+  function buildH1FieldsFixture() {
+    return {
+      title: { key: 'title', token: '{{title}}', value: 'Weekly Report', source: 'heading' },
+      summary: { key: 'summary', token: '{{summary}}', value: 'Main activity', source: 'section' },
+      customer: { key: 'customer', token: '{{customer}}', value: 'Example Customer', source: 'token' },
+      'customer decision': { key: 'customer decision', token: '{{customer decision}}', value: '', source: 'token' },
+      'regional sponsor': { key: 'regional sponsor', token: '{{regional sponsor}}', value: '', source: 'token' },
+      'next steps': { key: 'next steps', token: '{{next steps}}', value: 'Review and plan', source: 'section' },
+      notes: { key: 'notes', token: '{{notes}}', value: 'Extra notes', source: 'token' },
+    };
+  }
+
+
   function validateDrawioReportReconciler() {
     const cases = [];
     const check = (name, actual, expected) => {
       const pass = JSON.stringify(actual) === JSON.stringify(expected);
       cases.push({ name, pass, actual, expected });
     };
-
-    const xml = [
-      '<mxfile host="app.diagrams.net">',
-      '<diagram name="Page-1">',
-      '<mxGraphModel><root>',
-      '<mxCell id="0"/>',
-      '<mxCell id="1" parent="0"/>',
-      '<mxCell id="2" value="{{ Summary }}" vertex="1" parent="1"/>',
-      '<mxCell id="3" value="{{customer}}" vertex="1" parent="1"/>',
-      '<mxCell id="4" value="{{regional risk}}" vertex="1" parent="1"/>',
-      '</root></mxGraphModel>',
-      '</diagram>',
-      '</mxfile>',
-    ].join('');
-
-    const fields = {
-      summary: { value: 'Main activity' },
-      customer: { value: '' },
-      'unused field': { value: 'Keep me in Markdown' },
+    const checkCond = (name, cond) => {
+      cases.push({ name, pass: Boolean(cond), actual: Boolean(cond), expected: true });
     };
 
-    const result = reconcile(xml, fields);
-    check('template accepted', result.ok, true);
-    check('placeholder normalization', result.placeholders.map((item) => item.key), ['summary', 'customer', 'regional risk']);
-    check('matched', result.matched.map((item) => item.field.key), ['summary']);
-    check('missing value', result.missingValues.map((item) => item.field.key), ['customer']);
-    check('unknown placeholder', result.unknownPlaceholders.map((item) => item.key), ['regional risk']);
-    check('unused field', result.unusedFields.map((item) => item.key), ['unused field']);
+    const fixture = buildDrawioTemplateFixture();
+    const fields = buildH1FieldsFixture();
 
-    const missing = buildMissingTemplateFieldsMarkdown(result);
-    check(
-      'missing markdown',
-      missing,
-      ['## Template Fields', '', '{{regional risk}}:', '{{customer}}:'].join('\n')
-    );
+    // 1. empty template rejected
+    const empty = assessTemplateXml('');
+    check('01 empty rejected', empty.ok, false);
+    check('01b empty diagnostic', empty.diagnostics.some((d) => d.code === 'template-empty'), true);
 
-    const populated = populateTemplate(xml, fields);
-    check('population succeeds', populated.ok, true);
-    check('summary replaced', populated.xml.includes('value="Main activity"'), true);
-    check('blank preserved', populated.xml.includes('{{customer}}'), true);
-    check('unknown preserved', populated.xml.includes('{{regional risk}}'), true);
+    // 2. non-Draw.io XML rejected
+    const nonDrawio = assessTemplateXml('<html><body><p>not a diagram</p></body></html>');
+    check('02 non-drawio rejected', nonDrawio.ok, false);
+    check('02b non-drawio diagnostic', nonDrawio.diagnostics.some((d) => d.code === 'template-not-xml'), true);
 
-    const compressed = assessTemplateXml('<mxfile><diagram>abc123</diagram></mxfile>');
-    check('compressed rejected', compressed.ok, false);
+    // 3. malformed XML diagnostic where supported
+    const malformed = assessTemplateXml('<<<garbage>>>');
+    check('03 malformed rejected', malformed.ok, false);
+    check('03b malformed diagnostic', malformed.diagnostics.some((d) => d.code === 'template-not-xml'), true);
+
+    // 4. uncompressed template accepted
+    check('04 uncompressed accepted', assessTemplateXml(fixture).ok, true);
+
+    // 5. compressed template rejected
+    const compressed = assessTemplateXml('<mxfile><diagram>abc123encoded</diagram></mxfile>');
+    check('05 compressed rejected', compressed.ok, false);
+    check('05b compressed diagnostic', compressed.diagnostics.some((d) => d.code === 'template-compressed'), true);
+
+    // 6. no-placeholder template handled deterministically
+    const noPhXml = '<mxfile><diagram><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>';
+    const noPh = reconcile(noPhXml, fields);
+    check('06 no-placeholder ok', noPh.ok, true);
+    check('06b no-placeholder extraction', noPh.placeholders.length, 0);
+    check('06c no-placeholder markdown', buildMissingTemplateFieldsMarkdown(noPh), '');
+
+    // 7. standard placeholder extraction
+    const stdXml = '<mxfile><diagram><mxGraphModel><root><mxCell value="{{summary}}" vertex="1" parent="1"/><mxCell value="{{customer}}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>';
+    check('07 standard extraction', extractPlaceholders(stdXml).map((p) => p.key), ['summary', 'customer']);
+
+    // 8. custom placeholder extraction
+    const customXml = '<mxfile><diagram><mxGraphModel><root><mxCell value="{{ali summary}}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>';
+    check('08 custom extraction', extractPlaceholders(customXml).map((p) => p.key), ['ali summary']);
+
+    // 9. placeholder case normalization
+    const caseXml = '<mxfile><diagram><mxGraphModel><root><mxCell value="{{ SUMMARY }}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>';
+    check('09 case normalization', extractPlaceholders(caseXml).map((p) => p.key), ['summary']);
+
+    // 10. repeated-space normalization
+    const spaceXml = '<mxfile><diagram><mxGraphModel><root><mxCell value="{{  summary  }}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>';
+    check('10a space normalization key', extractPlaceholders(spaceXml).map((p) => p.key), ['summary']);
+    check('10b space normalization token', extractPlaceholders(spaceXml).map((p) => p.token), ['{{summary}}']);
+
+    // 11. deterministic first-seen order
+    const orderXml = '<mxfile><diagram><mxGraphModel><root><mxCell value="{{c}}" vertex="1" parent="1"/><mxCell value="{{a}}" vertex="1" parent="1"/><mxCell value="{{b}}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>';
+    check('11 first-seen order', extractPlaceholders(orderXml).map((p) => p.key), ['c', 'a', 'b']);
+    check('11b order deterministic', JSON.stringify(extractPlaceholders(orderXml)), JSON.stringify(extractPlaceholders(orderXml)));
+
+    // 12. repeated placeholder occurrence count
+    const repXml = '<mxfile><diagram><mxGraphModel><root><mxCell value="{{summary}}" vertex="1" parent="1"/><mxCell value="{{summary}}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>';
+    check('12 occurrence count', extractPlaceholders(repXml).find((p) => p.key === 'summary').occurrences, 2);
+    check('12b occurrence dedup', extractPlaceholders(repXml).length, 1);
+
+    // 13. H1 object-of-field-objects accepted
+    const h1Style = { summary: { key: 'summary', token: '{{summary}}', value: 'From H1', source: 'section' }, customer: { key: 'customer', token: '{{customer}}', value: 'Acme', source: 'token' } };
+    const h1Res = reconcile(stdXml, h1Style);
+    check('13 h1 fields accepted', h1Res.ok, true);
+    check('13b h1 matched', h1Res.matched.map((m) => m.field.key), ['summary', 'customer']);
+
+    // 14. plain key/value field object accepted
+    const plainFields = { summary: 'Plain value', customer: 'Plain customer' };
+    const plainRes = reconcile(stdXml, plainFields);
+    check('14 plain fields accepted', plainRes.ok, true);
+    check('14b plain matched', plainRes.matched.map((m) => m.field.key), ['summary', 'customer']);
+
+    // Full fixture reconciliation for 15-35
+    const reconciliation = reconcile(fixture, fields);
+
+    // 15. matched field with value
+    check('15 matched with value', reconciliation.matched.map((m) => m.field.key), ['title', 'summary', 'customer', 'next steps']);
+
+    // 16. matched field with blank value
+    check('16 missing values blank', reconciliation.missingValues.map((m) => m.field.key), ['customer decision', 'regional sponsor']);
+
+    // 17. unknown template placeholder
+    check('17 unknown placeholder', reconciliation.unknownPlaceholders.map((u) => u.key), ['region']);
+
+    // 18. unused Report field
+    check('18 unused field', reconciliation.unusedFields.map((f) => f.key), ['notes']);
+
+    // 19. category ordering deterministic
+    const result2 = reconcile(fixture, fields);
+    check('19a matched order deterministic', JSON.stringify(reconciliation.matched), JSON.stringify(result2.matched));
+    check('19b unknown order deterministic', JSON.stringify(reconciliation.unknownPlaceholders), JSON.stringify(result2.unknownPlaceholders));
+    check('19c missing order deterministic', JSON.stringify(reconciliation.missingValues), JSON.stringify(result2.missingValues));
+    check('19d unused order deterministic', JSON.stringify(reconciliation.unusedFields), JSON.stringify(result2.unusedFields));
+
+    // 20. missing Template Fields Markdown output
+    const missingMd = buildMissingTemplateFieldsMarkdown(reconciliation);
+    check('20 missing markdown', missingMd, ['## Template Fields', '', '{{customer decision}}:', '{{regional sponsor}}:', '{{region}}:'].join('\n'));
+
+    // 21. duplicate Template Fields lines prevented
+    const mdPhLines = missingMd.split('\n').filter((l) => l.startsWith('{{'));
+    check('21 no duplicate lines', mdPhLines.length, new Set(mdPhLines).size);
+
+    // 22. stable final newline
+    check('22 stable newline', missingMd.endsWith('\n'), false);
+    check('22b newline deterministic', buildMissingTemplateFieldsMarkdown(reconciliation), buildMissingTemplateFieldsMarkdown(result2));
+
+    // 23. populated XML replaces all valued occurrences
+    const populated = populateTemplate(fixture, fields);
+    check('23a population ok', populated.ok, true);
+    check('23b summary replaced both', (populated.xml.match(/Main activity/g) || []).length, 2);
+    check('23c title replaced', populated.xml.includes('value="Weekly Report"'), true);
+    check('23d customer replaced', populated.xml.includes('value="Example Customer"'), true);
+    check('23e next steps in html', populated.xml.includes('&lt;div&gt;Review and plan&lt;/div&gt;'), true);
+
+    // 24. blank matched placeholder preserved
+    check('24a customer decision preserved', populated.xml.includes('{{customer decision}}'), true);
+    check('24b regional sponsor preserved', populated.xml.includes('{{regional sponsor}}'), true);
+
+    // 25. unknown placeholder preserved
+    check('25 region preserved', populated.xml.includes('{{region}}'), true);
+
+    // 26. XML ampersand escaping
+    const ampXml = '<mxfile><diagram><mxGraphModel><root><mxCell value="{{summary}}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>';
+    const ampFields = { summary: { key: 'summary', token: '{{summary}}', value: 'A & B', source: 'token' } };
+    const ampPop = populateTemplate(ampXml, ampFields);
+    check('26a ampersand escaped', ampPop.xml.includes('A &amp; B'), true);
+    check('26b no raw ampersand', ampPop.xml.includes('A & B'), false);
+
+    // 27. XML less-than escaping
+    const ltFields = { summary: { key: 'summary', token: '{{summary}}', value: '5 < 10', source: 'token' } };
+    const ltPop = populateTemplate(ampXml, ltFields);
+    check('27 less-than escaped', ltPop.xml.includes('5 &lt; 10'), true);
+
+    // 28. quote/apostrophe behavior
+    const qFields = { summary: { key: 'summary', token: '{{summary}}', value: '"Quoted" and Customer\'s decision', source: 'token' } };
+    const qPop = populateTemplate(ampXml, qFields);
+    check('28a double quote escaped', qPop.xml.includes('&quot;Quoted&quot;'), true);
+    check('28b apostrophe escaped', qPop.xml.includes('&apos;s decision'), true);
+
+    // 29. multiline value behavior
+    const mlFields = { summary: { key: 'summary', token: '{{summary}}', value: 'Line one\nLine two', source: 'token' } };
+    const mlPop = populateTemplate(ampXml, mlFields);
+    check('29a multiline newline entity', mlPop.xml.includes('Line one&#xa;Line two'), true);
+    check('29b no raw newline', !mlPop.xml.includes('Line one\nLine two'), true);
+
+    // 30. original template not mutated
+    const originalFixture = buildDrawioTemplateFixture();
+    reconcile(fixture, fields);
+    populateTemplate(fixture, fields);
+    check('30 original unchanged', fixture, originalFixture);
+
+    // 31. H1 fields not mutated
+    const fieldsSnapshot = JSON.stringify(fields);
+    reconcile(fixture, fields);
+    populateTemplate(fixture, fields);
+    check('31 fields not mutated', JSON.stringify(fields), fieldsSnapshot);
+
+    // 32. repeated reconcile equivalence
+    check('32 reconcile equivalence', JSON.stringify(reconcile(fixture, fields)), JSON.stringify(reconcile(fixture, fields)));
+
+    // 33. repeated population byte identity
+    check('33 population byte identity', populateTemplate(fixture, fields).xml, populateTemplate(fixture, fields).xml);
+
+    // 34. sanitized end-to-end H1 fields plus Draw.io template
+    check('34a e2e ok', populated.ok, true);
+    check('34b e2e matched replaced', populated.xml.includes('Weekly Report'), true);
+    check('34c e2e unknown preserved', populated.xml.includes('{{region}}'), true);
+    check('34d e2e unreconciled count', (populated.xml.match(/\{\{/g) || []).length, 3);
 
     const failed = cases.filter((item) => !item.pass);
-    return {
+    const result = {
       ok: failed.length === 0,
       total: cases.length,
       passed: cases.length - failed.length,
       failed: failed.length,
       cases,
     };
+
+    // 35. validator return shape
+    check('35a return shape ok', typeof result.ok === 'boolean' && typeof result.total === 'number' && typeof result.passed === 'number' && typeof result.failed === 'number' && Array.isArray(result.cases));
+    check('35b shape total equals cases', result.total === cases.length);
+    check('35c shape ok false when failures', result.ok === (result.failed === 0));
+
+    return result;
   }
 
   const API = Object.freeze({
