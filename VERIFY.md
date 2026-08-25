@@ -124,6 +124,80 @@ Reusable H1 verification:
   ```
   Confirm `r.ok === true`, a non-empty `r.fields.summary`, custom `r.fields.customer.value === 'Alibaba'`, `r.fields.region.value === ''`, and `r.sourceMarkdown === md`.
 
-- [ ] **H2 reconciler (pending)**: confirm `MME_DRAWIO_REPORT_RECONCILER` is NOT registered as a live workflow until H2 review.
+### Reusable H2 verification (Draw.io reconciler)
 
-Browser-console runtime verification: pending (Node-only validation passed; a fresh browser session run belongs in H2/Draw.io closure).
+- [ ] **Reconciler API presence**: in a fresh application session, confirm `globalThis.MME_DRAWIO_REPORT_RECONCILER` exists.
+- [ ] **Dormant validator**: `globalThis.MME_DRAWIO_REPORT_RECONCILER.validateDrawioReportReconciler()` returns:
+  ```
+  ok=true
+  passed=60
+  total=60
+  failed=0
+  ```
+- [ ] **Browser-console sanitized H1-to-H2 reconciliation**: in a fresh session, run:
+  ```js
+  const importer = globalThis.MME_REPORT_MARKDOWN_IMPORT;
+  const R = globalThis.MME_DRAWIO_REPORT_RECONCILER;
+  const md = [
+    '---',
+    'type: report',
+    'period_start: 2026-08-24',
+    'period_end: 2026-08-30',
+    '---',
+    '',
+    '# Weekly Business Report',
+    '',
+    '## Summary',
+    '',
+    'Sanitized summary.',
+    '',
+    '## Next Steps',
+    '',
+    'Sanitized next step.',
+    '',
+    '## Template Fields',
+    '',
+    '{{customer}}: Example Customer',
+    '{{customer decision}}:'
+  ].join('\n');
+  const templateXml = '<mxfile><diagram id="page-1" name="Page-1"><mxGraphModel><root>'
+    + '<mxCell id="0"/><mxCell id="1" parent="0"/>'
+    + '<mxCell id="2" value="{{title}}" vertex="1" parent="1"/>'
+    + '<mxCell id="3" value="{{summary}}" vertex="1" parent="1"/>'
+    + '<mxCell id="4" value="{{customer}}" vertex="1" parent="1"/>'
+    + '<mxCell id="5" value="{{customer decision}}" vertex="1" parent="1"/>'
+    + '<mxCell id="6" value="{{regional sponsor}}" vertex="1" parent="1"/>'
+    + '</root></mxGraphModel></diagram></mxfile>';
+  const imported = importer.importReviewedReport(md);
+  const r = R.reconcile(templateXml, imported.fields);
+  console.log('ok', r.ok);
+  console.log('matched', r.matched.map(m => m.placeholder.key));
+  console.log('missingValues', r.missingValues.map(m => m.field.key));
+  console.log('unknownPlaceholders', r.unknownPlaceholders.map(u => u.key));
+  console.log('unusedFields', r.unusedFields.map(f => f.key));
+  console.log('occurrences', r.placeholders.map(p => p.key + '=' + p.occurrences));
+  console.log(R.buildMissingTemplateFieldsMarkdown(r));
+  const pop = R.populateTemplate(templateXml, imported.fields);
+  console.log(pop.xml);
+  console.log('unresolved preserved',
+    pop.xml.includes('{{customer decision}}') &&
+    pop.xml.includes('{{regional sponsor}}'));
+  console.log('original unchanged', templateXml.includes('{{title}}'));
+  ```
+  Confirm:
+  - `r.ok === true`;
+  - matched includes `title`, `summary`, `customer`;
+  - missingValues includes `customer decision`;
+  - unknownPlaceholders includes `regional sponsor`;
+  - unusedFields includes `next steps`;
+  - occurrences report one canonical entry per key (`summary=1`, etc.);
+  - Template Fields Markdown starts with `## Template Fields` and lists
+    `{{customer decision}}:` and `{{regional sponsor}}:` only;
+  - populated XML replaces valued placeholders with escaped text;
+  - blank and unknown placeholders remain verbatim including braces;
+  - the original `templateXml` string is unchanged.
+
+No debug button is added; this remains a console-only procedure.
+
+Browser-console runtime verification for H2: pending (Node-only validation
+passed 60/60; a fresh browser session run belongs in H3/Draw.io closure).

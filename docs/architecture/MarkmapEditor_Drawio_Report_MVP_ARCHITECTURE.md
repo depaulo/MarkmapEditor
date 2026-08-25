@@ -9,7 +9,7 @@ Current implementation:
 
 - ACT G (Quick Report + Report lifecycle): complete.
 - H1 (Reviewed Markdown importer): complete (committed at `e738ec3`, registered via `js/app/script-loader.js`, runtime API `globalThis.MME_REPORT_MARKDOWN_IMPORT`, dormant validator passes 39/39 in Node).
-- H2 (Draw.io reconciler): foundation source committed; NOT runtime-registered; NOT reviewed/accepted; NOT a live workflow.
+- H2 (Draw.io reconciler): complete (committed at `f1a82b5`, registered via `js/app/script-loader.js`, runtime API `globalThis.MME_DRAWIO_REPORT_RECONCILER`, dormant validator passes 60/60 in Node; sanitized H1-to-H2 integration passes).
 - H3 (reconciliation UI): not started.
 - H4 (Draw.io output delivery): not started.
 
@@ -415,6 +415,21 @@ Export:
 ```js
 globalThis.MME_DRAWIO_REPORT_RECONCILER
 ```
+
+H2 implementation status: complete (committed at `f1a82b5`; registered via
+`js/app/script-loader.js`; dormant validator passes 60/60 in Node; sanitized
+H1-to-H2 integration passes).
+
+Current H2 limitations:
+
+- uncompressed XML only (compressed payloads rejected, not decoded);
+- direct textual token replacement only;
+- no semantic Draw.io editing;
+- no compressed payload decoding;
+- no UI;
+- no template picker;
+- no output Save As;
+- no grouping.
 
 ### 11.3 Later UI owner
 

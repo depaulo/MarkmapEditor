@@ -108,7 +108,7 @@
 
 ## 11. Report & Draw.io MVP (Current Alignment)
 
-This section reflects the current alignment as of checkpoint `e738ec3`. Earlier
+This section reflects the current alignment as of checkpoint `f1a82b5`. Earlier
 checkpoint sections above remain a historical record.
 
 ### Product state
@@ -121,8 +121,11 @@ checkpoint sections above remain a historical record.
   Pure importer registered via `js/app/script-loader.js`, exposing
   `globalThis.MME_REPORT_MARKDOWN_IMPORT`. No workspace rescan; reviewed Markdown
   remains authoritative. Dormant validator passes 39/39 in Node.
-- **H2 (Draw.io reconciler):** Foundation source is committed but NOT
-  runtime-registered, NOT reviewed/accepted, and NOT a live workflow.
+- **H2 (Draw.io reconciler):** Complete and committed at `f1a82b5`. Pure
+  reconciler registered via `js/app/script-loader.js`, exposing
+  `globalThis.MME_DRAWIO_REPORT_RECONCILER`. Accepts uncompressed Draw.io XML
+  only; compressed templates rejected with a fatal diagnostic. Dormant validator
+  passes 60/60 in Node; sanitized H1-to-H2 integration passes.
 - **H3 (Reconciliation UI):** Not started.
 - **H4 (Draw.io output delivery):** Not started.
 
@@ -143,7 +146,9 @@ checkpoint sections above remain a historical record.
 - Report recognition requires leading `type: report` frontmatter.
 - Token values are one line; section-derived fields preserve multiline Markdown.
 - H1 imports Template Fields but does not insert them automatically.
-- H2 reconciler is not runtime registered.
+- H2 reconciler supports uncompressed Draw.io XML only and direct textual
+  token replacement only; no semantic Draw.io editing; blank and unknown
+  placeholders are preserved verbatim in generated output.
 - No reconciliation UI; no Draw.io output delivery; no compressed Draw.io
   template support; no automatic grouping.
 - BOM before Report frontmatter is unsupported in H1.
