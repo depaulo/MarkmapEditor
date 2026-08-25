@@ -3959,3 +3959,244 @@ html.dark .reportGenerateButton:disabled {
     flex-basis: 100%;
   }
 }
+
+/* ========================================================================
+   ACT H3 — Draw.io Report reconciliation UI
+   Narrow owner for the reconciliation overlay and sidebar entry action.
+   Reuses existing workspace variables/breakpoint conventions.
+   ======================================================================== */
+
+/* Sidebar entry action */
+.drawioReportEntryFieldset {
+  margin-top: 8px;
+}
+
+.drawioReportEntryButton {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color, #c9c9c9);
+  border-radius: var(--radius, 8px);
+  background: var(--panel-bg, transparent);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.drawioReportEntryButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.drawioReportEntryStatus {
+  font-size: 0.82em;
+  color: var(--muted-text, #666);
+  margin-top: 4px;
+  min-height: 1em;
+}
+
+/* Overlay */
+.drawioReportOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 12px;
+}
+
+.drawioReportOverlay[hidden] {
+  display: none;
+}
+
+.drawioReportDialog {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: min(80vh, 720px);
+  background: var(--panel-bg, #fff);
+  color: inherit;
+  border-radius: var(--radius, 10px);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.drawioReportHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color, #ddd);
+}
+
+.drawioReportDialogTitle {
+  font-weight: 600;
+}
+
+.drawioReportCloseButton {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1em;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.drawioReportBody {
+  padding: 10px 14px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.drawioReportTemplateRow {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  word-break: break-all;
+}
+
+.drawioReportTemplateName {
+  font-weight: 600;
+}
+
+.drawioReportMessage {
+  margin: 6px 0;
+  font-size: 0.88em;
+  min-height: 1em;
+}
+
+.drawioReportMessage-error {
+  color: var(--danger-text, #b00020);
+  font-weight: 600;
+}
+
+.drawioReportMessage-ok {
+  color: var(--ok-text, #1b7f3a);
+}
+
+.drawioReportMessage-info {
+  color: var(--muted-text, #555);
+}
+
+.drawioReportSummary {
+  font-size: 0.85em;
+  color: var(--muted-text, #444);
+  margin-bottom: 8px;
+}
+
+.drawioReportCategories {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drawioReportCategoryTitle {
+  margin: 0 0 4px 0;
+  font-size: 0.92em;
+  font-weight: 600;
+}
+
+.drawioReportList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.drawioReportItem {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 0.86em;
+  border-left: 3px solid var(--border-color, #ccc);
+  padding-left: 8px;
+}
+
+.drawioReportCategory-matched .drawioReportItem {
+  border-left-color: var(--ok-text, #2e8b57);
+}
+
+.drawioReportCategory-missing .drawioReportItem {
+  border-left-color: var(--warn-text, #c98a00);
+}
+
+.drawioReportCategory-unknown .drawioReportItem {
+  border-left-color: var(--danger-text, #b00020);
+}
+
+.drawioReportToken {
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.drawioReportMeta {
+  color: var(--muted-text, #666);
+}
+
+.drawioReportPreview {
+  flex-basis: 100%;
+  color: var(--muted-text, #555);
+  font-style: italic;
+  word-break: break-word;
+}
+
+.drawioReportEmpty {
+  font-size: 0.88em;
+  color: var(--muted-text, #555);
+}
+
+.drawioReportActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-color, #ddd);
+}
+
+.drawioReportActions button {
+  flex: 1 1 auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color, #bbb);
+  border-radius: var(--radius, 8px);
+  background: var(--panel-bg, transparent);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  min-height: 40px; /* mobile touch target */
+}
+
+.drawioReportActions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Narrow viewport: keep actions reachable and lists readable */
+@media (max-width: 520px) {
+  .drawioReportOverlay {
+    padding: 6px;
+    align-items: stretch;
+  }
+
+  .drawioReportDialog {
+    width: 100%;
+    max-height: none;
+    flex: 1 1 auto;
+  }
+
+  .drawioReportList {
+    max-height: 140px;
+  }
+
+  .drawioReportActions button {
+    flex-basis: 45%;
+  }
+}

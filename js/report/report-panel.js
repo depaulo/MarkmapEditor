@@ -30,6 +30,7 @@
     getWorkspaceIndexState: null,
     onPreparedReport: null,
     canGenerateReport: null,
+    canReconcileDrawioReport: null,
   };
 
   let attachedWorkspaceKey = null;
@@ -272,6 +273,15 @@
             Generate Report
           </button>
 
+          <!-- ACT H3: Draw.io reconciliation entry point. -->
+          <fieldset class="reportFieldset drawioReportEntryFieldset">
+            <legend class="reportFieldsetLegend">Draw.io Report</legend>
+            <button type="button" id="reportDrawioReconcileButton" class="drawioReportEntryButton">
+              Reconcile Draw.io Template
+            </button>
+            <div id="drawioReportEntryStatus" class="drawioReportEntryStatus" role="status"></div>
+          </fieldset>
+
           <div id="workspaceReportStatus" class="workspaceReportStatus" role="status"></div>
         </div>
       </div>
@@ -383,6 +393,15 @@
       });
     }
 
+    // ACT H3: Draw.io reconciliation entry action (single delegated listener).
+    const drawioEntry = document.getElementById('reportDrawioReconcileButton');
+    if (drawioEntry && !drawioEntry.dataset.drawioWired) {
+      drawioEntry.dataset.drawioWired = '1';
+      drawioEntry.addEventListener('click', () => {
+        handleDrawioReconcileClick(drawioEntry);
+      });
+    }
+
     wired = true;
     log('Report: panel wired');
   }
@@ -467,6 +486,79 @@
     }
 
     refreshGenerateAvailability(workspaceState);
+    refreshDrawioEntry();
+  }
+
+  // ACT H3: Draw.io reconciliation entry availability. Uses the H3-specific
+  // canReconcileDrawioReport adapter — never canGenerateReport.
+  function refreshDrawioEntry() {
+    const entryButton = document.getElementById('reportDrawioReconcileButton');
+    const entryStatus = document.getElementById('drawioReportEntryStatus');
+    if (!entryButton) return;
+
+    const panelModule =
+      (typeof globalThis !== 'undefined' && globalThis.MME_DRAWIO_REPORT_PANEL) || null;
+    const modulesReady = Boolean(
+      panelModule &&
+        (typeof globalThis !== 'undefined' && globalThis.MME_REPORT_MARKDOWN_IMPORT) &&
+        (typeof globalThis !== 'undefined' && globalThis.MME_DRAWIO_REPORT_RECONCILER)
+    );
+
+    let isReport = false;
+    try {
+      isReport = typeof adapters.canReconcileDrawioReport === 'function'
+        ? Boolean(adapters.canReconcileDrawioReport())
+        : false;
+    } catch {
+      isReport = false;
+    }
+
+    if (!modulesReady) {
+      entryButton.disabled = true;
+      entryButton.title = 'Draw.io Report modules are unavailable.';
+      if (entryStatus) entryStatus.textContent = 'Draw.io Report modules unavailable.';
+      return;
+    }
+
+    if (!isReport) {
+      entryButton.disabled = true;
+      entryButton.title = 'Open or generate a Report before using Draw.io reconciliation.';
+      if (entryStatus) entryStatus.textContent = '';
+      return;
+    }
+
+    entryButton.disabled = false;
+    entryButton.title = '';
+    if (entryStatus) entryStatus.textContent = 'Report active — select an uncompressed .drawio template.';
+  }
+
+  function handleDrawioReconcileClick(entryButton) {
+    // Click-time defense: recheck the adapter, not just the disabled flag.
+    let isReport = false;
+    try {
+      isReport = typeof adapters.canReconcileDrawioReport === 'function'
+        ? Boolean(adapters.canReconcileDrawioReport())
+        : false;
+    } catch {
+      isReport = false;
+    }
+    if (!isReport) {
+      safeStatus('Open or generate a Report before using Draw.io reconciliation.', 'error');
+      log('DrawioReport: reconcile blocked reason=not-report');
+      return;
+    }
+    const panelModule =
+      (typeof globalThis !== 'undefined' && globalThis.MME_DRAWIO_REPORT_PANEL) || null;
+    if (!panelModule || typeof panelModule.open !== 'function') {
+      safeStatus('Draw.io Report module unavailable.', 'error');
+      log('DrawioReport: open blocked reason=module-unavailable');
+      return;
+    }
+    try {
+      panelModule.open({ focusReturn: entryButton });
+    } catch (e) {
+      log(`DrawioReport: open failed: ${e?.message || e}`);
+    }
   }
 
   function getCurrentWorkspaceState() {

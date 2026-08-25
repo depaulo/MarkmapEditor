@@ -93,6 +93,10 @@ function appendScript(src, { onload } = {}) {
   // the Quick Report dictionary/generator/panel so its global is available.
   appendScript('./js/report/drawio-report-reconciler.js');
 
+  // ACT H3 — Draw.io Report reconciliation UI. Adapter-driven and self-wiring
+  // via its module-ready event; loaded before the dictionary/generator/panel.
+  appendScript('./js/report/drawio-report-panel.js');
+
   // ACT E + ACT F — Quick Report modules. Order: dictionary, generator, panel.
   // The panel tolerates an absent Workspace Index at load and dispatches a
   // narrow module-ready event; main.js ensures the panel during sidebar

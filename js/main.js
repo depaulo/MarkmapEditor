@@ -3212,7 +3212,13 @@ function finalizeWorkspaceSidebar() {
         getWorkspaceIndexState: () => WORKSPACE_INDEX_STATE,
         onPreparedReport: openVirtualReport,
         canGenerateReport,
+        canReconcileDrawioReport,
       });
+    } catch {}
+
+    // ACT H3: ensure Draw.io reconciliation adapters are registered.
+    try {
+      configureDrawioReportPanel?.();
     } catch {}
 
     // Phase 2: normalize panel order.
@@ -3283,6 +3289,7 @@ if (!window.__mmeReportPanelReadyFinalizerBound) {
         getWorkspaceIndexState: () => WORKSPACE_INDEX_STATE,
         onPreparedReport: openVirtualReport,
         canGenerateReport,
+        canReconcileDrawioReport,
       });
       log?.('Report: panel ready-signal handled');
     } catch (e) {
@@ -3788,6 +3795,10 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
   if (__virtualReportSession && __virtualReportSession.kind === 'report') {
     __virtualReportSession = null;
     log?.('Report: identity cleared on physical source open');
+    // ACT H3: discard any stale reconciliation session with it.
+    try {
+      globalThis.MME_DRAWIO_REPORT_PANEL?.resetSession?.('navigation');
+    } catch {}
   }
 
   globalThis.persistActiveWorkspaceFile?.();
@@ -4128,6 +4139,10 @@ function clearReportIdentityAfterTransition() {
   if (__virtualReportSession && __virtualReportSession.kind === 'report') {
     __virtualReportSession = null;
     log?.('Report: identity cleared after auxiliary transition');
+    // ACT H3: discard any stale reconciliation session with it.
+    try {
+      globalThis.MME_DRAWIO_REPORT_PANEL?.resetSession?.('navigation');
+    } catch {}
   }
   try {
     globalThis.MME_REPORT_PANEL?.refresh?.();
@@ -4219,6 +4234,128 @@ function openTextDocument({ text, fileName, fileHandle = null, reason = 'openTex
 // ACT G: Report document identity check. Returns false when a Report is active.
 function canGenerateReport() {
   return !(__virtualReportSession && __virtualReportSession.kind === 'report');
+}
+
+// ACT H3: Draw.io reconciliation availability. True only while a Report
+// document is active (virtual unsaved, saved, or reopened saved Report).
+// Independent of canGenerateReport() — the two have opposite availability rules.
+function canReconcileDrawioReport() {
+  return Boolean(__virtualReportSession && __virtualReportSession.kind === 'report');
+}
+
+// ACT H3: Canonical editor update for Template Fields insertion.
+// Uses runProgrammaticTextChange + __cmSetText, marks dirty once, updates
+// status/title, renders once. Preserves Report identity, currentSaveHandle,
+// currentFileName, Report Notes configuration, and the H3 template session.
+function applyDrawioReportMarkdown(text) {
+  const nextText = String(text == null ? '' : text);
+  if (nextText === md.value) {
+    return { changed: false };
+  }
+  runProgrammaticTextChange(() => {
+    md.value = nextText;
+    if (typeof window.__cmSetText === 'function') {
+      window.__cmSetText(nextText);
+    }
+  });
+  dirty = true;
+  setStatus(modeLabel());
+  updateDocumentTitle();
+  render('drawio-report-template-fields');
+  log?.('DrawioReport: editor updated through canonical setter');
+  return { changed: true };
+}
+
+// ACT H3: Read-only Draw.io template picker. Temporary H3 input only —
+// never touches currentSaveHandle, currentFileName, WORKSPACE_STATE.activeFile,
+// Navigation History, Hot Reload, Report identity, or editor content.
+async function pickDrawioTemplateFile() {
+  const acceptXml = { 'text/xml': ['.drawio', '.xml'] };
+  try {
+    if (window.isSecureContext && 'showOpenFilePicker' in window) {
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          types: [{ description: 'Draw.io template', accept: acceptXml }],
+          multiple: false,
+        });
+        const file = await handle.getFile();
+        const text = await file.text();
+        return { ok: true, name: file.name, text };
+      } catch (e) {
+        if (e && (e.name === 'AbortError' || e.name === 'NotAllowedError')) {
+          return { ok: false, reason: 'cancelled' };
+        }
+        // Fall through to the input fallback for other picker errors.
+      }
+    }
+    // Fallback: hidden file input (read-only, no writable handle).
+    const picked = await new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.drawio,.xml';
+      let settled = false;
+      const done = (value) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+      input.addEventListener('change', () => {
+        done(input.files && input.files[0] ? input.files[0] : null);
+      });
+      // Cancel detection is heuristic; treat window focus without change as cancel.
+      window.addEventListener(
+        'focus',
+        () => {
+          setTimeout(() => done(null), 300);
+        },
+        { once: true }
+      );
+      input.click();
+    });
+    if (!picked) {
+      return { ok: false, reason: 'cancelled' };
+    }
+    try {
+      const text = await picked.text();
+      return { ok: true, name: picked.name, text };
+    } catch (e) {
+      log?.(`DrawioReport: template read failed: ${e?.message || e}`);
+      return { ok: false, reason: 'read-failed' };
+    }
+  } catch (e) {
+    log?.(`DrawioReport: template picker failed: ${e?.message || e}`);
+    return { ok: false, reason: 'read-failed' };
+  }
+}
+
+// ACT H3: Register adapters with the reconciliation panel module.
+function configureDrawioReportPanel() {
+  try {
+    globalThis.MME_DRAWIO_REPORT_PANEL?.configure?.({
+      getMarkdown: () => md.value,
+      setMarkdown: applyDrawioReportMarkdown,
+      isReportDocument: canReconcileDrawioReport,
+      getCurrentFileName: () => currentFileName,
+      pickTemplateFile: pickDrawioTemplateFile,
+      showToast,
+      log,
+    });
+  } catch (e) {
+    log?.(`DrawioReport: adapter configuration failed: ${e?.message || e}`);
+  }
+}
+
+// ACT H3: Late-load signal for the Draw.io Report panel module.
+if (!window.__mmeDrawioReportPanelReadyBound) {
+  window.addEventListener('mme-drawio-report-panel-ready', () => {
+    try {
+      configureDrawioReportPanel();
+      log?.('DrawioReport: panel ready-signal handled');
+    } catch (e) {
+      log?.(`DrawioReport: ready-signal handling failed: ${e?.message || e}`);
+    }
+  });
+  window.__mmeDrawioReportPanelReadyBound = true;
 }
 
 async function openVirtualReport(preparedResult) {
@@ -8229,6 +8366,10 @@ async function openSmart() {
         if (__virtualReportSession && __virtualReportSession.kind === 'report') {
           __virtualReportSession = null;
           log?.('Report: G2C identity cleared on normal external document open');
+          // ACT H3: discard any stale reconciliation session with it.
+          try {
+            globalThis.MME_DRAWIO_REPORT_PANEL?.resetSession?.('navigation');
+          } catch {}
         }
       }
 
@@ -8547,6 +8688,10 @@ fileInput.addEventListener('change', async (e) => {
     if (__virtualReportSession && __virtualReportSession.kind === 'report') {
       __virtualReportSession = null;
       log?.('Report: G2C identity cleared on read-only external document open');
+      // ACT H3: discard any stale reconciliation session with it.
+      try {
+        globalThis.MME_DRAWIO_REPORT_PANEL?.resetSession?.('navigation');
+      } catch {}
     }
 
     const restored = maybeRestoreDraftAfterOpen('openSmart(read-only)');
