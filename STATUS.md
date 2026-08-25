@@ -103,3 +103,54 @@
 - Task Review remains the canonical task panel.
 - One Workspace Index state is shared by dependent features.
 - Archive is preferred over destructive deletion for managed workspace records.
+
+---
+
+## 11. Report & Draw.io MVP (Current Alignment)
+
+This section reflects the current alignment as of checkpoint `e738ec3`. Earlier
+checkpoint sections above remain a historical record.
+
+### Product state
+- **ACT G (Quick Report + Report lifecycle):** Complete and committed.
+  Dictionary, Markdown generator, Report panel, tokenized Report Notes,
+  virtual/saved Report lifecycle, Save/Discard/Cancel protections, physical and
+  auxiliary document-switch navigation guards, saved-Report reopening, and
+  Task-reconciliation exclusion are implemented.
+- **H1 (Reviewed Markdown importer):** Complete and committed at `e738ec3`.
+  Pure importer registered via `js/app/script-loader.js`, exposing
+  `globalThis.MME_REPORT_MARKDOWN_IMPORT`. No workspace rescan; reviewed Markdown
+  remains authoritative. Dormant validator passes 39/39 in Node.
+- **H2 (Draw.io reconciler):** Foundation source is committed but NOT
+  runtime-registered, NOT reviewed/accepted, and NOT a live workflow.
+- **H3 (Reconciliation UI):** Not started.
+- **H4 (Draw.io output delivery):** Not started.
+
+### Architecture invariants
+- Markdown is canonical; reviewed Markdown edits are authoritative.
+- Draw.io is a generated artifact, not a canonical source.
+- Reviewed Markdown feeds Draw.io via exact `{{field name}}` tokens.
+- No user-facing translation or synonym layer.
+- First MVP: one uncompressed `.drawio` template and one generated output.
+- Missing fields return to Markdown under `## Template Fields`.
+- Manual copy-and-paste fallback is an architectural requirement.
+- Grouping (customer/owner/Project/Tag) is deferred.
+- No embedded Draw.io editor in the thin MVP.
+- Screen improvements (fullscreen Markmap, fullscreen HTML, presentation
+  layout, vertical output) are planned after the Draw.io MVP.
+
+### Known limitations
+- Report recognition requires leading `type: report` frontmatter.
+- Token values are one line; section-derived fields preserve multiline Markdown.
+- H1 imports Template Fields but does not insert them automatically.
+- H2 reconciler is not runtime registered.
+- No reconciliation UI; no Draw.io output delivery; no compressed Draw.io
+  template support; no automatic grouping.
+- BOM before Report frontmatter is unsupported in H1.
+- Report files stored physically under `journals/` may follow Journal workspace
+  classification when opened through that workspace.
+
+### PWA / versioning
+- `sw.js` and `APP_VERSION` (`markmap-journal-pwa-v60-task-metadata-v1`) are
+  unchanged for this package. PWA cache and APP_VERSION finalization are
+  deferred until the first thin Draw.io workflow is runtime-complete.

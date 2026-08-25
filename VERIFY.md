@@ -85,3 +85,45 @@ legacyAutoInit=false
 - [ ] **Sidebar Width**: Sidebar resize handle operates smoothly; width persists across refreshes.
 - [ ] **Save / Save As**: Standard file system handlers preserve document content securely.
 - [ ] **PWA Cache**: Offline operations and cache hits verified via DevTools Application tab.
+
+---
+
+## 7. Group G: Draw.io Report MVP Import (H1)
+
+Reusable H1 verification:
+
+- [ ] **Importer API presence**: in a fresh application session, confirm `globalThis.MME_REPORT_MARKDOWN_IMPORT` exists.
+- [ ] **Dormant validator**: `globalThis.MME_REPORT_MARKDOWN_IMPORT.validateReportMarkdownImport()` returns `ok=true, passed=39, total=39, failed=0`.
+- [ ] **Browser-console sanitized import**: in a fresh session, run:
+  ```js
+  const R = globalThis.MME_REPORT_MARKDOWN_IMPORT;
+  const md = [
+    '---',
+    'type: report',
+    'period_start: 2026-08-24',
+    'period_end: 2026-08-30',
+    '---',
+    '',
+    '# Weekly Business Report',
+    '',
+    '## Summary',
+    '',
+    'Reviewed summary text.',
+    '',
+    '## Next Steps',
+    '',
+    '- Action item 1',
+    '',
+    '## Template Fields',
+    '',
+    '{{customer}}: Alibaba',
+    '{{region}}:'
+  ].join('\n');
+  const r = R.importReviewedReport(md);
+  console.log(r.ok, r.fields.title, r.fields.summary, r.fields.customer, r.fields.region, r.sourceMarkdown === md);
+  ```
+  Confirm `r.ok === true`, a non-empty `r.fields.summary`, custom `r.fields.customer.value === 'Alibaba'`, `r.fields.region.value === ''`, and `r.sourceMarkdown === md`.
+
+- [ ] **H2 reconciler (pending)**: confirm `MME_DRAWIO_REPORT_RECONCILER` is NOT registered as a live workflow until H2 review.
+
+Browser-console runtime verification: pending (Node-only validation passed; a fresh browser session run belongs in H2/Draw.io closure).

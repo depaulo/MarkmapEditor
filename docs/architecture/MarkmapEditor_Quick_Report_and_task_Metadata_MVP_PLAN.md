@@ -1,5 +1,18 @@
 # MarkmapEditor Quick Report and Task Metadata MVP
 
+## Implementation Status
+
+- Dictionary: implemented
+- Markdown generator: implemented
+- Report panel: implemented
+- Task metadata: implemented
+- Report lifecycle & guards (ACT G): implemented
+- Reviewed Markdown importer (H1): implemented and committed
+- Draw.io reconciliation (H2): foundation source committed; not registered; pending review
+- Draw.io visual output: not available
+
+The historical plan body below is preserved.
+
 ## Architecture and Implementation Handoff
 
 **Status:** Ready for source reconciliation and PLAN  

@@ -11,6 +11,18 @@
 
 ---
 
+## Current — Draw.io Report MVP Forward Order
+
+1. H2 reconciler review and validation (reconciler source committed; not yet runtime-registered).
+2. H3 reconciliation UI.
+3. H4 Draw.io output delivery.
+4. Draw.io MVP closure (uncompressed template, generated output, manual fallback verified).
+5. Screen improvements (fullscreen Markmap, fullscreen HTML, presentation layout, vertical output).
+6. Groups based on real Draw.io usage.
+7. Later artifact workflows.
+
+Status: H1 complete; H2 is the next live workflow.
+
 ## Short-term Priorities & Remaining Verification
 
 ### 1. Mode Session Bridge Verification (Required)

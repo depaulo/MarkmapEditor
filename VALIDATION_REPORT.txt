@@ -99,3 +99,40 @@ Manual tests still required:
 - W12: Verify no duplicate button/listener
 
 Final status: SOURCE IMPLEMENTATION AND STATIC VALIDATION COMPLETE — MANUAL BROWSER TESTS REQUIRED
+
+---
+
+ACT H1 — Reviewed Report Markdown Import
+
+Repository:
+- branch: development
+- tested checkpoint: e738ec3 (feat(report): add Draw.io XML reconciler and
+  reviewed Markdown importer for reports)
+
+Commands:
+- node --check js/report/report-markdown-import.js  -> PASS
+- node --check js/app/script-loader.js                -> PASS
+- node --check js/main.js                              -> PASS (ACT G regression)
+
+Fixture / validator:
+- importer validator: ok=true, passed=39, total=39, failed=0 -> PASS
+- sanitized real Report fixture (buildRealReportFixture) imports ok=true
+  with formatVersion=mme-reviewed-report-import-v1 -> PASS
+
+Registration:
+- js/report/report-markdown-import.js is registered in js/app/script-loader.js
+  as the first Report module; globalThis.MME_REPORT_MARKDOWN_IMPORT exposed.
+
+git:
+- git diff --check -> PASS (clean; H1 implementation committed at e738ec3)
+- drawio-report-reconciler.js committed as a draft source file but NOT
+  registered in script-loader.js; not reviewed or accepted as H2.
+
+Browser:
+- Browser-console runtime verification: pending
+  (Node-only validation passed; a fresh browser session run belongs in H2/Draw.io
+  closure.)
+
+Not tested:
+- H2 reconciler logic; H3 reconciliation UI; H4 Draw.io output delivery;
+  compressed Draw.io templates; embedded Draw.io editor; grouping.

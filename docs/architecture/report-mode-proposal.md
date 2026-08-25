@@ -1,5 +1,10 @@
 # Report Mode Proposal
 
+> Historical design exploration. The active first Draw.io MVP is governed by
+> `docs/architecture/MarkmapEditor_Drawio_Report_MVP_ARCHITECTURE.md`. Broader
+> embedded-editor and viewer concepts remain possible future enhancements but
+> are outside the active thin MVP.
+
 Status:
 PLANNED — NOT IMPLEMENTED — NOT RUNTIME-REACHABLE
 
