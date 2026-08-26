@@ -222,6 +222,10 @@
           </div>
           <div id="drawioReportMessage" class="drawioReportMessage" role="status"></div>
           <div id="drawioReportSummary" class="drawioReportSummary"></div>
+          <div class="drawioReportGuide" aria-hidden="false">
+            <span class="drawioReportGuideTitle">How it works</span>
+            <p>Place the same <code>{{field name}}</code> tags from the Report inside the corresponding Draw.io template elements. <strong>Select Template</strong> loads the template, <strong>Add Missing Fields</strong> returns unresolved tags to the Markdown, and <strong>Reconcile Again</strong> refreshes the comparison after editing.</p>
+          </div>
           <div id="drawioReportCategories" class="drawioReportCategories"></div>
         </div>
         <div class="drawioReportActions">

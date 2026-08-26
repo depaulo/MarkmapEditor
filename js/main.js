@@ -1645,7 +1645,9 @@ function toggleWorkspacePanel(panelId) {
                   ? document.getElementById('workspaceConceptsPanel')
                   : panelId === 'projects'
                     ? document.getElementById('workspaceProjectsPanel')
-                    : null;
+                    : panelId === 'report'
+                      ? document.getElementById('workspaceReportPanel')
+                      : null;
 
   if (!panelEl) return;
 
@@ -3799,6 +3801,10 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
     try {
       globalThis.MME_DRAWIO_REPORT_PANEL?.resetSession?.('navigation');
     } catch {}
+    // ACT H3: refresh the Report panel so the Draw.io button disables.
+    try {
+      globalThis.MME_REPORT_PANEL?.refresh?.();
+    } catch {}
   }
 
   globalThis.persistActiveWorkspaceFile?.();
@@ -4239,8 +4245,20 @@ function canGenerateReport() {
 // ACT H3: Draw.io reconciliation availability. True only while a Report
 // document is active (virtual unsaved, saved, or reopened saved Report).
 // Independent of canGenerateReport() — the two have opposite availability rules.
+let __lastCanReconcileLog = null;
 function canReconcileDrawioReport() {
-  return Boolean(__virtualReportSession && __virtualReportSession.kind === 'report');
+  const session = __virtualReportSession;
+  const kind = session?.kind || 'none';
+  const virtual = session && typeof session.virtual !== 'undefined' ? String(session.virtual) : 'none';
+  const savedVal = session && typeof session.saved !== 'undefined' ? String(session.saved) : 'none';
+  const result = Boolean(session && session.kind === 'report');
+  // Temporary structural diagnostic (verify-only); log only on change.
+  const sig = `${kind}|${virtual}|${savedVal}|${result}`;
+  if (sig !== __lastCanReconcileLog) {
+    __lastCanReconcileLog = sig;
+    log?.(`Report: canReconcile Draw.io kind=${kind} virtual=${virtual} saved=${savedVal} result=${result}`);
+  }
+  return result;
 }
 
 // ACT H3: Canonical editor update for Template Fields insertion.
@@ -4476,6 +4494,14 @@ async function openVirtualReport(preparedResult) {
     renderWorkspaceActivePanel?.();
     renderWorkspaceRelatedPanel?.();
     renderWorkspaceTasksPanel?.();
+
+    // ACT H3: refresh the Report panel so the Draw.io enablement reflects the
+    // now-active Report identity (virtual unsaved Report).
+    try {
+      globalThis.MME_REPORT_PANEL?.refresh?.();
+    } catch (e) {
+      log?.(`Report: H3 refresh after activation failed: ${e?.message || e}`);
+    }
 
     log?.(`Report: opened virtual report filename=${suggestedFilename}`);
 
@@ -8370,6 +8396,10 @@ async function openSmart() {
           try {
             globalThis.MME_DRAWIO_REPORT_PANEL?.resetSession?.('navigation');
           } catch {}
+          // ACT H3: refresh the Report panel so the Draw.io button disables.
+          try {
+            globalThis.MME_REPORT_PANEL?.refresh?.();
+          } catch {}
         }
       }
 
@@ -8691,6 +8721,10 @@ fileInput.addEventListener('change', async (e) => {
       // ACT H3: discard any stale reconciliation session with it.
       try {
         globalThis.MME_DRAWIO_REPORT_PANEL?.resetSession?.('navigation');
+      } catch {}
+      // ACT H3: refresh the Report panel so the Draw.io button disables.
+      try {
+        globalThis.MME_REPORT_PANEL?.refresh?.();
       } catch {}
     }
 

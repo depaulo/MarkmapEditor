@@ -36,6 +36,8 @@
   let attachedWorkspaceKey = null;
   let rendered = false;
   let wired = false;
+  // ACT H3: change-only availability tracker for temporary diagnostics.
+  let lastDrawioDisabledState = null;
 
   // ---- Small local helpers ----
 
@@ -144,6 +146,13 @@
     if (typeof options.canGenerateReport === 'function') {
       adapters.canGenerateReport = options.canGenerateReport;
     }
+    // ACT H3: Draw.io reconciliation availability adapter (distinct from
+    // canGenerateReport — the two have opposite availability rules).
+    if (typeof options.canReconcileDrawioReport === 'function') {
+      adapters.canReconcileDrawioReport = options.canReconcileDrawioReport;
+    }
+    // Temporary structural diagnostic (verify-only).
+    log(`Report: Draw.io adapter received=${typeof options.canReconcileDrawioReport === 'function'}`);
 
     const host = getSidebarBodyHost();
     if (!host) {
@@ -513,23 +522,32 @@
       isReport = false;
     }
 
+    let targetDisabled;
+    let targetTitle;
+    let statusText;
     if (!modulesReady) {
-      entryButton.disabled = true;
-      entryButton.title = 'Draw.io Report modules are unavailable.';
-      if (entryStatus) entryStatus.textContent = 'Draw.io Report modules unavailable.';
-      return;
+      targetDisabled = true;
+      targetTitle = 'Draw.io Report modules are unavailable.';
+      statusText = 'Draw.io Report modules unavailable.';
+    } else if (!isReport) {
+      targetDisabled = true;
+      targetTitle = 'Open or generate a Report before using Draw.io reconciliation.';
+      statusText = '';
+    } else {
+      targetDisabled = false;
+      targetTitle = '';
+      statusText = 'Report active — select an uncompressed .drawio template.';
     }
 
-    if (!isReport) {
-      entryButton.disabled = true;
-      entryButton.title = 'Open or generate a Report before using Draw.io reconciliation.';
-      if (entryStatus) entryStatus.textContent = '';
-      return;
-    }
+    entryButton.disabled = targetDisabled;
+    entryButton.title = targetTitle;
+    if (entryStatus) entryStatus.textContent = statusText;
 
-    entryButton.disabled = false;
-    entryButton.title = '';
-    if (entryStatus) entryStatus.textContent = 'Report active — select an uncompressed .drawio template.';
+    // Temporary structural diagnostic (verify-only); log only on change.
+    if (targetDisabled !== lastDrawioDisabledState) {
+      lastDrawioDisabledState = targetDisabled;
+      log(`Report: Draw.io availability adapter=${typeof adapters.canReconcileDrawioReport === 'function'} isReport=${isReport} disabled=${targetDisabled}`);
+    }
   }
 
   function handleDrawioReconcileClick(entryButton) {
