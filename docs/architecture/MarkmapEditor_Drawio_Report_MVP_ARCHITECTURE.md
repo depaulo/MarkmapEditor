@@ -11,7 +11,13 @@ Current implementation:
 - H1 (Reviewed Markdown importer): complete (committed at `e738ec3`, registered via `js/app/script-loader.js`, runtime API `globalThis.MME_REPORT_MARKDOWN_IMPORT`, dormant validator passes 39/39 in Node).
 - H2 (Draw.io reconciler): complete (committed at `f1a82b5`, registered via `js/app/script-loader.js`, runtime API `globalThis.MME_DRAWIO_REPORT_RECONCILER`, dormant validator passes 60/60 in Node; sanitized H1-to-H2 integration passes).
 - H3 (reconciliation UI): implemented (committed at `a1c39dc`, registered via `js/app/script-loader.js`, runtime API `globalThis.MME_DRAWIO_REPORT_PANEL`, dormant validator passes 38/38 in Node; runtime qualification, button availability, Report collapse, overlay open/Close, picker cancellation, no-template blocking, mobile open/Close, and session Close are browser-confirmed). Real-template desktop acceptance is pending.
-- H4 (Draw.io output delivery): not started.
+- H4 (Draw.io output delivery): complete (committed at `2c03960`, runtime APIs
+  `globalThis.MME_DRAWIO_REPORT_PANEL.generateDrawioOutput` and
+  `validateDrawioOutputDelivery`, output-delivery validator passes 51/51 in
+  Node; browser-only acceptance — real Save As dialog, picker cancellation,
+  download fallback, real-template end-to-end, generated-file opening in
+  Draw.io, mobile reachability — is pending). The embedded Draw.io editor
+  remains outside the thin MVP.
 
 ---
 
@@ -454,15 +460,39 @@ Currently implemented (H3, committed at `a1c39dc`). The reconciled UI owns:
 - light/dark mode support;
 - the "How it works" guidance box.
 
-H3 does not own output delivery. H4 remains responsible for:
+H3 does not own output delivery. H4 owns output delivery (implemented and
+committed at `2c03960`; APIs on `globalThis.MME_DRAWIO_REPORT_PANEL`:
 
-- final current-Markdown reread;
-- final reconciliation;
-- a clean generation gate;
-- XML population;
-- the output filename;
-- Save As or download fallback;
-- delivery of the generated editable `.drawio` output.
+- final current-Markdown reread on every generation attempt;
+- final H1 import and final H2 reconciliation reruns;
+- a clean generation gate (blocks on in-progress generation, non-Report,
+  no session, no/invalid/compressed/no-placeholder templates, remaining
+  missing values, and unknown template placeholders; unused Report fields
+  never block);
+- XML population exclusively through H2 `populateTemplate()`, never editing
+  the original template string, with a defensive unresolved-token sanity scan;
+- the `<report>-visual.drawio` output filename contract (supported Markdown/
+  text extensions stripped, invalid characters sanitized, duplicate `-visual`
+  prevented, safe `report` fallback base);
+- Save As picker delivery with a writable handle deliberately NOT retained as
+  `currentSaveHandle`;
+- Blob download fallback with revoked object URL when the picker is
+  unavailable;
+- a concurrency guard blocking duplicate generation and resetting after every
+  result;
+- cancellation and failure handling: picker cancellation (AbortError) is
+  normal and retryable, write/permission failures are structured failures —
+  neither produces a false success, and both preserve the H3 session and
+  Report;
+- state preservation: generated delivery never contaminates the Report
+  Markdown, dirty state, `currentSaveHandle`, `currentFileName`, Report
+  identity, the H3 template session, Navigation History,
+  `WORKSPACE_STATE.activeFile`, Hot Reload ownership, or Report Notes
+  configuration; after successful generation another attempt remains allowed.
+
+Browser-only acceptance for this flow (real picker, cancellation, download
+fallback, real-template end-to-end, generated-file opening in Draw.io, mobile
+reachability) is pending.
 
 Real-template desktop acceptance for H3 is pending.
 

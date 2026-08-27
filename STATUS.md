@@ -108,7 +108,7 @@
 
 ## 11. Report & Draw.io MVP (Current Alignment)
 
-This section reflects the current alignment as of checkpoint `a1c39dc` (H3).
+This section reflects the current alignment as of checkpoint `2c03960` (H4).
 Earlier checkpoint sections above remain a historical record.
 
 ### Product state
@@ -134,8 +134,21 @@ Earlier checkpoint sections above remain a historical record.
   no-template blocking, mobile open/Close, and session Close are
   browser-confirmed. Dormant validator passes 38/38 in Node. Real-template
   desktop acceptance is pending.
-- **H4 (Draw.io output delivery):** Not started. Final XML population and
-  generated `.drawio` delivery remain unavailable.
+- **H4 (Draw.io output delivery):** Complete and committed at `2c03960`.
+  The Generate Draw.io action inside the existing H3 overlay rereads the
+  current Report Markdown on every attempt, reruns the final H1 import and
+  final H2 reconciliation, enforces the clean generation gate (no-session,
+  no-template, invalid/compressed/no-placeholder templates, missing values,
+  unknown placeholders block generation; unused Report fields never do),
+  populates XML exclusively through H2 `populateTemplate()`, and delivers one
+  editable `.drawio` artifact as a separate file (`<report>-visual.drawio`) via
+  Save As picker or download fallback without modifying Report state or the
+  template. Runtime additions on `globalThis.MME_DRAWIO_REPORT_PANEL`:
+  `generateDrawioOutput()` and `validateDrawioOutputDelivery()`. Output-delivery
+  validator passes 51/51 in Node (adapter-mocked); browser-only acceptance —
+  real Save As dialog, picker cancellation, download fallback, real-template
+  end-to-end acceptance, generated-file opening in Draw.io, mobile
+  reachability — is pending.
 
 ### Architecture invariants
 - Markdown is canonical; reviewed Markdown edits are authoritative.
@@ -160,13 +173,22 @@ Earlier checkpoint sections above remain a historical record.
 - H3 reconciliation UI supports uncompressed template selection, review of the
   four categories, insertion of missing fields into Markdown, and Reconcile
   Again; real-template desktop acceptance is pending.
-- No Draw.io output delivery in H3; no compressed Draw.io template support; no
-  automatic grouping.
+- Draw.io output delivery (H4) is source-complete and Node-validated but not
+  yet browser-accepted: real Save As via showSaveFilePicker, picker
+  cancellation, download-fallback delivery, real-template end-to-end
+  acceptance, opening the generated `.drawio` in Draw.io, and mobile
+  reachability of the Generate action remain pending.
+- No compressed Draw.io template support and no automatic grouping.
 - BOM before Report frontmatter is unsupported in H1.
 - Report files stored physically under `journals/` may follow Journal workspace
   classification when opened through that workspace.
 
 ### PWA / versioning
-- `sw.js` and `APP_VERSION` (`markmap-journal-pwa-v60-task-metadata-v1`) are
+- `sw.js` and `APP_VERSION` (`markmap-journal-pwa-v60-task-metadata-v1`) remain
   unchanged for this package. PWA cache and APP_VERSION finalization are
-  deferred until the first thin Draw.io workflow is runtime-complete.
+  deferred to the separate Draw.io MVP Closure package.
+- Current source requiring cache review for that package:
+  `js/report/drawio-report-panel.js`, `js/main.js`,
+  `js/report/drawio-report-reconciler.js`, and `css/workspace.css`.
+- Offline and update-path validation remain pending until that closure
+  package passes.

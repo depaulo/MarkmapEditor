@@ -258,3 +258,73 @@ passed 60/60; a fresh browser session run belongs in H3/Draw.io closure).
   updates the match categories.
 - [ ] **Navigation session behavior**: cancelled accepted-document navigation
   preserves H3; successful navigation clears the temporary session.
+
+---
+
+## Reusable H4 verification (Draw.io output delivery)
+
+### Node/static validation (no browser required)
+
+- [ ] **Runtime API presence**: `globalThis.MME_DRAWIO_REPORT_PANEL` exposes
+  `generateDrawioOutput` and `validateDrawioOutputDelivery`.
+- [ ] **H3 regression validator** (kept separate):
+  ```js
+  globalThis.MME_DRAWIO_REPORT_PANEL.validateDrawioReportPanel()
+  ```
+  ```text
+  ok=true  passed=38  total=38  failed=0
+  ```
+- [ ] **H4 output-delivery validator**:
+  ```js
+  globalThis.MME_DRAWIO_REPORT_PANEL.validateDrawioOutputDelivery()
+  ```
+  ```text
+  ok=true  passed=51  total=51  failed=0
+  ```
+  Adapter-mocked coverage: final Markdown reread per attempt; final H1 import +
+  H2 reconciliation rerun; generation-gate reasons; `-visual.drawio` filename
+  contract (fn01–fn07); duplicate-generation blocking; unresolved-token
+  defensive block; log hygiene; module-state restoration.
+
+### Gate and availability checks
+
+- [ ] **Generate Draw.io availability** *(desktop; browser)*: with a Report
+  open, a template selected, and a clean gate, the Generate Draw.io button
+  inside the H3 overlay is enabled — no global toolbar action exists.
+- [ ] **No-session block**: without an H3 session/template, generation is
+  blocked with guidance instead of output.
+- [ ] **Missing-values block**: remaining blank valued placeholders block
+  generation ("Complete missing values ... Reconcile Again").
+- [ ] **Unknown-placeholder block**: unknown template placeholders block
+  generation ("Add the missing Template Fields ...").
+- [ ] **Invalid/compressed/no-placeholder blocks**: invalid, compressed, or
+  placeholder-free templates each block generation with their message.
+- [ ] **Clean gate**: completing values in Markdown plus Reconcile Again
+  enables generation; unused Report fields do not block.
+- [ ] **Incomplete output never generated**: no silent partial output — a
+  surviving token blocks delivery structurally.
+
+### Browser-only and desktop-only cases (PENDING — not executed)
+
+- [ ] **Save As success** *(desktop-only, real showSaveFilePicker)*: writes one
+  separate `.drawio` artifact; suggested filename equals the Report base plus
+  `-visual.drawio`; the output handle is never adopted as `currentSaveHandle`;
+  current Report filename remains unchanged.
+- [ ] **Picker cancellation** *(desktop-only)*: dismissing the save dialog is
+  normal ("Save cancelled." info only) — no error surface, no false success,
+  H3 session and Report preserved, retry allowed.
+- [ ] **Failure handling** *(desktop-only)*: permission/write failure reports a
+  structured failure (not cancellation), preserves H3 and Report, allows retry.
+- [ ] **Fallback delivery** *(browser-only environments without the picker)*:
+  Blob download starts, temporary object URL revoked, Report remains open.
+- [ ] **Generated file opening in Draw.io** *(desktop)*: the generated `.drawio`
+  opens correctly in external Draw.io; valued placeholders replaced; template
+  layout preserved; output remains editable.
+- [ ] **State preservation and regeneration**: after success/cancel/failure,
+  Report Markdown, dirty state, Navigation History, `WORKSPACE_STATE.activeFile`,
+  and the H3 template session are untouched; another generation is allowed;
+  Markdown is not auto-saved; H3 is not reset.
+- [ ] **Concurrent generation**: a second attempt during delivery is blocked
+  (in-progress) and the in-progress state resets after every result.
+- [ ] **Mobile layout** *(mobile-only)*: the overlay reaches the Generate action
+  and save status on a narrow mobile viewport.

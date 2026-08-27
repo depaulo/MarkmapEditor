@@ -13,15 +13,30 @@
 
 ## Current — Draw.io Report MVP Forward Order
 
-1. H2 reconciler review and validation (reconciler source committed; not yet runtime-registered).
-2. H3 reconciliation UI.
-3. H4 Draw.io output delivery.
-4. Draw.io MVP closure (uncompressed template, generated output, manual fallback verified).
-5. Screen improvements (fullscreen Markmap, fullscreen HTML, presentation layout, vertical output).
-6. Groups based on real Draw.io usage.
-7. Later artifact workflows.
+Completed (implementation committed; validations below are Node counts):
+- [x] ACT G Quick Report + Report lifecycle.
+- [x] H1 Reviewed Markdown importer (registered; 39/39 Node).
+- [x] H2 reconciler review, registration, and validation (60/60 Node).
+- [x] H3 reconciliation UI (38/38 Node; core overlay behavior browser-confirmed;
+  real-template desktop acceptance pending).
+- [x] H4 Draw.io output delivery (committed at `2c03960`; 51/51 Node,
+  adapter-mocked; browser-only acceptance pending).
 
-Status: H1 complete; H2 is the next live workflow.
+Remaining forward order:
+
+1. Real-template end-to-end acceptance (the next live workflow; covers the H3
+   real-template categories and the H4 browser-only items: real Save As,
+   picker cancellation, download fallback, Reconcile Again clean gate, Generate
+   enabled, opening the generated `.drawio` in Draw.io, mobile reachability).
+2. H4-DOC completion (documentation alignment — current package).
+3. Draw.io MVP closure (uncompressed template, generated output, manual
+   fallback verified end to end). Release-closed only after this passes.
+4. Service Worker and APP_VERSION finalization (cache review includes
+   `js/report/drawio-report-panel.js` and `css/workspace.css`).
+5. Offline and update-path validation.
+6. Screen improvements (fullscreen Markmap, fullscreen HTML, presentation layout, vertical output).
+7. Groups based on real Draw.io usage.
+8. Later artifact workflows.
 
 ## Short-term Priorities & Remaining Verification
 

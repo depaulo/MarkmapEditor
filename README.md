@@ -11,6 +11,10 @@ The reviewed Report Markdown importer is implemented as an internal foundation m
 
 ## Draw.io output
 
-Visual Draw.io generation is **not yet available**. When delivered, the Markdown-to-Draw.io contract uses exact `{{field name}}` tokens (for example `{{summary}}`, `{{customer}}`, `{{ali summary}}`) with no user-facing translation or synonym layer.
+A reviewed Report can be reconciled with an uncompressed Draw.io template inside the Report reconciliation overlay, using exact `{{field name}}` tokens (for example `{{summary}}`, `{{customer}}`, `{{ali summary}}`) with no user-facing translation or synonym layer.
+
+When all required fields have values, **Generate Draw.io** creates a new editable `.drawio` file as a separate artifact, delivered via Save As with a suggested `<report-name>-visual.drawio` filename (download fallback when the Save As picker is unavailable).
+
+The built-in Draw.io visual editor is **not included**. Generated output must be opened externally in Draw.io.
 
 See `docs/architecture/MarkmapEditor_Drawio_Report_MVP_ARCHITECTURE.md` for the locked architecture.
