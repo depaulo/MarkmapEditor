@@ -4346,6 +4346,80 @@ async function pickDrawioTemplateFile() {
   }
 }
 
+// ACT H4: Narrow output-delivery adapter. Save As via showSaveFilePicker when
+// available; Blob download fallback only when the picker path is unavailable.
+// Never touches currentSaveHandle, currentFileName, dirty state, drafts,
+// Navigation History, WORKSPACE_STATE.activeFile, or Hot Reload ownership.
+// The generated .drawio file is a separate artifact and never becomes the
+// current MarkmapEditor document.
+async function saveDrawioOutput({ xml, suggestedFilename }) {
+  const outputXml = String(xml == null ? '' : xml);
+  const name = String(suggestedFilename || 'report-visual.drawio');
+  if (!outputXml.trim()) {
+    log?.('DrawioReport: output failed reason=empty-output');
+    return { ok: false, cancelled: false, reason: 'write-failed', error: 'empty xml' };
+  }
+
+  // Primary path: Save As picker.
+  if (savePickerUsable()) {
+    let handle = null;
+    try {
+      handle = await window.showSaveFilePicker({
+        suggestedName: name,
+        types: [
+          {
+            description: 'Draw.io diagram',
+            accept: { 'text/xml': ['.drawio'] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(new Blob([outputXml], { type: 'text/xml;charset=utf-8' }));
+      await writable.close();
+      // Deliberately NOT assigned to currentSaveHandle and not registered
+      // anywhere else as document state.
+      log(`DrawioReport: output saved filename=${name} method=picker`);
+      return { ok: true, filename: name, method: 'picker' };
+    } catch (e) {
+      if (e && e.name === 'AbortError') {
+        // Normal user cancellation of the dialog — never an error surface.
+        log('DrawioReport: output cancelled');
+        return { ok: false, cancelled: true, reason: 'cancelled' };
+      }
+      if (e && e.name === 'NotAllowedError') {
+        // Permission-denied or write failure — a structured failure,
+        // NOT cancellation and NOT success. No automatic download fallback.
+        log(`DrawioReport: output failed reason=write-failed error=${e?.message || e}`);
+        showToast?.('Saving the Draw.io file was not permitted. Please try again.', 'error', 4500);
+        return { ok: false, cancelled: false, reason: 'write-failed', error: e?.message || e };
+      }
+      // Any other picker/write failure stays a structured failure too.
+      log(`DrawioReport: output failed reason=write-failed error=${e?.name || ''} ${e?.message || e}`);
+      showToast?.('Writing the Draw.io file failed. Please try again.', 'error', 4500);
+      return { ok: false, cancelled: false, reason: 'write-failed', error: e?.message || e };
+    }
+  }
+
+  // Fallback path: environment has no usable Save As picker.
+  try {
+    const blob = new Blob([outputXml], { type: 'text/xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    log(`DrawioReport: output delivered filename=${name} method=download`);
+    return { ok: true, filename: name, method: 'download' };
+  } catch (e) {
+    log(`DrawioReport: output failed reason=download-failed error=${e?.message || e}`);
+    showToast?.('The Draw.io download could not be started.', 'error', 4500);
+    return { ok: false, cancelled: false, reason: 'download-failed', error: e?.message || e };
+  }
+}
+
 // ACT H3: Register adapters with the reconciliation panel module.
 function configureDrawioReportPanel() {
   try {
@@ -4355,6 +4429,7 @@ function configureDrawioReportPanel() {
       isReportDocument: canReconcileDrawioReport,
       getCurrentFileName: () => currentFileName,
       pickTemplateFile: pickDrawioTemplateFile,
+      saveDrawioOutput,
       showToast,
       log,
     });

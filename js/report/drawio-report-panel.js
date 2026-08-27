@@ -19,12 +19,14 @@
     isReportDocument: null,
     getCurrentFileName: null,
     pickTemplateFile: null, // async -> { ok, name, text } | { ok:false, reason }
+    saveDrawioOutput: null, // ACT H4 async ({xml, suggestedFilename}) -> structured delivery result (main.js)
     showToast: null,
     log: null,
   };
 
   // ---- Temporary in-memory session (never persisted) ----
   let session = null;
+  let __generationInProgress = false; // ACT H4: narrow duplicate-generation guard
   let overlayEl = null;
   let returnFocusTarget = null;
 
@@ -171,6 +173,94 @@
   }
 
   // =====================================================================
+  // ACT H4 — Generation gate and output filename (pure helpers).
+  // H2 reconciliation remains the placeholder authority; this gate only
+  // evaluates a final H2 reconciliation result. Unused Report fields never
+  // block generation.
+  // =====================================================================
+
+  const GENERATION_BLOCK_MESSAGES = {
+    'not-report': 'Open or generate a Report before using Draw.io reconciliation.',
+    'no-session': 'Select an uncompressed Draw.io template first.',
+    'no-template': 'Select an uncompressed Draw.io template first.',
+    'invalid-template': 'Select a valid uncompressed Draw.io template.',
+    'compressed-template': 'This template uses a compressed Draw.io payload. Select an uncompressed template.',
+    'no-placeholders': 'No {{field name}} placeholders were found in this template.',
+    'missing-values': 'Complete missing values in the Report Markdown and use Reconcile Again.',
+    'unknown-placeholders': 'Add the missing Template Fields to the Report Markdown.',
+  };
+
+  function evaluateGenerationGate(input) {
+    const state = input && typeof input === 'object' ? input : {};
+    if (state.generating) {
+      return { allowed: false, reason: 'in-progress', message: 'Generating…' };
+    }
+    if (!state.isReport) {
+      return { allowed: false, reason: 'not-report', message: GENERATION_BLOCK_MESSAGES['not-report'] };
+    }
+    const session = state.session;
+    if (!session) {
+      return { allowed: false, reason: 'no-session', message: GENERATION_BLOCK_MESSAGES['no-session'] };
+    }
+    const hasTemplate =
+      Boolean(session.templateName) &&
+      typeof session.templateXml === 'string' &&
+      !!session.templateXml.trim();
+    if (!hasTemplate) {
+      return { allowed: false, reason: 'no-template', message: GENERATION_BLOCK_MESSAGES['no-template'] };
+    }
+    if (!session.assessment || session.assessment.ok !== true) {
+      const compressed = Boolean(session.assessment?.compressed);
+      return {
+        allowed: false,
+        reason: compressed ? 'compressed-template' : 'invalid-template',
+        message: compressed
+          ? GENERATION_BLOCK_MESSAGES['compressed-template']
+          : GENERATION_BLOCK_MESSAGES['invalid-template'],
+      };
+    }
+    // Placeholder authority: the final H2 reconciliation result.
+    const rec = session.reconciliation;
+    if (!rec || !Array.isArray(rec.placeholders)) {
+      return { allowed: false, reason: 'no-reconciliation', message: 'Run Reconcile Again to review this template.' };
+    }
+    if (rec.placeholders.length === 0) {
+      return { allowed: false, reason: 'no-placeholders', message: GENERATION_BLOCK_MESSAGES['no-placeholders'] };
+    }
+    if ((rec.missingValues || []).length > 0) {
+      return { allowed: false, reason: 'missing-values', message: GENERATION_BLOCK_MESSAGES['missing-values'] };
+    }
+    if ((rec.unknownPlaceholders || []).length > 0) {
+      return {
+        allowed: false,
+        reason: 'unknown-placeholders',
+        message: GENERATION_BLOCK_MESSAGES['unknown-placeholders'],
+      };
+    }
+    // Unused Report fields intentionally do not block generation.
+    return { allowed: true, reason: null, message: null };
+  }
+
+  // Suggested output filename derived from the current Report filename.
+  // Strips .md/.markdown/.txt, sanitizes filesystem-invalid characters,
+  // appends -visual.drawio without duplicating an existing -visual suffix.
+  function buildSuggestedDrawioFilename(rawName) {
+    let base = String(rawName == null ? '' : rawName).trim();
+    base = base.replace(/\.(md|markdown|txt)$/i, '');
+    base = base.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim();
+    base = base.replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+    if (!base) base = 'report';
+    if (!/-visual$/i.test(base)) base += '-visual';
+    return `${base}.drawio`;
+  }
+
+  // Defensive sanity scan only. The authoritative unresolved-placeholder gate
+  // is the final H2 reconciliation (missingValues/unknownPlaceholders empty).
+  function hasVisibleUnresolvedToken(xml) {
+    return /\{\{[^{}]+\}\}/.test(String(xml == null ? '' : xml));
+  }
+
+  // =====================================================================
   // Session lifecycle
   // =====================================================================
 
@@ -179,6 +269,7 @@
       safeLog(`session reset reason=${reason || 'unspecified'}`);
     }
     session = null;
+    setSaveStatus(''); // ACT H4: delivery status dies with the session
     closeOverlay();
   }
 
@@ -224,14 +315,16 @@
           <div id="drawioReportSummary" class="drawioReportSummary"></div>
           <div class="drawioReportGuide" aria-hidden="false">
             <span class="drawioReportGuideTitle">How it works</span>
-            <p>Place the same <code>{{field name}}</code> tags from the Report inside the corresponding Draw.io template elements. <strong>Select Template</strong> loads the template, <strong>Add Missing Fields</strong> returns unresolved tags to the Markdown, and <strong>Reconcile Again</strong> refreshes the comparison after editing.</p>
+            <p>Place the same <code>{{field name}}</code> tags from the Report inside the corresponding Draw.io template elements. <strong>Select Template</strong> loads the template, <strong>Add Missing Fields</strong> returns unresolved tags to the Markdown, <strong>Reconcile Again</strong> refreshes the comparison after editing, and when all required fields have values, <strong>Generate Draw.io</strong> creates a new editable .drawio file.</p>
           </div>
           <div id="drawioReportCategories" class="drawioReportCategories"></div>
+          <div id="drawioReportSaveStatus" class="drawioReportSaveStatus" role="status"></div>
         </div>
         <div class="drawioReportActions">
           <button type="button" id="drawioReportSelectTemplateButton">Select Template</button>
           <button type="button" id="drawioReportAddMissingButton">Add Missing Fields to Markdown</button>
           <button type="button" id="drawioReportReconcileAgainButton">Reconcile Again</button>
+          <button type="button" id="drawioReportGenerateButton" class="drawioReportPrimaryButton">Generate Draw.io</button>
           <button type="button" id="drawioReportCloseButton">Close</button>
         </div>
       </div>
@@ -246,6 +339,10 @@
     });
     overlayEl.querySelector('#drawioReportReconcileAgainButton').addEventListener('click', () => {
       void reconcileCurrentReport();
+    });
+    // ACT H4: generation entry inside the existing overlay actions row.
+    overlayEl.querySelector('#drawioReportGenerateButton').addEventListener('click', () => {
+      void generateDrawioOutput();
     });
     const closeHandler = () => close();
     overlayEl.querySelector('#drawioReportCloseButton').addEventListener('click', closeHandler);
@@ -274,6 +371,60 @@
     el.textContent = text || '';
     el.className = `drawioReportMessage${kind ? ` drawioReportMessage-${kind}` : ''}`;
   }
+
+  // ACT H4: temporary in-memory delivery status. Never persisted.
+  // Lifecycle: survives until Report Markdown reconciliation refreshes,
+  // Reconcile Again, a new template selection, another generate attempt, or
+  // H3 close/reset — the clearing events explicitly clear it.
+  let __saveStatus = null; // { text, kind } | null
+  function setSaveStatus(text, kind) {
+    __saveStatus = text ? { text: String(text), kind: kind || 'info' } : null;
+    const el = overlayEl?.querySelector('#drawioReportSaveStatus');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = `drawioReportSaveStatus${kind ? ` drawioReportSaveStatus-${kind}` : ''}`;
+  }
+
+  function getSaveStatusText() {
+    return __saveStatus ? __saveStatus.text : '';
+  }
+
+  // ACT H4: gate-driven availability of the Generate Draw.io action. UI
+  // affordance only — the authoritative gate re-evaluates at click time.
+  function refreshGenerateAvailability() {
+    const btn = overlayEl?.querySelector('#drawioReportGenerateButton');
+    if (!btn) return;
+    if (__generationInProgress) {
+      btn.disabled = true;
+      return; // busy/delivery status text is owned by generateDrawioOutput
+    }
+    const gate = evaluateGenerationGate({
+      isReport: isReportDocument(),
+      session,
+      generating: false,
+    });
+    btn.disabled = !gate.allowed;
+
+    // Idle hint reflects the current gate state without clobbering an
+    // active delivery status (saved/cancelled/failed).
+    if (__saveStatus && __generationInProgress !== true) {
+      // keep persistent delivery status visible
+    } else {
+      const HINTS = {
+        'not-report': 'Open or generate a Report.',
+        'no-session': 'Select a template.',
+        'no-template': 'Select a template.',
+        'invalid-template': 'Select a valid uncompressed Draw.io template.',
+        'compressed-template': 'Select an uncompressed Draw.io template.',
+        'no-reconciliation': 'Run Reconcile Again.',
+        'no-placeholders': 'No {{field name}} placeholders were found in this template.',
+        'missing-values': 'Complete missing values in Markdown.',
+        'unknown-placeholders': 'Add missing fields to Markdown.',
+      };
+      setSaveStatus(gate.allowed ? 'Ready to generate.' : HINTS[gate.reason] || '');
+    }
+  }
+
   function categoryBlock(title, rows, tone) {
     if (!rows.length) return '';
     const items = rows
@@ -349,6 +500,9 @@
       }
     }
     overlayEl.querySelector('#drawioReportAddMissingButton').disabled = addDisabled;
+
+    // ACT H4: keep Generate availability and hint in sync with review state.
+    refreshGenerateAvailability();
   }
   // =====================================================================
   // Actions
@@ -516,6 +670,7 @@
 
     openOverlay();
     setMessage('', '');
+    setSaveStatus(''); // ACT H4: Reconcile Again refresh clears delivery status
     renderReview();
     safeLog(
       `reconcile matched=${reconciliation.matched.length} missing=${reconciliation.missingValues.length} unknown=${reconciliation.unknownPlaceholders.length} unused=${reconciliation.unusedFields.length}`
@@ -613,6 +768,203 @@
     return { ok: true, changed: true, insertedCount: result.insertedCount };
   }
 
+  // =====================================================================
+  // ACT H4 — Generate Draw.io output delivery.
+  // Final current-Markdown refresh -> final H1 import -> final H2
+  // reconciliation (placeholder authority) -> clean generation gate ->
+  // H2 populateTemplate -> main.js saveDrawioOutput adapter (Save As or
+  // download fallback). The generated file never becomes the current
+  // MarkmapEditor document and Report state is never modified here.
+  // =====================================================================
+  async function generateDrawioOutput() {
+    // Concurrency: block a second generation attempt while one is active.
+    if (__generationInProgress) {
+      safeLog('generation blocked reason=in-progress');
+      return { ok: false, cancelled: false, reason: 'in-progress' };
+    }
+
+    const importer = getImporterModule();
+    const reconciler = getReconcilerModule();
+
+    if (!importer || typeof importer.importReviewedReport !== 'function') {
+      safeToast('Report Markdown importer is unavailable.', 'error');
+      safeLog('generation blocked reason=importer-unavailable');
+      return { ok: false, cancelled: false, reason: 'importer-unavailable' };
+    }
+    if (!reconciler || typeof reconciler.reconcile !== 'function' || typeof reconciler.populateTemplate !== 'function') {
+      safeToast('Draw.io reconciler is unavailable.', 'error');
+      safeLog('generation blocked reason=reconciler-unavailable');
+      return { ok: false, cancelled: false, reason: 'reconciler-unavailable' };
+    }
+
+    __generationInProgress = true;
+    try {
+      safeLog('generation begin');
+
+      // ---- Final current-Markdown refresh (never stale data) ----
+      if (!isReportDocument()) {
+        safeToast('Open or generate a Report before using Draw.io reconciliation.', 'warn');
+        safeLog('generation blocked reason=not-report');
+        resetSession('not-report');
+        return { ok: false, cancelled: false, reason: 'not-report' };
+      }
+      if (!session || !session.templateName || !session.templateXml) {
+        if (overlayEl) setMessage('Select a Draw.io template first.', 'info');
+        setSaveStatus('Select a template.', 'info');
+        safeLog('generation blocked reason=no-template');
+        return { ok: false, cancelled: false, reason: 'no-template' };
+      }
+
+      let markdown;
+      try {
+        // Reread the CURRENT editor Markdown on every generation attempt.
+        markdown = typeof adapters.getMarkdown === 'function' ? String(adapters.getMarkdown() || '') : '';
+      } catch (e) {
+        safeToast('The Markdown editor is unavailable.', 'error');
+        safeLog(`generation blocked reason=editor-unavailable error=${e?.message || e}`);
+        return { ok: false, cancelled: false, reason: 'editor-unavailable' };
+      }
+
+      const imported = importer.importReviewedReport(markdown);
+      if (!imported || imported.ok === false) {
+        const first = imported?.diagnostics?.[0];
+        if (overlayEl) setMessage(first?.message || 'The current Markdown could not be imported as a Report.', 'error');
+        safeToast(first?.message || 'Invalid Report Markdown.', 'error', 3500);
+        safeLog(`generation blocked reason=${first?.code || 'invalid-report-markdown'}`);
+        return { ok: false, cancelled: false, reason: 'invalid-report-markdown' };
+      }
+
+      // Final H2 reconciliation rerun — placeholder authority for the gate.
+      let reconciliation;
+      try {
+        reconciliation = reconciler.reconcile(session.templateXml, imported.fields);
+      } catch (e) {
+        safeToast('Reconciliation failed.', 'error');
+        safeLog(`generation blocked reason=reconciliation-failed error=${e?.message || e}`);
+        return { ok: false, cancelled: false, reason: 'reconciliation-failed' };
+      }
+
+      session.importedReport = imported;
+      session.reconciliation = reconciliation;
+
+      // Refresh review categories from the fresh reconciliation result.
+      openOverlay();
+      renderReview();
+      safeLog(
+        `reconcile matched=${reconciliation.matched.length} missing=${reconciliation.missingValues.length} unknown=${reconciliation.unknownPlaceholders.length} unused=${reconciliation.unusedFields.length}`
+      );
+
+      // ---- Clean generation gate (H2 reconciliation is authoritative) ----
+      const gate = evaluateGenerationGate({
+        isReport: true,
+        session,
+        generating: false, // this invocation already holds the concurrency flag
+      });
+      if (!gate.allowed) {
+        const countSuffix =
+          gate.reason === 'missing-values'
+            ? ` count=${reconciliation.missingValues.length}`
+            : gate.reason === 'unknown-placeholders'
+              ? ` count=${reconciliation.unknownPlaceholders.length}`
+              : '';
+        setSaveStatus(gate.message || 'Run Reconcile Again to review this template.', 'error');
+        safeLog(`generation blocked reason=${gate.reason}${countSuffix}`);
+        return { ok: false, cancelled: false, reason: gate.reason };
+      }
+      // ---- Population via the single H2 entry point ----
+      const templateXmlBefore = String(session.templateXml);
+      const populated = reconciler.populateTemplate(templateXmlBefore, imported.fields);
+
+      if (!populated || populated.ok !== true) {
+        setSaveStatus('The Draw.io output could not be generated from this template.', 'error');
+        safeLog('output failed reason=population-failed');
+        return { ok: false, cancelled: false, reason: 'population-failed' };
+      }
+      const outputXml = String(populated.xml == null ? '' : populated.xml);
+      if (!outputXml.trim()) {
+        setSaveStatus('The Draw.io output could not be generated from this template.', 'error');
+        safeLog('output failed reason=empty-output');
+        return { ok: false, cancelled: false, reason: 'population-empty' };
+      }
+      // The original template XML must remain byte-identical.
+      if (session.templateXml !== templateXmlBefore) {
+        setSaveStatus('The Draw.io output could not be generated from this template.', 'error');
+        safeLog('output failed reason=template-mutated');
+        return { ok: false, cancelled: false, reason: 'template-mutated' };
+      }
+      // Defensive sanity scan only — H2 remains the placeholder authority.
+      // If an unseen token survived a clean gate, block delivery structurally.
+      if (hasVisibleUnresolvedToken(outputXml)) {
+        setSaveStatus(
+          'Unresolved {{field name}} placeholders remain in the generated output. Use Reconcile Again.',
+          'error'
+        );
+        safeLog('output failed reason=unresolved-placeholders');
+        return { ok: false, cancelled: false, reason: 'unresolved-placeholders' };
+      }
+
+      // ---- Delivery through the main.js adapter ----
+      if (typeof adapters.saveDrawioOutput !== 'function') {
+        setSaveStatus('Draw.io output delivery is unavailable in this environment.', 'error');
+        safeLog('output failed reason=delivery-unavailable');
+        return { ok: false, cancelled: false, reason: 'delivery-unavailable' };
+      }
+
+      const suggestedFilename = buildSuggestedDrawioFilename(
+        typeof adapters.getCurrentFileName === 'function' ? adapters.getCurrentFileName() : ''
+      );
+      setSaveStatus('Saving…', 'busy');
+
+      let deliveryResult = null;
+      try {
+        deliveryResult = await adapters.saveDrawioOutput({ xml: outputXml, suggestedFilename });
+      } catch (e) {
+        safeLog(`output failed reason=adapter-threw error=${e?.message || e}`);
+        setSaveStatus('Save failed.', 'error');
+        safeToast('Saving the Draw.io output failed.', 'error', 4000);
+        return { ok: false, cancelled: false, reason: 'write-failed', error: e?.message || e };
+      }
+
+      if (deliveryResult && deliveryResult.cancelled === true) {
+        // Structured cancellation: no error surface; session and retry kept.
+        setSaveStatus('Save cancelled.', 'info');
+        safeLog('output cancelled');
+        return { ok: false, cancelled: true, reason: deliveryResult.reason || 'cancelled' };
+      }
+      if (deliveryResult && deliveryResult.ok === true) {
+        const savedName = String(deliveryResult.filename || suggestedFilename);
+        setSaveStatus(`Visual Report saved. ${savedName}`, 'ok');
+        safeToast(`Visual Report saved ✓ ${savedName}`, 'ok', 4500);
+        safeLog(
+          `output ${deliveryResult.method === 'download' ? 'delivered' : 'saved'} filename=${savedName} method=${deliveryResult.method === 'download' ? 'download' : 'picker'}`
+        );
+        return {
+          ok: true,
+          filename: savedName,
+          method: deliveryResult.method === 'download' ? 'download' : 'picker',
+        };
+      }
+
+      const failReason = deliveryResult?.reason || 'write-failed';
+      safeLog(
+        `output failed reason=${failReason}${deliveryResult?.error ? ` error=${deliveryResult.error}` : ''}`
+      );
+      setSaveStatus('Save failed.', 'error');
+      safeToast(
+        failReason === 'download-failed'
+          ? 'The Draw.io download could not be started.'
+          : 'Writing the Draw.io file failed. Please try again.',
+        'error',
+        4500
+      );
+      return { ok: false, cancelled: false, reason: failReason, error: deliveryResult?.error };
+    } finally {
+      __generationInProgress = false;
+      // Keep button availability accurate after success/cancel/failure.
+      try { refreshGenerateAvailability(); } catch {}
+    }
+  }
+
   function refresh() {
     if (overlayEl && !overlayEl.hidden && session && session.reconciliation) {
       renderReview();
@@ -622,6 +974,7 @@
   function close() {
     closeOverlay();
     session = null;
+    setSaveStatus(''); // ACT H4: delivery status dies with the session
     safeLog('session closed');
   }
 
@@ -886,6 +1239,315 @@
       cases,
     };
   }
+
+  // =====================================================================
+  // ACT H4 dormant validator (output delivery). Separate from the
+  // synchronous H3 contract; returns a Promise because adapter-mocked
+  // delivery tests are asynchronous. Never runs during boot.
+  // =====================================================================
+  async function validateDrawioOutputDelivery() {
+    const cases = [];
+    const check = (name, actual, expected) => {
+      const pass =
+        actual === expected ||
+        (typeof actual === 'object' && typeof expected === 'object'
+          ? JSON.stringify(actual) === JSON.stringify(expected)
+          : false);
+      cases.push({ name, pass });
+      return pass;
+    };
+    const checkCond = (name, cond) => { cases.push({ name, pass: Boolean(cond) }); return Boolean(cond); };
+    const savedAdapters = adapters;
+    const savedSessionRef = session;
+    const savedGenFlag = __generationInProgress;
+
+    try {
+      // ---- Fixtures mirroring the H1/H2 contracts ----
+      const FIELDS = {
+        title: { key: 'title', value: 'Weekly Report' },
+        summary: { key: 'summary', value: 'Main activity' },
+        customer: { key: 'customer', value: 'Acme Corp CONFIDENTIAL' },
+        'customer decision': { key: 'customer decision', value: '' },
+      };
+      const TEMPLATE_XML =
+        '<mxfile><diagram><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>' +
+        '<mxCell id="2" value="{{title}}"/><mxCell id="3" value="{{summary}}"/>' +
+        '<mxCell id="4" value="{{customer}}"/><mxCell id="5" value="{{customer decision}}"/>' +
+        '</root></mxGraphModel></diagram></mxfile>';
+      const NO_PH_XML = '<mxfile><diagram><mxGraphModel><root><mxCell id="0"/></root></mxGraphModel></diagram></mxfile>';
+      const UNKNOWN_XML = TEMPLATE_XML.replace('{{customer decision}}', '{{regional sponsor}}');
+      const mkKey = (v) => String(v == null ? '' : v).trim().toLowerCase().replace(/\s+/g, ' ');
+      function stubExtract(xml) {
+        const out = [];
+        const counts = Object.create(null);
+        const re = /\{\{\s*([^{}]+?)\s*\}\}/g;
+        let m;
+        while ((m = re.exec(String(xml))) !== null) {
+          const k = mkKey(m[1]);
+          counts[k] = (counts[k] || 0) + 1;
+          if (!out.some((p) => p.key === k)) out.push({ key: k, token: `{{${k}}}` });
+        }
+        out.forEach((p) => (p.occurrences = counts[p.key]));
+        return out;
+      }
+      function stubReconcileFn(xml, fo) {
+        const placeholders = stubExtract(xml);
+        const matched = [], missingValues = [], unknownPlaceholders = [], unusedFields = [];
+        const keys = new Set(placeholders.map((p) => p.key));
+        for (const p of placeholders) {
+          const f = fo[p.key];
+          if (!f) unknownPlaceholders.push({ ...p });
+          else if (!String(f.value || '').trim()) missingValues.push({ placeholder: { ...p }, field: { ...f } });
+          else matched.push({ placeholder: { ...p }, field: { ...f } });
+        }
+        for (const k of Object.keys(fo)) if (!keys.has(k)) unusedFields.push({ key: k, token: `{{${k}}}`, value: String(fo[k].value || '') });
+        return { ok: true, placeholders, matched, missingValues, unknownPlaceholders, unusedFields, diagnostics: [] };
+      }
+      let forceLeftoverToken = false;
+      let populateCalls = 0;
+      const stubReconciler = {
+        reconcile: (xml, f) => stubReconcileFn(xml, f),
+        assessTemplateXml: () => ({ ok: true, compressed: false, diagnostics: [] }),
+        populateTemplate: (xml, f) => {
+          populateCalls += 1;
+          const rec = stubReconcileFn(xml, f);
+          let out = String(xml);
+          for (const it of rec.matched) out = out.split(it.placeholder.token).join(String(it.field.value));
+          if (forceLeftoverToken) out = out.replace('</root>', '<mxCell id="99" value="{{survivor}}"/></root>');
+          return { ok: true, xml: out, reconciliation: rec, diagnostics: [] };
+        },
+      };
+      const realImporter = globalThis.MME_REPORT_MARKDOWN_IMPORT;
+      const realReconciler = globalThis.MME_DRAWIO_REPORT_RECONCILER;
+      globalThis.MME_REPORT_MARKDOWN_IMPORT = {
+        // Parses {{token}}: value lines so fresh-Markdown rereads drive
+        // classification exactly like generation expects.
+        importReviewedReport: (md) => {
+          const fields = {};
+          const re = /\{\{\s*([^{}]+?)\s*\}\}\s*:\s*([^\n]*)/g;
+          let m;
+          while ((m = re.exec(String(md || ''))) !== null) {
+            const k = mkKey(m[1]);
+            fields[k] = { key: k, value: m[2].trim() };
+          }
+          return { ok: true, fields, diagnostics: [] };
+        },
+      };
+      globalThis.MME_DRAWIO_REPORT_RECONCILER = stubReconciler;
+      // ---- Gate evaluation (pure; H2 result is placeholder authority) ----
+      const okA = { ok: true, compressed: false, diagnostics: [] };
+      const badA = { ok: false, compressed: false, diagnostics: [] };
+      const compA = { ok: false, compressed: true, diagnostics: [] };
+      const recFull = stubReconcileFn(TEMPLATE_XML, FIELDS);
+      const sessOf = (xml, a, rec, name) => ({
+        templateName: name === undefined ? (xml ? 't.drawio' : '') : name,
+        templateXml: xml,
+        assessment: a,
+        reconciliation: rec,
+      });
+      check('gate01 non-report blocked', (() => { const g = evaluateGenerationGate({ isReport: false }); return [g.allowed, g.reason]; })(), [false, 'not-report']);
+      check('gate02 no-session blocked', (() => { const g = evaluateGenerationGate({ isReport: true, session: null }); return [g.allowed, g.reason]; })(), [false, 'no-session']);
+      check('gate03a no-template-name', evaluateGenerationGate({ isReport: true, session: sessOf('', okA, recFull, '') }).reason, 'no-template');
+      check('gate03b blank-xml', evaluateGenerationGate({ isReport: true, session: sessOf('   ', okA, recFull) }).reason, 'no-template');
+      check('gate04 invalid-template', evaluateGenerationGate({ isReport: true, session: sessOf(TEMPLATE_XML, badA, recFull) }).reason, 'invalid-template');
+      check('gate05 compressed mapped', evaluateGenerationGate({ isReport: true, session: sessOf(TEMPLATE_XML, compA, recFull) }).reason, 'compressed-template');
+      check('gate06 no-placeholders', evaluateGenerationGate({ isReport: true, session: sessOf(NO_PH_XML, okA, stubReconcileFn(NO_PH_XML, FIELDS)) }).reason, 'no-placeholders');
+      const g7 = evaluateGenerationGate({ isReport: true, session: sessOf(TEMPLATE_XML, okA, recFull) });
+      check('gate07 missing-values blocked', [g7.allowed, g7.reason], [false, 'missing-values']);
+      checkCond('gate07b message mentions Reconcile Again', GENERATION_BLOCK_MESSAGES['missing-values'].includes('Reconcile Again'));
+      check('gate08 unknown blocked', evaluateGenerationGate({ isReport: true, session: sessOf(UNKNOWN_XML, okA, stubReconcileFn(UNKNOWN_XML, FIELDS)) }).reason, 'unknown-placeholders');
+      const cleanRec = stubReconcileFn(TEMPLATE_XML, {
+        title: { key: 'title', value: 'T' }, summary: { key: 'summary', value: 'S' },
+        customer: { key: 'customer', value: 'C' }, 'customer decision': { key: 'customer decision', value: 'D' },
+        notes: { key: 'notes', value: 'Markdown-only field' },
+      });
+      check('gate09 unused do not block', [cleanRec.unusedFields.length > 0, evaluateGenerationGate({ isReport: true, session: sessOf(TEMPLATE_XML, okA, cleanRec) }).allowed], [true, true]);
+      check('gate10 clean allows', evaluateGenerationGate({ isReport: true, session: sessOf(TEMPLATE_XML, okA, cleanRec) }).allowed, true);
+      check('gate11 in-progress blocks', (() => { const g = evaluateGenerationGate({ isReport: true, session: sessOf(TEMPLATE_XML, okA, cleanRec), generating: true }); return [g.allowed, g.reason]; })(), [false, 'in-progress']);
+
+      // ---- Filename contract ----
+      check('fn01 strips .md', buildSuggestedDrawioFilename('2026-08-24-to-2026-08-30-quick-report.md'), '2026-08-24-to-2026-08-30-quick-report-visual.drawio');
+      check('fn02 strips .markdown', buildSuggestedDrawioFilename('weekly-business-report.markdown'), 'weekly-business-report-visual.drawio');
+      check('fn03 strips .txt', buildSuggestedDrawioFilename('weekly-business-report.txt'), 'weekly-business-report-visual.drawio');
+      check('fn04 extensionless kept', buildSuggestedDrawioFilename('weekly-business-report'), 'weekly-business-report-visual.drawio');
+      check('fn05 duplicate -visual prevented', buildSuggestedDrawioFilename('weekly-business-report-visual.md'), 'weekly-business-report-visual.drawio');
+      check('fn06 invalid chars sanitized', buildSuggestedDrawioFilename('wee:kly*repor<t>.md'), 'wee-kly-repor-t-visual.drawio');
+      check('fn07 blank falls back', buildSuggestedDrawioFilename('   '), 'report-visual.drawio');
+      checkCond('fn08 output extension is .drawio', buildSuggestedDrawioFilename('x/y*z').endsWith('.drawio'));
+
+      // ---- Sanity scan (defensive only; H2 remains authority) ----
+      check('sanity01 detects token', hasVisibleUnresolvedToken('<v>{{alpha}}</v>'), true);
+      check('sanity02 clean output clear', hasVisibleUnresolvedToken(stubReconciler.populateTemplate(TEMPLATE_XML, {
+        title: { key: 'title', value: 'T' }, summary: { key: 'summary', value: 'S' },
+        customer: { key: 'customer', value: 'C' }, 'customer decision': { key: 'customer decision', value: 'D' },
+      }).xml), false);
+      // ---- Adapter-mocked delivery flows (all state lives in mocks) ----
+      const detFields = {
+        title: { key: 'title', value: 'T' }, summary: { key: 'summary', value: 'S' },
+        customer: { key: 'customer', value: 'C' }, 'customer decision': { key: 'customer decision', value: 'D' },
+      };
+      check('pop02 deterministic repeat-equivalent',
+        stubReconciler.populateTemplate(TEMPLATE_XML, detFields).xml ===
+        stubReconciler.populateTemplate(TEMPLATE_XML, JSON.parse(JSON.stringify(detFields))).xml,
+        true);
+      let currentMarkdown = '';
+      let getMarkdownCalls = 0;
+      let importCalls = 0;
+      let deliveryCalls = 0;
+      let lastDeliveryArg = null;
+      let logLines = [];
+      let releasePicker = null;
+
+      const CLEAN_MD = [
+        '# Weekly Business Report',
+        '',
+        '{{title}}: Weekly Report',
+        '{{summary}}: Main activity',
+        '',
+        '## Template Fields',
+        '',
+        '{{customer}}: Acme Corp CONFIDENTIAL',
+        '{{customer decision}}: Approve Q4 budget',
+      ].join('\n');
+      const MD_MISSING_DECISION = CLEAN_MD.replace('{{customer decision}}: Approve Q4 budget', '{{customer decision}}:');
+      const baseAdapters = () => ({
+        getMarkdown: () => { getMarkdownCalls += 1; return currentMarkdown; },
+        setMarkdown: () => { throw new Error('H4 must never modify editor content'); },
+        isReportDocument: () => true,
+        getCurrentFileName: () => 'weekly-business-report.txt',
+        pickTemplateFile: () => ({ ok: false, reason: 'unused-by-h4' }),
+        saveDrawioOutput: ({ xml, suggestedFilename }) => {
+          deliveryCalls += 1;
+          lastDeliveryArg = { xmlLength: String(xml).length, suggestedFilename };
+          return Promise.resolve({ ok: true, filename: suggestedFilename, method: 'download' });
+        },
+        showToast: () => {},
+        log: (m) => logLines.push(String(m)),
+      });
+      adapters = baseAdapters();
+
+      session = {
+        templateName: 'template.drawio',
+        templateXml: TEMPLATE_XML,
+        assessment: { ok: true, compressed: false, diagnostics: [] },
+        importedReport: null,
+        reconciliation: null,
+        openedAt: 'h4val',
+      };
+
+      // flow26: deferred picker success + duplicate-generation guard
+      currentMarkdown = CLEAN_MD;
+      adapters.saveDrawioOutput = ({ xml, suggestedFilename }) => {
+        deliveryCalls += 1;
+        lastDeliveryArg = { xmlLength: String(xml).length, suggestedFilename };
+        return new Promise((resolve) => { releasePicker = () => resolve({ ok: true, filename: suggestedFilename, method: 'picker' }); });
+      };
+      const p1 = generateDrawioOutput();
+      const dup = await generateDrawioOutput();
+      check('flow26 duplicate generation blocked', [dup.ok, dup.reason], [false, 'in-progress']);
+      releasePicker();
+      const r1 = await p1;
+      check('flow26b success structured', [r1.ok, r1.method], [true, 'picker']);
+      check('flow26c filename derived from report name', lastDeliveryArg.suggestedFilename, 'weekly-business-report-visual.drawio');
+      check('flow26d output XML nonempty and separate', lastDeliveryArg.xmlLength > TEMPLATE_XML.length, true);
+      check('flow26e original template unchanged', session.templateXml === TEMPLATE_XML, true);
+      check('flow26f in-progress resets after success', __generationInProgress, false);
+      check('flow26g H3 session preserved after success', Boolean(getSessionState()?.templateName), true);
+
+      // flow27: structured cancellation preserves session and retry
+      adapters.saveDrawioOutput = () => { deliveryCalls += 1; return Promise.resolve({ ok: false, cancelled: true, reason: 'cancelled' }); };
+      const dl27 = deliveryCalls;
+      const r2 = await generateDrawioOutput();
+      check('flow27 cancel structured', [r2.ok, r2.cancelled, r2.reason], [false, true, 'cancelled']);
+      check('flow27b session preserved after cancel', Boolean(getSessionState()?.templateName), true);
+      check('flow28 retry possible after cancel', __generationInProgress, false);
+      void dl27;
+
+      // flow29: write failure structured
+      adapters.saveDrawioOutput = () => Promise.resolve({ ok: false, cancelled: false, reason: 'write-failed', error: 'disk-full' });
+      const r3 = await generateDrawioOutput();
+      check('flow29 write-failure structured', [r3.ok, r3.cancelled, r3.reason], [false, false, 'write-failed']);
+      check('flow29b session preserved after failure', Boolean(getSessionState()?.templateName), true);
+
+      // flow30: adapter throwing (createWritable/write/close) is structured
+      adapters.saveDrawioOutput = () => Promise.reject(new Error('writable boom'));
+      const r4 = await generateDrawioOutput();
+      check('flow30 thrown failure structured', [r4.ok, r4.cancelled, r4.reason], [false, false, 'write-failed']);
+
+      // flow31: fresh reread detects a NEW blank -> blocked before delivery
+      adapters.saveDrawioOutput = ({ xml, suggestedFilename }) => { deliveryCalls += 1; return Promise.resolve({ ok: true, filename: suggestedFilename, method: 'download' }); };
+      currentMarkdown = MD_MISSING_DECISION;
+      const dl31 = deliveryCalls;
+      const r5 = await generateDrawioOutput();
+      check('flow31 missing-values block before delivery', [r5.ok, r5.reason], [false, 'missing-values']);
+      check('flow31b no Save As attempted on block', deliveryCalls, dl31);
+
+      // flow32: values completed -> Reconcile-Again-style regenerate works
+      currentMarkdown = CLEAN_MD.replace('{{customer decision}}: Approve Q4 budget', '{{customer decision}}: Final Q4 numbers');
+      const r6 = await generateDrawioOutput();
+      check('flow32 regeneration in same session works', [r6.ok, r6.method], [true, 'download']);
+
+      // flow33: defensive sanity gate blocks when a token survives a clean pass
+      forceLeftoverToken = true;
+      const dl33 = deliveryCalls;
+      const r7 = await generateDrawioOutput();
+      check('flow33 unresolved-token delivery blocked', [r7.ok, r7.reason], [false, 'unresolved-placeholders']);
+      check('flow33b no Save As on sanity block', deliveryCalls, dl33);
+      forceLeftoverToken = false;
+      // ---- Reread / rerun / preservation / logging guarantees ----
+      checkCond('state01 current Markdown reread per attempt', getMarkdownCalls >= 7);
+      const reconcileLogs = logLines.filter((l) => /^DrawioReport: reconcile /.test(l));
+      check('state02 final H1+H2 rerun each attempt', reconcileLogs.length, 7);
+      checkCond('state03 no field values echoed into logs', logLines.every((l) => !l.includes('CONFIDENTIAL')));
+      checkCond('state04 no template/output XML echoed into logs', logLines.every((l) => !l.includes('mxCell') && !l.includes('<mxfile')));
+      checkCond('state05 blocked logs whitelist-shaped', logLines.filter((l) => l.includes('blocked')).every((l) => /^DrawioReport: (generation|template) blocked/.test(l)));
+      checkCond('state06 saved/delivered logs carry filename+method only', logLines.some((l) => /output (saved|delivered) filename=\S+ method=(picker|download)$/.test(l)));
+
+      // Non-report guard during generation resets the stale session.
+      adapters.isReportDocument = () => false;
+      const r8 = await generateDrawioOutput();
+      check('state07 non-report generation blocked', r8.reason, 'not-report');
+      check('state08 stale session cleared on non-report', getSessionState(), null);
+
+      // Guidance contract (DOM-free source check of overlay markup).
+      const overlaySource = Function.prototype.toString.call(ensureOverlay);
+      checkCond(
+        'guide01 guidance mentions Generate Draw.io and editable .drawio',
+        overlaySource.includes('Generate Draw.io') && overlaySource.includes('editable .drawio file')
+      );
+
+      // ---- Restore module state and global modules ----
+      if (realImporter) globalThis.MME_REPORT_MARKDOWN_IMPORT = realImporter; else delete globalThis.MME_REPORT_MARKDOWN_IMPORT;
+      if (realReconciler) globalThis.MME_DRAWIO_REPORT_RECONCILER = realReconciler; else delete globalThis.MME_DRAWIO_REPORT_RECONCILER;
+      adapters = savedAdapters;
+      session = savedSessionRef;
+      __generationInProgress = savedGenFlag;
+      try { setSaveStatus(''); } catch {}
+      void getSaveStatusText;
+
+
+    } catch (e) {
+      cases.push({ name: 'h4val-error-guard', pass: false, error: e?.message || e });
+    }
+    const failedCases = cases.filter((c) => !c.pass);
+    return {
+      ok: failedCases.length === 0,
+      total: cases.length,
+      passed: cases.length - failedCases.length,
+      failed: failedCases.length,
+      // Browser-only cases stay out of the automated totals and must be
+      // validated manually in a live session:
+      browserOnlyPending: [
+        'real showSaveFilePicker dialog',
+        'real AbortError cancellation',
+        'Blob download initiation and object-URL revocation observability',
+        'generated .drawio opens correctly in Draw.io',
+        'narrow-mobile visual reachability',
+      ],
+      cases,
+    };
+  }
+
   const API = Object.freeze({
     configure,
     open,
@@ -893,10 +1555,12 @@
     selectTemplate,
     reconcileCurrentReport,
     insertMissingTemplateFields,
+    generateDrawioOutput,
     refresh,
     resetSession,
     getSessionState,
     validateDrawioReportPanel,
+    validateDrawioOutputDelivery,
   });
 
   try {

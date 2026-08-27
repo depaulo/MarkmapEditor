@@ -4027,6 +4027,35 @@ html.dark {
 
 .drawioReportEntryStatus { font-size: 0.82em; color: var(--drawio-text-muted); margin-top: 4px; min-height: 1em; }
 
+/* ACT H4 — Generate Draw.io action and delivery status */
+.drawioReportPrimaryButton {
+  background: var(--drawio-accent);
+  color: #fff;
+  border-color: var(--drawio-accent);
+}
+
+.drawioReportPrimaryButton:hover:not(:disabled) { filter: brightness(1.06); }
+
+.drawioReportPrimaryButton:disabled {
+  background: var(--drawio-surface);
+  color: var(--drawio-text-muted);
+  border-color: var(--drawio-border-strong);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.drawioReportSaveStatus {
+  font-size: 0.88em;
+  color: var(--drawio-text-muted);
+  min-height: 1em;
+  margin-top: 6px;
+  word-break: break-word;
+}
+
+.drawioReportSaveStatus-ok { color: var(--drawio-ok); font-weight: 600; }
+.drawioReportSaveStatus-error { color: var(--drawio-error); font-weight: 600; }
+.drawioReportSaveStatus-busy { color: var(--drawio-warn); }
+
 .drawioReportOverlay {
   position: fixed;
   inset: 0;
