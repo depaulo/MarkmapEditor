@@ -201,3 +201,60 @@ No debug button is added; this remains a console-only procedure.
 
 Browser-console runtime verification for H2: pending (Node-only validation
 passed 60/60; a fresh browser session run belongs in H3/Draw.io closure).
+
+### Reusable H3 verification (Draw.io reconciliation UI)
+
+**API availability**
+
+- [ ] **Panel API presence**: in a fresh application session, confirm
+  `globalThis.MME_DRAWIO_REPORT_PANEL` exists (an object exposing `open`,
+  `close`, `selectTemplate`, `reconcileCurrentReport`,
+  `insertMissingTemplateFields`, `refresh`, `resetSession`, `getSessionState`,
+  and `validateDrawioReportPanel`).
+- [ ] **Dormant validator**:
+  ```js
+  globalThis.MME_DRAWIO_REPORT_PANEL.validateDrawioReportPanel()
+  ```
+  ```text
+  ok=true
+  passed=38
+  total=38
+  failed=0
+  ```
+
+**Browser-confirmed checks**
+
+- [ ] **Adapter handoff**: a fresh Report session log shows
+  `Report: Draw.io adapter received=true`.
+- [ ] **Report button enablement**: with a virtual or saved Report active, the
+  Report sidebar `Reconcile Draw.io Template` button is enabled
+  (`disabled=false`).
+- [ ] **Non-Report disablement**: with a Journal/Concept/non-Report document
+  open, the same button is disabled.
+- [ ] **Report collapse**: the Report sidebar panel collapse/expand toggle works
+  and the Draw.io button reflects the active Report state.
+- [ ] **Overlay open**: clicking the enabled entry opens a single
+  `#mmeDrawioReportOverlay` overlay (one instance only).
+- [ ] **Close**: the overlay Close / top ✕ closes the overlay and returns focus.
+- [ ] **Picker cancellation**: dismissing the native file picker cancels safely
+  without an editor error and preserves the Report session.
+- [ ] **No-template blocking**: Add Missing Fields and Reconcile Again before any
+  template is selected are blocked safely (no-template message).
+- [ ] **Mobile open/Close**: the overlay opens and scrolls correctly on a narrow
+  mobile viewport.
+
+**Pending real-template acceptance (laptop)**
+
+- [ ] **Real template selection**: pick a valid uncompressed `.drawio`/`.xml`
+  template.
+- [ ] **Four categories**: Matched / Missing Values / Unknown Template
+  Placeholders / Unused Report Fields render with a real template.
+- [ ] **Occurrence counts**: per-key occurrence counts display correctly.
+- [ ] **Insertion**: Add Missing Fields inserts only absent tokens into
+  `## Template Fields` (one section, no duplicates).
+- [ ] **Duplicate prevention**: tokens already present elsewhere are not
+  duplicated.
+- [ ] **Reconcile Again**: running Reconcile Again after values are completed
+  updates the match categories.
+- [ ] **Navigation session behavior**: cancelled accepted-document navigation
+  preserves H3; successful navigation clears the temporary session.

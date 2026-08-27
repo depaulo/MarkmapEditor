@@ -108,8 +108,8 @@
 
 ## 11. Report & Draw.io MVP (Current Alignment)
 
-This section reflects the current alignment as of checkpoint `f1a82b5`. Earlier
-checkpoint sections above remain a historical record.
+This section reflects the current alignment as of checkpoint `a1c39dc` (H3).
+Earlier checkpoint sections above remain a historical record.
 
 ### Product state
 - **ACT G (Quick Report + Report lifecycle):** Complete and committed.
@@ -126,8 +126,16 @@ checkpoint sections above remain a historical record.
   `globalThis.MME_DRAWIO_REPORT_RECONCILER`. Accepts uncompressed Draw.io XML
   only; compressed templates rejected with a fatal diagnostic. Dormant validator
   passes 60/60 in Node; sanitized H1-to-H2 integration passes.
-- **H3 (Reconciliation UI):** Not started.
-- **H4 (Draw.io output delivery):** Not started.
+- **H3 (Reconciliation UI):** Implemented and committed at `a1c39dc`.
+  Runtime-registered via `js/app/script-loader.js`, exposing
+  `globalThis.MME_DRAWIO_REPORT_PANEL`. A user-facing reconciliation overlay is
+  available from the Report sidebar panel. Runtime qualification, button
+  availability, Report collapse, overlay open/Close, picker cancellation,
+  no-template blocking, mobile open/Close, and session Close are
+  browser-confirmed. Dormant validator passes 38/38 in Node. Real-template
+  desktop acceptance is pending.
+- **H4 (Draw.io output delivery):** Not started. Final XML population and
+  generated `.drawio` delivery remain unavailable.
 
 ### Architecture invariants
 - Markdown is canonical; reviewed Markdown edits are authoritative.
@@ -149,8 +157,11 @@ checkpoint sections above remain a historical record.
 - H2 reconciler supports uncompressed Draw.io XML only and direct textual
   token replacement only; no semantic Draw.io editing; blank and unknown
   placeholders are preserved verbatim in generated output.
-- No reconciliation UI; no Draw.io output delivery; no compressed Draw.io
-  template support; no automatic grouping.
+- H3 reconciliation UI supports uncompressed template selection, review of the
+  four categories, insertion of missing fields into Markdown, and Reconcile
+  Again; real-template desktop acceptance is pending.
+- No Draw.io output delivery in H3; no compressed Draw.io template support; no
+  automatic grouping.
 - BOM before Report frontmatter is unsupported in H1.
 - Report files stored physically under `journals/` may follow Journal workspace
   classification when opened through that workspace.

@@ -10,7 +10,7 @@ Current implementation:
 - ACT G (Quick Report + Report lifecycle): complete.
 - H1 (Reviewed Markdown importer): complete (committed at `e738ec3`, registered via `js/app/script-loader.js`, runtime API `globalThis.MME_REPORT_MARKDOWN_IMPORT`, dormant validator passes 39/39 in Node).
 - H2 (Draw.io reconciler): complete (committed at `f1a82b5`, registered via `js/app/script-loader.js`, runtime API `globalThis.MME_DRAWIO_REPORT_RECONCILER`, dormant validator passes 60/60 in Node; sanitized H1-to-H2 integration passes).
-- H3 (reconciliation UI): not started.
+- H3 (reconciliation UI): implemented (committed at `a1c39dc`, registered via `js/app/script-loader.js`, runtime API `globalThis.MME_DRAWIO_REPORT_PANEL`, dormant validator passes 38/38 in Node; runtime qualification, button availability, Report collapse, overlay open/Close, picker cancellation, no-template blocking, mobile open/Close, and session Close are browser-confirmed). Real-template desktop acceptance is pending.
 - H4 (Draw.io output delivery): not started.
 
 ---
@@ -431,15 +431,40 @@ Current H2 limitations:
 - no output Save As;
 - no grouping.
 
-### 11.3 Later UI owner
+### 11.3 Reconciliation UI owner
 
-Proposed later file:
+Implementation file:
 
 ```text
 js/report/drawio-report-panel.js
 ```
 
-This UI file should be created only after the pure importer and reconciler contracts pass fixtures.
+Currently implemented (H3, committed at `a1c39dc`). The reconciled UI owns:
+
+- Report-gated entry;
+- template selection;
+- template assessment (compressed/invalid blocking);
+- the four reconciliation categories (Matched, Missing Values, Unknown Template
+  Placeholders, Unused Report Fields);
+- occurrence display;
+- Add Missing Fields (insert absent tokens only into `## Template Fields`);
+- Reconcile Again;
+- the temporary in-memory session lifecycle;
+- the single responsive overlay;
+- light/dark mode support;
+- the "How it works" guidance box.
+
+H3 does not own output delivery. H4 remains responsible for:
+
+- final current-Markdown reread;
+- final reconciliation;
+- a clean generation gate;
+- XML population;
+- the output filename;
+- Save As or download fallback;
+- delivery of the generated editable `.drawio` output.
+
+Real-template desktop acceptance for H3 is pending.
 
 ---
 
