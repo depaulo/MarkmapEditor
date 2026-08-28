@@ -4,7 +4,7 @@
 
 #editor {
   width: 30%;
-  min-width: 200px;
+  min-width: 0;  /* S1: pane must shrink below its local toolbar */
   border-right: 1px solid var(--editor-border);
   background: var(--editor-bg);
   position: relative;

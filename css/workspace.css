@@ -1294,6 +1294,15 @@ html.journal-sidebar-collapsed .workspaceFilesSection {
   display: none;
 }
 
+/* S1: hide the entire shared sidebar-content region (all panels + empty state +
+   resize handle, including the dynamically-appended Report panel) when the
+   sidebar is collapsed. The .workspaceHeader (with the collapse/restore toggle)
+   stays visible so the sidebar can always be restored. This is a shared-region
+   rule, so future panels in .workspaceNavScroller are hidden automatically. */
+html.journal-sidebar-collapsed .workspaceNavScroller > :not(.workspaceHeader) {
+  display: none !important;
+}
+
 html.journal-sidebar-collapsed .workspaceHeader {
   align-items: center;
   padding: 8px 4px;

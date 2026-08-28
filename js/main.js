@@ -6933,32 +6933,70 @@ function render(source = 'render()') {
   })();
 }
 
-async function toggleHtml() {
+// Canonical HTML Preview visibility path (single source of truth).
+// The top-toolbar toggle, the local Close, and the edge restore all converge on
+// showHtmlPreview/hideHtmlPreview so pane width, rendered content, controls,
+// class and ARIA state never diverge. Edge restore must fully show + render +
+// sync controls in one click (DEFECT 3).
+function showHtmlPreview() {
   if (!globalThis.MME_WORKSPACE_CAPABILITIES?.canActive?.('htmlPreview')) {
     const activeId = globalThis.MME_WORKSPACE_CAPABILITIES?.getActiveId?.() || 'current workspace';
     log?.(`HTML Preview: blocked in ${activeId}`);
-    return;
+    return Promise.resolve(false);
   }
 
-  const willShow = htmlPane.style.display !== 'block';
-  htmlPane.style.display = willShow ? 'block' : 'none';
-  log(`HTML view ${willShow ? 'SHOW' : 'HIDE'}`);
-  if (willShow) {
-    htmlPane.innerHTML = await renderHtmlWithShiki(md.value);
-    buildHtmlHeadingIndex();
-    log('HTML pane refreshed');
-    syncHtmlScrollToEditor('toggleHtml show');
-    wireHtmlCloseButton();
-    updateHtmlPreviewButtons();
-  } else {
-    mapPane.style.width = '';
-    mapPane.style.flex = '1 1 auto';
-    wireHtmlCloseButton();
-    updateHtmlPreviewButtons();
+  htmlPane.style.display = 'block';
+  log('HTML view SHOW');
+
+  return renderHtmlWithShiki(md.value)
+    .then((html) => {
+      // S1: guard against stale async render. If the HTML pane was closed while
+      // rendering (e.g. splitter drag-open then quick Close), do not re-apply
+      // content, update controls, or flip the toolbar label back as if visible.
+      if (htmlPane.style.display !== 'block') {
+        log?.('HTML Preview show skipped: pane closed during render');
+        return false;
+      }
+      htmlPane.innerHTML = html;
+      buildHtmlHeadingIndex();
+      log('HTML pane refreshed');
+      syncHtmlScrollToEditor('showHtmlPreview show');
+      wireHtmlCloseButton();
+      updateHtmlPreviewButtons();
+      setShowHideLabel('btnHtml', true, 'HTML');
+      syncToolbarHeight();
+      constrainHtmlControlsToPane();
+      return true;
+    })
+    .catch((err) => {
+      log?.(`❌ HTML Preview show failed: ${err?.message || err}`);
+      return false;
+    });
+}
+
+function hideHtmlPreview() {
+  if (!globalThis.MME_WORKSPACE_CAPABILITIES?.canActive?.('htmlPreview')) {
+    const activeId = globalThis.MME_WORKSPACE_CAPABILITIES?.getActiveId?.() || 'current workspace';
+    log?.(`HTML Preview: blocked in ${activeId}`);
+    return false;
   }
 
-  setShowHideLabel('btnHtml', willShow, 'HTML');
+  htmlPane.style.display = 'none';
+  log('HTML view HIDE');
+
+  mapPane.style.width = '';
+  mapPane.style.flex = '1 1 auto';
+
+  wireHtmlCloseButton();
+  updateHtmlPreviewButtons();
+  setShowHideLabel('btnHtml', false, 'HTML');
   syncToolbarHeight();
+  constrainHtmlControlsToPane();
+  return true;
+}
+
+async function toggleHtml() {
+  return isHtmlPreviewOpen() ? hideHtmlPreview() : showHtmlPreview();
 }
 
 // ================================
@@ -8284,8 +8322,22 @@ if (btnCompact) {
   });
 }
 
+// S1: minimum resizable pane widths (px). These are small usability floors for the
+// splitter drag only. They are deliberately far below the natural local-toolbar/
+// overlay widths so a pane can shrink below its controls (the toolbar never defines
+// the pane minimum). No snap-to-hide, no auto-hide, no persistent migration needed.
+const MIN_EDITOR_PX = 96;
+const MIN_MAP_PX = 140;
+const MIN_HTML_PX = 140;
+// Hint width (px) at which a hidden HTML pane is considered intentionally revealed
+// by the user dragging the #splitHtml splitter. Kept below MIN_HTML_PX so content
+// appears before the usability minimum, and large enough to ignore tiny movement.
+const HTML_REVEAL_THRESHOLD = 90;
+// Guards the single hidden->visible HTML show during one #splitHtml drag.
+let _splitHtmlDragShown = false;
+
 // Splitters
-function makeResizable(splitter, left, container, getMaxWidth, getMinWidth) {
+function makeResizable(splitter, left, container, getMaxWidth, getMinWidth, onDrag, onDragStart) {
   let dragging = false,
     startX = 0,
     startW = 0;
@@ -8295,6 +8347,7 @@ function makeResizable(splitter, left, container, getMaxWidth, getMinWidth) {
     startW = left.getBoundingClientRect().width;
     log('Splitter drag start');
     e.preventDefault();
+    if (typeof onDragStart === 'function') onDragStart();
   });
   window.addEventListener('mouseup', () => {
     if (dragging) log('Splitter drag end');
@@ -8310,6 +8363,8 @@ function makeResizable(splitter, left, container, getMaxWidth, getMinWidth) {
     if (w > maxW) w = maxW;
     left.style.width = w + 'px';
     left.style.flex = `0 0 ${w}px`;
+    constrainHtmlControlsToPane();
+    if (typeof onDrag === 'function') onDrag();
   });
 }
 
@@ -8318,7 +8373,7 @@ makeResizable(
   document.getElementById('editor'),
   document.getElementById('layout'),
   () => document.getElementById('layout').getBoundingClientRect().width - 300,
-  () => 200
+  () => MIN_EDITOR_PX
 );
 
 makeResizable(
@@ -8328,11 +8383,36 @@ makeResizable(
   () => {
     const viewerW = document.getElementById('viewer').getBoundingClientRect().width;
     const htmlVisible = htmlPane.style.display === 'block';
-    const htmlMin = htmlVisible ? 200 : 0;
+    const htmlMin = htmlVisible ? MIN_HTML_PX : 0;
     const splitterW = document.getElementById('splitHtml').getBoundingClientRect().width || 6;
     return viewerW - htmlMin - splitterW;
   },
-  () => 200
+  () => MIN_MAP_PX,
+  () => {
+    // S1 drag-to-open: when HTML is hidden and the user drags #splitHtml to free
+    // room for it, treat the gesture as an explicit reopen via the canonical show
+    // path (single source of truth). Fires at most once per drag.
+    try {
+      if (htmlPane.style.display !== 'block') {
+        const viewerEl = document.getElementById('viewer');
+        const splitEl = document.getElementById('splitHtml');
+        const mapEl = document.getElementById('mapPane');
+        const viewerW = viewerEl.getBoundingClientRect().width;
+        const splitterW = splitEl.getBoundingClientRect().width || 6;
+        const mapW = mapEl.getBoundingClientRect().width;
+        const availHtml = viewerW - mapW - splitterW;
+        if (availHtml > HTML_REVEAL_THRESHOLD && !_splitHtmlDragShown) {
+          _splitHtmlDragShown = true;
+          showHtmlPreview();
+        }
+      }
+    } catch (e) {
+      try { log(`HTML drag-to-open failed: ${e?.message || e}`); } catch {}
+    }
+  },
+  () => {
+    _splitHtmlDragShown = false;
+  }
 );
 
 function isTopLevel() {
@@ -9054,10 +9134,10 @@ function wireHtmlCloseButton() {
 
       log?.('HTML Preview close button clicked');
 
-      if (typeof toggleHtml === 'function') {
-        toggleHtml();
+      if (typeof hideHtmlPreview === 'function') {
+        hideHtmlPreview();
       } else {
-        log?.('HTML Preview close failed: toggleHtml missing');
+        log?.('HTML Preview close failed: hideHtmlPreview missing');
       }
     },
     true
@@ -9080,6 +9160,7 @@ function updateHtmlPreviewButtons() {
 
     edge.hidden = isOpen;
     edge.style.display = isOpen ? 'none' : 'inline-flex';
+    edge.setAttribute('aria-hidden', isOpen ? 'true' : 'false');
   }
 
   if (close) {
@@ -9089,6 +9170,7 @@ function updateHtmlPreviewButtons() {
 
     close.hidden = !isOpen;
     close.style.display = isOpen ? 'inline-flex' : 'none';
+    close.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
 
     // Force enough inline style for diagnostics.
     if (isOpen) {
@@ -9198,10 +9280,45 @@ function setHtmlPreviewOpenClass(isOpen) {
   );
 }
 
+// Bounds the HTML control surface to the live HTML pane rectangle.
+// The controls are reparented under #viewer at runtime, so a viewer-relative
+// max-width/right would let them cross the splitter into Markmap when the HTML
+// pane is narrow (DEFECT 2). We measure the real #htmlPane box and clamp the
+// controls to it. Harmless no-op when HTML is hidden.
+function constrainHtmlControlsToPane() {
+  try {
+    const pane = document.getElementById('htmlPane');
+    const viewer = document.getElementById('viewer');
+    if (!pane || !viewer) return;
+
+    const isOpen = pane.style.display === 'block';
+    const items = ['htmlOverlayControls', 'btnHtmlClose'];
+    for (const id of items) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      if (!isOpen) {
+        el.style.maxWidth = '';
+        el.style.right = '';
+        continue;
+      }
+      const paneRect = pane.getBoundingClientRect();
+      const viewerRect = viewer.getBoundingClientRect();
+      const rightInset = 14;
+      const avail = Math.max(0, paneRect.width - rightInset);
+      const rightOffset = Math.max(0, viewerRect.right - (paneRect.right - rightInset));
+      el.style.maxWidth = avail + 'px';
+      el.style.right = rightOffset + 'px';
+    }
+  } catch (e) {
+    try { log(`constrainHtmlControlsToPane failed: ${e?.message || e}`); } catch {}
+  }
+}
+window.addEventListener('resize', constrainHtmlControlsToPane);
+
 updateHtmlPreviewButtons();
 wireHtmlCloseButton();
 
-document.getElementById('btnHtmlEdgeOpen')?.addEventListener('click', toggleHtml);
+document.getElementById('btnHtmlEdgeOpen')?.addEventListener('click', showHtmlPreview);
 
 // Editor visibility (hide/show) is now owned by js/editor/editor-visibility.js (R-SPLIT3).
 // The module wires btnToggleEditor / editorBtnHide / btnEditorEdgeOpen itself.

@@ -373,6 +373,9 @@ html.dark .welcomeModeIcon {
   z-index: 25;
 
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: calc(100% - 28px);
   align-items: center;
   gap: 6px;
 
@@ -537,6 +540,9 @@ html.dark #btnEditorEdgeOpen {
   z-index: 45;
 
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: calc(100% - 28px);
   align-items: center;
   gap: 6px;
 
@@ -629,6 +635,10 @@ html.compact #editorOverlayControls button {
 
   width: max-content;
   max-width: min(360px, calc(100% - 28px));
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+  max-height: min(78vh, calc(100% - 90px));
 
   padding: 7px;
   border-radius: 10px;
@@ -645,10 +655,11 @@ html.compact #editorOverlayControls button {
 
 .editorOverlayToolRow {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .editorOverlayToolRow + .editorOverlayToolRow {
