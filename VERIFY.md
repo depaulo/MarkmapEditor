@@ -200,7 +200,8 @@ Reusable H1 verification:
 No debug button is added; this remains a console-only procedure.
 
 Browser-console runtime verification for H2: pending (Node-only validation
-passed 60/60; a fresh browser session run belongs in H3/Draw.io closure).
+passed 101/101; a fresh browser session run belongs in the Draw.io MVP
+closure).
 
 ### Reusable H3 verification (Draw.io reconciliation UI)
 
@@ -261,10 +262,21 @@ passed 60/60; a fresh browser session run belongs in H3/Draw.io closure).
 
 ---
 
-## Reusable H4 verification (Draw.io output delivery)
+## Reusable H4 verification (Draw.io flexible output delivery)
 
 ### Node/static validation (no browser required)
 
+- [ ] **H2 reconciler validator** (kept separate):
+  ```js
+  globalThis.MME_DRAWIO_REPORT_RECONCILER.validateDrawioReportReconciler()
+  ```
+  ```text
+  ok=true  passed=101  total=101  failed=0  (0 entries with pass !== true)
+  ```
+  Covers uncompressed roots, optional XML declaration / UTF-8 BOM / leading
+  whitespace (assessment view only), declaration retained in output, strict
+  rejection of unrelated/escaped/fenced/malformed/PI-led input, declaration-led
+  compressed → `template-compressed`, and honest totals (no post-count results).
 - [ ] **Runtime API presence**: `globalThis.MME_DRAWIO_REPORT_PANEL` exposes
   `generateDrawioOutput` and `validateDrawioOutputDelivery`.
 - [ ] **H3 regression validator** (kept separate):
@@ -279,47 +291,62 @@ passed 60/60; a fresh browser session run belongs in H3/Draw.io closure).
   globalThis.MME_DRAWIO_REPORT_PANEL.validateDrawioOutputDelivery()
   ```
   ```text
-  ok=true  passed=51  total=51  failed=0
+  ok=true  passed=107  total=107  failed=0  (0 entries with pass !== true)
   ```
   Adapter-mocked coverage: final Markdown reread per attempt; final H1 import +
-  H2 reconciliation rerun; generation-gate reasons; `-visual.drawio` filename
-  contract (fn01–fn07); duplicate-generation blocking; unresolved-token
-  defensive block; log hygiene; module-state restoration.
+  two-pass H2 reconciliation; partial/complete generation modes; unresolved
+  placeholder preservation; `-visual.drawio` filename contract (fn01–fn07,
+  pk04); duplicate-generation blocking; unused-field aggregation (agg01–agg20,
+  flow36); reserved aggregate excluded from Markdown insertion (md01–md03,
+  insertion count=3); single-owner delivery logging (log01–log04, state06);
+  log hygiene; module-state restoration.
 
 ### Gate and availability checks
 
 - [ ] **Generate Draw.io availability** *(desktop; browser)*: with a Report
-  open, a template selected, and a clean gate, the Generate Draw.io button
-  inside the H3 overlay is enabled — no global toolbar action exists.
-- [ ] **No-session block**: without an H3 session/template, generation is
-  blocked with guidance instead of output.
-- [ ] **Missing-values block**: remaining blank valued placeholders block
-  generation ("Complete missing values ... Reconcile Again").
-- [ ] **Unknown-placeholder block**: unknown template placeholders block
-  generation ("Add the missing Template Fields ...").
-- [ ] **Invalid/compressed/no-placeholder blocks**: invalid, compressed, or
-  placeholder-free templates each block generation with their message.
-- [ ] **Clean gate**: completing values in Markdown plus Reconcile Again
-  enables generation; unused Report fields do not block.
-- [ ] **Incomplete output never generated**: no silent partial output — a
-  surviving token blocks delivery structurally.
+  open, a template selected, and at least one matched valued field, the
+  Generate Draw.io button inside the H3 overlay is enabled — no global toolbar
+  action exists; the button is always present in the overlay markup.
+- [ ] **Structural blocks**: no Report/session/template, invalid, compressed,
+  or placeholder-free templates, and no matched valued field each block
+  generation with guidance instead of output (`no-populated-fields`).
+- [ ] **Partial generation**: missing values, unknown placeholders, and unused
+  Report fields do NOT block; the status explains how many unresolved
+  placeholders will remain; matched values are populated; unresolved
+  placeholders stay visible with intact braces; `mode=partial` logged.
+- [ ] **Complete generation**: with nothing unresolved the status says
+  "Ready to generate." and the output uses `mode=complete`.
+- [ ] **Unused-field aggregation opt-in**: only when the template contains
+  `{{unused report fields}}`; constituents stay listed under Unused Report
+  Fields with the single informational note; no new mxCell or geometry is
+  created; H1 fields/fieldOrder are never mutated; the reserved placeholder is
+  never inserted into Markdown (insertion count=3 for the three-field case).
 
-### Browser-only and desktop-only cases (PENDING — not executed)
+### Browser-only and desktop-only cases (PENDING — laptop acceptance)
 
 - [ ] **Save As success** *(desktop-only, real showSaveFilePicker)*: writes one
   separate `.drawio` artifact; suggested filename equals the Report base plus
   `-visual.drawio`; the output handle is never adopted as `currentSaveHandle`;
-  current Report filename remains unchanged.
+  current Report filename remains unchanged; exactly one success log.
 - [ ] **Picker cancellation** *(desktop-only)*: dismissing the save dialog is
   normal ("Save cancelled." info only) — no error surface, no false success,
-  H3 session and Report preserved, retry allowed.
+  H3 session and Report preserved, retry allowed, one cancellation log.
 - [ ] **Failure handling** *(desktop-only)*: permission/write failure reports a
-  structured failure (not cancellation), preserves H3 and Report, allows retry.
+  structured failure (not cancellation), preserves H3 and Report, allows retry,
+  one failure log.
 - [ ] **Fallback delivery** *(browser-only environments without the picker)*:
-  Blob download starts, temporary object URL revoked, Report remains open.
+  Blob download starts, temporary object URL revoked, Report remains open,
+  one delivered log.
+- [ ] **Android `.drawio` selection** *(mobile)*: a `.drawio` file classified
+  BIN / `application/octet-stream` is visible or selectable via All files, read
+  as text, and accepted by content validation.
+- [ ] **XML declaration template**: a template beginning with
+  `<?xml version="1.0" ... ?>` is accepted with reconciliation equivalent to
+  the declaration-free copy; the declaration remains in generated output.
 - [ ] **Generated file opening in Draw.io** *(desktop)*: the generated `.drawio`
-  opens correctly in external Draw.io; valued placeholders replaced; template
-  layout preserved; output remains editable.
+  opens correctly in external Draw.io; valued placeholders replaced; unresolved
+  placeholders preserved during partial generation; aggregate text present when
+  opted in; template layout preserved; output remains editable.
 - [ ] **State preservation and regeneration**: after success/cancel/failure,
   Report Markdown, dirty state, Navigation History, `WORKSPACE_STATE.activeFile`,
   and the H3 template session are untouched; another generation is allowed;

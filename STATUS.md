@@ -108,7 +108,7 @@
 
 ## 11. Report & Draw.io MVP (Current Alignment)
 
-This section reflects the current alignment as of checkpoint `2c03960` (H4).
+This section reflects the current alignment as of checkpoint `4541709` (H4.1).
 Earlier checkpoint sections above remain a historical record.
 
 ### Product state
@@ -121,34 +121,45 @@ Earlier checkpoint sections above remain a historical record.
   Pure importer registered via `js/app/script-loader.js`, exposing
   `globalThis.MME_REPORT_MARKDOWN_IMPORT`. No workspace rescan; reviewed Markdown
   remains authoritative. Dormant validator passes 39/39 in Node.
-- **H2 (Draw.io reconciler):** Complete and committed at `f1a82b5`. Pure
-  reconciler registered via `js/app/script-loader.js`, exposing
-  `globalThis.MME_DRAWIO_REPORT_RECONCILER`. Accepts uncompressed Draw.io XML
-  only; compressed templates rejected with a fatal diagnostic. Dormant validator
-  passes 60/60 in Node; sanitized H1-to-H2 integration passes.
-- **H3 (Reconciliation UI):** Implemented and committed at `a1c39dc`.
-  Runtime-registered via `js/app/script-loader.js`, exposing
-  `globalThis.MME_DRAWIO_REPORT_PANEL`. A user-facing reconciliation overlay is
-  available from the Report sidebar panel. Runtime qualification, button
-  availability, Report collapse, overlay open/Close, picker cancellation,
-  no-template blocking, mobile open/Close, and session Close are
-  browser-confirmed. Dormant validator passes 38/38 in Node. Real-template
-  desktop acceptance is pending.
-- **H4 (Draw.io output delivery):** Complete and committed at `2c03960`.
-  The Generate Draw.io action inside the existing H3 overlay rereads the
-  current Report Markdown on every attempt, reruns the final H1 import and
-  final H2 reconciliation, enforces the clean generation gate (no-session,
-  no-template, invalid/compressed/no-placeholder templates, missing values,
-  unknown placeholders block generation; unused Report fields never do),
-  populates XML exclusively through H2 `populateTemplate()`, and delivers one
-  editable `.drawio` artifact as a separate file (`<report>-visual.drawio`) via
-  Save As picker or download fallback without modifying Report state or the
-  template. Runtime additions on `globalThis.MME_DRAWIO_REPORT_PANEL`:
-  `generateDrawioOutput()` and `validateDrawioOutputDelivery()`. Output-delivery
-  validator passes 51/51 in Node (adapter-mocked); browser-only acceptance —
-  real Save As dialog, picker cancellation, download fallback, real-template
-  end-to-end acceptance, generated-file opening in Draw.io, mobile
-  reachability — is pending.
+- **H2 (Draw.io reconciler):** Complete and committed at `f1a82b5`; XML
+  declaration compatibility added at `3ab7f65`. Pure reconciler registered via
+  `js/app/script-loader.js`, exposing `globalThis.MME_DRAWIO_REPORT_RECONCILER`.
+  Accepts uncompressed Draw.io XML with `<mxfile>` or `<mxGraphModel>` roots,
+  optionally preceded by a UTF-8 BOM, leading whitespace, and one standard XML
+  declaration (assessment-view normalization only — the original template and
+  the declaration in populated output are preserved). Compressed templates are
+  rejected with a distinct `template-compressed` diagnostic. Dormant validator
+  passes 101/101 in Node (honest totals; the three post-count self-referential
+  checks were removed); sanitized H1-to-H2 integration passes.
+- **H3 (Reconciliation UI):** Implemented and committed at `a1c39dc`; neutral
+  theme and guidance-below-actions refined through `3ab7f65`. Runtime-registered
+  via `js/app/script-loader.js`, exposing `globalThis.MME_DRAWIO_REPORT_PANEL`.
+  A user-facing reconciliation overlay is available from the Report sidebar
+  panel. Runtime qualification, button availability, Report collapse, overlay
+  open/Close, picker cancellation, no-template blocking, mobile open/Close, and
+  session Close are browser-confirmed. Dormant validator passes 38/38 in Node.
+  Real-template desktop acceptance is pending.
+- **H4 (Draw.io output delivery):** Complete and committed at `2c03960`;
+  flexible partial generation, unused-field aggregation, and Android picker
+  compatibility completed at `3ab7f65`; validator and logging cleanup at
+  `4541709`. The Generate Draw.io action inside the existing H3 overlay rereads
+  the current Report Markdown on every attempt, reruns the final H1 import and
+  final H2 reconciliation (two-pass when the template opts in via
+  `{{unused report fields}}`), and delivers one editable `.drawio` artifact as a
+  separate file (`<report>-visual.drawio`) via Save As picker or download
+  fallback without modifying Report state or the template.
+  **Intentional partial generation:** missing values, unknown placeholders, and
+  unused Report fields do not block; matched nonblank values are populated;
+  unresolved placeholders remain visible in the output; generation is blocked
+  only by structural conditions (no Report/session/template, invalid or
+  compressed template, no placeholders, import/reconciliation failure,
+  generation in progress, or no matched field with a nonblank value). Runtime
+  additions on `globalThis.MME_DRAWIO_REPORT_PANEL`: `generateDrawioOutput()`
+  and `validateDrawioOutputDelivery()`. Output-delivery validator passes
+  107/107 in Node (adapter-mocked); browser-only acceptance — real Save As
+  dialog, picker cancellation, download fallback, real-template end-to-end
+  acceptance, generated-file opening in Draw.io, mobile reachability — is
+  pending on the laptop.
 
 ### Architecture invariants
 - Markdown is canonical; reviewed Markdown edits are authoritative.
@@ -176,9 +187,17 @@ Earlier checkpoint sections above remain a historical record.
 - Draw.io output delivery (H4) is source-complete and Node-validated but not
   yet browser-accepted: real Save As via showSaveFilePicker, picker
   cancellation, download-fallback delivery, real-template end-to-end
-  acceptance, opening the generated `.drawio` in Draw.io, and mobile
-  reachability of the Generate action remain pending.
-- No compressed Draw.io template support and no automatic grouping.
+  acceptance (including partial and aggregation flows), opening the generated
+  `.drawio` in Draw.io, and mobile reachability of the Generate action remain
+  pending.
+- Compressed Draw.io payloads are detected and rejected; no decompression is
+  implemented. No automatic grouping.
+- The reserved `{{unused report fields}}` placeholder is template-controlled:
+  it is never inserted into Report Markdown by Add Missing Fields and is never
+  a user-maintained Template Field.
+- Delivery outcome logs are owned solely by the main.js delivery adapter; the
+  panel owns visible status and toasts (no duplicate success/cancel/failure
+  logs).
 - BOM before Report frontmatter is unsupported in H1.
 - Report files stored physically under `journals/` may follow Journal workspace
   classification when opened through that workspace.

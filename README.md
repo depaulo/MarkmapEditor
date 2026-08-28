@@ -11,9 +11,11 @@ The reviewed Report Markdown importer is implemented as an internal foundation m
 
 ## Draw.io output
 
-A reviewed Report can be reconciled with an uncompressed Draw.io template inside the Report reconciliation overlay, using exact `{{field name}}` tokens (for example `{{summary}}`, `{{customer}}`, `{{ali summary}}`) with no user-facing translation or synonym layer.
+A reviewed Report can be reconciled with an uncompressed Draw.io template (`.xml` or `.drawio`) inside the Report reconciliation overlay, using exact `{{field name}}` tokens (for example `{{summary}}`, `{{customer}}`, `{{ali summary}}`) with no user-facing translation or synonym layer. Templates beginning with a standard XML declaration (`<?xml version="1.0" ... ?>`) and optional UTF-8 BOM are accepted; compressed Draw.io payloads are detected and rejected.
 
-When all required fields have values, **Generate Draw.io** creates a new editable `.drawio` file as a separate artifact, delivered via Save As with a suggested `<report-name>-visual.drawio` filename (download fallback when the Save As picker is unavailable).
+**Generate Draw.io** supports intentional partial generation: matched values are populated, and any unresolved placeholders (missing values, unknown template placeholders) remain visible in the output for later completion — as long as at least one matched field has a value. Optionally, add `{{unused report fields}}` to a template text element to include all remaining nonblank Report fields that have no other template destination.
+
+Output is delivered via Save As with a suggested `<report-name>-visual.drawio` filename (download fallback when the Save As picker is unavailable). Android/Chrome picker compatibility for `.drawio` files classified as BIN / `application/octet-stream` is built in; content is always validated as uncompressed Draw.io XML regardless of extension or MIME type.
 
 The built-in Draw.io visual editor is **not included**. Generated output must be opened externally in Draw.io.
 
