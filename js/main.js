@@ -4288,17 +4288,38 @@ function applyDrawioReportMarkdown(text) {
 // never touches currentSaveHandle, currentFileName, WORKSPACE_STATE.activeFile,
 // Navigation History, Hot Reload, Report identity, or editor content.
 async function pickDrawioTemplateFile() {
-  const acceptXml = { 'text/xml': ['.drawio', '.xml'] };
+  // ACT H4.1 — Android/Chrome compatibility: .drawio files are commonly
+  // classified by the device file manager as application/octet-stream
+  // (displayed as BIN). Extension-to-MIME mapping avoids duplicate-extension
+  // rejection by Chromium. All files stays available (excludeAcceptAllOption
+  // is deliberately not set). Content remains validated by H2 afterwards;
+  // file.type is never trusted as proof of validity.
+  const acceptTypes = [
+    {
+      description: 'Draw.io templates',
+      accept: {
+        'application/xml': ['.xml'],
+        'application/octet-stream': ['.drawio'],
+      },
+    },
+  ];
+  // Narrow assessment normalization only: optional UTF-8 BOM and leading
+  // whitespace. Declaration-led XML is NOT altered here; H2 content
+  // validation remains authoritative.
+  const normalizeTemplateText = (text) =>
+    String(text == null ? '' : text)
+      .replace(/^\uFEFF/, '')
+      .replace(/^\s+/, '');
   try {
     if (window.isSecureContext && 'showOpenFilePicker' in window) {
       try {
         const [handle] = await window.showOpenFilePicker({
-          types: [{ description: 'Draw.io template', accept: acceptXml }],
+          types: acceptTypes,
           multiple: false,
         });
         const file = await handle.getFile();
         const text = await file.text();
-        return { ok: true, name: file.name, text };
+        return { ok: true, name: file.name, text: normalizeTemplateText(text) };
       } catch (e) {
         if (e && (e.name === 'AbortError' || e.name === 'NotAllowedError')) {
           return { ok: false, reason: 'cancelled' };
@@ -4310,7 +4331,7 @@ async function pickDrawioTemplateFile() {
     const picked = await new Promise((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.drawio,.xml';
+      input.accept = '.drawio,.xml,application/xml,text/xml,application/octet-stream';
       let settled = false;
       const done = (value) => {
         if (settled) return;
@@ -4335,7 +4356,7 @@ async function pickDrawioTemplateFile() {
     }
     try {
       const text = await picked.text();
-      return { ok: true, name: picked.name, text };
+      return { ok: true, name: picked.name, text: normalizeTemplateText(text) };
     } catch (e) {
       log?.(`DrawioReport: template read failed: ${e?.message || e}`);
       return { ok: false, reason: 'read-failed' };
@@ -4352,7 +4373,7 @@ async function pickDrawioTemplateFile() {
 // Navigation History, WORKSPACE_STATE.activeFile, or Hot Reload ownership.
 // The generated .drawio file is a separate artifact and never becomes the
 // current MarkmapEditor document.
-async function saveDrawioOutput({ xml, suggestedFilename }) {
+async function saveDrawioOutput({ xml, suggestedFilename, mode }) {
   const outputXml = String(xml == null ? '' : xml);
   const name = String(suggestedFilename || 'report-visual.drawio');
   if (!outputXml.trim()) {
@@ -4378,7 +4399,7 @@ async function saveDrawioOutput({ xml, suggestedFilename }) {
       await writable.close();
       // Deliberately NOT assigned to currentSaveHandle and not registered
       // anywhere else as document state.
-      log(`DrawioReport: output saved filename=${name} method=picker`);
+      log(`DrawioReport: output saved filename=${name} method=picker${mode ? ` mode=${mode}` : ''}`);
       return { ok: true, filename: name, method: 'picker' };
     } catch (e) {
       if (e && e.name === 'AbortError') {
@@ -4411,7 +4432,7 @@ async function saveDrawioOutput({ xml, suggestedFilename }) {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    log(`DrawioReport: output delivered filename=${name} method=download`);
+    log(`DrawioReport: output delivered filename=${name} method=download${mode ? ` mode=${mode}` : ''}`);
     return { ok: true, filename: name, method: 'download' };
   } catch (e) {
     log(`DrawioReport: output failed reason=download-failed error=${e?.message || e}`);

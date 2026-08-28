@@ -186,9 +186,111 @@
     'invalid-template': 'Select a valid uncompressed Draw.io template.',
     'compressed-template': 'This template uses a compressed Draw.io payload. Select an uncompressed template.',
     'no-placeholders': 'No {{field name}} placeholders were found in this template.',
-    'missing-values': 'Complete missing values in the Report Markdown and use Reconcile Again.',
-    'unknown-placeholders': 'Add the missing Template Fields to the Report Markdown.',
+    'no-populated-fields': 'No populated Report fields are available for generation.',
   };
+
+  // ACT H4 partial generation: unresolved placeholders (missing values +
+  // unknown template placeholders) intentionally remain visible in the
+  // generated output. Unique canonical keys are counted separately from raw
+  // occurrences so repeated placeholders do not inflate the field count.
+  function countUnresolved(rec) {
+    const source = [
+      ...((rec && rec.missingValues) || []),
+      ...((rec && rec.unknownPlaceholders) || []),
+    ];
+    const seen = new Set();
+    let occurrences = 0;
+    for (const item of source) {
+      const key = item.placeholder ? item.placeholder.key : item.key;
+      occurrences += Number(
+        (item.placeholder ? item.placeholder.occurrences : item.occurrences) || 1
+      );
+      if (key) seen.add(key);
+    }
+    return { unique: seen.size, occurrences };
+  }
+
+  // =====================================================================
+  // ACT H4.1 — Template-controlled aggregation of unused Report fields.
+  // Opt-in is exclusively the presence of {{unused report fields}} in the
+  // selected template. No checkbox, button, setting, or storage is added.
+  // =====================================================================
+  const AGGREGATE_KEY = 'unused report fields';
+  const AGGREGATE_TOKEN = '{{unused report fields}}';
+
+  function hasAggregatePlaceholder(xml) {
+    return /\{\{\s*unused report fields\s*\}\}/.test(String(xml == null ? '' : xml));
+  }
+
+  // Deterministic display label from the canonical key: completed tasks ->
+  // Completed Tasks. No translation, no synonyms.
+  function fieldLabelFromKey(key) {
+    return String(key == null ? '' : key)
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+
+  // Aggregate text built from H1 fields that are nonblank, have no individual
+  // destination in the template (any template placeholder: matched, missing,
+  // or unknown), and are not the derived aggregate field itself. Deterministic
+  // H1 field order; multiline values preserved; no mutation of H1 state.
+  function buildUnusedAggregateValue(imported, pass1Rec) {
+    const fields = (imported && imported.fields) || {};
+    const order = Array.isArray(imported.fieldOrder)
+      ? imported.fieldOrder
+      : Object.keys(fields);
+    const placeholderKeys = new Set(
+      ((pass1Rec && pass1Rec.placeholders) || []).map((p) => p.key)
+    );
+    const blocks = [];
+    for (const key of order) {
+      if (key === AGGREGATE_KEY) continue;
+      if (placeholderKeys.has(key)) continue;
+      const value = String((fields[key] && fields[key].value) == null ? '' : fields[key].value);
+      if (!value.trim()) continue;
+      blocks.push(`${fieldLabelFromKey(key)}\n\n${value}`);
+    }
+    return blocks.join('\n\n');
+  }
+
+  // Deterministic two-pass reconciliation inside the existing H3/H4
+  // coordination owner. PASS 1 classifies fields. When the template opts in
+  // via {{unused report fields}}, a derived field is added to a NEW effective
+  // projection (H1 fields/fieldOrder/sections and session.templateXml are
+  // never mutated) and PASS 2 drives the gate and H4 population. The second
+  // result keeps the PASS 1 unused-field list so constituents remain visible
+  // in review under Unused Report Fields.
+  function runTwoPassReconciliation(templateXml, imported) {
+    const reconciler = getReconcilerModule();
+    const pass1 = reconciler.reconcile(templateXml, imported.fields);
+    if (!hasAggregatePlaceholder(templateXml)) {
+      return {
+        reconciliation: pass1,
+        populationFields: imported.fields,
+        aggregateValue: null,
+        aggregatedCount: 0,
+      };
+    }
+    const aggregateValue = buildUnusedAggregateValue(imported, pass1);
+    const populationFields = { ...imported.fields };
+    populationFields[AGGREGATE_KEY] = {
+      key: AGGREGATE_KEY,
+      token: AGGREGATE_TOKEN,
+      value: aggregateValue,
+      source: 'derived',
+    };
+    const pass2 = reconciler.reconcile(templateXml, populationFields);
+    pass2.unusedFields = pass1.unusedFields;
+    pass2.aggregateIncluded = aggregateValue.trim() ? 1 : 0;
+    return {
+      reconciliation: pass2,
+      populationFields,
+      aggregateValue,
+      aggregatedCount: 1,
+    };
+  }
 
   function evaluateGenerationGate(input) {
     const state = input && typeof input === 'object' ? input : {};
@@ -227,18 +329,22 @@
     if (rec.placeholders.length === 0) {
       return { allowed: false, reason: 'no-placeholders', message: GENERATION_BLOCK_MESSAGES['no-placeholders'] };
     }
-    if ((rec.missingValues || []).length > 0) {
-      return { allowed: false, reason: 'missing-values', message: GENERATION_BLOCK_MESSAGES['missing-values'] };
-    }
-    if ((rec.unknownPlaceholders || []).length > 0) {
+    // ACT H4 partial generation: missing values, unknown placeholders, and
+    // unused Report fields do NOT block generation. Unresolved placeholders
+    // remain visible in the output for later completion. Generation requires
+    // at least one matched field with a nonblank value to populate.
+    const unresolved = countUnresolved(rec);
+    const populatedMatched = (rec.matched || []).filter(
+      (it) => String(it.field?.value || '').trim() !== ''
+    );
+    if (populatedMatched.length === 0) {
       return {
         allowed: false,
-        reason: 'unknown-placeholders',
-        message: GENERATION_BLOCK_MESSAGES['unknown-placeholders'],
+        reason: 'no-populated-fields',
+        message: GENERATION_BLOCK_MESSAGES['no-populated-fields'],
       };
     }
-    // Unused Report fields intentionally do not block generation.
-    return { allowed: true, reason: null, message: null };
+    return { allowed: true, reason: null, message: null, unresolved };
   }
 
   // Suggested output filename derived from the current Report filename.
@@ -313,12 +419,7 @@
           </div>
           <div id="drawioReportMessage" class="drawioReportMessage" role="status"></div>
           <div id="drawioReportSummary" class="drawioReportSummary"></div>
-          <div class="drawioReportGuide" aria-hidden="false">
-            <span class="drawioReportGuideTitle">How it works</span>
-            <p>Place the same <code>{{field name}}</code> tags from the Report inside the corresponding Draw.io template elements. <strong>Select Template</strong> loads the template, <strong>Add Missing Fields</strong> returns unresolved tags to the Markdown, <strong>Reconcile Again</strong> refreshes the comparison after editing, and when all required fields have values, <strong>Generate Draw.io</strong> creates a new editable .drawio file.</p>
-          </div>
           <div id="drawioReportCategories" class="drawioReportCategories"></div>
-          <div id="drawioReportSaveStatus" class="drawioReportSaveStatus" role="status"></div>
         </div>
         <div class="drawioReportActions">
           <button type="button" id="drawioReportSelectTemplateButton">Select Template</button>
@@ -326,6 +427,13 @@
           <button type="button" id="drawioReportReconcileAgainButton">Reconcile Again</button>
           <button type="button" id="drawioReportGenerateButton" class="drawioReportPrimaryButton">Generate Draw.io</button>
           <button type="button" id="drawioReportCloseButton">Close</button>
+        </div>
+        <div class="drawioReportFooter">
+          <div id="drawioReportSaveStatus" class="drawioReportSaveStatus" role="status"></div>
+          <div class="drawioReportGuide" aria-hidden="false">
+            <span class="drawioReportGuideTitle">How it works</span>
+            <p>Place the same <code>{{field name}}</code> tags from the Report inside the corresponding Draw.io template elements. <strong>Select Template</strong> loads the template, <strong>Add Missing Fields</strong> returns unresolved tags to the Markdown, <strong>Reconcile Again</strong> refreshes the comparison after editing, and <strong>Generate Draw.io</strong> populates the available matched values and creates a new editable .drawio file. Any unresolved placeholders remain visible for later completion. Optional: Add <code>{{unused report fields}}</code> to a Draw.io text element to include all remaining nonblank Report fields that have no other template destination.</p>
+          </div>
         </div>
       </div>
     `;
@@ -418,10 +526,18 @@
         'compressed-template': 'Select an uncompressed Draw.io template.',
         'no-reconciliation': 'Run Reconcile Again.',
         'no-placeholders': 'No {{field name}} placeholders were found in this template.',
-        'missing-values': 'Complete missing values in Markdown.',
-        'unknown-placeholders': 'Add missing fields to Markdown.',
+        'no-populated-fields': 'No populated Report fields are available for generation.',
       };
-      setSaveStatus(gate.allowed ? 'Ready to generate.' : HINTS[gate.reason] || '');
+      if (gate.allowed) {
+        const unresolvedUnique = gate.unresolved ? gate.unresolved.unique : 0;
+        setSaveStatus(
+          unresolvedUnique > 0
+            ? `Ready for partial generation. ${unresolvedUnique} unresolved placeholder${unresolvedUnique === 1 ? '' : 's'} will remain in the output.`
+            : 'Ready to generate.'
+        );
+      } else {
+        setSaveStatus(HINTS[gate.reason] || '');
+      }
     }
   }
 
@@ -486,8 +602,13 @@
       categoryBlock('Unknown Template Placeholders', unknownRows, 'unknown') +
       categoryBlock('Unused Report Fields', unusedRows, 'unused');
 
+    const aggregateNote =
+      session.aggregateValue && String(session.aggregateValue).trim() && unusedRows.length
+        ? '<p class="drawioReportAggregateNote">These fields will be included through <code>{{unused report fields}}</code>.</p>'
+        : '';
     overlayEl.querySelector('#drawioReportCategories').innerHTML =
-      html || '<p class="drawioReportEmpty">No {{field name}} placeholders were found in this template.</p>';
+      (html || '<p class="drawioReportEmpty">No {{field name}} placeholders were found in this template.</p>') +
+      aggregateNote;
 
     let addDisabled = rec.placeholders.length === 0;
     if (!addDisabled) {
@@ -656,9 +777,17 @@
       return { ok: false, reason: 'invalid-report-markdown' };
     }
 
+    // Final two-pass reconciliation — placeholder authority for the gate.
+    // PASS 1 classifies fields; PASS 2 (only when the template opts in via
+    // {{unused report fields}}) drives population with the derived field.
     let reconciliation;
+    let populationFields;
+    let aggregateValue;
     try {
-      reconciliation = reconciler.reconcile(session.templateXml, imported.fields);
+      const twoPass = runTwoPassReconciliation(session.templateXml, imported);
+      reconciliation = twoPass.reconciliation;
+      populationFields = twoPass.populationFields;
+      aggregateValue = twoPass.aggregateValue;
     } catch (e) {
       safeToast('Reconciliation failed.', 'error');
       safeLog(`reconcile failed error=${e?.message || e}`);
@@ -666,6 +795,8 @@
     }
 
     session.importedReport = imported;
+    session.populationFields = populationFields;
+    session.aggregateValue = aggregateValue;
     session.reconciliation = reconciliation;
 
     openOverlay();
@@ -771,10 +902,12 @@
   // =====================================================================
   // ACT H4 — Generate Draw.io output delivery.
   // Final current-Markdown refresh -> final H1 import -> final H2
-  // reconciliation (placeholder authority) -> clean generation gate ->
-  // H2 populateTemplate -> main.js saveDrawioOutput adapter (Save As or
-  // download fallback). The generated file never becomes the current
-  // MarkmapEditor document and Report state is never modified here.
+  // reconciliation (placeholder authority) -> generation gate (partial
+  // generation allowed) -> H2 populateTemplate -> main.js saveDrawioOutput
+  // adapter (Save As or download fallback). The generated file never becomes
+  // the current MarkmapEditor document and Report state is never modified
+  // here. Unresolved placeholders intentionally remain visible in partial
+  // output.
   // =====================================================================
   async function generateDrawioOutput() {
     // Concurrency: block a second generation attempt while one is active.
@@ -799,8 +932,6 @@
 
     __generationInProgress = true;
     try {
-      safeLog('generation begin');
-
       // ---- Final current-Markdown refresh (never stale data) ----
       if (!isReportDocument()) {
         safeToast('Open or generate a Report before using Draw.io reconciliation.', 'warn');
@@ -834,10 +965,17 @@
         return { ok: false, cancelled: false, reason: 'invalid-report-markdown' };
       }
 
-      // Final H2 reconciliation rerun — placeholder authority for the gate.
+      // Final two-pass reconciliation — placeholder authority for the gate.
+      // PASS 1 classifies fields; PASS 2 (only when the template opts in via
+      // {{unused report fields}}) drives population with the derived field.
       let reconciliation;
+      let populationFields;
+      let aggregateValue;
       try {
-        reconciliation = reconciler.reconcile(session.templateXml, imported.fields);
+        const twoPass = runTwoPassReconciliation(session.templateXml, imported);
+        reconciliation = twoPass.reconciliation;
+        populationFields = twoPass.populationFields;
+        aggregateValue = twoPass.aggregateValue;
       } catch (e) {
         safeToast('Reconciliation failed.', 'error');
         safeLog(`generation blocked reason=reconciliation-failed error=${e?.message || e}`);
@@ -845,6 +983,8 @@
       }
 
       session.importedReport = imported;
+      session.populationFields = populationFields;
+      session.aggregateValue = aggregateValue;
       session.reconciliation = reconciliation;
 
       // Refresh review categories from the fresh reconciliation result.
@@ -854,26 +994,31 @@
         `reconcile matched=${reconciliation.matched.length} missing=${reconciliation.missingValues.length} unknown=${reconciliation.unknownPlaceholders.length} unused=${reconciliation.unusedFields.length}`
       );
 
-      // ---- Clean generation gate (H2 reconciliation is authoritative) ----
+      // ---- Generation gate (H2 reconciliation is authoritative) ----
+      // ACT H4 partial generation: missing values and unknown template
+      // placeholders do NOT block; they intentionally remain visible in the
+      // output. Only structural conditions and a total lack of populated
+      // matched values block.
       const gate = evaluateGenerationGate({
         isReport: true,
         session,
         generating: false, // this invocation already holds the concurrency flag
       });
       if (!gate.allowed) {
-        const countSuffix =
-          gate.reason === 'missing-values'
-            ? ` count=${reconciliation.missingValues.length}`
-            : gate.reason === 'unknown-placeholders'
-              ? ` count=${reconciliation.unknownPlaceholders.length}`
-              : '';
         setSaveStatus(gate.message || 'Run Reconcile Again to review this template.', 'error');
-        safeLog(`generation blocked reason=${gate.reason}${countSuffix}`);
+        safeLog(`generation blocked reason=${gate.reason}`);
         return { ok: false, cancelled: false, reason: gate.reason };
       }
+      const unresolvedUnique = gate.unresolved ? gate.unresolved.unique : 0;
+      const generationMode = unresolvedUnique > 0 ? 'partial' : 'complete';
+      safeLog(
+        generationMode === 'partial'
+          ? `generation begin mode=partial unresolved=${unresolvedUnique}`
+          : 'generation begin mode=complete'
+      );
       // ---- Population via the single H2 entry point ----
       const templateXmlBefore = String(session.templateXml);
-      const populated = reconciler.populateTemplate(templateXmlBefore, imported.fields);
+      const populated = reconciler.populateTemplate(templateXmlBefore, populationFields);
 
       if (!populated || populated.ok !== true) {
         setSaveStatus('The Draw.io output could not be generated from this template.', 'error');
@@ -892,15 +1037,25 @@
         safeLog('output failed reason=template-mutated');
         return { ok: false, cancelled: false, reason: 'template-mutated' };
       }
-      // Defensive sanity scan only — H2 remains the placeholder authority.
-      // If an unseen token survived a clean gate, block delivery structurally.
-      if (hasVisibleUnresolvedToken(outputXml)) {
-        setSaveStatus(
-          'Unresolved {{field name}} placeholders remain in the generated output. Use Reconcile Again.',
-          'error'
-        );
-        safeLog('output failed reason=unresolved-placeholders');
-        return { ok: false, cancelled: false, reason: 'unresolved-placeholders' };
+      // ACT H4 partial generation: visible unresolved placeholders are
+      // intentional in partial output — H4 never rejects output merely
+      // because {{field name}} placeholders remain. Structural verification
+      // instead: every matched nonblank value must have been populated by H2.
+      const populatedMatched = (reconciliation.matched || []).filter(
+        (it) => String(it.field?.value || '').trim() !== ''
+      );
+      const unpopulatedMatched = populatedMatched.filter((it) =>
+        outputXml.includes(it.placeholder.token)
+      );
+      if (unpopulatedMatched.length > 0) {
+        setSaveStatus('The Draw.io output could not be generated from this template.', 'error');
+        safeLog('output failed reason=population-incomplete');
+        return { ok: false, cancelled: false, reason: 'population-incomplete' };
+      }
+      if (unresolvedUnique > 0 && !hasVisibleUnresolvedToken(outputXml)) {
+        setSaveStatus('The Draw.io output could not be generated from this template.', 'error');
+        safeLog('output failed reason=unresolved-placeholders-missing');
+        return { ok: false, cancelled: false, reason: 'unresolved-placeholders-missing' };
       }
 
       // ---- Delivery through the main.js adapter ----
@@ -917,7 +1072,7 @@
 
       let deliveryResult = null;
       try {
-        deliveryResult = await adapters.saveDrawioOutput({ xml: outputXml, suggestedFilename });
+        deliveryResult = await adapters.saveDrawioOutput({ xml: outputXml, suggestedFilename, mode: generationMode });
       } catch (e) {
         safeLog(`output failed reason=adapter-threw error=${e?.message || e}`);
         setSaveStatus('Save failed.', 'error');
@@ -933,15 +1088,23 @@
       }
       if (deliveryResult && deliveryResult.ok === true) {
         const savedName = String(deliveryResult.filename || suggestedFilename);
-        setSaveStatus(`Visual Report saved. ${savedName}`, 'ok');
+        const deliveredMethod =
+          deliveryResult.method === 'download' ? 'download' : 'picker';
+        setSaveStatus(
+          generationMode === 'partial' && unresolvedUnique > 0
+            ? `Visual Report saved. ${savedName} — ${unresolvedUnique} unresolved placeholder${unresolvedUnique === 1 ? '' : 's'} remain${unresolvedUnique === 1 ? 's' : ''} in the output.`
+            : `Visual Report saved. ${savedName}`,
+          'ok'
+        );
         safeToast(`Visual Report saved ✓ ${savedName}`, 'ok', 4500);
         safeLog(
-          `output ${deliveryResult.method === 'download' ? 'delivered' : 'saved'} filename=${savedName} method=${deliveryResult.method === 'download' ? 'download' : 'picker'}`
+          `output ${deliveredMethod === 'download' ? 'delivered' : 'saved'} filename=${savedName} method=${deliveredMethod} mode=${generationMode}`
         );
         return {
           ok: true,
           filename: savedName,
-          method: deliveryResult.method === 'download' ? 'download' : 'picker',
+          method: deliveredMethod,
+          mode: generationMode,
         };
       }
 
@@ -1301,7 +1464,7 @@
           else matched.push({ placeholder: { ...p }, field: { ...f } });
         }
         for (const k of Object.keys(fo)) if (!keys.has(k)) unusedFields.push({ key: k, token: `{{${k}}}`, value: String(fo[k].value || '') });
-        return { ok: true, placeholders, matched, missingValues, unknownPlaceholders, unusedFields, diagnostics: [] };
+        return { ok: true, placeholders, matched, missingValues, unknownPlaceholders, unusedFields, fieldOrder: Object.keys(fo), diagnostics: [] };
       }
       let forceLeftoverToken = false;
       let populateCalls = 0;
@@ -1353,9 +1516,37 @@
       check('gate05 compressed mapped', evaluateGenerationGate({ isReport: true, session: sessOf(TEMPLATE_XML, compA, recFull) }).reason, 'compressed-template');
       check('gate06 no-placeholders', evaluateGenerationGate({ isReport: true, session: sessOf(NO_PH_XML, okA, stubReconcileFn(NO_PH_XML, FIELDS)) }).reason, 'no-placeholders');
       const g7 = evaluateGenerationGate({ isReport: true, session: sessOf(TEMPLATE_XML, okA, recFull) });
-      check('gate07 missing-values blocked', [g7.allowed, g7.reason], [false, 'missing-values']);
-      checkCond('gate07b message mentions Reconcile Again', GENERATION_BLOCK_MESSAGES['missing-values'].includes('Reconcile Again'));
-      check('gate08 unknown blocked', evaluateGenerationGate({ isReport: true, session: sessOf(UNKNOWN_XML, okA, stubReconcileFn(UNKNOWN_XML, FIELDS)) }).reason, 'unknown-placeholders');
+      check('gate07 missing values allow partial generation', [g7.allowed, g7.reason], [true, null]);
+      check('gate07b unresolved count from missing values only', g7.unresolved, { unique: 1, occurrences: 1 });
+      check('gate08 unknown placeholders allow partial generation', evaluateGenerationGate({ isReport: true, session: sessOf(UNKNOWN_XML, okA, stubReconcileFn(UNKNOWN_XML, FIELDS)) }).allowed, true);
+      const MIXED_XML =
+        '<mxfile><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>' +
+        '<mxCell id="2" value="{{title}}"/><mxCell id="3" value="{{summary}}"/>' +
+        '<mxCell id="4" value="{{customer}}"/><mxCell id="5" value="{{customer decision}}"/>' +
+        '<mxCell id="6" value="{{regional sponsor}}"/></root></mxGraphModel></mxfile>';
+      const gMixed = evaluateGenerationGate({
+        isReport: true,
+        session: sessOf(MIXED_XML, okA, stubReconcileFn(MIXED_XML, {
+          title: { key: 'title', value: '' }, summary: { key: 'summary', value: 'S' }, customer: { key: 'customer', value: 'C' },
+        })),
+      });
+      check('gate08b missing+unknown allow partial generation', [gMixed.allowed, gMixed.reason], [true, null]);
+      check('gate08c unresolved unique count deterministic', gMixed.unresolved, { unique: 3, occurrences: 3 });
+      const REPEATED_XML =
+        '<mxfile><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>' +
+        '<mxCell id="2" value="{{title}}"/><mxCell id="3" value="{{alpha}} {{alpha}}"/>' +
+        '</root></mxGraphModel></mxfile>';
+      const gRep = evaluateGenerationGate({
+        isReport: true,
+        session: sessOf(REPEATED_XML, okA, stubReconcileFn(REPEATED_XML, { title: { key: 'title', value: 'T' } })),
+      });
+      check('gate08c repeated occurrences do not inflate unique count', [gRep.allowed, gRep.unresolved], [true, { unique: 1, occurrences: 2 }]);
+      const recAllBlank = stubReconcileFn(TEMPLATE_XML, {
+        title: { key: 'title', value: '' }, summary: { key: 'summary', value: ' ' },
+        customer: { key: 'customer', value: '' }, 'customer decision': { key: 'customer decision', value: '' },
+      });
+      check('gate08d no populated matched values blocks', (() => { const g = evaluateGenerationGate({ isReport: true, session: sessOf(TEMPLATE_XML, okA, recAllBlank) }); return [g.allowed, g.reason]; })(), [false, 'no-populated-fields']);
+      checkCond('gate08e message names the populated-fields requirement', GENERATION_BLOCK_MESSAGES['no-populated-fields'].includes('populated Report fields'));
       const cleanRec = stubReconcileFn(TEMPLATE_XML, {
         title: { key: 'title', value: 'T' }, summary: { key: 'summary', value: 'S' },
         customer: { key: 'customer', value: 'C' }, 'customer decision': { key: 'customer decision', value: 'D' },
@@ -1390,6 +1581,46 @@
         stubReconciler.populateTemplate(TEMPLATE_XML, detFields).xml ===
         stubReconciler.populateTemplate(TEMPLATE_XML, JSON.parse(JSON.stringify(detFields))).xml,
         true);
+
+      // ---- ACT H4.1 aggregation unit cases (two-pass, no H1 mutation) ----
+      const AGGREGATE_XML =
+        '<mxfile><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>' +
+        '<mxCell id="2" value="{{title}}"/><mxCell id="3" value="{{customer}}"/>' +
+        '<mxCell id="4" value="{{unused report fields}}"/></root></mxGraphModel></mxfile>';
+      const aggImported = {
+        fields: {
+          title: { key: 'title', token: '{{title}}', value: 'T', source: 'heading' },
+          customer: { key: 'customer', token: '{{customer}}', value: 'C', source: 'token' },
+          'completed tasks': { key: 'completed tasks', token: '{{completed tasks}}', value: '- A\n- B', source: 'section' },
+          'project forecast': { key: 'project forecast', token: '{{project forecast}}', value: 'Forecast content.', source: 'section' },
+          'blank field': { key: 'blank field', token: '{{blank field}}', value: '', source: 'token' },
+          'managed notes': { key: 'managed notes', token: '{{managed notes}}', value: 'Managed detail', source: 'token' },
+        },
+        fieldOrder: ['title', 'customer', 'completed tasks', 'project forecast', 'blank field', 'managed notes'],
+        sections: [],
+      };
+      const aggSnapshot = JSON.stringify(aggImported);
+      check('agg01 non-optin template unchanged', (() => { const plain = runTwoPassReconciliation(TEMPLATE_XML, aggImported); return [plain.populationFields === aggImported.fields, plain.aggregatedCount, plain.aggregateValue]; })(), [true, 0, null]);
+      checkCond('agg02 canonical aggregate placeholder detection only', hasAggregatePlaceholder('<v>{{unused report fields}}</v>') && hasAggregatePlaceholder('<v>{{  unused report fields  }}</v>') && !hasAggregatePlaceholder('<v>{{unused_fields}}</v>') && !hasAggregatePlaceholder('<v>{{all unused fields}}</v>') && !hasAggregatePlaceholder('<v>{{unused report field}}</v>'));
+      const agg1 = runTwoPassReconciliation(AGGREGATE_XML, aggImported);
+      check('agg03 aggregate text deterministic', agg1.aggregateValue, 'Completed Tasks\n\n- A\n- B\n\nProject Forecast\n\nForecast content.\n\nManaged Notes\n\nManaged detail');
+      checkCond('agg04 blank unused fields excluded', !agg1.aggregateValue.includes('Blank Field'));
+      checkCond('agg05 individually matched fields excluded', !agg1.aggregateValue.includes('Customer') && !/\bTitle\b/.test(agg1.aggregateValue));
+      checkCond('agg06 unknown placeholder-only keys excluded', !agg1.aggregateValue.includes('Regional Sponsor'));
+      check('agg07 derived field source is derived', agg1.populationFields['unused report fields'].source, 'derived');
+      const aggMatch = agg1.reconciliation.matched.find((it) => it.placeholder.key === 'unused report fields');
+      check('agg08 pass2 sees aggregate matched with value', [Boolean(aggMatch), aggMatch ? aggMatch.field.value : ''], [true, agg1.aggregateValue]);
+      check('agg09 H1 fields/fieldOrder/sections not mutated', JSON.stringify(aggImported), aggSnapshot);
+      check('agg10 H1 field order preserved', agg1.reconciliation.fieldOrder, ['title', 'customer', 'completed tasks', 'project forecast', 'blank field', 'managed notes', 'unused report fields']);
+      check('agg11 constituents remain visible under Unused', (agg1.reconciliation.unusedFields || []).map((f) => f.key), ['completed tasks', 'project forecast', 'blank field', 'managed notes']);
+      const aggXmlSnapshot = AGGREGATE_XML;
+      checkCond('agg12 original template string untouched', AGGREGATE_XML === aggXmlSnapshot && hasAggregatePlaceholder(AGGREGATE_XML) && agg1.populationFields[AGGREGATE_KEY].token === '{{unused report fields}}');
+      const aggBlank = runTwoPassReconciliation(AGGREGATE_XML, { fields: { title: { key: 'title', token: '{{title}}', value: 'T' } }, fieldOrder: ['title'], sections: [] });
+      check('agg13 empty aggregate preserves placeholder in pass2', [aggBlank.aggregateValue, aggBlank.reconciliation.missingValues.some((m) => m.placeholder.key === 'unused report fields'), aggBlank.reconciliation.matched.some((it) => it.placeholder.key === 'unused report fields')], ['', true, false]);
+      check('agg14 repeated aggregation deterministic', JSON.stringify(runTwoPassReconciliation(AGGREGATE_XML, aggImported).aggregateValue), JSON.stringify(agg1.aggregateValue));
+      const aggPopulatedXml = stubReconciler.populateTemplate(AGGREGATE_XML, agg1.populationFields).xml;
+      check('agg15 population replaces aggregate placeholder via H2', [aggPopulatedXml.includes('- A\n- B'), aggPopulatedXml.includes('{{unused report fields}}')], [true, false]);
+      check('agg16 multiline values preserved in aggregate', agg1.aggregateValue.includes('- A\n- B'), true);
       let currentMarkdown = '';
       let getMarkdownCalls = 0;
       let importCalls = 0;
@@ -1416,9 +1647,9 @@
         isReportDocument: () => true,
         getCurrentFileName: () => 'weekly-business-report.txt',
         pickTemplateFile: () => ({ ok: false, reason: 'unused-by-h4' }),
-        saveDrawioOutput: ({ xml, suggestedFilename }) => {
+        saveDrawioOutput: ({ xml, suggestedFilename, mode }) => {
           deliveryCalls += 1;
-          lastDeliveryArg = { xmlLength: String(xml).length, suggestedFilename };
+          lastDeliveryArg = { xml: String(xml), xmlLength: String(xml).length, suggestedFilename, mode };
           return Promise.resolve({ ok: true, filename: suggestedFilename, method: 'download' });
         },
         showToast: () => {},
@@ -1437,9 +1668,9 @@
 
       // flow26: deferred picker success + duplicate-generation guard
       currentMarkdown = CLEAN_MD;
-      adapters.saveDrawioOutput = ({ xml, suggestedFilename }) => {
+      adapters.saveDrawioOutput = ({ xml, suggestedFilename, mode }) => {
         deliveryCalls += 1;
-        lastDeliveryArg = { xmlLength: String(xml).length, suggestedFilename };
+        lastDeliveryArg = { xml: String(xml), xmlLength: String(xml).length, suggestedFilename, mode };
         return new Promise((resolve) => { releasePicker = () => resolve({ ok: true, filename: suggestedFilename, method: 'picker' }); });
       };
       const p1 = generateDrawioOutput();
@@ -1453,6 +1684,7 @@
       check('flow26e original template unchanged', session.templateXml === TEMPLATE_XML, true);
       check('flow26f in-progress resets after success', __generationInProgress, false);
       check('flow26g H3 session preserved after success', Boolean(getSessionState()?.templateName), true);
+      check('flow26h clean generation uses mode=complete', r1.mode, 'complete');
 
       // flow27: structured cancellation preserves session and retry
       adapters.saveDrawioOutput = () => { deliveryCalls += 1; return Promise.resolve({ ok: false, cancelled: true, reason: 'cancelled' }); };
@@ -1474,34 +1706,66 @@
       const r4 = await generateDrawioOutput();
       check('flow30 thrown failure structured', [r4.ok, r4.cancelled, r4.reason], [false, false, 'write-failed']);
 
-      // flow31: fresh reread detects a NEW blank -> blocked before delivery
-      adapters.saveDrawioOutput = ({ xml, suggestedFilename }) => { deliveryCalls += 1; return Promise.resolve({ ok: true, filename: suggestedFilename, method: 'download' }); };
+      // flow31: fresh reread detects a NEW blank -> partial generation proceeds
+      adapters.saveDrawioOutput = ({ xml, suggestedFilename, mode }) => { deliveryCalls += 1; lastDeliveryArg = { xml: String(xml), xmlLength: String(xml).length, suggestedFilename, mode }; return Promise.resolve({ ok: true, filename: suggestedFilename, method: 'download' }); };
       currentMarkdown = MD_MISSING_DECISION;
-      const dl31 = deliveryCalls;
       const r5 = await generateDrawioOutput();
-      check('flow31 missing-values block before delivery', [r5.ok, r5.reason], [false, 'missing-values']);
-      check('flow31b no Save As attempted on block', deliveryCalls, dl31);
+      check('flow31 missing values allow partial generation', [r5.ok, r5.mode], [true, 'partial']);
+      check('flow31b unresolved placeholder preserved in output', lastDeliveryArg.xml.includes('{{customer decision}}'), true);
 
       // flow32: values completed -> Reconcile-Again-style regenerate works
       currentMarkdown = CLEAN_MD.replace('{{customer decision}}: Approve Q4 budget', '{{customer decision}}: Final Q4 numbers');
       const r6 = await generateDrawioOutput();
       check('flow32 regeneration in same session works', [r6.ok, r6.method], [true, 'download']);
+      check('flow32b clean generation uses mode=complete', r6.mode, 'complete');
 
-      // flow33: defensive sanity gate blocks when a token survives a clean pass
+      // flow33: H4 no longer rejects output merely because a visible token
+      // survives — unresolved placeholders are intentional; H2 remains the
+      // placeholder authority.
       forceLeftoverToken = true;
-      const dl33 = deliveryCalls;
       const r7 = await generateDrawioOutput();
-      check('flow33 unresolved-token delivery blocked', [r7.ok, r7.reason], [false, 'unresolved-placeholders']);
-      check('flow33b no Save As on sanity block', deliveryCalls, dl33);
+      check('flow33 leftover token no longer blocks delivery', [r7.ok, r7.mode], [true, 'complete']);
+      check('flow33b leftover token preserved in output', lastDeliveryArg.xml.includes('{{survivor}}'), true);
       forceLeftoverToken = false;
+
+      // flow34: partial generation with missing values delivers and preserves
+      // unresolved placeholders; matched values are populated.
+      currentMarkdown = MD_MISSING_DECISION;
+      const r34 = await generateDrawioOutput();
+      check('flow34 partial generation with missing values works', [r34.ok, r34.mode], [true, 'partial']);
+      check('flow34b unresolved placeholder preserved', lastDeliveryArg.xml.includes('{{customer decision}}'), true);
+      check('flow34c matched values populated', !lastDeliveryArg.xml.includes('{{title}}') && !lastDeliveryArg.xml.includes('{{customer}}'), true);
+      check('flow34d partial status mentions unresolved count', getSaveStatusText().includes('unresolved'), true);
+
+      // flow35: unknown placeholders allow partial generation
+      session.templateXml = UNKNOWN_XML;
+      currentMarkdown = CLEAN_MD;
+      const r35 = await generateDrawioOutput();
+      check('flow35 unknown placeholders allow partial generation', [r35.ok, r35.mode], [true, 'partial']);
+      check('flow35b unknown placeholder preserved', lastDeliveryArg.xml.includes('{{regional sponsor}}'), true);
+      session.templateXml = TEMPLATE_XML;
+
+      // flow36: template-controlled unused-field aggregation (two-pass)
+      session.templateXml = AGGREGATE_XML;
+      currentMarkdown = CLEAN_MD + '\n{{notes}}: Extra notes\n{{managed notes}}: Managed detail';
+      const r36 = await generateDrawioOutput();
+      check('flow36 aggregate two-pass generation works', [r36.ok, r36.mode], [true, 'complete']);
+      check('flow36b aggregate placeholder populated in output', lastDeliveryArg.xml.includes('Extra notes') && lastDeliveryArg.xml.includes('Managed detail'), true);
+      check('flow36c aggregate token absent from output', lastDeliveryArg.xml.includes('{{unused report fields}}'), false);
+      check('flow36d constituents remain listed under Unused', (session.reconciliation.unusedFields || []).some((f) => f.key === 'notes'), true);
+      check('flow36e H1 fields not mutated by generation', Object.prototype.hasOwnProperty.call(session.importedReport.fields, 'unused report fields'), false);
+      check('flow36f original template unchanged', session.templateXml === AGGREGATE_XML, true);
+      check('flow36g no extra Draw.io elements or geometry', [lastDeliveryArg.xml.includes('<mxCell id="0"/>'), (lastDeliveryArg.xml.match(/mxCell/g) || []).length], [true, (AGGREGATE_XML.match(/mxCell/g) || []).length]);
+      session.templateXml = TEMPLATE_XML;
+      currentMarkdown = CLEAN_MD;
       // ---- Reread / rerun / preservation / logging guarantees ----
-      checkCond('state01 current Markdown reread per attempt', getMarkdownCalls >= 7);
+      checkCond('state01 current Markdown reread per attempt', getMarkdownCalls >= 10);
       const reconcileLogs = logLines.filter((l) => /^DrawioReport: reconcile /.test(l));
-      check('state02 final H1+H2 rerun each attempt', reconcileLogs.length, 7);
+      check('state02 final H1+H2 rerun each attempt', reconcileLogs.length, 10);
       checkCond('state03 no field values echoed into logs', logLines.every((l) => !l.includes('CONFIDENTIAL')));
       checkCond('state04 no template/output XML echoed into logs', logLines.every((l) => !l.includes('mxCell') && !l.includes('<mxfile')));
       checkCond('state05 blocked logs whitelist-shaped', logLines.filter((l) => l.includes('blocked')).every((l) => /^DrawioReport: (generation|template) blocked/.test(l)));
-      checkCond('state06 saved/delivered logs carry filename+method only', logLines.some((l) => /output (saved|delivered) filename=\S+ method=(picker|download)$/.test(l)));
+      checkCond('state06 saved/delivered logs carry filename+method+mode only', logLines.filter((l) => /output (saved|delivered) /.test(l)).every((l) => /^DrawioReport: output (saved|delivered) filename=\S+ method=(picker|download) mode=(partial|complete)$/.test(l)));
 
       // Non-report guard during generation resets the stale session.
       adapters.isReportDocument = () => false;
@@ -1514,6 +1778,63 @@
       checkCond(
         'guide01 guidance mentions Generate Draw.io and editable .drawio',
         overlaySource.includes('Generate Draw.io') && overlaySource.includes('editable .drawio file')
+      );
+      checkCond(
+        'guide02 unresolved placeholders documented in guide',
+        overlaySource.includes('unresolved placeholders remain visible')
+      );
+      checkCond(
+        'guide03 guide and status located below the action buttons',
+        overlaySource.indexOf('drawioReportCategories') < overlaySource.indexOf('drawioReportActions') &&
+          overlaySource.indexOf('drawioReportActions') < overlaySource.indexOf('drawioReportSaveStatus') &&
+          overlaySource.indexOf('drawioReportSaveStatus') < overlaySource.indexOf('drawioReportGuide')
+      );
+      checkCond(
+        'ui01 Generate Draw.io button always present in overlay markup',
+        overlaySource.includes('id="drawioReportGenerateButton"')
+      );
+      checkCond(
+        'ui02 single Generate button instance',
+        overlaySource.split('id="drawioReportGenerateButton"').length - 1 === 1
+      );
+      checkCond(
+        'theme01 neutral theme hooks present (guide + primary button classes)',
+        overlaySource.includes('drawioReportGuide') && overlaySource.includes('drawioReportPrimaryButton')
+      );
+      checkCond(
+        'log01 partial/complete mode log contract',
+        Function.prototype.toString.call(generateDrawioOutput).includes('mode=partial') &&
+          Function.prototype.toString.call(generateDrawioOutput).includes('mode=complete')
+      );
+      checkCond(
+        'agg17 aggregation note rendered once near Unused category',
+        Function.prototype.toString.call(renderReview).split('drawioReportAggregateNote').length - 1 === 1 &&
+          Function.prototype.toString.call(renderReview).includes('These fields will be included through')
+      );
+      checkCond(
+        'agg18 guidance includes the exact aggregate token',
+        overlaySource.includes('Optional: Add <code>{{unused report fields}}</code>')
+      );
+      checkCond(
+        'agg19 partial generation contract wording preserved in guidance',
+        overlaySource.includes('Any unresolved placeholders remain visible for later completion.')
+      );
+      checkCond(
+        'pk01 template content read as text via adapter contract',
+        Function.prototype.toString.call(selectTemplate).includes('picked.text') &&
+          !Function.prototype.toString.call(selectTemplate).includes('picked.type')
+      );
+      checkCond(
+        'pk02 picker owner never trusts file.type as validity proof',
+        !Function.prototype.toString.call(selectTemplate).includes('file.type')
+      );
+      checkCond(
+        'pk03 output filename contract unchanged (.drawio)',
+        buildSuggestedDrawioFilename('weekly-report.md').endsWith('.drawio')
+      );
+      checkCond(
+        'agg20 no Draw.io elements or geometry created by aggregation',
+        Function.prototype.toString.call(runTwoPassReconciliation).includes('mxCell') === false
       );
 
       // ---- Restore module state and global modules ----

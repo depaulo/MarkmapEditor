@@ -4029,12 +4029,13 @@ html.dark {
 
 /* ACT H4 — Generate Draw.io action and delivery status */
 .drawioReportPrimaryButton {
-  background: var(--drawio-accent);
-  color: #fff;
+  background: var(--drawio-surface);
+  color: var(--drawio-accent);
   border-color: var(--drawio-accent);
+  font-weight: 600;
 }
 
-.drawioReportPrimaryButton:hover:not(:disabled) { filter: brightness(1.06); }
+.drawioReportPrimaryButton:hover:not(:disabled) { background: var(--drawio-accent-soft); }
 
 .drawioReportPrimaryButton:disabled {
   background: var(--drawio-surface);
@@ -4055,6 +4056,32 @@ html.dark {
 .drawioReportSaveStatus-ok { color: var(--drawio-ok); font-weight: 600; }
 .drawioReportSaveStatus-error { color: var(--drawio-error); font-weight: 600; }
 .drawioReportSaveStatus-busy { color: var(--drawio-warn); }
+
+/* ACT H4 — footer below the action buttons: generation status + How it works */
+.drawioReportFooter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--drawio-border);
+  background: var(--drawio-surface);
+}
+.drawioReportFooter .drawioReportGuide { margin-bottom: 0; }
+
+/* ACT H4.1 — aggregation note near the Unused Report Fields category */
+.drawioReportAggregateNote {
+  margin: 8px 0 0;
+  font-size: 0.82em;
+  color: var(--drawio-text-muted);
+}
+.drawioReportAggregateNote code {
+  font-family: monospace;
+  background: var(--drawio-surface-alt);
+  border: 1px solid var(--drawio-border);
+  border-radius: 3px;
+  padding: 0 3px;
+  word-break: break-all;
+}
 
 .drawioReportOverlay {
   position: fixed;
@@ -4128,10 +4155,10 @@ html.dark {
   gap: 4px;
   padding: 8px 10px;
   margin-bottom: 10px;
-  border: 1px solid var(--drawio-border-strong);
-  border-left: 3px solid var(--drawio-accent);
+  border: 1px solid var(--drawio-border);
+  border-left: 3px solid var(--drawio-border-strong);
   border-radius: 6px;
-  background: var(--drawio-guide-soft);
+  background: var(--drawio-surface-alt);
   color: var(--drawio-text);
   font-size: 0.86em;
 }
@@ -4159,9 +4186,9 @@ html.dark {
 
 .drawioReportCategoryTitle { margin: 0 0 4px 0; font-size: 0.92em; font-weight: 600; }
 
-.drawioReportCategory-matched { background: var(--drawio-ok-soft); border-left: 3px solid var(--drawio-ok); }
-.drawioReportCategory-missing { background: var(--drawio-warn-soft); border-left: 3px solid var(--drawio-warn); }
-.drawioReportCategory-unknown { background: var(--drawio-error-soft); border-left: 3px solid var(--drawio-error); }
+.drawioReportCategory-matched { background: var(--drawio-surface-alt); border-left: 3px solid var(--drawio-ok); }
+.drawioReportCategory-missing { background: var(--drawio-surface-alt); border-left: 3px solid var(--drawio-warn); }
+.drawioReportCategory-unknown { background: var(--drawio-surface-alt); border-left: 3px solid var(--drawio-error); }
 .drawioReportCategory-unused { background: var(--drawio-surface-alt); border-left: 3px solid var(--drawio-border-strong); }
 
 .drawioReportList {

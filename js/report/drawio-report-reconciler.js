@@ -57,6 +57,27 @@
     return { fields, order };
   }
 
+  // ACT H4.1 — narrow assessment normalization. The original template string
+  // is never mutated; this view is used only for the Draw.io root and
+  // compression checks. Removes from the internal view only: one optional
+  // UTF-8 BOM, optional leading whitespace, and ONE valid leading XML
+  // declaration (version 1.0, optional encoding, double or single quoted)
+  // plus the whitespace after it. Arbitrary processing instructions, malformed
+  // declarations, and declarations appearing after other content are NOT
+  // removed. extractPlaceholders/reconcile/populateTemplate keep reading the
+  // ORIGINAL source; the declaration remains present in populated output.
+  const XML_DECLARATION_RE =
+    /^<\?xml\s+version\s*=\s*(?:"1\.0"|'1\.0')(?:\s+encoding\s*=\s*(?:"[A-Za-z][A-Za-z0-9._-]*"|'[A-Za-z][A-Za-z0-9._-]*'))?\s*\?>/;
+
+  function normalizedAssessmentView(source) {
+    let view = String(source == null ? '' : source).replace(/^\uFEFF/, '');
+    view = view.replace(/^\s+/, '');
+    if (XML_DECLARATION_RE.test(view)) {
+      view = view.replace(XML_DECLARATION_RE, '').replace(/^\s+/, '');
+    }
+    return view;
+  }
+
   function assessTemplateXml(xml) {
     const source = String(xml == null ? '' : xml);
     const diagnostics = [];
@@ -66,7 +87,12 @@
       return { ok: false, compressed: false, diagnostics };
     }
 
-    const looksLikeXml = /^\s*<(mxfile|mxGraphModel)\b/i.test(source);
+    // Root and compression checks run on the normalized assessment view so
+    // BOM-led, whitespace-led, and XML-declaration-led uncompressed Draw.io
+    // XML are assessed correctly. The original input is never mutated.
+    const view = normalizedAssessmentView(source);
+
+    const looksLikeXml = /^<(mxfile|mxGraphModel)\b/i.test(view);
     if (!looksLikeXml) {
       diagnostics.push({
         level: 'fatal',
@@ -76,8 +102,8 @@
       return { ok: false, compressed: false, diagnostics };
     }
 
-    const compressedDiagram = /<diagram\b[^>]*>\s*[^<\s][\s\S]*?<\/diagram>/i.test(source);
-    if (compressedDiagram && !/<mxGraphModel\b/i.test(source)) {
+    const compressedDiagram = /<diagram\b[^>]*>\s*[^<\s][\s\S]*?<\/diagram>/i.test(view);
+    if (compressedDiagram && !/<mxGraphModel\b/i.test(view)) {
       diagnostics.push({
         level: 'fatal',
         code: 'template-compressed',
@@ -87,7 +113,7 @@
 
     return {
       ok: !diagnostics.some((item) => item.level === 'fatal'),
-      compressed: compressedDiagram && !/<mxGraphModel\b/i.test(source),
+      compressed: compressedDiagram && !/<mxGraphModel\b/i.test(view),
       diagnostics,
     };
   }
@@ -449,6 +475,63 @@
     check('34b e2e matched replaced', populated.xml.includes('Weekly Report'), true);
     check('34c e2e unknown preserved', populated.xml.includes('{{region}}'), true);
     check('34d e2e unreconciled count', (populated.xml.match(/\{\{/g) || []).length, 3);
+
+    // =====================================================================
+    // ACT H4.1 — narrow XML declaration compatibility (36-39).
+    // =====================================================================
+    const XML_DECL = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    const BOM = '\uFEFF';
+    const declFixture = XML_DECL + fixture;
+    const gmXml = '<mxGraphModel><root><mxCell value="{{summary}}"/></root></mxGraphModel>';
+
+    check('36a direct mxfile accepted', assessTemplateXml(fixture).ok, true);
+    check('36b direct mxGraphModel accepted', assessTemplateXml(gmXml).ok, true);
+    check('36c declaration plus mxfile accepted', assessTemplateXml(declFixture).ok, true);
+    check('36d declaration plus mxGraphModel accepted', assessTemplateXml(XML_DECL + gmXml).ok, true);
+    check('36e UTF-8 encoding declaration accepted', assessTemplateXml(XML_DECL + fixture).ok, true);
+    check('36f single-quoted declaration accepted', assessTemplateXml("<?xml version='1.0' encoding='UTF-8'?>\n" + fixture).ok, true);
+    check('36g BOM plus mxfile accepted', assessTemplateXml(BOM + fixture).ok, true);
+    check('36h BOM + whitespace + declaration + mxfile accepted', assessTemplateXml(BOM + '  \n ' + XML_DECL + ' \n' + fixture).ok, true);
+    check('36i BOM + declaration + mxGraphModel accepted', assessTemplateXml(BOM + XML_DECL + gmXml).ok, true);
+    check('36j leading whitespace + declaration accepted', assessTemplateXml('\n  ' + XML_DECL + fixture).ok, true);
+    check('36k declaration without encoding accepted', assessTemplateXml('<?xml version="1.0"?>\n' + fixture).ok, true);
+
+    const declStd = XML_DECL + stdXml;
+    check('37a declaration-led placeholder extraction', extractPlaceholders(declStd).map((p) => p.key), ['summary', 'customer']);
+    check('37b declaration-led repeated occurrences', extractPlaceholders(XML_DECL + repXml).find((p) => p.key === 'summary').occurrences, 2);
+    const declRec = reconcile(declFixture, fields);
+    check('37c declaration-led reconciliation ok', declRec.ok, true);
+    check('37d declaration-led matched', declRec.matched.map((m) => m.field.key), ['title', 'summary', 'customer', 'next steps']);
+    check('37e declaration-led missing values', declRec.missingValues.map((m) => m.field.key), ['customer decision', 'regional sponsor']);
+    check('37f declaration-led unknown', declRec.unknownPlaceholders.map((u) => u.key), ['region']);
+    check('37g declaration-led unused', declRec.unusedFields.map((f) => f.key), ['notes']);
+    const declPop = populateTemplate(declFixture, fields);
+    check('37h declaration-led population ok', declPop.ok, true);
+    check('37i declaration retained in populated output', declPop.xml.startsWith('<?xml'), true);
+    check('37j declaration-led values replaced', declPop.xml.includes('Weekly Report'), true);
+    check('37k declaration-led blanks preserved', declPop.xml.includes('{{customer decision}}'), true);
+    check('37l declaration-led unknown preserved', declPop.xml.includes('{{region}}'), true);
+    check('37m original declaration-led input unchanged', declFixture, XML_DECL + fixture);
+    check('37n repeated assessment deterministic', JSON.stringify(assessTemplateXml(declFixture)), JSON.stringify(assessTemplateXml(declFixture)));
+    check('37o repeated population byte identity', populateTemplate(declFixture, fields).xml, populateTemplate(declFixture, fields).xml);
+
+    check('38a unrelated declaration-led XML rejected', assessTemplateXml(XML_DECL + '<html><body>no</body></html>').ok, false);
+    check('38a2 unrelated diagnostic template-not-xml', assessTemplateXml(XML_DECL + '<html></html>').diagnostics.some((d) => d.code === 'template-not-xml'), true);
+    check('38b HTML-escaped declaration-led rejected', assessTemplateXml('&lt;?xml version="1.0"?&gt;\n&lt;mxfile&gt;').ok, false);
+    check('38c Markdown-fenced declaration-led rejected', assessTemplateXml('```xml\n' + declFixture + '\n```').ok, false);
+    check('38d malformed declaration rejected', assessTemplateXml('<?xml version="2.0"?>\n' + fixture).ok, false);
+    check('38d2 missing-version declaration rejected', assessTemplateXml('<?xml encoding="UTF-8"?>\n' + fixture).ok, false);
+    check('38e arbitrary processing instruction not treated as declaration', assessTemplateXml('<?xml-stylesheet href="a.xsl"?>\n' + fixture).ok, false);
+    check('38f plain text containing mxfile rejected', assessTemplateXml('the word mxfile appears here').ok, false);
+    check('38g mxfile only later inside unrelated root rejected', assessTemplateXml(XML_DECL + '<html><body>mxfile</body></html>').ok, false);
+    check('38h declaration after other content not removed', assessTemplateXml('<html></html>\n' + XML_DECL + fixture).ok, false);
+
+    const declCompressed = assessTemplateXml(XML_DECL + '<mxfile><diagram>abc123encoded</diagram></mxfile>');
+    check('39a declaration-led compressed rejected', declCompressed.ok, false);
+    check('39b declaration-led compressed diagnostic', declCompressed.diagnostics.some((d) => d.code === 'template-compressed'), true);
+    check('39c declaration-led compressed not misdiagnosed not-xml', declCompressed.diagnostics.some((d) => d.code === 'template-not-xml'), false);
+    check('39d direct-root compressed detection unchanged', assessTemplateXml('<mxfile><diagram>abc123encoded</diagram></mxfile>').diagnostics.some((d) => d.code === 'template-compressed'), true);
+    check('39e declaration-led assessment shape unchanged', [typeof declCompressed.ok, typeof declCompressed.compressed, Array.isArray(declCompressed.diagnostics)], ['boolean', 'boolean', true]);
 
     const failed = cases.filter((item) => !item.pass);
     const result = {
