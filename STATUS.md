@@ -203,11 +203,35 @@ Earlier checkpoint sections above remain a historical record.
   classification when opened through that workspace.
 
 ### PWA / versioning
-- `sw.js` and `APP_VERSION` (`markmap-journal-pwa-v60-task-metadata-v1`) remain
-  unchanged for this package. PWA cache and APP_VERSION finalization are
-  deferred to the separate Draw.io MVP Closure package.
-- Current source requiring cache review for that package:
-  `js/report/drawio-report-panel.js`, `js/main.js`,
-  `js/report/drawio-report-reconciler.js`, and `css/workspace.css`.
-- Offline and update-path validation remain pending until that closure
-  package passes.
+- **Draw.io MVP PWA closure is complete at the source level.** `APP_VERSION`
+  (single owner: `sw.js`) is now
+  `markmap-journal-pwa-v61-drawio-report-mvp-v1`; cache identity is
+  `markmap-journal-pwa-v61-drawio-report-mvp-v1-app` / `...-runtime`. The
+  previous `markmap-journal-pwa-v60-task-metadata-v1` identity is no longer an
+  active owner.
+- All six Report/Draw.io modules (`report-markdown-import.js`,
+  `drawio-report-reconciler.js`, `drawio-report-panel.js`,
+  `report-dictionary.js`, `quick-report-generator.js`, `report-panel.js`) are
+  precached in `LOCAL_APP_SHELL` in script-loader order; `js/main.js`,
+  `js/app/script-loader.js`, and `css/workspace.css` were already precached.
+- Activation cleanup is now prefix-scoped (`markmap-journal-pwa-`): old release
+  caches are deleted, current `-app`/`-runtime` caches survive, and unrelated
+  origin caches are never touched. `skipWaiting()` + `clients.claim()` update
+  lifecycle is preserved; no forced reload was added, so the existing
+  unsaved-Report protection is not bypassed.
+- Clean-install, update-over-old-cache, offline, and minimum Draw.io smoke
+  acceptance are **browser-only and pending** (see VERIFY.md
+  "Draw.io MVP PWA closure" for exact steps). Static, cache-manifest, and
+  version-consistency validation passed (see VALIDATION_REPORT.txt).
+- External CDN dependencies (markmap, d3, shiki, CodeMirror) follow the
+  existing contract: cached after one successful online load; the Draw.io
+  Report workflow itself is fully local (template pick, reconciliation,
+  generation, and Save As require no network).
+
+### Known limitations (PWA closure additions)
+- Aggregate Report content may contain literal Markdown escape characters
+  (for example `\_text\_`) in generated Draw.io text. The content is present in
+  the XML; this is a display characteristic, not data loss.
+- A long aggregate value can exceed the visible height of the template-owned
+  `{{unused report fields}}` text element. Template authors may resize or
+  reposition the reserved element in Draw.io.

@@ -355,3 +355,78 @@ closure).
   (in-progress) and the in-progress state resets after every result.
 - [ ] **Mobile layout** *(mobile-only)*: the overlay reaches the Generate action
   and save status on a narrow mobile viewport.
+---
+
+## Draw.io MVP PWA closure verification
+
+Cache/version closure is source-complete:
+`APP_VERSION` = `markmap-journal-pwa-v61-drawio-report-mvp-v1`
+(single owner: `sw.js`); caches
+`markmap-journal-pwa-v61-drawio-report-mvp-v1-app` / `...-runtime`;
+activation cleanup is prefix-scoped (`markmap-journal-pwa-`); all six Report
+modules are precached in `LOCAL_APP_SHELL`.
+
+### Static / Node validation (no browser required)
+
+- [x] `node --check sw.js` -> PASS.
+- [x] Cache-manifest paths: all 64 `LOCAL_APP_SHELL` entries exist on disk
+  (zero missing). Note: the array contains pre-existing duplicate entries for
+  modules listed in both the shell block and the dynamic-modules block;
+  precaching is idempotent and harmless.
+- [x] Version consistency: exactly one `APP_VERSION = '...'` owner (`sw.js`);
+  no page-level or manifest copy; no `markmap-journal-pwa-v60-*` active owner
+  remains in `sw.js`.
+- [x] H1 importer validator: `MME_REPORT_MARKDOWN_IMPORT.validateReportMarkdownImport()`
+  -> ok=true, passed=39, total=39, failed=0.
+- [x] H2 reconciler validator (separate):
+  `MME_DRAWIO_REPORT_RECONCILER.validateDrawioReportReconciler()`
+  -> ok=true, passed=101, total=101, failed=0.
+- [x] H3 panel validator (separate):
+  `MME_DRAWIO_REPORT_PANEL.validateDrawioReportPanel()`
+  -> ok=true, passed=38, total=38, failed=0.
+- [x] H4 output-delivery validator (separate):
+  `MME_DRAWIO_REPORT_PANEL.validateDrawioOutputDelivery()`
+  -> ok=true, passed=107, total=107, failed=0.
+
+### Browser acceptance (PENDING — not executed in the Termux coder environment)
+
+**A. Clean install**
+1. DevTools → Application → Service Workers: Unregister for this origin.
+2. Application → Cache Storage: delete only caches beginning with
+   `markmap-journal-pwa-`.
+3. Close the application tab; reopen online; allow install/activation
+   (skipWaiting + claim; reload the tab once after activation).
+4. Confirm Cache Storage contains
+   `markmap-journal-pwa-v61-drawio-report-mvp-v1-app` (and `-runtime`) and no
+   `v60` caches remain.
+5. Confirm the app boots and the three runtime APIs exist:
+   `globalThis.MME_REPORT_MARKDOWN_IMPORT`,
+   `globalThis.MME_DRAWIO_REPORT_RECONCILER`,
+   `globalThis.MME_DRAWIO_REPORT_PANEL`.
+
+**B. Update over the old cache**
+1. Load the previous release (v60 cache active), then serve/deploy the new
+   release and reload online.
+2. Confirm the new Service Worker installs and activates (skipWaiting),
+   the old `markmap-journal-pwa-v60-*` caches are removed, the new v61 caches
+   are present.
+3. Reload; confirm all Draw.io runtime APIs load together and none of these
+   mixed-version symptoms appear: `MME_DRAWIO_REPORT_PANEL` undefined, missing
+   Generate Draw.io, old clean-only generation gate, missing
+   `{{unused report fields}}` support, `.drawio` Android picker regression,
+   XML declaration regression, old CSS/guidance layout.
+
+**C. Offline**
+1. After one successful online load, close the tab, go offline (or DevTools
+   Offline), reopen the same URL.
+2. Confirm the shell starts, the Report panel renders, the Draw.io
+   reconciliation overlay opens with the three runtime APIs present, a local
+   uncompressed template reconciles, Generate Draw.io follows the Report
+   state, and Save As/download stays local.
+3. Restore the network and confirm normal operation continues.
+
+**D. Minimum Draw.io smoke**
+- App boots; H1/H2/H3 runtime objects exist; a Report can be generated;
+  `Reconcile Draw.io Template` enables; a controlled template can be selected;
+  the four categories display; Generate Draw.io is present; partial generation
+  reaches Save As; the Report remains current; no runtime exception appears.

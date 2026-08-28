@@ -9,7 +9,14 @@
  */
 const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
 
-const APP_VERSION = 'markmap-journal-pwa-v60-task-metadata-v1';
+// APP_VERSION is the single authoritative release/version owner. It names the
+// installed cache identity (APP_CACHE / RUNTIME_CACHE) for this release
+// boundary: Draw.io Report MVP closure (ACT G + H1 + H2 + H3 + H4 + H4.1).
+const APP_VERSION = 'markmap-journal-pwa-v61-drawio-report-mvp-v1';
+// Stable base prefix for every cache this application owns. Activation cleanup
+// deletes only caches matching this prefix so unrelated origin caches are
+// never touched.
+const CACHE_PREFIX = 'markmap-journal-pwa-';
 const APP_CACHE = `${APP_VERSION}-app`;
 const RUNTIME_CACHE = `${APP_VERSION}-runtime`;
 
@@ -76,6 +83,17 @@ const LOCAL_APP_SHELL = [
   './js/templates/templates-menu.js',
   './js/export/export-actions.js',
   './js/export/export-menu.js',
+
+  // Dynamically loaded Report/Draw.io modules (script-loader.js).
+  // Required offline for the Quick Report panel and the Draw.io Report
+  // workflow (H1 importer, H2 reconciler, H3/H4 panel). Order follows the
+  // script-loader registration order.
+  './js/report/report-markdown-import.js',
+  './js/report/drawio-report-reconciler.js',
+  './js/report/drawio-report-panel.js',
+  './js/report/report-dictionary.js',
+  './js/report/quick-report-generator.js',
+  './js/report/report-panel.js',
 ];
 
 const CDN_APP_SHELL = [
@@ -240,7 +258,14 @@ sw.addEventListener('activate', (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys
-          .filter((key) => ![APP_CACHE, RUNTIME_CACHE].includes(key))
+          // Prefix-scoped cleanup: delete only caches owned by this
+          // application (old release identities), never unrelated origin
+          // caches. The current APP_CACHE and RUNTIME_CACHE always survive.
+          .filter(
+            (key) =>
+              key.startsWith(CACHE_PREFIX) &&
+              ![APP_CACHE, RUNTIME_CACHE].includes(key)
+          )
           .map((key) => caches.delete(key))
       );
     })

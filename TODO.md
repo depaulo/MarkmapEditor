@@ -28,6 +28,21 @@ Completed (implementation committed; validations below are Node counts):
   committed at `3ab7f65`); validator honesty and single-owner delivery logging
   cleanup (committed at `4541709`).
 
+Completed (Draw.io MVP PWA closure package — source closure complete;
+browser acceptance pending):
+- [x] Service Worker and APP_VERSION finalization: all six Report modules
+  (`js/report/report-markdown-import.js`, `js/report/drawio-report-reconciler.js`,
+  `js/report/drawio-report-panel.js`, `js/report/report-dictionary.js`,
+  `js/report/quick-report-generator.js`, `js/report/report-panel.js`) are
+  precached in `LOCAL_APP_SHELL`; cache identity bumped to
+  `markmap-journal-pwa-v61-drawio-report-mvp-v1` (`-app` / `-runtime`);
+  activation cleanup narrowed to the `markmap-journal-pwa-` cache prefix;
+  `skipWaiting()`/`clients.claim()` lifecycle preserved.
+- [x] Cache-manifest and version-consistency validation: `node --check sw.js`
+  PASS; every cached path exists; single APP_VERSION owner; old v60 identity
+  removed as an active owner; H1 39/39, H2 101/101, H3 38/38, H4 107/107
+  validators still pass.
+
 Remaining forward order:
 
 1. Laptop end-to-end acceptance (the next live workflow; covers the H3
@@ -36,16 +51,12 @@ Remaining forward order:
    placeholders, `{{unused report fields}}` aggregation, Android `.drawio`
    selection, XML declaration template, opening the generated `.drawio` in
    Draw.io, mobile reachability).
-2. H4-DOC completion (documentation alignment — current package).
-3. Draw.io MVP closure (uncompressed template, generated output, manual
-   fallback verified end to end). Release-closed only after this passes.
-4. Service Worker and APP_VERSION finalization (cache review includes
-   `js/report/drawio-report-panel.js`, `js/report/drawio-report-reconciler.js`,
-   and `css/workspace.css`).
-5. Offline and update-path validation.
-6. Screen improvements (fullscreen Markmap, fullscreen HTML, presentation layout, vertical output).
-7. Groups based on real Draw.io usage.
-8. Later artifact workflows.
+2. Draw.io MVP closure browser acceptance: clean install, update over the old
+   cache, offline boot with the Draw.io modules, and the minimum Draw.io smoke
+   test — exact steps in VERIFY.md, "Draw.io MVP PWA closure".
+3. Screen improvements (fullscreen Markmap, fullscreen HTML, presentation layout, vertical output).
+4. Groups based on real Draw.io usage.
+5. Later artifact workflows.
 
 ## Short-term Priorities & Remaining Verification
 
