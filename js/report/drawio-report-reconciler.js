@@ -542,11 +542,13 @@
       cases,
     };
 
-    // 35. validator return shape
-    check('35a return shape ok', typeof result.ok === 'boolean' && typeof result.total === 'number' && typeof result.passed === 'number' && typeof result.failed === 'number' && Array.isArray(result.cases));
-    check('35b shape total equals cases', result.total === cases.length);
-    check('35c shape ok false when failures', result.ok === (result.failed === 0));
-
+    // Return-shape contract (informational, intentionally NOT test cases):
+    // ok = (failed.length === 0); total = cases.length; passed + failed =
+    // cases.length. The former self-referential 35a/35b/35c entries were
+    // removed from the result array: 35b compared result.total (captured
+    // before later pushes) against the grown cases.length and could never
+    // pass, and 35a/35c restated the construction invariants above. Totals
+    // are computed after every result so no pass:false entry is hidden.
     return result;
   }
 

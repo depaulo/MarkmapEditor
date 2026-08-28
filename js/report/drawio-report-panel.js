@@ -116,6 +116,7 @@
     const absent = [];
     const seen = new Set();
     for (const key of collectMissingKeys(reconciliation)) {
+      if (key === AGGREGATE_KEY) continue; // ACT H4.1 — reserved aggregate never enters Markdown.
       if (existing.has(key)) continue; // Cases C/D/E — never duplicate.
       if (seen.has(key)) continue;
       seen.add(key);
@@ -1082,8 +1083,8 @@
 
       if (deliveryResult && deliveryResult.cancelled === true) {
         // Structured cancellation: no error surface; session and retry kept.
+        // Final cancellation log is owned by the main.js delivery adapter.
         setSaveStatus('Save cancelled.', 'info');
-        safeLog('output cancelled');
         return { ok: false, cancelled: true, reason: deliveryResult.reason || 'cancelled' };
       }
       if (deliveryResult && deliveryResult.ok === true) {
@@ -1097,9 +1098,8 @@
           'ok'
         );
         safeToast(`Visual Report saved ✓ ${savedName}`, 'ok', 4500);
-        safeLog(
-          `output ${deliveredMethod === 'download' ? 'delivered' : 'saved'} filename=${savedName} method=${deliveredMethod} mode=${generationMode}`
-        );
+        // Final saved/delivered log is owned by the main.js delivery adapter;
+        // the panel emits the visible status and toast only (no duplicate).
         return {
           ok: true,
           filename: savedName,
@@ -1109,9 +1109,8 @@
       }
 
       const failReason = deliveryResult?.reason || 'write-failed';
-      safeLog(
-        `output failed reason=${failReason}${deliveryResult?.error ? ` error=${deliveryResult.error}` : ''}`
-      );
+      // Adapter-mediated failure logs (write-failed / download-failed) are
+      // owned by the main.js delivery adapter; the panel shows status only.
       setSaveStatus('Save failed.', 'error');
       safeToast(
         failReason === 'download-failed'
@@ -1765,7 +1764,7 @@
       checkCond('state03 no field values echoed into logs', logLines.every((l) => !l.includes('CONFIDENTIAL')));
       checkCond('state04 no template/output XML echoed into logs', logLines.every((l) => !l.includes('mxCell') && !l.includes('<mxfile')));
       checkCond('state05 blocked logs whitelist-shaped', logLines.filter((l) => l.includes('blocked')).every((l) => /^DrawioReport: (generation|template) blocked/.test(l)));
-      checkCond('state06 saved/delivered logs carry filename+method+mode only', logLines.filter((l) => /output (saved|delivered) /.test(l)).every((l) => /^DrawioReport: output (saved|delivered) filename=\S+ method=(picker|download) mode=(partial|complete)$/.test(l)));
+      checkCond('state06 delivery outcome logs owned by the main.js adapter (no panel duplicates)', logLines.every((l) => !/output (saved|delivered|cancelled) /.test(l) && !/output failed reason=(write-failed|download-failed) /.test(l)));
 
       // Non-report guard during generation resets the stale session.
       adapters.isReportDocument = () => false;
@@ -1805,6 +1804,60 @@
         'log01 partial/complete mode log contract',
         Function.prototype.toString.call(generateDrawioOutput).includes('mode=partial') &&
           Function.prototype.toString.call(generateDrawioOutput).includes('mode=complete')
+      );
+      checkCond(
+        'log02 delivery success logged once by the main.js adapter owner',
+        !Function.prototype.toString.call(generateDrawioOutput).includes('output saved') &&
+          !Function.prototype.toString.call(generateDrawioOutput).includes('output delivered')
+      );
+      checkCond(
+        'log03 cancellation logged once by the delivery owner',
+        !Function.prototype.toString.call(generateDrawioOutput).includes("safeLog('output cancelled')")
+      );
+      checkCond(
+        'log04 adapter-mediated failure logged once by the delivery owner',
+        !Function.prototype.toString.call(generateDrawioOutput).includes('reason=${failReason}')
+      );
+      checkCond(
+        'pk04 no source path appends .xml to the .drawio output filename',
+        !Function.prototype.toString.call(buildSuggestedDrawioFilename).includes('.xml')
+      );
+      check(
+        'md01 reserved aggregate excluded from Markdown insertion',
+        computeAbsentTokens('# Report\n', {
+          placeholders: [
+            { key: 'unused report fields', token: '{{unused report fields}}' },
+            { key: 'customer decision', token: '{{customer decision}}' },
+          ],
+          matched: [],
+          missingValues: [
+            { placeholder: { key: 'unused report fields', token: '{{unused report fields}}' }, field: { key: 'unused report fields', value: '' } },
+            { placeholder: { key: 'customer decision', token: '{{customer decision}}' }, field: { key: 'customer decision', value: '' } },
+          ],
+          unknownPlaceholders: [], unusedFields: [],
+        }).map((t) => t.token),
+        ['{{customer decision}}']
+      );
+      const mdAbsent = computeAbsentTokens('# Report\n', {
+        placeholders: [
+          { key: 'customer', token: '{{customer}}' },
+          { key: 'customer decision', token: '{{customer decision}}' },
+          { key: 'regional sponsor', token: '{{regional sponsor}}' },
+          { key: 'unused report fields', token: '{{unused report fields}}' },
+        ],
+        matched: [],
+        missingValues: [
+          { placeholder: { key: 'customer', token: '{{customer}}' }, field: { key: 'customer', value: '' } },
+          { placeholder: { key: 'customer decision', token: '{{customer decision}}' }, field: { key: 'customer decision', value: '' } },
+          { placeholder: { key: 'regional sponsor', token: '{{regional sponsor}}' }, field: { key: 'regional sponsor', value: '' } },
+          { placeholder: { key: 'unused report fields', token: '{{unused report fields}}' }, field: { key: 'unused report fields', value: '' } },
+        ],
+        unknownPlaceholders: [], unusedFields: [],
+      });
+      check('md02 normal three fields insertion count=3', applyMissingTemplateFields('# Report\n', mdAbsent).insertedCount, 3);
+      checkCond(
+        'md03 aggregate still populates through the derived field (flow36)',
+        Function.prototype.toString.call(runTwoPassReconciliation).includes("source: 'derived'")
       );
       checkCond(
         'agg17 aggregation note rendered once near Unused category',
