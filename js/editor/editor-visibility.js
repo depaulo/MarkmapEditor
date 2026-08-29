@@ -73,6 +73,12 @@
       const splitEditorEl = getSplitEditorEl();
       if (!editorEl) return;
 
+      // S2: enforce the last-useful-pane rule through the pane registry.
+      // Re-entrant calls from the registry adapter proceed (isPaneActing).
+      try {
+        if (typeof hideViaRegistry === 'function' && !hideViaRegistry('editor')) return;
+      } catch {}
+
       editorWasVisible = false;
       lastEditorWidth = editorEl.style.width || editorEl.getBoundingClientRect().width + 'px';
 
@@ -85,6 +91,7 @@
       setShowHideLabelSafe('btnToggleEditor', false, 'Editor');
       syncToolbarHeightSafe();
       updateEditorVisibilityControls();
+      try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
     } catch (e) {
       logSafe(`❌ hideEditor() failed: ${e?.message || e}`);
     }
@@ -109,6 +116,7 @@
       setShowHideLabelSafe('btnToggleEditor', true, 'Editor');
       syncToolbarHeightSafe();
       updateEditorVisibilityControls();
+      try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
     } catch (e) {
       logSafe(`❌ showEditor() failed: ${e?.message || e}`);
     }

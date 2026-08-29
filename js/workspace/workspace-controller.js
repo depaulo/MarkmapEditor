@@ -576,16 +576,7 @@ function initJournalSidebarCollapse() {
     event.stopPropagation();
 
     const next = !document.documentElement.classList.contains('journal-sidebar-collapsed');
-    document.documentElement.classList.toggle('journal-sidebar-collapsed', !!next);
-
-    const btn2 = document.getElementById('btnWorkspaceCollapse');
-    if (btn2) {
-      btn2.textContent = next ? '▶' : '◀';
-      btn2.title = next ? 'Expand sidebar' : 'Collapse sidebar';
-      btn2.setAttribute('aria-label', btn2.title);
-    }
-
-    setLocalStorageValue(JOURNAL_SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
+    setJournalSidebarCollapsed(next);
 
     if (!next) {
       try {
@@ -601,6 +592,26 @@ function initJournalSidebarCollapse() {
 
   btn.__bound = true;
 }
+
+// S2 — single canonical Sidebar collapse/restore path. Shared by the local
+// header button and the pane-registry sidebar adapter; keeps class, button
+// label, persistence, and registry state in agreement.
+function setJournalSidebarCollapsed(next) {
+  document.documentElement.classList.toggle('journal-sidebar-collapsed', !!next);
+
+  const btn2 = document.getElementById('btnWorkspaceCollapse');
+  if (btn2) {
+    btn2.textContent = next ? '▶' : '◀';
+    btn2.title = next ? 'Expand sidebar' : 'Collapse sidebar';
+    btn2.setAttribute('aria-label', btn2.title);
+  }
+
+  setLocalStorageValue(JOURNAL_SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
+
+  try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
+}
+
+globalThis.setJournalSidebarCollapsed = setJournalSidebarCollapsed;
 
 async function archiveActiveWorkspaceFile() {
   // Capability guard — block when the active workspace cannot archive.

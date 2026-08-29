@@ -14,6 +14,18 @@ function appendScript(src, { onload } = {}) {
   return s;
 }
 
+// Runtime stylesheet loader (idempotent). Used for Screen Layout modules so
+// index.html stays unchanged.
+function appendStylesheet(href) {
+  try {
+    if (document.querySelector(`link[rel="stylesheet"][href="${href}"]`)) return;
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = href;
+    document.head.appendChild(l);
+  } catch {}
+}
+
   // Load order: navigation history -> UI overlays/modals -> templates data -> export helpers -> main -> editor visibility -> templates menu
   appendScript('./js/navigation/navigation-history.js');
 
@@ -56,6 +68,11 @@ function appendScript(src, { onload } = {}) {
   // files to avoid changing already-validated Index startup behavior.
   appendScript('./js/workspace/workspace-index-workspace.js');
   appendScript('./js/workspace/workspace-index-document.js');
+
+  // Screen Layout S2 — pane registry and edge restore. Loaded before main.js
+  // so MME_VIEW_LAYOUT exists when main.js registers pane adapters.
+  appendStylesheet('./css/view-layout.css');
+  appendScript('./js/ui/view-layout.js');
 
   appendScript('./js/main.js', {
     onload: function () {

@@ -1,0 +1,68 @@
+/* MarkmapEditor Screen Layout — S2 pane-registry and edge-restore helpers.
+ *
+ * S1 corrected resize/overlay foundation in the existing per-pane CSS files.
+ * This file owns only the shared edge-restore and registry-pane helper styles
+ * added by S2. Fullscreen and mobile classes remain dormant until S3/S5.
+ */
+
+:root {
+  --mme-pane-control-gap: 6px;
+  --mme-pane-edge-size: 40px;
+  --mme-pane-control-z: 90;
+}
+
+/* ---- Shared edge-restore tab (registry-rendered Markmap edge) ---- */
+.mme-pane-edge-restore {
+  position: absolute;
+  z-index: var(--mme-pane-control-z);
+  min-width: var(--mme-pane-edge-size);
+  min-height: var(--mme-pane-edge-size);
+  border-radius: 10px;
+  border: 1px solid var(--toolbar-border, rgba(255, 255, 255, 0.18));
+  background: var(--toolbar-bg, rgba(30, 30, 30, 0.92));
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  user-select: none;
+  line-height: 1;
+}
+
+.mme-pane-edge-restore:hover {
+  opacity: 1;
+}
+
+.mme-pane-edge-restore[hidden] {
+  display: none !important;
+}
+
+/* Markmap edge restore sits on the right, vertically centered. Because it is
+   placed below the top-corner HTML edge control, the two restore tabs do not
+   overlap when both Markmap and HTML are hidden (deterministic stacking). */
+.mme-pane-edge-restore[data-edge='right'] {
+  inset-inline-end: 6px;
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+}
+
+html.dark .mme-pane-edge-restore {
+  background: var(--toolbar-bg, rgba(37, 37, 38, 0.95));
+  border-color: var(--btn-border, rgba(255, 255, 255, 0.18));
+}
+
+/* ---- Local Markmap Hide control (inside the existing map overlay) ---- */
+#mapOverlayControls #mapBtnHide {
+  width: 32px;
+}
+
+/* Phone classes remain dormant until S5. DeX follows viewport capability. */
+@media (max-width: 760px) {
+  .mme-pane-edge-restore {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

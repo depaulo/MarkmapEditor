@@ -6966,6 +6966,7 @@ function showHtmlPreview() {
       setShowHideLabel('btnHtml', true, 'HTML');
       syncToolbarHeight();
       constrainHtmlControlsToPane();
+      try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
       return true;
     })
     .catch((err) => {
@@ -6981,6 +6982,10 @@ function hideHtmlPreview() {
     return false;
   }
 
+  // S2: enforce the last-useful-pane rule through the registry. A re-entrant
+  // call from the registry adapter proceeds normally (isPaneActing guard).
+  if (typeof hideViaRegistry === 'function' && !hideViaRegistry('html')) return true;
+
   htmlPane.style.display = 'none';
   log('HTML view HIDE');
 
@@ -6992,11 +6997,200 @@ function hideHtmlPreview() {
   setShowHideLabel('btnHtml', false, 'HTML');
   syncToolbarHeight();
   constrainHtmlControlsToPane();
+  try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
   return true;
 }
 
 async function toggleHtml() {
   return isHtmlPreviewOpen() ? hideHtmlPreview() : showHtmlPreview();
+}
+
+// ================================
+// S2 — Pane Registry integration
+// ================================
+
+// Route a hide request through the registry so the last-useful-pane rule is
+// enforced once, centrally. Returns true when the caller should proceed with
+// the direct owner hide (registry absent, re-entrant call, or fallback), false
+// when the registry already performed (or blocked) the hide.
+function hideViaRegistry(paneId) {
+  try {
+    const V = globalThis.MME_VIEW_LAYOUT;
+    if (!V || typeof V.hidePane !== 'function' || V.isPaneActing?.()) return true;
+    const r = V.hidePane(paneId);
+    if (r && r.ok) return false; // registry already delegated to the owner
+    if (r && r.reason === 'last-useful-pane') {
+      try { showToast('At least one content view must remain open.', 'error', 2200); } catch {}
+      return false;
+    }
+  } catch {}
+  return true;
+}
+
+// ---- S2 Markmap visibility (narrow adapter; registry owns the edge tab) ----
+let _markmapHiddenView = null;
+
+function isMapPaneVisible() {
+  const pane = document.getElementById('mapPane');
+  return !!pane && pane.style.display !== 'none';
+}
+
+function hideMapPane() {
+  const pane = document.getElementById('mapPane');
+  if (!pane || pane.style.display === 'none') return true;
+  try {
+    const v = getCurrentViewState();
+    if (v) _markmapHiddenView = v;
+  } catch {}
+  pane.style.display = 'none';
+  log('Markmap view HIDE');
+  return true;
+}
+
+function showMapPane() {
+  const pane = document.getElementById('mapPane');
+  if (!pane) return false;
+  const wasHidden = pane.style.display === 'none';
+  pane.style.display = 'flex';
+  log('Markmap view SHOW');
+  if (wasHidden) {
+    // Restore the user's pan/zoom after the pane regains layout; the Markmap
+    // instance and SVG are never recreated. No unconditional auto-fit that
+    // would destroy the current view.
+    requestAnimationFrame(() => {
+      try {
+        const v = _markmapHiddenView || getCurrentViewState();
+        if (v && typeof applyViewState === 'function') {
+          applyViewState(v, 'markmap restore');
+        }
+      } catch (e) {
+        try { log(`markmap restore view failed: ${e?.message || e}`); } catch {}
+      }
+      _markmapHiddenView = null;
+    });
+  }
+  return true;
+}
+
+function ensureMapHideButton() {
+  try {
+    const overlay = document.getElementById('mapOverlayControls');
+    if (!overlay || document.getElementById('mapBtnHide')) return;
+    const btn = document.createElement('button');
+    btn.id = 'mapBtnHide';
+    btn.type = 'button';
+    btn.textContent = '✕';
+    btn.title = 'Hide Map';
+    btn.setAttribute('aria-label', 'Hide Map');
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      hideViaRegistry('markmap');
+    });
+    overlay.appendChild(btn);
+  } catch (e) {
+    try { log(`map hide button init failed: ${e?.message || e}`); } catch {}
+  }
+}
+
+function initViewLayoutRegistry() {
+  try {
+    const V = globalThis.MME_VIEW_LAYOUT;
+    if (!V || typeof V.registerPane !== 'function') return;
+    if (V.getPane?.('editor')?.adapter) { V.configure?.(); return; } // idempotent
+
+    V.registerPane({
+      id: 'sidebar',
+      label: 'Workspace',
+      contexts: ['journal'],
+      edge: 'left',
+      usefulContent: false,
+      elementId: 'workspaceSidebar',
+      adapter: {
+        isAvailable: () => globalThis.currentAppContextId === 'journal',
+        isVisible: () =>
+          !document.documentElement.classList.contains('journal-sidebar-collapsed'),
+        show: () => {
+          try {
+            if (typeof globalThis.setJournalSidebarCollapsed !== 'function') return false;
+            globalThis.setJournalSidebarCollapsed(false);
+            return true;
+          } catch { return false; }
+        },
+        hide: () => {
+          try {
+            if (typeof globalThis.setJournalSidebarCollapsed !== 'function') return false;
+            globalThis.setJournalSidebarCollapsed(true);
+            return true;
+          } catch { return false; }
+        },
+      },
+    });
+
+    V.registerPane({
+      id: 'editor',
+      label: 'Editor',
+      contexts: ['editor', 'journal', 'slides'],
+      edge: 'left',
+      usefulContent: true,
+      elementId: 'editor',
+      splitterId: 'splitEditor',
+      adapter: {
+        isVisible: () => !(globalThis.MME_EDITOR_VISIBILITY?.isEditorHidden?.() ?? false),
+        show: () => {
+          try { globalThis.MME_EDITOR_VISIBILITY?.showEditor?.(); return true; }
+          catch { return false; }
+        },
+        hide: () => {
+          try { globalThis.MME_EDITOR_VISIBILITY?.hideEditor?.(); return true; }
+          catch { return false; }
+        },
+        focus: () => {
+          try { globalThis.__cm?.focus?.(); return true; }
+          catch { return false; }
+        },
+      },
+    });
+
+    V.registerPane({
+      id: 'markmap',
+      label: 'Map',
+      contexts: ['editor', 'journal', 'slides'],
+      edge: 'right',
+      usefulContent: true,
+      elementId: 'mapPane',
+      splitterId: 'splitHtml',
+      adapter: {
+        isVisible: isMapPaneVisible,
+        show: showMapPane,
+        hide: hideMapPane,
+      },
+    });
+
+    V.registerPane({
+      id: 'html',
+      label: 'Preview',
+      contexts: ['editor', 'journal', 'slides'],
+      edge: 'right',
+      usefulContent: true,
+      elementId: 'htmlPane',
+      splitterId: 'splitHtml',
+      adapter: {
+        isVisible: () => htmlPane.style.display === 'block',
+        show: () => {
+          try { showHtmlPreview(); return true; } catch { return false; }
+        },
+        hide: () => {
+          try { return hideHtmlPreview() !== false; } catch { return false; }
+        },
+      },
+    });
+
+    V.configure?.();
+    try { log('Pane registry initialized (S2)'); } catch {}
+  } catch (e) {
+    try { log(`❌ pane registry init failed: ${e?.message || e}`); } catch {}
+  }
 }
 
 // ================================
@@ -7938,6 +8132,10 @@ function wireMapOverlayControls() {
 }
 
 wireMapOverlayControls();
+
+// S2 — wire the pane registry after overlay controls exist.
+ensureMapHideButton();
+initViewLayoutRegistry();
 
 // ================================
 // Markmap Style Modifier MVP
