@@ -7088,8 +7088,64 @@ function ensureMapHideButton() {
       hideViaRegistry('markmap');
     });
     overlay.appendChild(btn);
+    if (!document.getElementById('mapBtnFullscreen')) {
+      const fsBtn = document.createElement('button');
+      fsBtn.id = 'mapBtnFullscreen';
+      fsBtn.type = 'button';
+      fsBtn.textContent = '⛶';
+      fsBtn.title = 'Fullscreen Map';
+      fsBtn.setAttribute('aria-label', 'Fullscreen Map');
+      fsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try { globalThis.MME_VIEW_LAYOUT?.enterFullscreen?.('markmap'); } catch {}
+      });
+      overlay.appendChild(fsBtn);
+    }
   } catch (e) {
     try { log(`map hide button init failed: ${e?.message || e}`); } catch {}
+  }
+}
+
+function ensureEditorFullscreenButton() {
+  try {
+    const host = document.getElementById('editorOverlayControls');
+    if (!host || document.getElementById('editorBtnFullscreen')) return;
+    const btn = document.createElement('button');
+    btn.id = 'editorBtnFullscreen';
+    btn.type = 'button';
+    btn.textContent = '⛶';
+    btn.title = 'Fullscreen Editor';
+    btn.setAttribute('aria-label', 'Fullscreen Editor');
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try { globalThis.MME_VIEW_LAYOUT?.enterFullscreen?.('editor'); } catch {}
+    });
+    host.appendChild(btn);
+  } catch (e) {
+    try { log(`editor fullscreen button init failed: ${e?.message || e}`); } catch {}
+  }
+}
+
+function ensureHtmlFullscreenButton() {
+  try {
+    const overlay = ensureHtmlOverlayControls();
+    if (!overlay || document.getElementById('htmlBtnFullscreen')) return;
+    const btn = document.createElement('button');
+    btn.id = 'htmlBtnFullscreen';
+    btn.type = 'button';
+    btn.textContent = '⛶';
+    btn.title = 'Fullscreen Preview';
+    btn.setAttribute('aria-label', 'Fullscreen Preview');
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try { globalThis.MME_VIEW_LAYOUT?.enterFullscreen?.('html'); } catch {}
+    });
+    overlay.appendChild(btn);
+  } catch (e) {
+    try { log(`html fullscreen button init failed: ${e?.message || e}`); } catch {}
   }
 }
 
@@ -7149,6 +7205,28 @@ function initViewLayoutRegistry() {
           try { globalThis.__cm?.focus?.(); return true; }
           catch { return false; }
         },
+        captureLayout: () => {
+          try {
+            const cm = globalThis.__cm;
+            return { scroll: cm ? (cm.doc?.scrollTop ?? cm.getScrollInfo?.().top ?? null) : null };
+          } catch { return null; }
+        },
+        applyLayout: () => {
+          try {
+            requestAnimationFrame(() => {
+              try { globalThis.__cm?.refresh?.(); } catch {}
+            });
+            return true;
+          } catch { return false; }
+        },
+        restoreLayout: () => {
+          try {
+            requestAnimationFrame(() => {
+              try { globalThis.__cm?.refresh?.(); globalThis.__cm?.focus?.(); } catch {}
+            });
+            return true;
+          } catch { return false; }
+        },
       },
     });
 
@@ -7164,6 +7242,30 @@ function initViewLayoutRegistry() {
         isVisible: isMapPaneVisible,
         show: showMapPane,
         hide: hideMapPane,
+        captureLayout: () => {
+          try { return getCurrentViewState() || null; } catch { return null; }
+        },
+        applyLayout: ({ baselineLayout }) => {
+          try {
+            requestAnimationFrame(() => {
+              if (baselineLayout) {
+                try { applyViewState(baselineLayout, 'markmap fullscreen enter'); } catch {}
+              }
+            });
+            return true;
+          } catch { return false; }
+        },
+        restoreLayout: ({ fullscreenLayout, baselineLayout }) => {
+          try {
+            const view = fullscreenLayout || baselineLayout;
+            requestAnimationFrame(() => {
+              if (view) {
+                try { applyViewState(view, 'markmap fullscreen exit'); } catch {}
+              }
+            });
+            return true;
+          } catch { return false; }
+        },
       },
     });
 
@@ -7183,10 +7285,40 @@ function initViewLayoutRegistry() {
         hide: () => {
           try { return hideHtmlPreview() !== false; } catch { return false; }
         },
+        captureLayout: () => {
+          try { return { top: htmlPane.scrollTop, left: htmlPane.scrollLeft }; }
+          catch { return null; }
+        },
+        applyLayout: ({ baselineLayout }) => {
+          try {
+            requestAnimationFrame(() => {
+              try {
+                if (baselineLayout?.top != null) htmlPane.scrollTop = baselineLayout.top;
+                if (baselineLayout?.left != null) htmlPane.scrollLeft = baselineLayout.left;
+              } catch {}
+            });
+            return true;
+          } catch { return false; }
+        },
+        restoreLayout: ({ fullscreenLayout, baselineLayout }) => {
+          try {
+            const lay = fullscreenLayout || baselineLayout;
+            requestAnimationFrame(() => {
+              try {
+                if (lay?.top != null) htmlPane.scrollTop = lay.top;
+                if (lay?.left != null) htmlPane.scrollLeft = lay.left;
+              } catch {}
+            });
+            return true;
+          } catch { return false; }
+        },
       },
     });
 
     V.configure?.();
+    ensureMapHideButton();
+    ensureEditorFullscreenButton();
+    ensureHtmlFullscreenButton();
     try { log('Pane registry initialized (S2)'); } catch {}
   } catch (e) {
     try { log(`❌ pane registry init failed: ${e?.message || e}`); } catch {}
@@ -9463,6 +9595,7 @@ function setHtmlPreviewOpenClass(isOpen) {
   document.documentElement.classList.toggle('html-preview-open', Boolean(isOpen));
 
   const overlay = ensureHtmlOverlayControls();
+  ensureHtmlFullscreenButton();
 
   if (overlay) {
     overlay.hidden = !isOpen;

@@ -181,7 +181,10 @@
   }
 
   function setContext(contextId, options = {}) {
-    state.contextId = cleanId(contextId) || 'editor';
+    const nextContextId = cleanId(contextId) || 'editor';
+    // Context change exits fullscreen first (approved S3 contract).
+    if (fsState && nextContextId !== state.contextId) exitFullscreen({ via: 'context-change' });
+    state.contextId = nextContextId;
     const useful = getAvailablePanes().filter((p) => p.usefulContent !== false);
     const anyVisible = useful.some((p) => isPaneVisible(p.id));
     if (!anyVisible && options.allowEmpty !== true) {
@@ -267,6 +270,159 @@
     return getState();
   }
 
+  // ---- S3: application-local pane fullscreen (registry-owned orchestration) ----
+  let fsState = null; // { paneId, hiddenBefore, snapshot, enteredAt, el }
+  let escapeBound = false;
+  let fsResizeBound = false;
+
+  function fsTargetElement(pane) {
+    try {
+      return document.getElementById(pane.elementId || '') || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function fsUpdateTopVar() {
+    try {
+      const bar = document.getElementById('toolbar');
+      const h = bar ? Math.round(bar.getBoundingClientRect().height) : 0;
+      document.documentElement.style.setProperty('--mme-fs-top', (h > 0 ? h : 0) + 'px');
+    } catch {}
+  }
+
+  function fsModalOwnsEscape() {
+    try {
+      // A visible <dialog> or role=dialog surface consumes Escape first.
+      return Boolean(document.querySelector('dialog[open], [role="dialog"]:not([hidden])'));
+    } catch {
+      return false;
+    }
+  }
+
+  function ensureFsExitControl(pane) {
+    try {
+      if (document.getElementById('mmePaneFullscreenExit')) return;
+      const host = fsTargetElement(pane) || document.body;
+      const btn = document.createElement('button');
+      btn.id = 'mmePaneFullscreenExit';
+      btn.type = 'button';
+      btn.title = 'Exit Fullscreen';
+      btn.setAttribute('aria-label', 'Exit Fullscreen');
+      btn.textContent = 'Exit Fullscreen';
+      btn.addEventListener('click', () => exitFullscreen({ via: 'button' }));
+      host.appendChild(btn);
+    } catch {}
+  }
+
+  function removeFsExitControl() {
+    try {
+      document.getElementById('mmePaneFullscreenExit')?.remove();
+    } catch {}
+  }
+
+  function captureFsSnapshot(paneId) {
+    const visible = {};
+    try {
+      paneDefinitions.forEach((_def, id) => { visible[id] = isPaneVisible(id); });
+    } catch {}
+    let targetLayout = null;
+    try { targetLayout = getPane(paneId)?.adapter.captureLayout?.({ mode: 'enter' }) ?? null; } catch {}
+    let activeElement = null;
+    try { activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null; } catch {}
+    return { contextId: state.contextId, visible, targetLayout, activeElement };
+  }
+
+  function bindFsListeners() {
+    if (escapeBound || typeof document === 'undefined') return;
+    escapeBound = true;
+    // Bubble phase: modal/menu handlers run first; respect defaultPrevented.
+    document.addEventListener('keydown', (ev) => {
+      if (!fsState || ev.key !== 'Escape' || ev.defaultPrevented) return;
+      if (fsModalOwnsEscape()) return;
+      ev.preventDefault();
+      exitFullscreen({ via: 'escape' });
+    });
+    if (!fsResizeBound) {
+      fsResizeBound = true;
+      window.addEventListener('resize', () => {
+        if (fsState) fsUpdateTopVar();
+      });
+    }
+  }
+
+  function enterFullscreen(id, options = {}) {
+    const pane = getPane(id);
+    if (!pane) return { ok: false, paneId: cleanId(id), reason: 'not-registered' };
+    if (!isPaneAvailable(id)) return { ok: false, paneId: pane.id, reason: 'unavailable' };
+    if (fsState && fsState.paneId === pane.id) {
+      return { ok: true, paneId: pane.id, active: true, changed: false };
+    }
+    if (typeof document === 'undefined') return { ok: false, paneId: pane.id, reason: 'dom-unavailable' };
+    // One fullscreen target only: restore previous composition, then enter.
+    if (fsState) exitFullscreen({ via: 'switch' });
+    const snapshot = captureFsSnapshot(pane.id);
+    const hiddenBefore = !isPaneVisible(pane.id);
+    if (hiddenBefore) {
+      acting = true;
+      try { pane.adapter.show?.({ viaFullscreen: true }); } catch {}
+      acting = false;
+    }
+    const el = fsTargetElement(pane);
+    const root = document.documentElement;
+    root.classList.add('mme-pane-fullscreen-active');
+    try { root.dataset.mmeFullscreenPane = pane.id; } catch {}
+    if (el) el.classList.add('mme-pane-fullscreen-target');
+    fsUpdateTopVar();
+    ensureFsExitControl(pane);
+    fsState = { paneId: pane.id, hiddenBefore, snapshot, enteredAt: Date.now(), el };
+    try { pane.adapter.applyLayout?.({ mode: 'enter', baselineLayout: snapshot.targetLayout }); } catch {}
+    try { snapshot.activeElement?.blur?.(); } catch {}
+    emit(pane.id, 'enter-fullscreen');
+    return { ok: true, paneId: pane.id, active: true, changed: true };
+  }
+
+  function exitFullscreen(options = {}) {
+    if (!fsState) return { ok: true, paneId: null, active: false, changed: false };
+    const fs = fsState;
+    fsState = null;
+    const pane = getPane(fs.paneId);
+    // Capture fullscreen-mode layout (e.g. zoom/pan changed during fullscreen).
+    let fullscreenLayout = null;
+    try { fullscreenLayout = pane?.adapter.captureLayout?.({ mode: 'exit' }) ?? null; } catch {}
+    const root = document.documentElement;
+    root.classList.remove('mme-pane-fullscreen-active');
+    try { delete root.dataset.mmeFullscreenPane; } catch {}
+    if (fs.el) fs.el.classList.remove('mme-pane-fullscreen-target');
+    removeFsExitControl();
+    // Undo temporary visibility changes made for fullscreen entry only.
+    if (fs.hiddenBefore && pane) {
+      acting = true;
+      try { pane.adapter.hide?.({ viaFullscreen: true }); } catch {}
+      acting = false;
+    }
+    // Restore pre-fullscreen geometry/state; fullscreenLayout wins when valid.
+    try {
+      pane?.adapter.restoreLayout?.({
+        mode: 'exit',
+        fullscreenLayout,
+        baselineLayout: fs.snapshot.targetLayout,
+      });
+    } catch {}
+    try { fs.snapshot.activeElement?.focus?.(); } catch {}
+    emit(fs.paneId, 'exit-fullscreen');
+    return { ok: true, paneId: fs.paneId, active: false, changed: true };
+  }
+
+  function isFullscreen() {
+    return Boolean(fsState);
+  }
+
+  function getFullscreenState() {
+    if (!fsState) return Object.freeze({ active: false, paneId: null, enteredAt: null });
+    return Object.freeze({ active: true, paneId: fsState.paneId, enteredAt: fsState.enteredAt });
+  }
+
   function notIntegrated(name) {
     return function () { return { ok: false, reason: 'not-integrated', capability: name }; };
   }
@@ -319,10 +475,9 @@
     isPaneAvailable, getAvailablePanes, isPaneVisible,
     showPane, hidePane, togglePane, getState, setContext, refresh, subscribe,
     configure, syncMarkmapEdgeTab, validateViewLayout, isPaneActing,
+    enterFullscreen, exitFullscreen, isFullscreen, getFullscreenState,
     registerPreset: notIntegrated('registerPreset'),
     applyPreset: notIntegrated('applyPreset'),
-    enterFullscreen: notIntegrated('enterFullscreen'),
-    exitFullscreen: notIntegrated('exitFullscreen'),
     restoreAll: notIntegrated('restoreAll'),
   });
 

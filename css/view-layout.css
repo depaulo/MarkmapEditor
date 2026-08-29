@@ -55,10 +55,90 @@ html.dark .mme-pane-edge-restore {
 }
 
 /* ---- Local Markmap Hide control (inside the existing map overlay) ---- */
-#mapOverlayControls #mapBtnHide {
+#mapOverlayControls #mapBtnHide,
+#mapOverlayControls #mapBtnFullscreen {
   width: 32px;
 }
 
+/* ---- S3: application-local pane fullscreen (registry-owned state) ----
+ * Root state: html.mme-pane-fullscreen-active + [data-mme-fullscreen-pane].
+ * Suppression is CSS-only: underlying visibility preferences are untouched. */
+:root {
+  --mme-fs-top: 0px; /* set from #toolbar height by the registry */
+  --mme-fs-z: 9000;  /* above panes/splitters (≤100) and toolbar (10000 is
+                        above, but toolbar stays visible; modals at 30000) */
+}
+
+html.mme-pane-fullscreen-active #viewer > *:not(.mme-pane-fullscreen-target) {
+  display: none !important;
+}
+
+/* Non-target panes live directly under #layout/#viewer; suppress them and the
+ * splitters via the root state only. */
+html.mme-pane-fullscreen-active #splitEditor,
+html.mme-pane-fullscreen-active #splitHtml,
+html.mme-pane-fullscreen-active #workspaceSidebarResizeHandle,
+html.mme-pane-fullscreen-active #workspaceSidebar,
+html.mme-pane-fullscreen-active #editor:not(.mme-pane-fullscreen-target) {
+  display: none !important;
+}
+
+/* Edge-restore tabs must not appear over fullscreen content. */
+html.mme-pane-fullscreen-active .mme-pane-edge-restore,
+html.mme-pane-fullscreen-active #btnEditorEdgeOpen,
+html.mme-pane-fullscreen-active #btnHtmlEdgeOpen {
+  display: none !important;
+}
+
+/* The fullscreen target fills the application content surface below the
+ * toolbar; viewport-based, so resize/orientation remain stable. */
+.mme-pane-fullscreen-target {
+  position: fixed !important;
+  inset: var(--mme-fs-top) 0 0 0 !important;
+  z-index: var(--mme-fs-z) !important;
+  display: block !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+}
+
+/* Shared Exit Fullscreen control (exactly one, registry-owned). */
+#mmePaneFullscreenExit {
+  position: absolute;
+  inset-block-start: 10px;
+  inset-inline-end: 10px;
+  z-index: calc(var(--mme-fs-z) + 2);
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--toolbar-border, rgba(255, 255, 255, 0.18));
+  background: var(--toolbar-bg, rgba(30, 30, 30, 0.92));
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  user-select: none;
+}
+
+#mmePaneFullscreenExit:focus-visible {
+  outline: 2px solid var(--accent, #4c9aff);
+  outline-offset: 2px;
+}
+
+/* Suppress the fullscreen target's own Hide/Close control: Exit is the way out. */
+html.mme-pane-fullscreen-active[data-mme-fullscreen-pane='editor'] #editorBtnHide,
+html.mme-pane-fullscreen-active[data-mme-fullscreen-pane='markmap'] #mapBtnHide,
+html.mme-pane-fullscreen-active[data-mme-fullscreen-pane='html'] #btnHtmlClose {
+  display: none !important;
+}
+
+/* Editor pane keeps its flex column layout (CodeMirror fills via its host). */
+html.mme-pane-fullscreen-active[data-mme-fullscreen-pane='editor'] #editor.mme-pane-fullscreen-target {
+  display: flex !important;
+}
+
+/* Phone classes remain dormant until S5. DeX follows viewport capability. */
 /* Phone classes remain dormant until S5. DeX follows viewport capability. */
 @media (max-width: 760px) {
   .mme-pane-edge-restore {
