@@ -8671,25 +8671,56 @@ const HTML_REVEAL_THRESHOLD = 90;
 // Guards the single hidden->visible HTML show during one #splitHtml drag.
 let _splitHtmlDragShown = false;
 
-// Splitters
+// S4B: pane splitter drag lifecycle migrated from mouse-only events to one
+// unified Pointer Events path (mouse, touch, and pen). Geometry, minimums,
+// clamping, callbacks, and the #splitHtml drag-to-open behavior are unchanged;
+// only the input lifecycle was replaced. A shared idempotent finalizer prevents
+// double finalization across pointerup / pointercancel / lostpointercapture.
+// Pointer capture keeps the drag alive when the finger leaves the touch lane.
 function makeResizable(splitter, left, container, getMaxWidth, getMinWidth, onDrag, onDragStart) {
   let dragging = false,
+    activePointerId = null,
     startX = 0,
-    startW = 0;
-  splitter.addEventListener('mousedown', (e) => {
-    dragging = true;
+    startW = 0,
+    finalized = false;
+  // Shared cleanup: runs exactly once per drag, safe to call from
+  // pointerup, pointercancel, or lostpointercapture.
+  const finalize = (reason) => {
+    if (finalized) return;
+    finalized = true;
+    if (dragging) log(reason === 'cancel' ? 'Splitter drag cancel' : 'Splitter drag end');
+    dragging = false;
+    activePointerId = null;
+    try {
+      if (typeof splitter.releasePointerCapture === 'function' &&
+          typeof splitter.hasPointerCapture === 'function' &&
+          activePointerId !== null &&
+          splitter.hasPointerCapture(activePointerId)) {
+        splitter.releasePointerCapture(activePointerId);
+      }
+    } catch {}
+  };
+  splitter.addEventListener('pointerdown', (e) => {
+    if (dragging && activePointerId !== null && e.pointerId !== activePointerId) return; // one pointer at a time
+    if (e.pointerType === 'mouse') {
+      if (e.button !== 0) return; // primary button only
+    } else if (e.isPrimary === false) {
+      return; // touch/pen: primary pointer only where supported
+    }
+    finalized = false;
+    activePointerId = e.pointerId;
     startX = e.clientX;
     startW = left.getBoundingClientRect().width;
-    log('Splitter drag start');
-    e.preventDefault();
+    dragging = true;
+    log(`Splitter drag start (${splitter.id || 'splitter'}, ${e.pointerType})`);
+    try {
+      if (typeof splitter.setPointerCapture === 'function') splitter.setPointerCapture(e.pointerId);
+    } catch {}
+    e.preventDefault(); // only for this splitter gesture
     if (typeof onDragStart === 'function') onDragStart();
   });
-  window.addEventListener('mouseup', () => {
-    if (dragging) log('Splitter drag end');
-    dragging = false;
-  });
-  window.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
+  window.addEventListener('pointermove', (e) => {
+    if (!dragging || e.pointerId !== activePointerId) return;
     const dx = e.clientX - startX;
     let w = startW + dx;
     const minW = getMinWidth ? getMinWidth() : 200;
@@ -8700,6 +8731,19 @@ function makeResizable(splitter, left, container, getMaxWidth, getMinWidth, onDr
     left.style.flex = `0 0 ${w}px`;
     constrainHtmlControlsToPane();
     if (typeof onDrag === 'function') onDrag();
+    e.preventDefault(); // only during the active splitter drag
+  });
+  window.addEventListener('pointerup', (e) => {
+    if (e.pointerId !== activePointerId) return;
+    finalize('end');
+  });
+  window.addEventListener('pointercancel', (e) => {
+    if (e.pointerId !== activePointerId) return;
+    finalize('cancel');
+  });
+  splitter.addEventListener('lostpointercapture', (e) => {
+    // Capture loss alone must not duplicate the pointerup finalization.
+    if (dragging && activePointerId === e.pointerId) finalize('cancel');
   });
 }
 
