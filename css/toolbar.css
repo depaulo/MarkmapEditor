@@ -114,3 +114,34 @@ html.compact #saveStatus {
   font-size: 11px;
   opacity: 0.6;
 }
+/* =====================================================================
+   S4B — controlled horizontal toolbar scrolling at narrow widths.
+   Single fixed row is preserved over a normal-width desktop (unchanged).
+   No wrapping, no command removal, and Compact Mode is never auto-enabled.
+   Only the toolbar scrolls; the fixed #layout / body gain no horizontal
+   overflow. Height stays constant, so --toolbar-h / --mme-fs-top remain
+   correct. Menus positioned from toolbar controls use getBoundingClientRect
+   of the (scrolled) visible button, so the Layout / Export / Help menus
+   stay inside the viewport.
+   */
+@media (max-width: 1023px) {
+  #toolbar {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    gap: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  #toolbar .btnGroup,
+  #toolbar .btnSep {
+    flex: 0 0 auto;
+  }
+
+  /* Keep the status readout reachable when the toolbar scrolls. */
+  #saveStatus {
+    flex: 0 0 auto;
+  }
+}

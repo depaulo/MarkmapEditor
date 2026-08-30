@@ -192,6 +192,34 @@ html.dark #workspaceSidebarResizeHandle:hover::before {
   opacity: 0.8;
 }
 
+/* ---- S4B touch-friendly Sidebar resize lane ----
+   The visible handle stays 10px wide (no geometry change). Under a coarse
+   pointer an invisible ::after lane is centered over the handle so finger
+   drags start reliably. It is part of the handle's own box, so the existing
+   pointer-event resize listeners still receive the events. It uses
+   pointer-events:auto only on the handle; pane-local buttons with higher
+   z-index and the collapsed rail remain reachable. The handle already owns
+   touch-action:none and setPointerCapture, so no event migration or
+   duplicate listeners are added. The lane is suppressed with the Sidebar
+   during pane fullscreen (the Sidebar is display:none there). */
+@media (pointer: coarse) {
+  #workspaceSidebarResizeHandle::after {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 50%;
+    width: var(--touch-splitter-hit-width, 28px);
+    transform: translateX(-50%);
+    z-index: 1;
+    pointer-events: auto;
+    background: transparent;
+  }
+
+  #workspaceSidebarResizeHandle:active::after {
+    background-color: rgba(127, 127, 127, 0.1);
+  }
+}
+
 html.journal-sidebar-collapsed #workspaceSidebarResizeHandle {
   display: none;
 }
@@ -4255,4 +4283,30 @@ html.dark {
   .drawioReportDialog { width: 100%; max-height: none; flex: 1 1 auto; }
   .drawioReportList { max-height: 140px; }
   .drawioReportActions button { flex-basis: 45%; }
+}
+/* =====================================================================
+   S4B — narrow-viewport open-Sidebar width cap (OPTION A: keep collapse).
+   Based on viewport width only (@media max-width), never coarse pointer
+   alone, so wide coarse-pointer environments (e.g. DeX with pointer:coarse)
+   are unaffected. The open Sidebar cannot exceed ~86vw on a narrow
+   viewport so a temporarily-open Sidebar stays usable. The collapsed 52px
+   rail (html.journal-sidebar-collapsed) is unchanged, the persisted desktop
+   width is not rewritten, no localStorage write occurs, and returning to a
+   wide viewport restores normal persisted geometry.
+   */
+@media (max-width: 767px) {
+  html[data-app-context='journal']:not(.journal-sidebar-collapsed) #workspaceSidebar {
+    width: min(var(--workspace-sidebar-width, 280px), 86vw) !important;
+    flex-basis: min(var(--workspace-sidebar-width, 280px), 86vw) !important;
+    min-width: 0 !important;
+  }
+}
+
+/* ---- Coarse-pointer touch target for the Sidebar collapse/restore toggle ----
+   Capability-aware only; fine-pointer keeps the current 28px hit area. */
+@media (pointer: coarse) {
+  #btnWorkspaceCollapse {
+    width: 40px;
+    height: 40px;
+  }
 }

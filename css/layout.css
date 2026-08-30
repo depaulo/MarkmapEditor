@@ -67,3 +67,46 @@ html.dark .splitter::before {
 html.dark .splitter:hover::before {
   opacity: 0.75;
 }
+
+/* =====================================================================
+   S4B — touch-friendly splitter grab lane.
+   The visible splitter keeps its narrow 6px layout width (no geometry
+   change). Under a coarse pointer we add an invisible ::after interaction
+   lane centered over the splitter so finger drags start reliably. The lane
+   is part of the splitter's own box, so the existing makeResizable
+   listeners still receive the events (mouse-mapped touch drag). It uses
+   pointer-events:auto only on the splitter, so it never blocks the pane
+   buttons (which have higher z-index) or adjacent noninteractive content
+   beyond the intended lane. touch-action:none on the splitter keeps a touch
+   from scrolling/panning instead of dragging; it is scoped to the splitter
+   only and does not affect Editor/Markmap/HTML scrolling. Fine-pointer
+   desktop keeps its current geometry and behavior unchanged. The lane is
+   suppressed automatically with the splitter during pane fullscreen
+   (the splitter element is display:none there). */
+:root {
+  --touch-splitter-hit-width: 28px;
+}
+
+@media (pointer: coarse) {
+  .splitter {
+    touch-action: none;
+    user-select: none;
+  }
+
+  .splitter::after {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 50%;
+    width: var(--touch-splitter-hit-width);
+    transform: translateX(-50%);
+    z-index: 1;
+    pointer-events: auto;
+    background: transparent;
+  }
+
+  /* Subtle touch-only active feedback; the resting lane stays invisible. */
+  .splitter:active::after {
+    background-color: rgba(127, 127, 127, 0.1);
+  }
+}

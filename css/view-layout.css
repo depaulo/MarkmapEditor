@@ -190,43 +190,19 @@ html.compact #mmeLayoutBtn {
   user-select: none;
 }
 
-/* ---- S4A: Quick Edit controls ---- */
-#mmeQuickEditBtn {
-  position: absolute;
-  inset-block-end: 14px;
-  inset-inline-end: 14px;
-  z-index: 120;
-  padding: 8px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--toolbar-border, rgba(255, 255, 255, 0.18));
-  background: var(--toolbar-bg, rgba(30, 30, 30, 0.92));
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
-  user-select: none;
-}
-
-#mmeQuickEditBtn[hidden] {
-  display: none !important;
-}
-
-#mmeQuickEditDone {
-  position: fixed;
-  inset-block-end: 14px;
-  inset-inline-end: 14px;
-  z-index: 9600; /* above panes/splitters and Quick Edit surfaces; below toolbar */
-  padding: 8px 16px;
-  border-radius: 10px;
-  border: 1px solid var(--toolbar-border, rgba(255, 255, 255, 0.18));
-  background: var(--toolbar-bg, rgba(30, 30, 30, 0.92));
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.26);
-  user-select: none;
-}
-
+/* ---- S4A: Quick Edit controls ----
+   S4B: the launcher and Done now live inside #grpPresentationAction, a
+   toolbar button group inserted immediately after #grpLayout (beside the
+   Layout selector). They are styled by the toolbar button grammar in
+   css/toolbar.css (#toolbar .btnGroup > button). No floating content
+   ownership remains: no absolute/fixed positioning, no inset offsets, no
+   translateX centering, and no content-overlay z-index.
+   Visibility is driven by the [hidden] attribute on each control and on the
+   group (set by syncPresentationActionGroup / syncQuickEditButton). */
+#grpPresentationAction[hidden],
+#grpPresentationAction:not([hidden]) #mmeQuickEditBtn[hidden],
+#grpPresentationAction:not([hidden]) #mmeQuickEditDone[hidden],
+#mmeQuickEditBtn[hidden],
 #mmeQuickEditDone[hidden] {
   display: none !important;
 }
@@ -237,7 +213,10 @@ html.compact #mmeLayoutBtn {
   outline-offset: 2px;
 }
 
-/* Quick Edit launcher is never visible during pane fullscreen. */
+/* Quick Edit action is never visible during pane fullscreen. Hiding the
+   whole group keeps both the launcher and Done suppressed; #mmePaneFullscreenExit
+   remains the only fullscreen exit control. */
+html.mme-pane-fullscreen-active #grpPresentationAction,
 html.mme-pane-fullscreen-active #mmeQuickEditBtn,
 html.mme-pane-fullscreen-active #mmeQuickEditDone {
   display: none !important;
@@ -290,6 +269,82 @@ html.mme-viewer-empty #splitHtml {
 /* Phone classes remain dormant until S4B. DeX follows viewport capability. */
 @media (max-width: 760px) {
   .mme-pane-edge-restore {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+/* =====================================================================
+   S4B — Responsive polish over the same pane system.
+
+   These are narrow-only / coarse-pointer refinements on top of the S1-S4A
+   horizontal architecture. No vertical stacking, no mobile primary-pane
+   state, no mobile switcher, no orientation reorder, no user-agent branch.
+   Fine-pointer (mouse / DeX cursor) control geometry is unchanged so
+   desktop behavior is preserved.
+
+   Layout menu: keep a readable width without ever exceeding the viewport.
+   */
+#mmeLayoutMenu {
+  min-width: min(180px, 92vw);
+}
+
+/* ---- Safe-area spacing for fixed/absolute viewport-edge controls ----
+   env() falls back to 0px on environments without insets, so desktop /
+   common-width spacing is unchanged. Only controls that sit at viewport
+   edges are touched; no global padding is applied to body/#layout/panes.
+   Quick Edit / Done now live inside #grpPresentationAction in the toolbar,
+   so they no longer float over content and carry no safe-area offset. */
+
+#mmePaneFullscreenExit {
+  inset-block-start: calc(10px + env(safe-area-inset-top, 0px));
+  inset-inline-end: calc(10px + env(safe-area-inset-right, 0px));
+}
+
+/* ---- Editor tools-panel available height on short dynamic viewports ----
+   S4B responsive override only: the base rule lives in css/overlays.css
+   (its 78vh / 100%-based fallback stays). Here only the height constraint
+   is relaxed for coarse pointers on short viewports so the panel stays
+   reachable with an open keyboard. Container geometry, ordering and pane
+   containment are unchanged. No VisualViewport scripting: CSS only.
+   A compatible fallback stays in overlays.css ahead of any @supports. */
+@supports (height: 100dvh) {
+  @media (pointer: coarse) and (max-height: 780px) {
+    .editorOverlayToolsPanel {
+      max-height: min(calc(100dvh - 150px), calc(100% - 90px));
+    }
+  }
+}
+
+/* ---- Coarse-pointer touch targets (~40-44px) -----------------------
+   Capability-aware only via @media (pointer: coarse); fine-pointer controls
+   keep their current sizes. Real interactive controls grow but pane minimum
+   widths are NOT raised, so panes still shrink below their local toolbars
+   (S1 rule: the pane defines the toolbar size). Focus-visible states in the
+   base rules are preserved. */
+@media (pointer: coarse) {
+  #editorOverlayControls button,
+  #editorOverlayToolsPanel button,
+  #mapOverlayControls button,
+  #htmlOverlayControls button {
+    min-width: 40px;
+    height: 40px;
+  }
+
+  #mmePaneFullscreenExit {
+    min-height: 40px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+
+  #mmeLayoutMenu .mme-layout-item {
+    min-height: 40px;
+    font-size: 13px;
+  }
+
+  .mme-pane-edge-restore,
+  #btnEditorEdgeOpen,
+  #btnHtmlEdgeOpen,
+  #mmeMapEdgeRestore {
     min-width: 44px;
     min-height: 44px;
   }

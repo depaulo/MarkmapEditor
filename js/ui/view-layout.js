@@ -737,9 +737,27 @@
   function ensureQuickEditControls() {
     try {
       if (typeof document === 'undefined') return;
-      const viewer = document.getElementById('viewer');
-      if (viewer && !document.getElementById('mmeQuickEditBtn')) {
-        const btn = document.createElement('button');
+      const toolbar = document.getElementById('toolbar');
+      if (!toolbar) return;
+      // S4B: Quick Edit and Done now live in ONE toolbar group immediately
+      // after #grpLayout (beside the Layout selector). No floating content
+      // ownership: neither control is appended to #viewer/#mapPane/#htmlPane/
+      // #editor or to document.body as an overlay.
+      let group = document.getElementById('grpPresentationAction');
+      if (!group) {
+        group = document.createElement('div');
+        group.className = 'btnGroup';
+        group.id = 'grpPresentationAction';
+        group.hidden = true;
+        const grpLayout = document.getElementById('grpLayout');
+        if (grpLayout) grpLayout.insertAdjacentElement('afterend', group);
+        else toolbar.insertBefore(group, toolbar.querySelector('#grpFile') || null);
+      }
+      // Reuse-or-create launcher, then ensure it belongs to the group so a
+      // pre-existing floating control is migrated (no duplicate id).
+      let btn = document.getElementById('mmeQuickEditBtn');
+      if (!btn) {
+        btn = document.createElement('button');
         btn.id = 'mmeQuickEditBtn';
         btn.type = 'button';
         btn.className = 'mme-quick-edit-launch';
@@ -751,10 +769,12 @@
           e.stopPropagation();
           openQuickEdit({ via: 'button' });
         });
-        viewer.appendChild(btn);
       }
-      if (!document.getElementById('mmeQuickEditDone')) {
-        const done = document.createElement('button');
+      if (btn.parentNode !== group) group.appendChild(btn);
+      // Reuse-or-create Done, then ensure it belongs to the group.
+      let done = document.getElementById('mmeQuickEditDone');
+      if (!done) {
+        done = document.createElement('button');
         done.id = 'mmeQuickEditDone';
         done.type = 'button';
         done.textContent = 'Done';
@@ -765,20 +785,36 @@
           e.stopPropagation();
           closeQuickEdit({ via: 'done' });
         });
-        document.body.appendChild(done);
       }
+      if (done.parentNode !== group) group.appendChild(done);
+    } catch {}
+  }
+
+  // Group visibility: only visible in Presentation while not in pane fullscreen.
+  function syncPresentationActionGroup() {
+    try {
+      if (typeof document === 'undefined') return;
+      const group = document.getElementById('grpPresentationAction');
+      if (!group) return;
+      const presentationActive =
+        presetState.currentPresetId === 'presentation' && !fsState;
+      group.hidden = !presentationActive;
     } catch {}
   }
 
   function syncQuickEditButton() {
     try {
       const btn = document.getElementById('mmeQuickEditBtn');
-      if (!btn) return;
+      const done = document.getElementById('mmeQuickEditDone');
       const available =
         presetState.currentPresetId === 'presentation' &&
         !qeState && !fsState && !isPaneVisible('editor') &&
         isPaneAvailable('editor');
-      btn.hidden = !available;
+      if (btn) btn.hidden = !available;
+      // Done shows only while Quick Edit is active (and only within the group,
+      // which itself is hidden outside Presentation/fullscreen).
+      if (done) done.hidden = !qeState;
+      syncPresentationActionGroup();
     } catch {}
   }
 
