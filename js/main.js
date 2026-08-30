@@ -7319,7 +7319,12 @@ function initViewLayoutRegistry() {
     ensureMapHideButton();
     ensureEditorFullscreenButton();
     ensureHtmlFullscreenButton();
-    try { log('Pane registry initialized (S2)'); } catch {}
+    try {
+      const presetIds = (V.getAvailablePresets?.() || []).map((p) => p.id).join(', ');
+      log(`Pane registry initialized (S2) — S4A presets available: ${presetIds || 'none'}`);
+    } catch {
+      try { log('Pane registry initialized (S2)'); } catch {}
+    }
   } catch (e) {
     try { log(`❌ pane registry init failed: ${e?.message || e}`); } catch {}
   }

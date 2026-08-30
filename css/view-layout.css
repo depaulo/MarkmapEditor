@@ -138,8 +138,156 @@ html.mme-pane-fullscreen-active[data-mme-fullscreen-pane='editor'] #editor.mme-p
   display: flex !important;
 }
 
-/* Phone classes remain dormant until S5. DeX follows viewport capability. */
-/* Phone classes remain dormant until S5. DeX follows viewport capability. */
+/* ---- S4A: contextual Layout selector (top toolbar; presets only) ---- */
+#grpLayout {
+  position: relative;
+  gap: 4px;
+}
+
+#mmeLayoutBtn {
+  height: 28px;
+  font-size: 12px;
+  padding: 0 8px;
+  background: var(--toolbar-bg);
+  color: var(--text);
+  border: 1px solid var(--toolbar-border);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+
+#mmeLayoutBtn:focus-visible {
+  outline: 2px solid var(--accent, #4c9aff);
+  outline-offset: 2px;
+}
+
+html.compact #mmeLayoutBtn {
+  height: 24px;
+  padding: 0 5px;
+  font-size: 11px;
+}
+
+#mmeLayoutMenu {
+  min-width: 180px;
+  max-width: min(280px, 92vw);
+}
+
+#mmeLayoutMenu .mme-layout-item {
+  justify-content: flex-start;
+  font-size: 12px;
+}
+
+#mmeLayoutMenu .mme-layout-item:focus-visible {
+  outline: 2px solid var(--accent, #4c9aff);
+  outline-offset: -2px;
+}
+
+#mmeLayoutMenu .mme-layout-custom {
+  padding: 4px 10px;
+  font-size: 11px;
+  opacity: 0.65;
+  user-select: none;
+}
+
+/* ---- S4A: Quick Edit controls ---- */
+#mmeQuickEditBtn {
+  position: absolute;
+  inset-block-end: 14px;
+  inset-inline-end: 14px;
+  z-index: 120;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--toolbar-border, rgba(255, 255, 255, 0.18));
+  background: var(--toolbar-bg, rgba(30, 30, 30, 0.92));
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  user-select: none;
+}
+
+#mmeQuickEditBtn[hidden] {
+  display: none !important;
+}
+
+#mmeQuickEditDone {
+  position: fixed;
+  inset-block-end: 14px;
+  inset-inline-end: 14px;
+  z-index: 9600; /* above panes/splitters and Quick Edit surfaces; below toolbar */
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--toolbar-border, rgba(255, 255, 255, 0.18));
+  background: var(--toolbar-bg, rgba(30, 30, 30, 0.92));
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.26);
+  user-select: none;
+}
+
+#mmeQuickEditDone[hidden] {
+  display: none !important;
+}
+
+#mmeQuickEditBtn:focus-visible,
+#mmeQuickEditDone:focus-visible {
+  outline: 2px solid var(--accent, #4c9aff);
+  outline-offset: 2px;
+}
+
+/* Quick Edit launcher is never visible during pane fullscreen. */
+html.mme-pane-fullscreen-active #mmeQuickEditBtn,
+html.mme-pane-fullscreen-active #mmeQuickEditDone {
+  display: none !important;
+}
+
+/* ---- S4A: Quick Edit intermediate-width suppression (CSS ONLY) ----
+ * Root state: html.mme-quick-edit-active + data-mme-quick-edit-surface.
+ * The dataset holds the KEPT Presentation surface; the other surface is
+ * temporarily suppressed by stylesheet display only. Logical Registry
+ * visibility (adapter style.display checks) is untouched, so no edge tabs,
+ * no last-useful-pane effect, and no customized marking can occur. */
+html.mme-quick-edit-active[data-mme-quick-edit-surface='markmap'] #htmlPane {
+  display: none !important;
+}
+
+html.mme-quick-edit-active[data-mme-quick-edit-surface='html'] #mapPane {
+  display: none !important;
+}
+
+/* ---- S4A FOCUS: derived viewer-empty state (root class html.mme-viewer-empty) ----
+ * Set by the Registry based on logical visibility ONLY (Markmap OR HTML visible).
+ * When both useful viewer panes are logically hidden the shared #viewer must not
+ * reserve content width: the Editor grows to fill the application content area.
+ * Yielded to fullscreen (S3) so a fullscreen target inside #viewer is unaffected.
+ * No pane stacking, no phone primary-pane behavior, no vertical splitters. */
+html.mme-viewer-empty:not(.mme-pane-fullscreen-active) #viewer {
+  flex: 0 0 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  overflow: visible !important;
+}
+
+html.mme-viewer-empty:not(.mme-pane-fullscreen-active) #splitEditor {
+  display: none !important;
+}
+
+html.mme-viewer-empty:not(.mme-pane-fullscreen-active) #editor {
+  flex: 1 1 0 !important;
+  width: auto !important;
+}
+
+/* While the viewer is empty, keep its internal panes/splitter hidden and let
+ * the edge-restore controls (Show Map / Show HTML) remain reachable. */
+html.mme-viewer-empty #mapPane,
+html.mme-viewer-empty #htmlPane,
+html.mme-viewer-empty #splitHtml {
+  display: none !important;
+}
+
+/* Phone classes remain dormant until S4B. DeX follows viewport capability. */
 @media (max-width: 760px) {
   .mme-pane-edge-restore {
     min-width: 44px;
