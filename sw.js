@@ -11,8 +11,9 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 
 // APP_VERSION is the single authoritative release/version owner. It names the
 // installed cache identity (APP_CACHE / RUNTIME_CACHE) for this release
-// boundary: Draw.io Report MVP closure (ACT G + H1 + H2 + H3 + H4 + H4.1).
-const APP_VERSION = 'markmap-journal-pwa-v61-drawio-report-mvp-v1';
+// boundary: Screen Layout closure (S1 + S2 + S3 + S4A + S4B + PWA reconciliation:
+// css/view-layout.css and js/ui/view-layout.js joined the deterministic precache).
+const APP_VERSION = 'markmap-journal-pwa-v62-screen-layout-closure-v1';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.
@@ -36,9 +37,16 @@ const LOCAL_APP_SHELL = [
   './css/menus.css',
   './css/overlays.css',
   './css/workspace.css',
+  // Screen Layout runtime stylesheet. Loaded dynamically by script-loader.js
+  // (appendStylesheet) — precached here so it is a deterministic release asset
+  // instead of a stale-able runtime-cached copy (S4B device-testing finding).
+  './css/view-layout.css',
   './js/navigation/navigation-history.js',
   './js/main.js',
   './js/app/script-loader.js',
+  // Screen Layout pane registry. Loaded dynamically by script-loader.js before
+  // main.js so MME_VIEW_LAYOUT exists when pane adapters register.
+  './js/ui/view-layout.js',
   './js/ui/welcome.js',
 
   './js/ui/help.js',

@@ -43,7 +43,44 @@ browser acceptance pending):
   removed as an active owner; H1 39/39, H2 101/101, H3 38/38, H4 107/107
   validators still pass.
 
-Remaining forward order:
+## Completed (Screen Layout phase)
+
+- [x] S1 pane resize and overlay isolation (`d241e9c`).
+- [x] S2 pane registry, delegated visibility owners, edge restore,
+  last-useful-pane protection (`677c2b7`).
+- [x] S3 pane-local fullscreen for Editor, Markmap, HTML with exact
+  restoration (`7264be3`).
+- [x] S4A contextual presets (Work / Review / Presentation / Focus), Layout
+  selector, transactional application, customized state, Presentation Quick
+  Edit (`c80dfc4`).
+- [x] S4B touch-friendly controls, toolbar touch scrolling, narrow Sidebar
+  cap, safe-area polish, touch splitter lanes, Pointer Events splitter
+  lifecycle with pointer capture and cancellation cleanup (`4e6237c`,
+  `0c98d8c`).
+- [x] Real-device validation: `#splitEditor` and `#splitHtml` touch resize
+  start/end, toolbar finger scrolling, presets and fullscreen functional.
+- [x] Documentation closure: architecture document finalized; STATUS, TODO,
+  VERIFY, VALIDATION_REPORT, README updated.
+- [x] PWA reconciliation: `css/view-layout.css` and `js/ui/view-layout.js`
+  precached; APP_VERSION bumped to
+  `markmap-journal-pwa-v62-screen-layout-closure-v1`.
+
+## Screen Layout deferred work (no active package)
+
+- [ ] Optional module extraction: HTML Preview controller is the next
+  candidate (show/hide/render/control/scroll lifecycle); only if future
+  maintenance justifies the regression risk.
+- [ ] Optional responsive refinement after broader real-device use.
+- [ ] Optional persistent layout preferences (saved custom layouts /
+  per-document layout persistence) — deferred, not a current requirement.
+- [ ] Future pane stacking only if real usage proves horizontal panes
+  insufficient.
+- [ ] Automated browser coverage for pane registry, presets, fullscreen, and
+  Quick Edit.
+- [ ] Edge-restore placement reconsideration only if a real conflict is
+  reproduced.
+
+## Remaining forward order (pre-Screen-Layout order, updated)
 
 1. Laptop end-to-end acceptance (the next live workflow; covers the H3
    real-template categories and the H4 browser-only items: real Save As,
@@ -54,7 +91,7 @@ Remaining forward order:
 2. Draw.io MVP closure browser acceptance: clean install, update over the old
    cache, offline boot with the Draw.io modules, and the minimum Draw.io smoke
    test — exact steps in VERIFY.md, "Draw.io MVP PWA closure".
-3. Screen improvements (fullscreen Markmap, fullscreen HTML, presentation layout, vertical output).
+3. ~~Screen improvements (fullscreen Markmap, fullscreen HTML, presentation layout)~~ — delivered by the Screen Layout phase (S3/S4A/S4B). "Vertical output" was explicitly rejected; horizontal panes remain.
 4. Groups based on real Draw.io usage.
 5. Later artifact workflows.
 

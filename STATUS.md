@@ -1,10 +1,49 @@
-# MarkMapJournal v58 Release Status
+# MarkMapJournal Release Status
 
 ## 1. Current Release / Checkpoint
 - **Branch**: `development`
+- **Checkpoint Commits**: Screen Layout S1–S4B: `d241e9c` (S1), `677c2b7` (S2),
+  `7264be3` (S3), `c80dfc4` (S4A), `4e6237c` + `0c98d8c` (S4B, final `0c98d8c` = HEAD)
+- **APP_VERSION**: `markmap-journal-pwa-v62-screen-layout-closure-v1` (single owner: `sw.js`)
+- **Status**: Screen Layout phase complete. S1–S4B implemented and
+  device-validated; documentation closure and PWA reconciliation performed in
+  the Screen Layout closure package.
+
+---
+
+## 1a. Screen Layout State
+
+- **S1** (resize and overlay isolation): ✅ Complete.
+- **S2** (pane registry and edge restore): ✅ Complete.
+- **S3** (pane-local fullscreen): ✅ Complete.
+- **S4A** (contextual presets, Layout selector, Quick Edit): ✅ Complete.
+- **S4B** (touch-friendly controls, Pointer Events splitter lifecycle): ✅ Complete.
+- **Device touch resize**: accepted on real hardware — `#splitEditor` and
+  `#splitHtml` receive touch Pointer Events and start/end resize; toolbar
+  scrolls with a finger; presets and fullscreen functional.
+- **Documentation closure**: ✅ Complete (architecture document finalized from
+  source truth; STATUS/TODO/VERIFY/VALIDATION_REPORT updated).
+- **PWA closure**: `css/view-layout.css` and `js/ui/view-layout.js` added to the
+  `sw.js` deterministic precache; cache identity bumped to
+  `markmap-journal-pwa-v62-screen-layout-closure-v1`. Clean-install, update,
+  and offline-reload browser acceptance: **PENDING** (manual procedures in
+  `VERIFY.md`); static/cache consistency checks passed.
+
+Architecture owner:
+`docs/architecture/MarkmapEditor_Screen_Layout_ARCHITECTURE.md`.
+
+Intentionally excluded (not implemented): vertical pane stacking, mobile
+primary-pane state, mandatory mobile switcher, mobile Sidebar drawer,
+orientation pane reorder, native Fullscreen API, arbitrary docking, saved
+custom layouts, per-document layout persistence.
+
+---
+
+## 1b. Legacy v58 Status (superseded narrative, retained for history)
 - **Checkpoint Commit**: `a78963f`
 - **APP_VERSION**: `markmap-journal-pwa-v58-editable-workspace-foundation-v1`
 - **Status**: Functional recovery successfully implemented and verified. All runtime edits complete.
+
 
 ---
 

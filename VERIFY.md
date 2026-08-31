@@ -365,6 +365,9 @@ Cache/version closure is source-complete:
 `markmap-journal-pwa-v61-drawio-report-mvp-v1-app` / `...-runtime`;
 activation cleanup is prefix-scoped (`markmap-journal-pwa-`); all six Report
 modules are precached in `LOCAL_APP_SHELL`.
+Note: this identity is superseded by
+`markmap-journal-pwa-v62-screen-layout-closure-v1` (Screen Layout closure);
+the Report modules remain precached unchanged under the v62 identity.
 
 ### Static / Node validation (no browser required)
 
@@ -430,3 +433,86 @@ modules are precached in `LOCAL_APP_SHELL`.
   `Reconcile Draw.io Template` enables; a controlled template can be selected;
   the four categories display; Generate Draw.io is present; partial generation
   reaches Save As; the Report remains current; no runtime exception appears.
+
+---
+
+## Screen Layout closure verification
+
+Cache/version closure is source-complete:
+`APP_VERSION` = `markmap-journal-pwa-v62-screen-layout-closure-v1`
+(single owner: `sw.js`); caches `...v62-screen-layout-closure-v1-app` /
+`...-runtime`; activation cleanup remains prefix-scoped
+(`markmap-journal-pwa-`); `css/view-layout.css` and `js/ui/view-layout.js` are
+deterministic precache assets in `LOCAL_APP_SHELL`.
+
+### A. Source / static validation (executed in the coder environment)
+
+- [x] `node --check` PASS for `sw.js`, `js/app/script-loader.js`,
+  `js/ui/view-layout.js`, `js/main.js`, `js/editor/editor-visibility.js`,
+  `js/workspace/workspace-controller.js`.
+- [x] Exactly one `APP_VERSION` definition (`sw.js`); value is
+  `markmap-journal-pwa-v62-screen-layout-closure-v1`; `APP_CACHE` and
+  `RUNTIME_CACHE` derive from it; no page-level or manifest copy; no `v61`
+  identity remains active in `sw.js`.
+- [x] `css/view-layout.css` and `js/ui/view-layout.js` each appear exactly once
+  in `LOCAL_APP_SHELL`; paths match `js/app/script-loader.js` exactly
+  (`./css/view-layout.css`, `./js/ui/view-layout.js`); no case, leading-path,
+  or alternate-path mismatch; script-loader ownership preserved (no duplicate
+  link/script tags added).
+- [x] All twelve critical Screen Layout runtime assets are precached
+  (`main.js`, `view-layout.js`, `editor-visibility.js`,
+  `workspace-controller.js`, `script-loader.js`, `layout.css`, `toolbar.css`,
+  `view-layout.css`, `workspace.css`, `editor.css`, `html-preview.css`,
+  `overlays.css`).
+- [x] Activation cleanup remains prefix-scoped (`markmap-journal-pwa-`);
+  old v61 app and runtime caches are deleted by the owned-prefix cleanup after
+  v62 activates; no unrelated-origin cache is touched.
+- [x] `git diff --check` PASS; no implementation file modified.
+
+### B. Previously confirmed browser/device evidence (accepted, not re-run)
+
+- [x] `#splitEditor` receives touch Pointer Events; resize starts and ends.
+- [x] `#splitHtml` receives touch Pointer Events; resize starts and ends.
+- [x] Markmap fullscreen preserves zoom/pan on exit.
+- [x] Editor width restored after Hide/Restore; CodeMirror preserved.
+- [x] HTML canonical show/hide (`showHtmlPreview`/`hideHtmlPreview`); splitter
+  drag-to-open works.
+- [x] Focus full-width behavior through the derived viewer-empty state.
+- [x] Quick Edit and Done live in `#grpPresentationAction` beside Layout; no
+  floating pane overlays.
+- [x] Work / Review / Presentation / Focus presets and local fullscreen
+  functional on device.
+
+### C. PWA / browser acceptance (PENDING — not executed in this environment)
+
+Do not mark these PASS until executed on the deployed origin.
+
+- [ ] **Clean install**: clear this origin's previous application data;
+  unregister the Service Worker; delete owned caches beginning with
+  `markmap-journal-pwa-`; reopen online; allow install/activation (skipWaiting
+  + claim; reload once after activation). Confirm Cache Storage contains
+  `markmap-journal-pwa-v62-screen-layout-closure-v1-app` (and `-runtime`),
+  that `css/view-layout.css` and `js/ui/view-layout.js` are in the app cache,
+  and that `globalThis.MME_VIEW_LAYOUT` exists.
+- [ ] **Update**: begin from an older controlled installation (v61 or earlier);
+  serve the v62 release; reload online; confirm the new Service Worker
+  installs and activates (skipWaiting), old `markmap-journal-pwa-v61-*` caches
+  are removed, and one coherent release loads (Registry, presets, view-layout
+  CSS, Quick Edit).
+- [ ] **Online reload**: confirm Registry, presets, styles, Quick Edit, Focus,
+  and Pointer Event resizing after reload.
+- [ ] **Offline reload**: genuinely disable network; reload; confirm Registry,
+  presets, toolbar, view-layout CSS, and pane controls load with no missing
+  Screen Layout asset.
+
+### D. Focused Screen Layout smoke (after v62 activation; PENDING)
+
+1. Reload online; confirm version/caches.
+2. Open Layout menu; apply Work.
+3. Apply Review.
+4. Apply Presentation.
+5. Open and close Quick Edit.
+6. Apply Focus (Editor fills content width).
+7. Touch-resize `#splitEditor`; touch-resize `#splitHtml`.
+8. Enter and exit one local fullscreen.
+9. Reload offline; confirm Registry, presets, styles, and controls load.

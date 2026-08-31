@@ -1,6 +1,18 @@
 # MarkmapEditor
 Single File Markmap Editor
 
+## Screen Layout
+
+Panes (Sidebar, Editor, Markmap, HTML Preview) compose horizontally. Use the
+toolbar **Layout** selector to apply the **Work**, **Review**, **Presentation**,
+or **Focus** presets; manual pane changes mark the preset as customized. Each
+visible pane has its own Hide control with an edge restore tab, and a local
+fullscreen action with a shared exit control (Escape also exits).
+**Presentation** offers **Quick Edit** in the toolbar, which opens the real
+editor without leaving the presentation. On narrow or touch screens the toolbar
+scrolls horizontally and splitters have enlarged touch lanes for finger
+resizing.
+
 ## Quick Report
 
 Quick Report Markdown generation is available from your Journal workspace. A reviewed weekly report can be generated directly from existing workspace, Task, and Project data, then edited as Markdown.

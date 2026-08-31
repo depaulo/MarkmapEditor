@@ -2,493 +2,233 @@
 
 ## Status
 
-Planning baseline for the screen-layout phase after the Draw.io Report MVP closure.
+Final implemented architecture for the Screen Layout phase (S1, S2, S3, S4A, S4B).
 
-This document is based on the current repository snapshot in `repomix-output-depaulo-MarkmapEditor (9).xml`.
+This document describes the verified implementation, not intended behavior.
+Screen Layout is horizontally composed; nothing here describes an implemented
+vertical, drawer, or primary-pane mobile system.
 
-## Source-truth assessment
+Checkpoints:
 
-The repository already contains important pieces that older screen plans treated as future work:
+- architecture baseline: `cf37f6e`;
+- S1: `d241e9c` — resize and overlay isolation;
+- S2: `677c2b7` — pane registry and edge restore;
+- S3: `7264be3` — pane-local fullscreen;
+- S4A: `c80dfc4` — contextual presets, Layout selector, Quick Edit;
+- S4B: `4e6237c` + `0c98d8c` — touch-friendly controls and unified Pointer
+  Events splitter lifecycle;
+- PWA reconciliation: `css/view-layout.css` and `js/ui/view-layout.js` are
+  deterministic precache assets under
+  `markmap-journal-pwa-v62-screen-layout-closure-v1`.
 
-- `#layout` and `#viewer` are flex containers.
-- `#viewer` and `#mapPane` already use `min-width: 0`.
-- `#editor` still declares `min-width: 200px`.
-- `#htmlPane` still declares `min-width: 200px`.
-- splitters already exist.
-- `js/editor/editor-visibility.js` already owns Editor hide/show, remembers width, and wires:
-  - the top toolbar Editor toggle;
-  - the Editor local hide control;
-  - the Editor edge-restore control.
-- HTML Preview already has a close control and an edge-open control.
-- Markmap and Editor already have local overlay control surfaces.
-- HTML overlay controls are currently moved into `#viewer`, rather than remaining owned by `#htmlPane`.
-- `main.js` still owns substantial HTML Preview, Markmap overlay, splitter, and editor-overlay integration.
-
-Therefore, this phase must consolidate existing behavior rather than create a second visibility system.
-
-## Product decisions
-
-### Global controls
-
-The top toolbar owns only:
-
-- application context/mode;
-- layout preset selection.
-
-The top toolbar does not own a hardcoded list of every pane in every context.
-
-### Local controls
-
-A visible pane owns its own:
-
-- Hide action;
-- Fullscreen action;
-- pane-specific tools.
-
-### Hidden panes
-
-A hidden pane leaves a persistent edge-restore control.
-
-### Optional recovery menu
-
-A future global recovery command may provide:
-
-- Restore all panes;
-- Reset current layout;
-- Exit fullscreen.
-
-It is secondary, not the primary pane-toggle mechanism.
-
-## Core contract
+## Layers
 
 ```text
-Context
--> registers available panes and presets
-
-Preset
--> applies an initial composition
-
-Visible pane
--> provides local Hide and Fullscreen
-
-Hidden pane
--> provides an edge-restore control
-
-Pane toolbar
--> never defines the pane minimum width
-
-Mobile
--> reuses the same pane registry, normally showing one primary pane at a time
+CONTEXT      editor | journal | slides (future contexts register their own)
+PRESET       Work | Review | Presentation | Focus | Custom (customized)
+PANE         Sidebar | Editor | Markmap | HTML Preview
+LOCAL ACTION Hide | edge Restore | Fullscreen | pane-specific tools
+TEMPORARY    local fullscreen | Presentation Quick Edit | responsive toolbar
 ```
 
-## Initial panes
+Each layer only orchestrates the layer below it; composition changes always
+delegate to the per-pane visibility owners.
 
-### Editor context
+## Contexts
 
-- Editor
-- Markmap
-- HTML Preview
+- `editor`: standalone editing context.
+- `journal`: workspace context with the Workspace Sidebar.
+- `slides`: presentation editing context.
+- Future contexts register their own panes and presets through the registry;
+  no context requires a hardcoded global pane-toggle menu.
 
-### Journal context
+The active context is resolved by `MME_VIEW_LAYOUT.setContext()` /
+`getCurrentContextId()` from `currentAppContextId`, `data-app-context`, or the
+context selector. A context change exits fullscreen and closes Quick Edit
+before switching, and never auto-applies a preset.
 
-- Workspace Sidebar
-- Editor
-- Markmap
-- HTML Preview
+## Pane Registry
 
-### Future contexts
+Owner: `js/ui/view-layout.js`; global API `globalThis.MME_VIEW_LAYOUT`
+(frozen object, also `window.MME_VIEW_LAYOUT`).
 
-Future contexts such as Slides or standalone Draw.io register their own panes and presets without adding their pane names to a fixed global toolbar contract.
+The registry is an orchestrator/state observer. It does not own pane geometry
+and does not directly touch pane DOM for visibility; it delegates to adapters.
 
-## Pane registry
+Responsibilities:
 
-Recommended runtime owner:
+- `registerPane(definition)` / `getPane(id)` / `getAvailablePanes()`;
+- availability (context membership plus `adapter.isAvailable()`);
+- visibility orchestration through `showPane` / `hidePane` / `togglePane`;
+- last-useful-pane protection (a useful pane cannot be hidden when no other
+  useful pane is visible; reason `last-useful-pane`);
+- subscriptions (`subscribe`) and the `mme-view-layout-changed` event;
+- presets (`registerPreset`, `applyPreset`, `getCurrentPreset`);
+- fullscreen (`enterFullscreen`, `exitFullscreen`);
+- Quick Edit (`openQuickEdit`, `closeQuickEdit`);
+- derived viewer-empty state (`html.mme-viewer-empty`).
 
-```text
-js/ui/view-layout.js
-```
+Panes are registered in `js/main.js` with narrow adapters:
 
-Recommended global API:
+- `sidebar` — show/hide delegate to `setJournalSidebarCollapsed()`;
+- `editor` — delegates to `MME_EDITOR_VISIBILITY`, preserves CodeMirror focus;
+- `markmap` — narrow adapter over the map pane; DOM and Markmap instance are
+  preserved; zoom/pan captured and restored through `getCurrentViewState` /
+  `applyViewState`;
+- `html` — delegates to `showHtmlPreview()` / `hideHtmlPreview()` and
+  preserves scroll position.
 
-```text
-globalThis.MME_VIEW_LAYOUT
-```
+## Pane visibility owners
 
-The registry should support:
-
-- `registerPane(definition)`
-- `unregisterPane(id)` only if needed by a real context lifecycle
-- `getPane(id)`
-- `getAvailablePanes(contextId)`
-- `isPaneVisible(id)`
-- `showPane(id, options)`
-- `hidePane(id, options)`
-- `togglePane(id, options)`
-- `restoreAll(contextId)`
-- `registerPreset(definition)`
-- `applyPreset(id, options)`
-- `getCurrentPreset()`
-- `enterFullscreen(paneId)`
-- `exitFullscreen()`
-- `getState()` as a safe immutable projection
-- `refresh()`
-
-The first implementation must adapt existing Editor and HTML owners rather than duplicate them.
-
-## Pane definition
-
-Conceptual shape:
-
-```js
-{
-  id: 'editor',
-  label: 'Editor',
-  contexts: ['editor', 'journal'],
-  edge: 'left',
-  elementId: 'editor',
-  splitterId: 'splitEditor',
-  hideControlId: 'editorBtnHide',
-  restoreControlId: 'btnEditorEdgeOpen',
-  canHide: true,
-  canFullscreen: true,
-  adapter: {
-    show,
-    hide,
-    isVisible,
-    captureSize,
-    restoreSize
-  }
-}
-```
-
-Definitions are data contracts. Existing owners remain authoritative until migrated deliberately.
-
-## Size and resize contract
-
-### Required behavior
-
-- Editor, Markmap, and HTML Preview can shrink below the width of their local toolbars.
-- Splitters retain pointer ownership during drag.
-- Toolbars never impose intrinsic minimum width on panes.
-- Markmap pan, zoom, node click, and drag remain functional.
-- Editor selection, scroll, and CodeMirror commands remain functional.
-- HTML scrolling remains functional.
-
-### CSS rules
-
-Pane and flex/grid ancestors that must shrink use:
-
-```css
-min-width: 0;
-min-height: 0;
-```
-
-Grid tracks, if introduced, use:
-
-```css
-minmax(0, 1fr)
-```
-
-The pane defines toolbar capacity, not the reverse.
-
-### Overlay isolation
-
-- A transparent overlay layer uses `pointer-events: none`.
-- Actual controls use `pointer-events: auto`.
-- Toolbars use `max-width` constrained to the owning pane.
-- Toolbars wrap, compact, scroll internally, or collapse into More/Tools.
-- A toolbar must not overlap the splitter hit target.
-- Splitters use a higher interaction layer than decorative overlay surfaces.
-
-### Current source-specific risks
-
-- `#editor { min-width: 200px; }` prevents smaller Editor widths.
-- `#htmlPane { min-width: 200px; }` prevents smaller Preview widths.
-- Markmap and Editor overlay widths can constrain or visually overrun narrow panes.
-- HTML controls currently live under `#viewer`, so ownership and positioning must be reviewed before pane-local fullscreen.
-- Markmap overlay listeners stop propagation on the entire overlay surface; the overlay hit area must remain no larger than the visible controls.
-
-## Edge restore
-
-Existing Editor and HTML edge controls should be generalized, not replaced abruptly.
-
-Recommended edges:
-
-- Editor: left
-- Workspace Sidebar: left
-- Markmap: right
-- HTML Preview: right or lower-right
-
-Requirements:
-
-- edge controls remain reachable;
-- controls do not cover splitters;
-- controls remain touch-friendly;
-- restoring a pane restores its last valid size when possible;
-- hiding a pane does not destroy its state;
-- at least one useful primary pane must remain visible.
-
-## Fullscreen
-
-Fullscreen is pane-local and temporary.
-
-Targets:
-
-- Editor
-- Markmap
-- HTML Preview
-
-On enter:
-
-- capture visibility and sizes;
-- visually isolate the target pane;
-- keep the same document and runtime objects;
-- keep dirty state;
-- preserve pane-local state;
-- show Exit Fullscreen;
-- support Escape.
-
-On exit:
-
-- restore the exact pre-fullscreen composition where possible;
-- restore splitter visibility;
-- preserve Editor selection;
-- preserve Markmap zoom/pan;
-- preserve HTML scroll where possible.
-
-Fullscreen does not overwrite a saved preset.
+- Editor: `globalThis.MME_EDITOR_VISIBILITY` (`js/editor/editor-visibility.js`)
+  owns editor-hidden state, width save/restore, the toolbar toggle, the local
+  hide control, and the edge-restore control.
+- HTML Preview: `showHtmlPreview()`, `hideHtmlPreview()`, `toggleHtml()` in
+  `js/main.js`; splitter drag-to-open on `#splitHtml` reopens HTML through the
+  canonical show path (single source of truth, once per drag).
+- Sidebar: `setJournalSidebarCollapsed()` in
+  `js/workspace/workspace-controller.js` is the single canonical collapse and
+  restore path (class, button label, persistence, and registry state stay in
+  agreement). Desktop collapse state persists; Sidebar Report output is
+  contained inside the pane.
+- Markmap: local hide control and the registry-owned edge tab
+  (`#mmeMapEdgeRestore`); no separate visibility system.
 
 ## Presets
 
-### Work
-
-Editor context:
-
-- Editor visible
-- Markmap visible
-- HTML Preview hidden
-
-Journal context:
-
-- Sidebar visible
-- Editor visible
-- Markmap visible
-- HTML Preview hidden
-
-### Review
-
-- Editor visible
-- Markmap visible
-- HTML Preview visible
-- Sidebar follows context default
-
-### Presentation
-
-- Markmap visible
-- HTML Preview visible
-- Editor hidden initially
-- Sidebar hidden
-- Quick Edit available
-
-### Focus
-
-- Editor visible
-- Markmap hidden
-- HTML Preview hidden
-- Sidebar hidden
-
-Presets are contextual definitions registered into the same layout owner. A future context may register different preset names without changing the pane registry core.
-
-## Quick Edit
-
-Quick Edit is temporary access to the real Editor during Presentation.
-
-Desktop and DeX:
-
-- temporary side panel where feasible.
-
-Phone:
-
-- near-fullscreen Editor overlay/composition.
-
-Quick Edit:
-
-- uses the current Markdown;
-- does not clone the document;
-- preserves dirty state;
-- does not auto-save;
-- refreshes Markmap and HTML through existing rendering paths;
-- returns to the prior Presentation composition.
-
-## Mobile behavior
-
-Desktop and DeX remain the primary multi-pane experience.
-
-Phone default:
-
-- one primary pane at a time;
-- Editor / Map / Preview switcher derived from the pane registry;
-- Workspace Sidebar becomes a drawer;
-- pane tools compact into a small Tools/More control;
-- no hover-only interaction;
-- safe-area aware controls;
-- keyboard-safe Quick Edit completion control.
-
-Phone Presentation:
-
-- Map / Preview switcher;
-- no forced side-by-side composition in portrait.
-
-DeX should follow desktop behavior based on actual viewport capability, not device user-agent detection.
-
-## Persistence
-
-Initial persistence may store only:
-
-- last preset;
-- last normal visibility composition;
-- last valid pane sizes;
-- last mobile primary pane.
-
-Do not initially persist:
-
-- per-document layouts;
-- per-workspace layouts;
-- independent portrait/landscape layouts;
-- arbitrary docking trees.
-
-Temporary fullscreen and Quick Edit state must not persist.
-
-## Compatibility requirements
-
-This screen phase must preserve:
-
-- current document identity;
-- dirty state;
-- Save and Save As;
-- Hot Reload;
-- mode sessions;
-- Workspace Host;
-- Navigation History;
-- Wiki Links;
-- Task Review;
-- Markmap-to-Editor jump;
-- HTML synchronization;
-- Report panel;
-- Draw.io Report overlay and output workflow;
-- light and dark themes;
-- Compact Mode.
-
-## Revised implementation packages
-
-The current repository already has Editor local hide/restore and HTML close/restore. Therefore the earlier six implementation ACTs should be reduced to five focused packages.
-
-### S1 - Resize and overlay isolation
-
-- remove toolbar-driven minimum-width behavior;
-- correct Editor and HTML shrink constraints;
-- constrain local toolbars to pane size;
-- protect splitter pointer ownership;
-- validate Markmap, Editor, and HTML interaction.
-
-No new module required.
-
-### S2 - Unified pane registry and edge restore
-
-- create `js/ui/view-layout.js`;
-- create `css/view-layout.css`;
-- adapt existing Editor and HTML visibility owners;
-- add Markmap local Hide and edge restore;
-- register Workspace Sidebar where source ownership permits;
-- expose a safe runtime API and dormant validator.
-
-### S3 - Pane-local fullscreen
-
-- add Editor, Markmap, and HTML fullscreen;
-- restore exact prior layout;
-- Escape and visible Exit;
-- preserve local state.
-
-### S4 - Contextual presets, Presentation, and Quick Edit
-
-- add Work, Review, Presentation, Focus;
-- add top-level Layout preset selector only;
-- add Quick Edit;
-- keep pane toggles local.
-
-### S5 - Mobile layer and stabilization
-
-- one primary pane at a time on phone;
-- Sidebar drawer;
-- Editor / Map / Preview switcher;
-- touch/safe-area/keyboard handling;
-- cross-context regression validation;
-- no new feature beyond stabilization.
-
-### S-DOC - Documentation closure
-
-- update STATUS, TODO, VERIFY, VALIDATION_REPORT;
-- finalize this architecture document from implemented source truth.
-
-## Expected new files
-
-Implementation:
-
-```text
-js/ui/view-layout.js
-css/view-layout.css
-```
-
-Documentation:
-
-```text
-docs/architecture/MarkmapEditor_Screen_Layout_ARCHITECTURE.md
-```
-
-Conditional only if source size proves necessary after S4:
-
-```text
-js/ui/mobile-layout.js
-```
-
-Do not create the conditional mobile module in advance.
-
-## Release boundaries
-
-Recommended checkpoints:
-
-```text
-fix(layout): isolate pane controls from resize
-feat(layout): add pane registry and edge restore
-feat(layout): add local pane fullscreen
-feat(layout): add contextual presets and presentation quick edit
-feat(layout): add responsive mobile pane navigation
-fix(layout): stabilize screen layout behavior
-
-docs(layout): complete screen layout documentation
-```
-
-S5 may produce one feature commit and one stabilization commit if fixes are substantial. It remains one PLAN/ACT package unless source-proven complexity requires separation.
-
-## Non-goals
-
-- arbitrary docking;
-- draggable pane rearrangement;
-- per-document layouts;
-- a second mobile application;
-- phone splitters;
-- context-specific hardcoded pane lists in the top toolbar;
-- standalone Draw.io implementation;
-- Reveal.js redesign;
-- Report workflow changes.
+All compositions delegate to pane adapters via `showPane`/`hidePane` during one
+transactional `applyPreset` (rollback to the prior composition on failure; the
+preset is recorded only after success). Presets never apply automatically.
+
+WORK
+
+- Editor context: Editor visible, Markmap visible, HTML hidden.
+- Journal context: Sidebar visible, Editor visible, Markmap visible, HTML hidden.
+- Slides context: Editor visible, Markmap visible, HTML hidden.
+
+REVIEW
+
+- Editor, Markmap, and HTML Preview visible; Sidebar visible in Journal.
+
+PRESENTATION
+
+- Markmap and HTML visible; Editor hidden; Sidebar hidden (Journal).
+- Quick Edit available; no automatic fullscreen.
+
+FOCUS
+
+- Editor visible; Markmap and HTML hidden; Sidebar hidden (Journal).
+- The derived viewer-empty state (`html.mme-viewer-empty`) collapses the shared
+  `#viewer` so the Editor fills the application content width.
+- Focus remains distinct from Fullscreen Editor.
+
+Custom / customized state
+
+- A local pane change after preset application marks the preset customized
+  (`Layout · <Name> *`); nothing is auto-reapplied.
+- Re-applying the preset restores the exact composition and clears the flag.
+
+## Local actions
+
+A visible pane owns its own Hide action, Fullscreen action, and pane-specific
+tools. A hidden pane leaves a persistent edge-restore control. Pane toolbars
+never define the pane minimum width (`MIN_EDITOR_PX = 96`, `MIN_MAP_PX = 140`,
+`MIN_HTML_PX = 140`); panes may shrink below their local toolbar width.
+
+## Temporary composition
+
+### Local fullscreen
+
+- Application-local CSS fullscreen (`html.mme-pane-fullscreen-active` plus
+  `data-mme-fullscreen-pane`); the same pane and the same instance remain in
+  place. No native Fullscreen API, no localStorage persistence.
+- Registry-owned state: one target at a time; shared `#mmePaneFullscreenExit`
+  control; Escape closes it unless a modal owns Escape (the Layout menu does).
+- Context change or preset application exits fullscreen first.
+- Restoration is exact: panes hidden before entering are re-hidden, baseline
+  geometry is restored, and fullscreen-time layout wins when valid:
+  - Editor: CodeMirror scroll and focus preserved;
+  - Markmap: zoom/pan preserved (view-state capture/restore);
+  - HTML: scroll position preserved.
+
+### Presentation Quick Edit
+
+- Only available in Presentation (`quick-edit-unavailable` elsewhere).
+- Uses the real Editor and the real CodeMirror instance; does not clone
+  Markdown, does not change context, does not Save, and preserves dirty-state
+  ownership.
+- Markmap and HTML remain logically visible; where the content cannot fit all
+  three panes, the non-active surface is suppressed temporarily by CSS only
+  (`data-mme-quick-edit-surface`), never through a visibility owner, so no edge
+  tab, last-useful-pane effect, or customized marking can occur.
+- Done restores the Presentation baseline.
+- Quick Edit and Done live in `#grpPresentationAction` in the toolbar beside
+  `#grpLayout`; neither control floats over pane content.
+- Fullscreen and Quick Edit are mutually exclusive.
+
+### Responsive toolbar behavior
+
+- Narrow viewports: the toolbar scrolls horizontally (viewport width based,
+  never user-agent based); menus positioned from toolbar controls use
+  `getBoundingClientRect`, so they remain reachable while it scrolls.
+- Touch targets enlarge under `@media (pointer: coarse)` (about 40-44 px); pane
+  minimum widths are not raised.
+- Edge controls keep deterministic positions; safe-area insets apply only to
+  controls touching viewport edges.
+- An open Sidebar receives a narrow-viewport width cap (about 86vw); the
+  collapsed rail, persisted desktop width, and wide-viewport geometry are
+  unchanged.
+- Touch-friendly invisible splitter lanes (`--touch-splitter-hit-width: 28px`)
+  under a coarse pointer for `#splitEditor`, `#splitHtml`, and the Sidebar
+  resize handle; visible splitter geometry is unchanged.
+- Pointer Events unify mouse, touch, and pen drag in `makeResizable()`: one
+  active pointer id, pointer capture, and a shared idempotent finalizer for
+  `pointerup` / `pointercancel` / `lostpointercapture`.
+- DeX is treated by width/capability media queries, not by user-agent detection.
+
+## PWA asset ownership
+
+`css/view-layout.css` and `js/ui/view-layout.js` are loaded dynamically by
+`js/app/script-loader.js` (before `main.js`) and are precached in `sw.js`
+(`LOCAL_APP_SHELL`) so the release cache identity controls them
+deterministically. Cache identity:
+`markmap-journal-pwa-v62-screen-layout-closure-v1` (`-app` / `-runtime`),
+prefix-scoped activation cleanup (`markmap-journal-pwa-`).
+
+## Intentionally excluded (not implemented)
+
+- vertical pane stacking;
+- orientation-driven pane reorder;
+- mobile primary-pane state;
+- mandatory mobile switcher;
+- mobile Sidebar drawer;
+- native Fullscreen API;
+- arbitrary docking / draggable pane rearrangement;
+- saved custom layouts / per-document layout persistence.
+
+## Module boundaries (recommendations only; no extraction performed)
+
+- `js/ui/view-layout.js`: KEEP through closure; consider extracting the
+  preset/Quick Edit UI if future work expands it.
+- `js/main.js`: KEEP for closure; HTML Preview and pane resize are extraction
+  candidates.
+- HTML Preview: potential EXTRACT NEXT (substantial show/hide/render/control/
+  scroll lifecycle, independently testable).
+- Pane resize and Markmap pane: DEFER.
+- Responsive CSS: KEEP distributed among its current owners (`layout.css`,
+  `toolbar.css`, `view-layout.css`, `workspace.css`, `overlays.css`).
 
 ## Final acceptance
 
 - overlays no longer block resize;
-- panes shrink below toolbar width;
+- panes shrink below their toolbar width;
 - local Hide and edge restore are consistent;
-- pane-local fullscreen restores state;
-- presets are contextual and predictable;
-- phone uses one primary pane without breaking DeX;
-- no context requires a hardcoded global pane-toggle menu;
-- existing editor, workspace, HTML, Markmap, and Report workflows remain functional.
+- pane-local fullscreen restores state (Editor width, Markmap zoom/pan, HTML
+  scroll);
+- presets are contextual and predictable with honest customized marking;
+- the Editor fills the content width in Focus;
+- Quick Edit uses the real Editor and restores Presentation;
+- touch resize works on `#splitEditor` and `#splitHtml` (device-confirmed);
+- view-layout assets are deterministic release assets;
+- existing editor, workspace, HTML, Markmap, and Report workflows remain
+  functional.
