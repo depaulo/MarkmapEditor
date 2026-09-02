@@ -335,12 +335,49 @@
   function refresh() {
     const index = getWorkspaceIndex();
     const links = index && index.links;
-    const linkCount = links ? Array.from(links.keys()).length : 0;
-    const resolvedCount = (index && index.ready)
-      ? (links ? Array.from(links.values()).flat().length : 0)
+    const ready = Boolean(index && index.ready);
+    // index.links is a Map: key = unique link target, value = array of source
+    // paths referencing that target. Flattened values are therefore SOURCE
+    // OCCURRENCES, not resolved targets — subtracting them from the unique
+    // target count mixes units and produced impossible negative "missing"
+    // diagnostics. Classification below counts the SAME unique-target set
+    // through the existing resolver, so the units are compatible:
+    //   resolvedTargets + ambiguousTargets + missingTargets + notReadyTargets
+    //     === uniqueTargets
+    // sourceOccurrences stays a separate informational metric and is never
+    // subtracted from anything.
+    const uniqueTargets = links ? links.size : 0;
+    const sourceOccurrences = links
+      ? Array.from(links.values()).reduce(
+          (n, v) => n + (Array.isArray(v) ? v.length : 0),
+          0
+        )
       : 0;
-    const missingCount = (index && index.ready) ? linkCount - resolvedCount : 0;
-    safeLog('WikiLinks: refresh links=' + linkCount + ' resolved=' + resolvedCount + ' missing=' + missingCount + ' indexReady=' + Boolean(index && index.ready));
+    let resolvedTargets = 0;
+    let ambiguousTargets = 0;
+    let missingTargets = 0;
+    let notReadyTargets = 0;
+    if (ready && links) {
+      for (const key of links.keys()) {
+        const result = resolveTarget(key);
+        if (result.status === 'resolved') resolvedTargets++;
+        else if (result.status === 'ambiguous') ambiguousTargets++;
+        else if (result.status === 'missing') missingTargets++;
+        else notReadyTargets++;
+      }
+    } else {
+      notReadyTargets = uniqueTargets;
+    }
+    safeLog(
+      'WikiLinks: refresh' +
+        ' uniqueTargets=' + uniqueTargets +
+        ' resolvedTargets=' + resolvedTargets +
+        ' ambiguousTargets=' + ambiguousTargets +
+        ' missingTargets=' + missingTargets +
+        ' notReadyTargets=' + notReadyTargets +
+        ' sourceOccurrences=' + sourceOccurrences +
+        ' indexReady=' + ready
+    );
     refreshCodeMirrorDecorations();
   }
 

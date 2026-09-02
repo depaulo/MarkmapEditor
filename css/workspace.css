@@ -1146,6 +1146,39 @@ html.workspace-empty .workspaceFilesSection {
   display: none;
 }
 
+/* No-Workspace visual projection (display only — DOM, panel state, collapse
+   preferences, and Report configuration are untouched):
+   While html.workspace-empty is active the Journal Sidebar shows only the
+   Workspace header (title, collapse control, Open Workspace, and the
+   existing clearly disabled Today / New Concept / Archive Active actions)
+   plus the single no-Workspace empty-state message. Data-dependent panels,
+   their counters and empty list bodies, and the bottom file-navigation
+   controls are hidden. Elements are stable or idempotently created DOM and
+   reappear unchanged when html.workspace-ready becomes active.
+   !important is required because author display rules
+   (.workspaceReportPanel { display:block }, .workspaceTasksPanel /
+   .workspaceRelatedPanel { display:flex }) would otherwise override the
+   hidden attribute, and because ensure() paths may set inline display. */
+html.workspace-empty #workspaceSearchPanel,
+html.workspace-empty #workspaceReportPanel,
+html.workspace-empty #workspaceActivePanel,
+html.workspace-empty #workspaceRelatedPanel,
+html.workspace-empty #workspaceTasksPanel,
+html.workspace-empty #workspaceTagsPanel,
+html.workspace-empty #workspaceProjectsPanel,
+html.workspace-empty #workspaceIndexPanel,
+html.workspace-empty #workspaceNavControls,
+/* The Journals/Concepts roots need their own ID projection: the later
+   #workspaceJournalsPanel/#workspaceConceptsPanel { display:flex } rule
+   (ID specificity) overrides the class-based .workspaceFilesSection rule
+   above, which is why they stayed visible in the real browser. Hiding the
+   panel roots removes header, badge/count, "No journals"/"No concepts"
+   bodies, border-top, and their whitespace in one rule. */
+html.workspace-empty #workspaceJournalsPanel,
+html.workspace-empty #workspaceConceptsPanel {
+  display: none !important;
+}
+
 html.workspace-empty #btnJournalToday {
   opacity: 0.45;
   cursor: not-allowed;

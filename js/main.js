@@ -3194,6 +3194,25 @@ function finalizeWorkspaceSidebar() {
     return;
   }
 
+  // No-Workspace initial state: panels that require Workspace data (Search,
+  // Active, Related, Tasks, Tags, Projects, Index) are not created until a
+  // workspace is open. The header, Open Workspace, and the existing
+  // no-Workspace empty state remain the only sidebar content. The Report
+  // panel is unaffected: it is ensured by its own module-ready listener and
+  // gates generation on index readiness itself. When a workspace opens, the
+  // mme-workspace-index-ready listener below runs this finalizer once with
+  // rootHandle present, creating each panel through the existing idempotent
+  // ensure/wire lifecycle.
+  if (!workspaceState.rootHandle) {
+    if (!window.__mmeWorkspacePanelsDeferredLogged) {
+      window.__mmeWorkspacePanelsDeferredLogged = true;
+      globalThis.log?.(
+        'Workspace: sidebar panels deferred; no active workspace (standalone controls only)'
+      );
+    }
+    return;
+  }
+
   try {
     // Phase 1: ensure canonical panel markup.
     forceUpgradeWorkspacePanelMarkup('index');
@@ -3201,6 +3220,10 @@ function finalizeWorkspaceSidebar() {
     forceUpgradeWorkspacePanelMarkup('tasks');
 
     ensureWorkspaceSearchPanel?.();
+    // Wire the Search input here too (idempotent): a workspace can be opened
+    // without a Journal context switch, and the context-switch path is gated
+    // on rootHandle, so this is the readiness re-entry point for Search.
+    wireWorkspaceSearch?.();
     ensureWorkspaceActivePanel?.();
     ensureWorkspaceRelatedPanel();
     ensureWorkspaceTasksPanel();
@@ -6946,6 +6969,14 @@ function showHtmlPreview() {
   }
 
   htmlPane.style.display = 'block';
+  // Synchronize the HTML controls with the logical state immediately, before
+  // the async content render completes. This is the same final-state owner
+  // (updateHtmlPreviewButtons) used everywhere else; calling it here hides
+  // #btnHtmlEdgeOpen in the same synchronous flow that makes the pane visible,
+  // so the Registry refresh/audit that may run during the render no longer
+  // observes a stale Open control. The post-render call below remains as the
+  // idempotent final sync after content is applied.
+  updateHtmlPreviewButtons();
   log('HTML view SHOW');
 
   return renderHtmlWithShiki(md.value)
@@ -11590,9 +11621,15 @@ function applyAppContextUi(contextId, reason = 'applyAppContextUi') {
   try {
     restoreWorkspaceSidebarWidth?.();
     wireWorkspaceSidebarResize?.();
-    ensureWorkspaceSearchPanel?.();
-    wireWorkspaceSearch?.();
-    setupWorkspacePanels?.();
+    // Workspace-dependent sidebar setup: deferred until a workspace is open.
+    // Width/resize restore above is standalone-safe and stays unconditional.
+    // When a workspace opens later, finalizeWorkspaceSidebar (index-ready)
+    // creates the panels and wires Search exactly once.
+    if (globalThis.WORKSPACE_STATE?.rootHandle) {
+      ensureWorkspaceSearchPanel?.();
+      wireWorkspaceSearch?.();
+      setupWorkspacePanels?.();
+    }
   } catch (e) {
     log?.(`Workspace: sidebar resize restore/wire failed: ${e?.message || e}`);
   }
@@ -11733,7 +11770,6 @@ md.addEventListener('input', () => {
   }
   dirty = true;
   setStatus(modeLabel() + ' (modified)');
-  log(`Editor input: dirty=true; scheduling render in ${RENDER_DEBOUNCE_MS}ms`);
   updateDocumentTitle();
   globalThis.MME_RENDER?.scheduleRender?.('editor input');
 });

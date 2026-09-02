@@ -99,6 +99,13 @@
   }
 
   function emit(paneId, reason) {
+    // Final-state edge synchronization: emit() is the choke point for every
+    // registry show/hide (pane-local Hide buttons, edge-restore clicks,
+    // preset steps). syncMarkmapEdgeTab() was previously reached only through
+    // refresh()/configure(), so a markmap hide/show that ended in emit() left
+    // #mmeMapEdgeRestore stale until an unrelated refresh. Idempotent and
+    // cheap; the preset transaction's final refresh() still runs afterwards.
+    syncMarkmapEdgeTab();
     if (presetApplyDepth > 0) {
       // S4A: one meaningful preset event per transaction; update de-dup key so
       // the final event is not swallowed by refresh().
@@ -189,6 +196,7 @@
 
   function refresh() {
     syncMarkmapEdgeTab();
+    scheduleEdgeAudit();
     if (acting || initializing) return getState();
     if (snapshotKey() === lastPublished) return getState();
     emit(null, 'refresh');
@@ -280,6 +288,88 @@
     const available = isPaneAvailable('markmap');
     const visible = isPaneVisible('markmap');
     btn.hidden = !(available && !visible);
+  }
+
+  // ---- One-shot final-state edge audit (anomaly-only) ----
+  // Runs only at the final refresh choke point. Logs nothing on valid states;
+  // logs once per distinct anomaly: an edge Restore/Open control rendered
+  // while its pane is logically visible, or two visible edge controls whose
+  // bounding rectangles intersect. No pointermove/resize/continuous logging.
+
+  // Deferred execution: one pending audit at a time, always auditing the
+  // LATEST final state. A refresh() that lands inside an owner's synchronous
+  // flow (e.g. HTML display change before updateHtmlPreviewButtons) must not
+  // classify that unpainted transitional state as a final defect; the single
+  // animation frame runs after the whole synchronous flow settles. No
+  // timeouts, no polling, no observers; anomaly de-duplication is preserved
+  // by auditEdgeStateLog, and no DOM references are retained across frames.
+  let edgeAuditScheduled = false;
+
+  function scheduleEdgeAudit() {
+    if (typeof requestAnimationFrame !== 'function') {
+      auditEdgeState();
+      return;
+    }
+    if (edgeAuditScheduled) return;
+    edgeAuditScheduled = true;
+    requestAnimationFrame(() => {
+      edgeAuditScheduled = false;
+      auditEdgeState();
+    });
+  }
+
+  function auditEdgeState() {
+    if (typeof document === 'undefined') return;
+    try {
+      const specs = [
+        { id: 'mmeMapEdgeRestore', pane: 'markmap' },
+        { id: 'btnHtmlEdgeOpen', pane: 'html' },
+        { id: 'btnEditorEdgeOpen', pane: 'editor' },
+      ];
+      const shown = [];
+      for (const s of specs) {
+        const el = document.getElementById(s.id);
+        if (!el) continue;
+        const rendered = !(el.hidden || el.getClientRects().length === 0);
+        if (rendered && isPaneVisible(s.pane)) {
+          auditEdgeStateLog('edge-visible-while-pane-visible', s.id, el, null);
+          return;
+        }
+        if (rendered) shown.push({ id: s.id, el });
+      }
+      for (let i = 0; i < shown.length; i++) {
+        for (let j = i + 1; j < shown.length; j++) {
+          const a = shown[i].el.getBoundingClientRect();
+          const b = shown[j].el.getBoundingClientRect();
+          const hit = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+          if (hit) {
+            auditEdgeStateLog('edge-rect-overlap', shown[i].id, shown[i].el, shown[j].id);
+            return;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  function auditEdgeStateLog(kind, id, el, id2) {
+    try {
+      const preset = getCurrentPreset();
+      const key = [kind, id, id2 || '-', state.contextId, preset ? preset.id : '-'].join('|');
+      if (auditEdgeStateLog.__last === key) return; // once per distinct anomaly
+      auditEdgeStateLog.__last = key;
+      const r = el.getBoundingClientRect();
+      const vis = {};
+      ['markmap', 'html', 'editor'].forEach((p) => { vis[p] = isPaneVisible(p); });
+      globalThis.log?.(
+        `ViewLayout edge audit: ${kind} id=${id}${id2 ? '+' + id2 : ''}` +
+          ` title="${el.title || el.getAttribute('aria-label') || ''}"` +
+          ` hidden=${el.hidden} display=${getComputedStyle(el).display}` +
+          ` rect=${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)}x${Math.round(r.height)}` +
+          ` context=${state.contextId} preset=${preset ? preset.id + (preset.customized ? '*' : '') : '-'}` +
+          ` paneVisible=${JSON.stringify(vis)}` +
+          ` root=${document.documentElement.className}`
+      );
+    } catch {}
   }
 
   function bindContextObserver() {

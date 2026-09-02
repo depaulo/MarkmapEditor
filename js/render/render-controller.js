@@ -28,7 +28,9 @@
     if (renderTimer) {
       clearTimeout(renderTimer);
       renderTimer = null;
-      safeLog('RenderController: cancelled pending render');
+      // Routine per-input debounce cancellation is intentionally not logged:
+      // repeated input cancels and reschedules the same timer and the render
+      // lifecycle itself (begin/end/error) remains the diagnostic record.
     }
   }
 
@@ -68,7 +70,8 @@
 
     cancelPendingRender();
 
-    safeLog(`RenderController: schedule reason=${r} delay=${RENDER_DEBOUNCE_MS}ms`);
+    // Routine per-input scheduling/rescheduling is intentionally not logged
+    // (same debounce contract; begin/end/error logs remain).
 
     renderTimer = setTimeout(() => {
       renderTimer = null;

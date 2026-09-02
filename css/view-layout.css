@@ -266,6 +266,21 @@ html.mme-viewer-empty #splitHtml {
   display: none !important;
 }
 
+/* Collapsed-Viewer band separation (source-proven collision fix):
+ * When html.mme-viewer-empty is active the shared #viewer collapses to zero
+ * width with overflow:visible, so #mmeMapEdgeRestore (right inset, vertically
+ * centered) overflows onto the full-width Editor's right interaction band and
+ * shares the exact center band with #editorBtnHide (right:-14px, top:50%).
+ * Both controls are legitimately visible in that state (Map hidden needs Show
+ * Map; Editor visible needs Hide), so this is a band collision, not a
+ * visibility-sync defect. Give the Map edge restore a deterministic
+ * below-center band only while the Viewer is empty; ownership, z-index, touch
+ * accessibility, non-empty Viewer placement, and the HTML top-right band are
+ * unchanged. Removing html.mme-viewer-empty restores the normal position. */
+html.mme-viewer-empty .mme-pane-edge-restore[data-edge='right'] {
+  inset-block-start: calc(50% + 48px);
+}
+
 /* Phone classes remain dormant until S4B. DeX follows viewport capability. */
 @media (max-width: 760px) {
   .mme-pane-edge-restore {
