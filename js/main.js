@@ -531,27 +531,6 @@ function stripYamlFrontmatterForTags(text) {
 // parseMarkdownTags moved to js/workspace/workspace-parser.js
 // ---- Task metadata parser (ACT B) ----
 
-function isLeapYear(year) {
-  const y = Number(year);
-  if (!Number.isInteger(y) || y < 1) return false;
-  return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
-}
-
-function isValidIsoDate(value) {
-  const str = String(value || '').trim();
-  if (!str) return false;
-  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return false;
-  const year = Number(m[1]);
-  const month = Number(m[2]);
-  const day = Number(m[3]);
-  if (month < 1 || month > 12) return false;
-  const maxDay = new Date(year, month, 0).getDate();
-  if (day < 1 || day > maxDay) return false;
-  if (year < 1900 || year > 2100) return false;
-  return true;
-}
-
 function normalizeMetadataKey(key) {
   return String(key || '')
     .trim()
@@ -595,6 +574,11 @@ function cleanTaskText(rawMatch3) {
 function parseMarkdownTasks(text) {
   const lines = normalizeParserText(text).split('\n');
   const tasks = [];
+  const lifecycle = globalThis.MME_TASK_LIFECYCLE;
+  const isValidDate =
+    lifecycle && typeof lifecycle.isValidIsoDate === 'function'
+      ? lifecycle.isValidIsoDate
+      : null;
 
   lines.forEach((line, index) => {
     const match = line.match(/^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/);
@@ -618,14 +602,7 @@ function parseMarkdownTasks(text) {
       dueDate: null,
     };
 
-    const meta = task.metadata;
-
-    if (task.done && meta.completed) {
-      const val = String(meta.completed || '').trim();
-      if (isValidIsoDate(val)) {
-        task.completedDate = val;
-      }
-    }
+        const meta = task.metadata;
 
     if (meta.priority) {
       task.priority = String(meta.priority).trim() || null;
@@ -633,10 +610,26 @@ function parseMarkdownTasks(text) {
     if (meta.owner) {
       task.owner = String(meta.owner).trim() || null;
     }
-    if (meta.due) {
+    if (meta.due && isValidDate) {
       const dueVal = String(meta.due).trim();
-      if (isValidIsoDate(dueVal)) {
+      if (isValidDate(dueVal)) {
         task.dueDate = dueVal;
+      }
+    }
+
+    // T1B lifecycle enrichment: adopt the pure lifecycle owner. normalizeTask
+    // adds status/effectiveStatus/openedDate/startedDate/closedDate (where
+    // closedDate === validated completedDate) while preserving every existing
+    // source field. Checkbox-authoritative normalization applies. Parsing never
+    // writes metadata; invalid raw dates survive in task.metadata and normalize
+    // to null on the derived date fields. Falls back to legacy validation only
+    // if the lifecycle owner is unexpectedly absent.
+    if (lifecycle && typeof lifecycle.normalizeTask === 'function') {
+      Object.assign(task, lifecycle.normalizeTask(task));
+    } else if (task.done && meta.completed && isValidDate) {
+      const val = String(meta.completed || '').trim();
+      if (isValidDate(val)) {
+        task.completedDate = val;
       }
     }
 
@@ -4249,6 +4242,10 @@ function openTextDocument({ text, fileName, fileHandle = null, reason = 'openTex
   externalStale = false;
   externalStaleModified = 0;
 
+  // ACT G / T1B: capture the post-open Task baseline so the next physical Save
+  // can reconcile checkbox changes. Report documents are excluded internally.
+  captureTaskBaseline();
+
   setStatus(modeLabel());
   updateDocumentTitle();
 
@@ -5385,6 +5382,10 @@ async function openFromRecent(item) {
     render('openRecent(writable) render()');
     showToast(`Opened ✓ ${currentFileName}`, 'ok');
   }
+
+  // ACT G / T1B: capture the post-open Task baseline so the next physical Save
+  // can reconcile checkbox changes. Report documents are excluded internally.
+  captureTaskBaseline();
 }
 
 function sanitizeRecentName(name) {
@@ -8994,6 +8995,11 @@ async function openSmart() {
         hasAutoFitted = false;
         render('openSmart(writable) render()');
       }
+
+      // ACT G / T1B: capture the post-open Task baseline so the next physical
+      // Save can reconcile checkbox changes. Report documents are excluded
+      // internally (the saved-report branch above sets report identity).
+      captureTaskBaseline();
       return;
     } catch (e) {
       if (e && e.name === 'AbortError') {
@@ -9116,70 +9122,92 @@ function captureTaskBaseline() {
 }
 
 function reconcileTasksBeforeSave() {
-  // ACT G: Report documents are excluded from Task reconciliation by identity.
-  if (__virtualReportSession?.kind === 'report') {
-    return { changed: false, text: md.value, skippedReason: 'report-document' };
-  }
-
-  if (!__taskBaseline) {
-    return { changed: false, text: md.value, skippedReason: 'no-baseline' };
-  }
-
   const currentText = String(md.value || '');
   const currentTasks = globalThis.parseMarkdownTasks?.(currentText) || [];
+  const lifecycle = globalThis.MME_TASK_LIFECYCLE;
+
+  // ACT G: Report documents are excluded from Task reconciliation by identity.
+  if (__virtualReportSession?.kind === 'report') {
+    return {
+      changed: false,
+      text: currentText,
+      skippedReason: 'report-document',
+      completedAdded: 0,
+      completedRemoved: 0,
+      ambiguous: 0,
+    };
+  }
+  if (!__taskBaseline) {
+    return {
+      changed: false,
+      text: currentText,
+      skippedReason: 'no-baseline',
+      completedAdded: 0,
+      completedRemoved: 0,
+      ambiguous: 0,
+    };
+  }
+  if (!lifecycle || typeof lifecycle.matchTasksForSave !== 'function') {
+    return {
+      changed: false,
+      text: currentText,
+      skippedReason: 'no-lifecycle',
+      completedAdded: 0,
+      completedRemoved: 0,
+      ambiguous: 0,
+    };
+  }
   if (currentTasks.length === 0) {
-    return { changed: false, text: currentText, skippedReason: 'no-tasks' };
+    return {
+      changed: false,
+      text: currentText,
+      skippedReason: 'no-tasks',
+      completedAdded: 0,
+      completedRemoved: 0,
+      ambiguous: 0,
+    };
   }
 
-  const baselineByLine = new Map();
-  for (const t of __taskBaseline) {
-    baselineByLine.set(t.line, t);
-  }
-
+  const today = getLocalIsoDate();
   const lines = currentText.split('\n');
   let changed = false;
   let completedAdded = 0;
   let completedRemoved = 0;
-  let ambiguous = 0;
 
-  for (const current of currentTasks) {
-    const baseline = baselineByLine.get(current.line);
-    if (!baseline) continue;
+  // T1B (ACT D): reorder-safe matching. matchTasksForSave aligns Tasks by
+  // canonical text, so a checkbox change on a MOVED Task is still reconciled
+  // even though its line number changed. The observed current checkbox is
+  // authoritative; applySaveLifecycle only edits the task-local mme-task
+  // comment (the checkbox marker is never rewritten here).
+  const match = lifecycle.matchTasksForSave(__taskBaseline, currentTasks);
+  const ambiguous = match.ambiguous;
 
-    // Compare canonical clean text only (ignores metadata comments)
-    if (current.text !== baseline.text) continue;
+  for (const pair of match.pairs) {
+    const baseline = __taskBaseline[pair.baseline];
+    const current = currentTasks[pair.current];
+    if (!baseline || !current) continue;
 
-    const currentDone = current.done;
-    const baselineDone = baseline.done;
+    // Checkbox-authoritative: only act when the current checkbox disagrees
+    // with the baseline completion state.
+    if (current.done === baseline.done) continue;
 
-    // Same completion state: nothing to do
-    if (currentDone === baselineDone) continue;
+    // IDEMPOTENCE: applySaveLifecycle reports changed=false when the current
+    // line already reflects the desired completion state.
+    const res = lifecycle.applySaveLifecycle(current.raw, {
+      today,
+      isNew: false,
+      checked: current.done,
+      explicitStatus: null,
+    });
 
-    const lineIndex = current.line - 1;
-    if (lineIndex < 0 || lineIndex >= lines.length) continue;
-
-    const rawLine = lines[lineIndex];
-    const taskMatch = rawLine.match(/^(\s*[-*+]\s+\[)([ xX])(\]\s+)(.*)$/);
-    if (!taskMatch) continue;
-
-    // CURRENT checkbox is authoritative
-    const currentChecked = taskMatch[2].toLowerCase() === 'x';
-    if (currentChecked !== currentDone) continue;
-
-    // IDEMPOTENCE: skip if already reconciled
-    const hasCompletedMeta = /<!--\s*mme-task:[\s\S]*?\bcompleted\s*=/i.test(rawLine);
-    if (currentDone && hasCompletedMeta) continue;
-    if (!currentDone && !hasCompletedMeta) continue;
-
-    // Rewrite ONLY the metadata comment on the CURRENT raw line
-    const newText = rewriteTaskMetadataComment(taskMatch[4], currentDone);
-    const newLine = taskMatch[1] + taskMatch[2] + taskMatch[3] + newText;
-
-    if (newLine !== rawLine) {
-      lines[lineIndex] = newLine;
-      changed = true;
-      if (currentDone) completedAdded++;
-      else completedRemoved++;
+    if (res.ok && res.changed) {
+      const lineIndex = current.line - 1;
+      if (lineIndex >= 0 && lineIndex < lines.length) {
+        lines[lineIndex] = res.line;
+        changed = true;
+        if (res.added.completed) completedAdded++;
+        if (res.removed.completed) completedRemoved++;
+      }
     }
   }
 
@@ -9250,6 +9278,10 @@ function newDocument() {
     hasAutoFitted = false;
     forceFitNextRender = true;
 
+    // ACT G / T1B: capture the post-open Task baseline for the new document so
+    // the next physical Save can reconcile checkbox changes.
+    captureTaskBaseline();
+
     setStatus(modeLabel());
     updateDocumentTitle();
 
@@ -9319,6 +9351,11 @@ fileInput.addEventListener('change', async (e) => {
       hasAutoFitted = false;
       render('openSmart(read-only) render()');
     }
+
+    // ACT G / T1B: capture the post-open Task baseline so the next physical
+    // Save can reconcile checkbox changes. Report documents are excluded
+    // internally (stale Report identity was cleared above for read-only docs).
+    captureTaskBaseline();
   } catch (err) {
     log(`❌ read-only open error: ${err?.message || err}`);
   }
@@ -9413,7 +9450,11 @@ async function saveSmart() {
   // ACT D: Conservative pre-save Task reconciliation.
   const reconciled = reconcileTasksBeforeSave();
   let text = md.value;
-  if (reconciled.changed) {
+  if (reconciled.skippedReason) {
+    log(
+      `TaskReconcile: skipped (${reconciled.skippedReason}); changed=false completed=0 reopened=0 ambiguous=${reconciled.ambiguous || 0}`
+    );
+  } else if (reconciled.changed) {
     __programmaticTextChange++;
     try {
       md.value = reconciled.text;
@@ -9427,8 +9468,10 @@ async function saveSmart() {
     log(
       `TaskReconcile: result changed=true completed=${reconciled.completedAdded} reopened=${reconciled.completedRemoved} ambiguous=${reconciled.ambiguous}`
     );
-  } else if (reconciled.completedAdded === 0 && reconciled.completedRemoved === 0) {
-    log('TaskReconcile: result changed=false completed=0 reopened=0 ambiguous=0');
+  } else {
+    log(
+      `TaskReconcile: no changes needed; changed=false completed=0 reopened=0 ambiguous=${reconciled.ambiguous || 0}`
+    );
   }
 
   if (currentSaveHandle) {

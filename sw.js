@@ -11,9 +11,9 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 
 // APP_VERSION is the single authoritative release/version owner. It names the
 // installed cache identity (APP_CACHE / RUNTIME_CACHE) for this release
-// boundary: Screen Layout closure (S1 + S2 + S3 + S4A + S4B + PWA reconciliation:
-// css/view-layout.css and js/ui/view-layout.js joined the deterministic precache).
-const APP_VERSION = 'markmap-journal-pwa-v64-task-lifecycle-core-v1';
+// boundary: Task Lifecycle physical-Save integration (T1B): js/main.js and
+// js/tasks/task-lifecycle.js joined the deterministic precache).
+const APP_VERSION = 'markmap-journal-pwa-v65-task-lifecycle-save-v1';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.

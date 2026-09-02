@@ -2,7 +2,7 @@
 
 ## Status
 - **T1A — core lifecycle:** implemented.
-- **T1B — physical-Save integration:** pending (not implemented in T1A).
+- **T1B — physical-Save integration:** implemented.
 
 This document describes the Task lifecycle owner and its data contract. It is
 the lifecycle companion to the existing
@@ -10,11 +10,11 @@ the lifecycle companion to the existing
 which remains the authority for the `mme-task` metadata comment grammar and the
 legacy `completed` date behavior.
 
-> **Important:** Do NOT treat automatic Opened Date as active after T1A. T1A
-> provides the pure lifecycle owner and canonical transition/serialization
-> contract only. Nothing in T1A writes dates, reconciles physical Save, or
-> mutates the Workspace Index. Automatic date writing is a T1B (Save
-> integration) responsibility.
+> **Important:** T1B is now active. Automatic Opened/Started/Closed date writing
+> happens **only during physical Save** (via `reconcileTasksBeforeSave`), never
+> during typing or draft Auto-save. The lifecycle owner remains pure — all
+> I/O, Save, and Workspace Index mutation live in `js/main.js`. Report documents
+> are excluded from Task reconciliation by identity.
 
 ---
 
@@ -185,40 +185,32 @@ metadata together.
 
 This function does not access the Editor, write a file, reload the Workspace
 Index, trigger Save, call the clock, or update a baseline.
-## 11. Future Save reconciliation responsibility
+## 11. Save reconciliation responsibility (T1B, implemented)
 
-Automatic lifecycle reconciliation during physical Save belongs to **T1B**. It
-is intentionally NOT in T1A.
+Automatic lifecycle reconciliation during physical Save is implemented in T1B
+(`js/main.js` `reconcileTasksBeforeSave`). It observes the checkbox state already
+present in the Editor Markdown — it never decides that the user intended to
+check/uncheck a task. It:
 
-T1B must observe the checkbox state already present in the Editor Markdown — it
-must not decide that the user intended to check/uncheck a task. It will:
+- aligns current Tasks to the pre-Save baseline via `matchTasksForSave`
+  (reorder-safe, text-identity matching);
+- records/removes Closed Date (`completed`) on checkbox completion/reopening via
+  `applySaveLifecycle` (checkbox-authoritative; one consolidated Editor
+  transaction);
+- refreshes the baseline only after a successful physical Save.
 
-- detect newly inserted Tasks (append, prepend, and middle insertion) and add
-  Opened Date;
-- record Started Date on source-proven entry to Ongoing;
-- record/remove Closed Date (`completed`) on checkbox completion/reopening;
-- apply one consolidated Editor transaction;
-- refresh the baseline only after a successful Save.
+Report documents are excluded from reconciliation by identity. Sequence matching,
+occurrence indexing, ambiguity classification, and line-edit assembly live in the
+pure lifecycle owner; the glue lives in `js/main.js`.
 
-Sequence matching, occurrence indexing, ambiguity classification, and line-edit
-assembly are T1B responsibilities. T1A exposes only the pure metadata helpers
-these consumers will use.
+## 12. Date-validator consolidation (resolved)
 
-## 12. Temporary T1A/T1B date-validator state (honest duplication)
-
-Currently the repository has two date validators:
-
-- `js/main.js` `isValidIsoDate()` — used by the legacy `parseMarkdownTasks` and
-  physical Save completion handling;
-- `js/tasks/task-lifecycle.js` `isValidIsoDate()` — used by the new lifecycle
-  API. This validator is arithmetic-only (no `Date` calls).
-
-This duplication is temporary. `js/main.js` does not yet consume
-`MME_TASK_LIFECYCLE` in T1A. T1B must reconcile the duplication when
-`parseMarkdownTasks` adopts the lifecycle owner. The final integrated
-architecture must not leave two active lifecycle date-validation owners without
-an explicit reason. The single current-date reader remains `getLocalIsoDate()`
-in `main.js`.
+The temporary T1A/T1B date-validator duplication is resolved. After T1B,
+`js/main.js` no longer declares `isValidIsoDate()` / `isLeapYear()` — the only
+active lifecycle date validation is the pure arithmetic-only
+`MME_TASK_LIFECYCLE.isValidIsoDate()`. The single application-local date reader
+remains `main.js getLocalIsoDate()`, which always supplies `today` to the
+lifecycle APIs.
 
 ## 13. Legacy behavior and no backfill
 
@@ -267,13 +259,180 @@ Metadata Template visibility architecture remain separate and unmodified.
 
 ## Scope
 
-**Included (T1A):** pure lifecycle owner; status vocabulary; checkbox-authoritative
-normalization; date parsing/validation (arithmetic-only); canonical
-serialization; `applyTransition`; deterministic validator fixtures; architecture
-document; loader/precache/release integration for the new module.
+**Included (T1B, in addition to T1A):** parser lifecycle enrichment
+(`parseMarkdownTasks` adopts `MME_TASK_LIFECYCLE.normalizeTask`, adding
+`status`, `effectiveStatus`, `openedDate`, `startedDate`, `closedDate` while
+retaining every source-compatible field); physical-Save lifecycle reconciliation
+in `js/main.js` (`reconcileTasksBeforeSave`); deterministic occurrence-aware
+sequence matcher (`matchTasksForSave`); pure save-lifecycle metadata writer
+(`applySaveLifecycle`) used by the reconcile pass; one consolidated CodeMirror
+transaction; concise aggregate TaskReconcile metrics log; baseline lifecycle
+(capture after document open; refresh only after successful physical Save; never
+on draft Auto-save or failed Save; excluded for virtual Report documents); date-validator
+consolidation (legacy `main.js` `isValidIsoDate`/`isLeapYear` removed in favor of
+the pure lifecycle owner, `getLocalIsoDate` retained as the single date reader);
+release cache identity bump in `sw.js`.
 
 **Explicitly excluded:** Board UI, drag-and-drop, Done-period filter, TaskReview
 redesign, Report sections, Projects, document frontmatter, stable-ID migration,
-transition history, Reopened Date, mass historical migration, physical-Save
-reconciliation, Workspace Index behavior changes.
-a status remain valid as Todo.
+transition history, Reopened Date, mass historical migration.
+
+---
+
+## 18. T1B implementation (physical-Save integration)
+
+T1B wires the pure lifecycle owner (`js/tasks/task-lifecycle.js`, global
+`MME_TASK_LIFECYCLE`) into the existing parser and physical-Save reconciliation
+in `js/main.js`. It adds no new UI and changes no Report output.
+
+### 18.1 Parser enrichment
+
+`parseMarkdownTasks()` retains every existing field and, when the lifecycle owner
+is available, folds the normalized record back via `Object.assign(task,
+lifecycle.normalizeTask(task))`. This adds `status`, `effectiveStatus`,
+`openedDate`, `startedDate`, `closedDate` (where `closedDate` equals the validated
+`completedDate`). A checked Task is always effectively `done`; an unchecked
+Task is `backlog` / `ongoing` / `todo` by its status, defaulting to `todo` for
+absent or unknown status. Unknown raw status and unknown metadata remain
+preserved. Parsing never writes metadata; it is a pure read of source. A legacy
+fallback (`task.done && isValidIsoDate(meta.completed)`) remains only for the
+case where the lifecycle owner is unexpectedly absent.
+
+### 18.2 Validator consolidation
+
+The legacy `js/main.js` `isValidIsoDate()` / `isLeapYear()` helpers are removed:
+after enrichment the only active lifecycle date validation is
+`MME_TASK_LIFECYCLE.isValidIsoDate()` (arithmetic-only, no `Date` calls). The
+single application-local date reader remains `main.js getLocalIsoDate()`, which
+always supplies `today` to the pure lifecycle APIs — the lifecycle owner never
+reads the clock.
+
+### 18.3 Sequence matcher (`matchTasksForSave`)
+
+`MME_TASK_LIFECYCLE.matchTasksForSave(baseline, current)` is a small, deterministic,
+occurrence-aware matcher built on canonical clean text and an ordered LCS
+alignment. Its job is to PROVE only the insertion of uniquely identifiable Tasks
+(same visible text that did not exist in the baseline); everything else is
+classified ambiguous and never auto-tagged.
+
+The matcher classifies regions between matched anchors:
+
+- pure insertion region (unmatched current, no baseline deletions) whose visible
+  text does not already exist in the baseline, and whose text does not already
+  appear in the baseline, is a **source-proven new** candidate;
+- pure insertion of a duplicated label (identical text already present in the
+  baseline) is **ambiguous** because, without a stable Task ID, positional proof
+  is impossible;
+- deletion-only, edit/replace, or mixed counts are **ambiguous**, and no lifecycle
+  rewrite is applied;
+- an inserted count above the per-gap / whole-document cap flips `skippedRewrite`,
+  so automatic new-tagging is skipped while safely matched completion/reopening
+  still applies.
+
+A moved existing Task is intentionally ambiguous for *new-tagging* (it must not
+receive a spurious Opened Date). For checkbox-change detection it is handled by
+the aligned matched pairs (text identity, not line number). The `newIndices`
+array is intentionally unused by the Save-reconcile pass (which only processes
+matched pairs); it exists for future Board/consumer use. The safety cap values
+are narrow by design (per-gap 8, total-insert 20, total-new 16).
+
+### 18.4 Save-lifecycle writer (`applySaveLifecycle`)
+
+`applySaveLifecycle(rawLine, { today, isNew, checked, explicitStatus })` edits
+ONLY the task-local `mme-task` comment during physical-Save reconciliation. It
+never rewrites the checkbox marker and preserves every non-lifecycle key and
+unknown raw status. Date fields follow "add only if absent", so valid hand-written
+dates and invalid raw values are never silently overwritten or deleted; invalid
+raw values normalize to `null` on the derived date fields. Returns
+`{ ok, changed, line, added, removed }`.
+
+### 18.5 Physical-Save reconcile (`reconcileTasksBeforeSave`)
+
+The existing `js/main.js` `reconcileTasksBeforeSave()` is extended to delegate to
+the lifecycle owner. Required ordering (one local lines array, one join, one
+`__cmSetText`):
+
+1. read current Markdown;
+2. parse current Tasks;
+3. align current Tasks against the baseline (`matchTasksForSave`);
+4. for each matched pair where the current checkbox disagrees with the baseline,
+   apply `applySaveLifecycle` (checkbox-authoritative);
+5. return one reconciled text;
+6. `__cmSetText` once if changed (inside `__programmaticTextChange`);
+7. continue through the existing physical Save;
+8. refresh the baseline only after a successful write.
+
+Report documents are excluded (`skippedReason: 'report-document'`); a missing
+baseline or no Tasks also short-circuits with a `skippedReason` (no metadata is
+reported as persisted). A `skippedReason` does not block the Save itself.
+
+### 18.6 New-Task contract (physical Save)
+
+A source-proven new Task receives Opened Date during physical Save (via the
+reconcile pass), never during typing or draft Auto-save:
+
+- new Todo: `opened=today`; no status; no started; no completed;
+- new Backlog: `opened=today`; `status=backlog` preserved; no started unless
+  already valid;
+- new Ongoing: `opened=today`; `status=ongoing` preserved; `started=today` if
+  absent;
+- new Done: `opened=today`; `completed=today` if absent; never `status=done`;
+  stale recognized open status removed during canonical editing.
+
+### 18.7 Completion and reopening
+
+- Open to Done: add `completed=today` if missing; preserve existing `opened` /
+  started; remove a recognized stale open status (`backlog`/`ongoing`/`todo`)
+  only when canonically editing; never write `status=done`.
+- Done to Open: remove `completed`; preserve `opened` / `started`; keep an explicit
+  `status=backlog` or `status=ongoing`; reopen to Ongoing with missing started
+  adds `started=today`; absent/unknown status is effectively `todo`.
+- No Reopened Date; no transition-history log.
+
+### 18.8 Legacy / no-backfill policy
+
+Existing Tasks without `opened` stay without `opened` unless a source-proven
+transition requires another edit. Completing a legacy Task adds `completed=today`
+but does NOT invent `opened`. Existing checked Tasks without `completed` remain
+`done` with unknown close date unless they newly transition in the active
+session. Existing invalid dates normalize to `null`; raw metadata is preserved.
+No Workspace scan or mass file update.
+
+### 18.9 Duplicate-task limitation (honest)
+
+Visible-text identity with no stable ID cannot prove which occurrence of an
+identical label is new after insertion, movement, or edit. The matcher therefore
+treats ambiguous duplicate regions conservatively: it preserves source, increments
+`ambiguous`, and never rewrites the region by occurrence number. Stable Task
+identity remains deferred to the future Board package. The architecture does NOT
+claim that ambiguous identical duplicates receive an Opened Date.
+
+### 18.10 Baseline lifecycle
+
+- **Physical-open capture:** baseline captured after document content becomes
+  authoritative (post open, post draft-restore) for every normal open path
+  (`openTextDocument`, `openFromRecent`, `openSmart`, `newDocument`).
+- **Virtual Report:** baseline is never created or used (`__taskBaseline = null`).
+- **Draft Auto-save:** baseline is not refreshed.
+- **Failed Save:** baseline is NOT refreshed (the next Save retries safely and
+  idempotently).
+- **Successful Save:** baseline refreshed via `captureTaskBaseline()`.
+- **Persistence:** in-memory only; never persisted to `localStorage`.
+
+### 18.11 Transition terminology
+
+The lifecycle vocabulary uses 12 directional transitions across the 4 statuses
+(backlog, todo, ongoing, done) with same-state idempotence, serialized
+canonically by `buildTaskMetadataComment`.
+
+### 18.12 Consumers
+
+- **Workspace Index:** enriched fields flow through the existing object spreads
+  (`...task`); `open`/`done` counts unchanged (`!done` / `done`); Backlog/Todo/Ongoing
+  all remain open. No index rendering change.
+- **TaskReview:** current open/done view unchanged; `done` filter unchanged.
+- **Report:** completed-task output remains based on `done`/`completedDate`;
+  byte-compatible for identical source data; no new lifecycle sections.
+- **Journals / Concepts:** lifecycle metadata is task-local only.
+- **Standalone Editor:** without a valid physical-document baseline, reconcile
+  short-circuits (`no-baseline`); no guessing.

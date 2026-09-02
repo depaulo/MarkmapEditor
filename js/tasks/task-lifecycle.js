@@ -365,6 +365,271 @@
     return { ok: true, changed: true, line: newLine, effectiveStatus: target };
   }
 
+// ---- T1B sequence matcher (deterministic; occurrence-aware; no stable ID) ----
+  //
+  // Physical-Save new-Task detection. Aligns the baseline Task sequence with
+  // the current sequence using occurrence-aware canonical keys and ordered LCS
+  // anchors. It only ever PROVES insertion of uniquely identifiable visible
+  // text; everything else is classified as ambiguous.
+  //
+  // Explicit limitations (see architecture document):
+  // - identical visible text has NO stable identity, so an inserted extra copy
+  //   of an already-present label is ambiguous (never auto-Opened);
+  // - a moved Task reads as an equal-count region and is ambiguous;
+  // - a replaced block reads as an equal/mixed region and is ambiguous;
+  // - large rewrites hit the safety cap and never mass-tag.
+  //
+  // Occurrence index is an ALIGNMENT AID ONLY, never stable identity: the Nth
+  // current occurrence of identical text is NOT assumed to be the Nth baseline
+  // occurrence. Proving that would require a stable Task ID (deferred).
+
+  // Narrow safety cap for automatic Opened-date tagging.
+  const MAX_SAFE_NEW_PER_GAP = 8;
+  const MAX_SAFE_NEW_TOTAL = 16;
+  const MAX_SAFE_INSERT_TOTAL = 20;
+
+  function canonicalTaskText(value) {
+    return String(value == null ? '' : value)
+      .replace(/<!--\s*mme-task:[\s\S]*?-->/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  // Builds occurrence-aware sequence entries: { src, text, occ, key }.
+  function buildMatchSeq(tasks) {
+    const counts = {};
+    return (tasks || []).map((t) => {
+      const text = canonicalTaskText(t && t.text);
+      counts[text] = (counts[text] || 0) + 1;
+      return { src: t, text, occ: counts[text], key: text + '\u0000' + counts[text] };
+    });
+  }
+
+  // Longest-common-subsequence alignment over occurrence-aware keys.
+  // Returns matched pairs [{ baseline, current }] ordered by baseline then
+  // current. Fixed backtrack rule keeps the result deterministic.
+  function lcsAlign(b, c) {
+    const n = b.length;
+    const m = c.length;
+    const dp = [];
+    for (let i = 0; i <= n; i++) dp.push(new Array(m + 1).fill(0));
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i][j] =
+          b[i].key === c[j].key ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+    const pairs = [];
+    let i = 0;
+    let j = 0;
+    while (i < n && j < m) {
+      if (b[i].key === c[j].key) {
+        pairs.push({ baseline: i, current: j });
+        i++;
+        j++;
+      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+        i++;
+      } else {
+        j++;
+      }
+    }
+    return pairs;
+  }
+
+  // Aligns baseline/current Task sequences and classifies regions.
+  // Returns:
+  //   pairs, newIndices, ambiguousIndices, ambiguous, deletedCount,
+  //   insertedCount, skippedRewrite.
+  function matchTasksForSave(baseline, current) {
+    const b = buildMatchSeq(baseline);
+    const c = buildMatchSeq(current);
+    const pairs = lcsAlign(b, c);
+
+    // A current insertion is only source-proven new when its visible text does
+    // NOT already exist in the baseline: an added duplicate copy of an existing
+    // label cannot be positionally proven (no stable ID) -> ambiguous.
+    const baselineTextCounts = {};
+    for (const t of baseline || []) {
+      const text = canonicalTaskText(t && t.text);
+      baselineTextCounts[text] = (baselineTextCounts[text] || 0) + 1;
+    }
+
+    let newIndices = [];
+    const ambiguousIndices = [];
+    let ambiguous = 0;
+    let deletedCount = 0;
+    let insertedCount = 0;
+    let skippedRewrite = false;
+
+    let prevB = -1;
+    let prevC = -1;
+    const regions = [];
+    for (const p of pairs) {
+      regions.push({ bFrom: prevB + 1, bTo: p.baseline, cFrom: prevC + 1, cTo: p.current });
+      prevB = p.baseline;
+      prevC = p.current;
+    }
+    regions.push({ bFrom: prevB + 1, bTo: b.length, cFrom: prevC + 1, cTo: c.length });
+
+    for (const r of regions) {
+      const bDel = r.bTo - r.bFrom;
+      const cIns = r.cTo - r.cFrom;
+      deletedCount += bDel;
+      insertedCount += cIns;
+
+      if (cIns > 0 && bDel === 0) {
+        // Pure insertion region: candidate new current Tasks.
+        const candidates = [];
+        for (let j = r.cFrom; j < r.cTo; j++) {
+          const text = c[j].text;
+          if (baselineTextCounts[text] > 0) {
+            ambiguousIndices.push(j);
+            ambiguous++;
+          } else {
+            candidates.push(j);
+          }
+        }
+        if (candidates.length > MAX_SAFE_NEW_PER_GAP) {
+          // Per-gap cap engaged: fold candidates to ambiguous, no tagging.
+          skippedRewrite = true;
+          ambiguous += candidates.length;
+          for (const idx of candidates) ambiguousIndices.push(idx);
+        } else {
+          newIndices = newIndices.concat(candidates);
+        }
+      } else if (cIns === 0 && bDel === 0) {
+        // Fully matched region: nothing to do.
+      } else {
+        // Deletion-only, edit/replace, or mixed -> ambiguous.
+        ambiguous += Math.max(cIns, bDel);
+        for (let j = r.cFrom; j < r.cTo; j++) ambiguousIndices.push(j);
+      }
+    }
+
+    // Whole-document / total-new caps: skip automatic new-tagging entirely.
+    if (insertedCount > MAX_SAFE_INSERT_TOTAL || newIndices.length > MAX_SAFE_NEW_TOTAL) {
+      skippedRewrite = true;
+    }
+    if (skippedRewrite && newIndices.length) {
+      ambiguous += newIndices.length;
+      for (const idx of newIndices) ambiguousIndices.push(idx);
+      newIndices = [];
+    }
+
+    return {
+      pairs,
+      newIndices,
+      ambiguousIndices,
+      ambiguous,
+      deletedCount,
+      insertedCount,
+      skippedRewrite,
+    };
+  }
+// ---- T1B save-lifecycle metadata writer (pure; checkbox never rewritten) ----
+  //
+  // Edits ONLY the task-local `mme-task` comment during physical-Save
+  // reconciliation. The observed checkbox is authoritative and read from the
+  // source line; the checkbox marker is never changed here. All non-lifecycle
+  // metadata and unknown raw statuses survive round-trip. Invalid raw lifecycle
+  // values are preserved as written (not silently overwritten).
+  //
+  // opts:
+  //   { today, isNew, checked, explicitStatus }
+  //     today           'YYYY-MM-DD' current local date (single owner main.js)
+  //     isNew           source-proven new Task (may receive opened)
+  //     checked         current checkbox authority state
+  //     explicitStatus  normalized raw status value or null/'' (unknown kept)
+  //
+  // Returns { ok, changed, line, added:{opened,started,completed},
+  //           removed:{completed,status}, reason? }.
+  function applySaveLifecycle(rawLine, opts) {
+    const o = opts || {};
+    const today = o.today;
+    const isNew = Boolean(o.isNew);
+    const checked = Boolean(o.checked);
+    const status = String(o.explicitStatus == null ? '' : o.explicitStatus)
+      .trim()
+      .toLowerCase() || null;
+
+    const source = typeof rawLine === 'string' ? rawLine : (rawLine && rawLine.raw) || '';
+    const parsed = parseTaskLine(source);
+    if (!parsed) {
+      return { ok: false, changed: false, line: source, reason: 'not-a-task-line' };
+    }
+
+    const { entries } = parseCommentEntries(parsed.content);
+    const before = metadataFromEntries(entries);
+    const ops = { set: {}, remove: [] };
+    const needToday = [];
+
+    // Date writes follow "add only if ABSENT" so valid hand-written dates and
+    // invalid raw values are never silently overwritten or deleted.
+    const absentOpened = before.opened == null || !String(before.opened).trim();
+    const absentCompleted = before.completed == null || !String(before.completed).trim();
+    const absentStarted = before.started == null || !String(before.started).trim();
+
+    if (isNew && absentOpened) {
+      ops.set.opened = today;
+      needToday.push('opened');
+    }
+
+    if (checked) {
+      // Effective Done: ensure a closed date; never status=done.
+      if (absentCompleted) {
+        ops.set.completed = today;
+        needToday.push('completed');
+      }
+      // Remove a recognized stale open status only (backlog/ongoing/todo).
+      // Unknown status values are preserved.
+      if (OPEN_STATUSES.indexOf(status) !== -1) ops.remove.push('status');
+    } else {
+      // Effective open.
+      ops.remove.push('completed');
+      if (status === 'ongoing') {
+        ops.set.status = 'ongoing';
+        if (absentStarted) {
+          ops.set.started = today;
+          needToday.push('started');
+        }
+      } else if (status === 'backlog') {
+        ops.set.status = 'backlog';
+      }
+      // todo/absent/unknown: status untouched (todo by absence).
+    }
+
+    if (needToday.length && !isValidIsoDate(today)) {
+      return { ok: false, changed: false, line: source, reason: 'invalid-today' };
+    }
+
+    const newEntries = applyEntryOps(entries, ops);
+    const newContent = rewriteContentComment(parsed.content, newEntries);
+    const newLine =
+      parsed.indent +
+      parsed.bullet +
+      parsed.gap +
+      parsed.open +
+      parsed.marker +
+      parsed.close +
+      parsed.after +
+      newContent;
+
+    const after = metadataFromEntries(newEntries);
+    const added = {
+      opened: !isValidIsoDate(before.opened) && isValidIsoDate(after.opened),
+      started: !isValidIsoDate(before.started) && isValidIsoDate(after.started),
+      completed: !isValidIsoDate(before.completed) && isValidIsoDate(after.completed),
+    };
+    const removed = {
+      completed: isValidIsoDate(before.completed) && !isValidIsoDate(after.completed),
+      status: before.status != null && after.status == null,
+    };
+
+    if (newLine === source) {
+      return { ok: true, changed: false, line: source, added, removed };
+    }
+    return { ok: true, changed: true, line: newLine, added, removed };
+  }
   // ---- Validator (deterministic; explicit today values; no clock) ----
 
   function validate() {
@@ -793,6 +1058,241 @@
       JSON.stringify(r)
     );
 
+    // ---------- T1B SEQUENCE MATCHER (pure) ----------
+    const bas = (arr) => arr.map((text) => ({ text, done: false, line: 0 }));
+    const basDone = (arr, done) => arr.map((text) => ({ text, done, line: 0 }));
+
+    // append unique -> new proven
+    let m = matchTasksForSave(bas(['A', 'B']), bas(['A', 'B', 'NEW']));
+    check(
+      'M1 append unique -> new proven',
+      m.newIndices.length === 1 && m.newIndices[0] === 2 && m.ambiguous === 0,
+      JSON.stringify({ n: m.newIndices.length, a: m.ambiguous })
+    );
+
+    // prepend unique -> new proven
+    m = matchTasksForSave(bas(['A', 'B']), bas(['NEW', 'A', 'B']));
+    check(
+      'M2 prepend unique -> new proven',
+      m.newIndices.length === 1 && m.newIndices[0] === 0,
+      JSON.stringify({ n: m.newIndices.length })
+    );
+
+    // middle insertion unique -> new proven
+    m = matchTasksForSave(bas(['A', 'B', 'C']), bas(['A', 'NEW', 'B', 'C']));
+    check(
+      'M3 middle unique -> new proven',
+      m.newIndices.length === 1 && m.newIndices[0] === 1,
+      JSON.stringify({ n: m.newIndices.length })
+    );
+
+    // moved unique task -> ambiguous, no new opened
+    m = matchTasksForSave(bas(['A', 'B', 'C']), bas(['B', 'A', 'C']));
+    check(
+      'M4 moved task -> ambiguous, not new',
+      m.newIndices.length === 0 && m.ambiguous > 0,
+      JSON.stringify({ n: m.newIndices.length, a: m.ambiguous })
+    );
+
+    // edited task -> ambiguous, no new opened
+    m = matchTasksForSave(bas(['A', 'B']), bas(['A edited', 'B']));
+    check(
+      'M5 edited task -> ambiguous, not new',
+      m.newIndices.length === 0 && m.ambiguous > 0,
+      JSON.stringify({ n: m.newIndices.length, a: m.ambiguous })
+    );
+
+    // replacement block -> ambiguous, no new opened
+    m = matchTasksForSave(bas(['A', 'B', 'C']), bas(['X', 'Y', 'Z']));
+    check(
+      'M6 replacement block -> ambiguous, not new',
+      m.newIndices.length === 0 && m.ambiguous > 0,
+      JSON.stringify({ n: m.newIndices.length, a: m.ambiguous })
+    );
+
+    // unchanged duplicate tasks -> matched, no new
+    m = matchTasksForSave(bas(['A', 'A']), bas(['A', 'A']));
+    check(
+      'M7 unchanged duplicates -> matched, no new',
+      m.newIndices.length === 0 && m.pairs.length === 2 && m.ambiguous === 0,
+      JSON.stringify({ n: m.newIndices.length, p: m.pairs.length, a: m.ambiguous })
+    );
+
+    // extra identical copy of a duplicated label -> ambiguous (no stable ID)
+    m = matchTasksForSave(bas(['A', 'A']), bas(['A', 'A', 'A']));
+    check(
+      'M8 duplicate inserted -> ambiguous, not new',
+      m.newIndices.length === 0 && m.ambiguous > 0,
+      JSON.stringify({ n: m.newIndices.length, a: m.ambiguous })
+    );
+
+    // duplicate run with one distinct inserted label -> one new, duplicates matched
+    m = matchTasksForSave(
+      basDone(['A', 'A'], true),
+      basDone(['A', 'NEW', 'A'], true)
+    );
+    check(
+      'M9 duplicate run + distinct label -> one new proven',
+      m.newIndices.length === 1 && m.newIndices[0] === 1 && m.pairs.length === 2,
+      JSON.stringify({ n: m.newIndices.length, p: m.pairs.length })
+    );
+
+    // moved duplicate region -> ambiguous, no new opened
+    m = matchTasksForSave(bas(['A', 'A', 'B']), bas(['B', 'A', 'A']));
+    check(
+      'M10 moved duplicate region -> ambiguous, not new',
+      m.newIndices.length === 0 && m.ambiguous > 0,
+      JSON.stringify({ n: m.newIndices.length, a: m.ambiguous })
+    );
+
+    // duplicate with differing metadata still aligned by visible text
+    m = matchTasksForSave(
+      [{ text: 'A', done: true, openedDate: '2026-08-01' }, { text: 'A', done: false }],
+      [{ text: 'A', done: true, openedDate: '2026-08-01' }, { text: 'A', done: false }]
+    );
+    check(
+      'M11 duplicate metadata-bearing -> aligned matched pairs',
+      m.pairs.length === 2 && m.newIndices.length === 0,
+      JSON.stringify({ p: m.pairs.length, n: m.newIndices.length })
+    );
+
+    // large rewrite safety cap
+    const bigBase = [];
+    const bigCur = [];
+    for (let k = 0; k < 6; k++) bigBase.push('T' + k);
+    for (let k = 6; k <= 30; k++) bigCur.push('Tk' + k);
+    m = matchTasksForSave(bas(bigBase), bas(bigCur));
+    check(
+      'M12 large rewrite -> skippedRewrite, no new tagging',
+      m.skippedRewrite === true && m.newIndices.length === 0,
+      JSON.stringify({ skippedRewrite: m.skippedRewrite, n: m.newIndices.length })
+    );
+
+
+    // ---------- T1B SAVE-LIFECYCLE WRITER (pure) ----------
+    const Y = '2026-09-01';
+
+    // new Todo: opened once, no status
+    r = applySaveLifecycle('- [ ] A', { today: Y, isNew: true, checked: false, explicitStatus: null });
+    check(
+      'S1 new Todo opened once',
+      r.ok && r.changed && /opened=2026-09-01/.test(r.line) && !/status=/.test(r.line),
+      r.line
+    );
+
+    // new Backlog: opened + status=backlog kept, no started
+    r = applySaveLifecycle('- [ ] A <!-- mme-task: status=backlog -->', { today: Y, isNew: true, checked: false, explicitStatus: 'backlog' });
+    check(
+      'S2 new Backlog opened + status kept, no started',
+      r.ok && r.changed && /opened=2026-09-01/.test(r.line) && /status=backlog/.test(r.line) && !/started=/.test(r.line),
+      r.line
+    );
+
+    // new Ongoing: opened + started + status=ongoing
+    r = applySaveLifecycle('- [ ] A <!-- mme-task: status=ongoing -->', { today: Y, isNew: true, checked: false, explicitStatus: 'ongoing' });
+    check(
+      'S3 new Ongoing opened + started',
+      r.ok && r.changed && /opened=2026-09-01/.test(r.line) && /started=2026-09-01/.test(r.line) && /status=ongoing/.test(r.line),
+      r.line
+    );
+
+    // new Done: opened + completed, no status=done
+    r = applySaveLifecycle('- [x] A', { today: Y, isNew: true, checked: true, explicitStatus: null });
+    check(
+      'S4 new Done opened + completed, no status',
+      r.ok && r.changed && /opened=2026-09-01/.test(r.line) && /completed=2026-09-01/.test(r.line) && !/status=/.test(r.line),
+      r.line
+    );
+
+    // legacy completion: completed only, no opened backfill
+    r = applySaveLifecycle('- [ ] A', { today: Y, isNew: false, checked: true, explicitStatus: null });
+    check(
+      'S5 legacy completion completed only, no opened',
+      r.ok && r.changed && /completed=2026-09-01/.test(r.line) && !/opened=/.test(r.line),
+      r.line
+    );
+
+        // done -> todo reopen: completed removed, opened preserved
+    r = applySaveLifecycle('- [ ] A <!-- mme-task: completed=2026-08-01; opened=2026-08-02 -->', { today: Y, isNew: false, checked: false, explicitStatus: null });
+    check(
+      'S6 reopen to todo removes completed, preserves opened',
+      r.ok && r.changed && !/completed=/.test(r.line) && /opened=2026-08-02/.test(r.line),
+      r.line
+    );
+
+    // done -> ongoing reopen with explicit ongoing: keeps status + adds started if missing
+    r = applySaveLifecycle('- [ ] A <!-- mme-task: completed=2026-08-01; status=ongoing -->', { today: Y, isNew: false, checked: false, explicitStatus: 'ongoing' });
+    check(
+      'S7 reopen to ongoing keeps status + adds started if missing',
+      r.ok && r.changed && /status=ongoing/.test(r.line) && /started=2026-09-01/.test(r.line) && !/completed=/.test(r.line),
+      r.line
+    );
+
+    // done -> backlog reopen: keeps status, no started added
+    r = applySaveLifecycle('- [ ] A <!-- mme-task: completed=2026-08-01; status=backlog -->', { today: Y, isNew: false, checked: false, explicitStatus: 'backlog' });
+    check(
+      'S8 reopen to backlog keeps status, no started',
+      r.ok && r.changed && /status=backlog/.test(r.line) && !/started=/.test(r.line) && !/completed=/.test(r.line),
+      r.line
+    );
+    // unknown metadata preserved on a new task
+    r = applySaveLifecycle('- [ ] A <!-- mme-task: owner=adelson; unknown=7 -->', { today: Y, isNew: true, checked: false, explicitStatus: null });
+    check(
+      'S9 unknown metadata preserved on new task',
+      r.ok && r.changed && /owner=adelson/.test(r.line) && /unknown=7/.test(r.line),
+      r.line
+    );
+
+    // invalid raw opened preserved (not backfilled) on a legacy completion
+    r = applySaveLifecycle('- [ ] A <!-- mme-task: opened=2026-13-01 -->', { today: Y, isNew: false, checked: true, explicitStatus: null });
+    check(
+      'S10 invalid raw opened preserved on completion',
+      r.ok && r.changed && /opened=2026-13-01/.test(r.line) && (r.line.match(/opened=2026-09-01/g) || []).length === 0,
+      r.line
+    );
+
+    // idempotence / retry: re-running the writer is a no-op
+    const one = applySaveLifecycle('- [ ] A', { today: Y, isNew: true, checked: false, explicitStatus: null });
+    const two = applySaveLifecycle(one.line, { today: Y, isNew: true, checked: false, explicitStatus: null });
+    check(
+      'S11 idempotent re-application -> no repeat write / no duplicate comment',
+      one.changed === true && two.changed === false && (two.line.match(/mme-task:/g) || []).length <= 1,
+      JSON.stringify({ one: one.line, two: two.line })
+    );
+
+    // completion of stale recognized open status removes it; unknown status kept
+    r = applySaveLifecycle('- [x] A <!-- mme-task: status=ongoing -->', { today: Y, isNew: false, checked: true, explicitStatus: 'ongoing' });
+    check(
+      'S12 completion removes stale open status',
+      r.ok && !/status=ongoing/.test(r.line) && /completed=2026-09-01/.test(r.line),
+      r.line
+    );
+
+    // unknown status preserved across completion
+    r = applySaveLifecycle('- [x] A <!-- mme-task: status=weird -->', { today: Y, isNew: false, checked: true, explicitStatus: 'weird' });
+    check(
+      'S13 unknown status preserved on completion',
+      r.ok && /status=weird/.test(r.line) && /completed=2026-09-01/.test(r.line),
+      r.line
+    );
+
+    // checkbox marker never rewritten
+    r = applySaveLifecycle('- [x] Checked stays', { today: Y, isNew: false, checked: true, explicitStatus: null });
+    check(
+      'S14 checkbox marker preserved by save writer',
+      r.ok && (r.changed === false || r.line.indexOf('[x]') !== -1),
+      r.line
+    );
+
+    // new Done removes stale recognized open status but keeps unknown status
+    r = applySaveLifecycle('- [x] A <!-- mme-task: status=backlog; owner=zoe -->', { today: Y, isNew: true, checked: true, explicitStatus: 'backlog' });
+    check(
+      'S15 new Done drops stale open status, keeps unrelated metadata',
+      r.ok && /completed=2026-09-01/.test(r.line) && /opened=2026-09-01/.test(r.line) && !/status=/.test(r.line) && /owner=zoe/.test(r.line),
+      r.line
+    );
+
+
     return {
       ok: failed === 0,
       total: results.length,
@@ -812,6 +1312,8 @@
     normalizeTask,
     effectiveStatusOf,
     applyTransition,
+    applySaveLifecycle,
+    matchTasksForSave,
     buildTaskMetadataComment,
     validate,
   };
