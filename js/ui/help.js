@@ -16,6 +16,13 @@ function getHelpOrigin() {
   return helpOrigin;
 }
 
+function updateHelpBackToWelcomeVisibility() {
+  try {
+    const btn = document.getElementById('btnHelpBackToWelcome');
+    if (btn) btn.hidden = getHelpOrigin() !== 'welcome';
+  } catch {}
+}
+
 function getCurrentHelpContext() {
   const contextId =
     globalThis.currentAppContextId ||
@@ -119,6 +126,7 @@ function wireHelpOverlay() {
   btnHelp?.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
+    setHelpOrigin('toolbar');
     showHelpOverlay();
   });
 
@@ -128,14 +136,35 @@ function wireHelpOverlay() {
     hideHelpOverlay();
   });
 
-  // UX-MODE1.1: Back to Welcome button.
+  // UX-MODE1.1: Back to Welcome button. One deterministic return transition
+  // owned here (not delegated to showWelcomeOverlay's side effects).
   btnBackToWelcome?.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
-    hideHelpOverlay();
+
+    // Duplicate-activation guard: ignore clicks once the transition started.
+    if (overlay.__returningToWelcome) return;
+    overlay.__returningToWelcome = true;
+
     try {
+      // 1. Hide Help explicitly.
+      hideHelpOverlay();
+
+      // 2. Neutral origin state so a later direct Help open is clean.
+      setHelpOrigin('toolbar');
+
+      // 3. Present the central Welcome hub (also re-asserts Help hidden).
       globalThis.showWelcomeOverlay?.();
-    } catch {}
+
+      // 4. Confirm Help remains hidden after the transition.
+      const helpAfter = document.getElementById('helpOverlay');
+      if (helpAfter && !helpAfter.hidden) {
+        helpAfter.hidden = true;
+      }
+    } finally {
+      overlay.__returningToWelcome = false;
+    }
+
     log?.('Help: back to Welcome');
   });
 
@@ -146,6 +175,8 @@ function wireHelpOverlay() {
       hideHelpOverlay();
     }
   });
+
+  updateHelpBackToWelcomeVisibility();
 
   overlay.__helpBound = true;
 
@@ -175,6 +206,17 @@ function renderHelpContentForContext(context) {
     body.innerHTML = getEditorHelpHtml();
   }
 
+  // A newly opened reference always starts at the top; a previous
+  // reference's scroll position must never be reused.
+  try {
+    body.scrollTop = 0;
+  } catch {}
+
+  // Back-to-Welcome visibility is synchronized only after the final origin
+  // is assigned and before the overlay is revealed, so it can never flash
+  // in the wrong state or depend on a later pass.
+  updateHelpBackToWelcomeVisibility();
+
   const overlay = document.getElementById('helpOverlay');
   if (overlay) {
     overlay.hidden = false;
@@ -191,13 +233,25 @@ function showHelpForContext(context, options) {
   const valid = context === 'journal' || context === 'concept' || context === 'slides' || context === 'editor';
   const target = valid ? context : 'editor';
 
-  // UX-MODE1.2: Record origin if provided.
-  if (options && typeof options === 'object') {
-    setHelpOrigin(options.origin);
-  }
+  // UX-MODE1.2: Every Help opening path assigns its origin explicitly so no
+  // previous Welcome-origin value can leak into a later direct Help opening.
+  setHelpOrigin(options && typeof options === 'object' ? options.origin : 'toolbar');
 
   log?.(`Help: force context=${target} origin=${getHelpOrigin()}`);
   renderHelpContentForContext(target);
+
+  // One concise diagnostic for Welcome-origin references only.
+  if (getHelpOrigin() === 'welcome') {
+    try {
+      const backBtn = document.getElementById('btnHelpBackToWelcome');
+      const backDisplay = backBtn
+        ? globalThis.getComputedStyle?.(backBtn).display || '(n/a)'
+        : '(missing)';
+      log?.(
+        `Help: reference shown context=${target} origin=welcome backHidden=${backBtn ? backBtn.hidden : '(missing)'} backDisplay=${backDisplay}`
+      );
+    } catch {}
+  }
 }
 
 function getEditorHelpHtml() {

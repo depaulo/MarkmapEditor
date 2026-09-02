@@ -12,17 +12,29 @@ const WELCOME_CONTENT_VERSION = '2026-07-v1';
 function shouldShowWelcome() {
   try {
     const storedVersion = localStorage.getItem(WELCOME_VERSION_KEY);
-    if (storedVersion !== WELCOME_CONTENT_VERSION) {
-      log?.(`Welcome: startup decision show=true reason=version-changed key=${WELCOME_VERSION_KEY} value=${storedVersion}`);
-      return true;
-    }
     const dismissed = localStorage.getItem(WELCOME_STORAGE_KEY);
-    if (dismissed === '1') {
-      log?.(`Welcome: startup decision show=false reason=explicitly-dismissed key=${WELCOME_STORAGE_KEY} value=${dismissed}`);
-      return false;
+
+    // Existing policy preserved: a changed/unseen Welcome content version
+    // wins over the dismissed flag; an acknowledged version respects it.
+    let show;
+    let reason;
+
+    if (storedVersion !== WELCOME_CONTENT_VERSION) {
+      show = true;
+      reason = storedVersion == null ? 'first-run' : 'version-changed';
+    } else if (dismissed === '1') {
+      show = false;
+      reason = 'explicitly-dismissed';
+    } else {
+      show = false;
+      reason = 'already-seen';
     }
-    log?.(`Welcome: startup decision show=false reason=already-seen key=${WELCOME_VERSION_KEY} value=${storedVersion}`);
-    return false;
+
+    log?.(
+      `Welcome: startup decision show=${show} reason=${reason} contentVersion=${WELCOME_CONTENT_VERSION} seenVersion=${storedVersion ?? 'null'} dismissed=${dismissed ?? 'null'}`
+    );
+
+    return show;
   } catch {
     log?.('Welcome: startup decision show=true reason=storage-error');
     return true;
@@ -37,6 +49,14 @@ function showWelcomeOverlay() {
     return;
   }
 
+  // Ensure no stale Help reference stays layered above/beside the hub
+  // whenever Welcome is (re)presented, including the Back to Welcome flow.
+  try {
+    if (typeof globalThis.hideHelpOverlay === 'function') {
+      globalThis.hideHelpOverlay();
+    }
+  } catch {}
+
   // Apply complete open state consistently.
   overlay.hidden = false;
   overlay.removeAttribute('hidden');
@@ -47,11 +67,32 @@ function showWelcomeOverlay() {
   overlay.style.opacity = '';
   overlay.style.pointerEvents = '';
 
+  // Present the hub at its initial scroll position on every re-presentation.
   try {
-    overlay.focus?.();
+    overlay.querySelector('.welcomeBody')?.scrollTo?.(0, 0);
   } catch {}
 
-  log?.('Welcome: shown');
+  // Keyboard entry lands on a useful hub control (existing modal grammar).
+  try {
+    const first = document.getElementById('btnWelcomeContinue');
+    if (first && typeof first.focus === 'function') {
+      first.focus({ preventScroll: true });
+    } else {
+      overlay.focus?.();
+    }
+  } catch {}
+
+  // One concise final-state diagnostic: proves whether the hub is actually
+  // visible (not merely un-hidden) after presentation.
+  try {
+    const cs = globalThis.getComputedStyle?.(overlay);
+    const helpEl = document.getElementById('helpOverlay');
+    log?.(
+      `Welcome: hub shown hidden=${overlay.hidden} ariaHidden=${overlay.getAttribute('aria-hidden')} display=${cs ? cs.display : '(n/a)'} visibility=${cs ? cs.visibility : '(n/a)'} opacity=${cs ? cs.opacity : '(n/a)'} open=${overlay.classList.contains('open')} helpHidden=${helpEl ? helpEl.hidden : '(missing)'}`
+    );
+  } catch {}
+
+  log?.('Welcome: hub shown');
 }
 
 function hideWelcomeOverlay({ remember = true } = {}) {

@@ -7167,8 +7167,8 @@ function ensureHtmlFullscreenButton() {
     btn.id = 'htmlBtnFullscreen';
     btn.type = 'button';
     btn.textContent = '⛶';
-    btn.title = 'Fullscreen Preview';
-    btn.setAttribute('aria-label', 'Fullscreen Preview');
+    btn.title = 'Fullscreen HTML Preview';
+    btn.setAttribute('aria-label', 'Fullscreen HTML Preview');
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -9629,7 +9629,7 @@ function ensureHtmlOverlayControls() {
       title="Copy rendered text"
       aria-label="Copy rendered text"
     >
-      Text
+      📋<span class="htmlIconBadge" aria-hidden="true">Aa</span>
     </button>
 
     <button
@@ -9638,7 +9638,7 @@ function ensureHtmlOverlayControls() {
       title="Copy HTML"
       aria-label="Copy HTML"
     >
-      HTML
+      📋<span class="htmlIconBadge" aria-hidden="true">&lt;/&gt;</span>
     </button>
 
     <button
@@ -9647,7 +9647,7 @@ function ensureHtmlOverlayControls() {
       title="Export HTML"
       aria-label="Export HTML"
     >
-      Export
+      ⬇️
     </button>
 
     <button
@@ -9656,7 +9656,7 @@ function ensureHtmlOverlayControls() {
       title="Scroll HTML preview to top"
       aria-label="Scroll HTML preview to top"
     >
-      ↑
+      ⤒
     </button>
   `;
 

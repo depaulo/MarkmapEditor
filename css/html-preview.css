@@ -230,16 +230,16 @@ html.html-preview-open #htmlOverlayControls {
 
 
 #htmlOverlayControls button {
-  height: 28px;
+  height: 32px;
   min-width: 30px;
 
   display: inline-flex;
   align-items: center;
   justify-content: center;
 
-  padding: 0 8px;
+  padding: 0 7px;
 
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1;
 
   background: var(--toolbar-bg);
@@ -257,6 +257,30 @@ html.html-preview-open #htmlOverlayControls {
 
 #htmlOverlayControls button:active {
   transform: translateY(1px);
+}
+
+#htmlOverlayControls button:focus-visible {
+  outline: 2px solid var(--focus-ring, #1976d2);
+  outline-offset: 2px;
+}
+
+/* Decorative semantic badge inside an icon-only copy control. Copy Text uses
+   Aa (text) and Copy HTML uses </> (code) so the two copy actions stay
+   visibly distinct while sharing the application copy metaphor. The badge
+   is decorative only: the button's aria-label carries the accessible name
+   and pointer-events:none keeps the click target on the button itself. */
+#htmlOverlayControls .htmlIconBadge {
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: 1px;
+  letter-spacing: -0.02em;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+html.compact #htmlOverlayControls .htmlIconBadge {
+  font-size: 8px;
 }
 
 html.dark #htmlOverlayControls {
@@ -284,5 +308,41 @@ html.compact #htmlOverlayControls {
 html.compact #htmlOverlayControls button {
   height: 24px;
   padding: 0 6px;
-  font-size: 11px;
+  font-size: 13px;
+}
+
+/* ---- HTML heading anchor: smaller and less prominent in the live preview
+   only. The renderer markup, heading IDs, href targets, and the standalone
+   export CSS are untouched, so exported HTML behavior is unchanged. The
+   glyph stays baseline-aligned so the heading line height is not disturbed;
+   hover/focus-visible restores full prominence. Selector is intentionally
+   narrow (same-page heading anchors only, inside the live pane). */
+#htmlPane h1 a[href^="#"],
+#htmlPane h2 a[href^="#"],
+#htmlPane h3 a[href^="#"],
+#htmlPane h4 a[href^="#"],
+#htmlPane h5 a[href^="#"],
+#htmlPane h6 a[href^="#"] {
+  margin-left: 0.45em;
+  font-size: 0.6em;
+  vertical-align: baseline;
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.5;
+}
+
+#htmlPane h1 a[href^="#"]:hover,
+#htmlPane h2 a[href^="#"]:hover,
+#htmlPane h3 a[href^="#"]:hover,
+#htmlPane h4 a[href^="#"]:hover,
+#htmlPane h5 a[href^="#"]:hover,
+#htmlPane h6 a[href^="#"]:hover,
+#htmlPane h1 a[href^="#"]:focus-visible,
+#htmlPane h2 a[href^="#"]:focus-visible,
+#htmlPane h3 a[href^="#"]:focus-visible,
+#htmlPane h4 a[href^="#"]:focus-visible,
+#htmlPane h5 a[href^="#"]:focus-visible,
+#htmlPane h6 a[href^="#"]:focus-visible {
+  opacity: 1 !important;
+  color: var(--link, #1976d2);
 }
