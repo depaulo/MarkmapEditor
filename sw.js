@@ -13,7 +13,7 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 // installed cache identity (APP_CACHE / RUNTIME_CACHE) for this release
 // boundary: Screen Layout closure (S1 + S2 + S3 + S4A + S4B + PWA reconciliation:
 // css/view-layout.css and js/ui/view-layout.js joined the deterministic precache).
-const APP_VERSION = 'markmap-journal-pwa-v62-screen-layout-closure-v1';
+const APP_VERSION = 'markmap-journal-pwa-v63-welcome-html-icons-v1';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.
