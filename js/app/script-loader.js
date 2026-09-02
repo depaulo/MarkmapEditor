@@ -38,6 +38,9 @@ function appendStylesheet(href) {
 
   // Workspace metadata/index parser (R-SPLIT2). Loaded before main.js so its
   // globals are available; main.js no longer declares these functions.
+  // Task Lifecycle Core (T1A) loads first so parser normalization and future
+  // reconciliation consumers resolve globalThis.MME_TASK_LIFECYCLE at call time.
+  appendScript('./js/tasks/task-lifecycle.js');
   appendScript('./js/workspace/workspace-parser.js');
 
   // Workspace Host — lifecycle foundation. Loaded before capability/runtime
