@@ -1,4 +1,5 @@
 # MarkmapEditor
+
 Single File Markmap Editor
 
 ## Screen Layout
@@ -32,3 +33,10 @@ Output is delivered via Save As with a suggested `<report-name>-visual.drawio` f
 The built-in Draw.io visual editor is **not included**. Generated output must be opened externally in Draw.io.
 
 See `docs/architecture/MarkmapEditor_Drawio_Report_MVP_ARCHITECTURE.md` for the locked architecture.
+
+Read the following documents to understand the project guidelines and principles:
+
+- docs/PRODUCT_PRINCIPLES.md
+- docs/AI_DEVELOPMENT_WORKFLOW.md
+- docs/AI_DEVELOPMENT_ENVIRONMENT.
+- Architecture documents: `docs/architecture/`
