@@ -101,6 +101,12 @@ function appendStylesheet(href) {
   // R-TASK2 + R-TASK3 — task search, filters, and priority.
   appendScript('./js/workspace/task-review.js');
 
+  // Simple Task Board Quick View — consumer of the three-level Task
+  // architecture. Loaded after task-review.js so it can reuse the TaskReview
+  // source resolver / navigation owner (MME_TASK_REVIEW) at call time.
+  appendStylesheet('./css/task-board.css');
+  appendScript('./js/tasks/task-board.js');
+
   appendScript('./js/templates/templates-menu.js');
 
   // ACT H1 — pure Reviewed Report Markdown importer. Loaded first among the

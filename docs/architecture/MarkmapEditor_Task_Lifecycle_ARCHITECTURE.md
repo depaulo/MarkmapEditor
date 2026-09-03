@@ -436,3 +436,204 @@ canonically by `buildTaskMetadataComment`.
 - **Journals / Concepts:** lifecycle metadata is task-local only.
 - **Standalone Editor:** without a valid physical-document baseline, reconcile
   short-circuits (`no-baseline`); no guessing.
+
+---
+
+## 19. Task Board Quick View (consumer)
+
+This section documents the first visual Task management experience — the **Simple
+Task Board Quick View** — as a consumer of the lifecycle owner. It adds no
+lifecycle logic and does not begin Reports, Projects, Groups, or a full Task mode.
+
+### 19.1 Three-level Task architecture
+
+- **Level 1 — Workspace Index:** the normalized read model. Discovers Tasks,
+  normalizes lifecycle fields (`status`, `effectiveStatus`, `openedDate`,
+  `startedDate`, `completedDate`, `closedDate`) and preserves source path, file
+  kind, file name, and line. Stays close to raw Workspace data.
+- **Level 2 — TaskReview Sidebar:** the compact Sidebar view (`js/workspace/task-review.js`).
+  Owns the Sidebar Tasks panel, quick search/filters, open/done experience, source
+  navigation, and the single **Board** entry action.
+- **Level 3 — Task Board Quick View:** the focused wide overlay
+  (`js/tasks/task-board.js`, global `MME_TASK_BOARD`). Renders four lifecycle
+  columns, supports status changes and Done-period filtering, and navigates to
+  source. A future optional full Task Manager mode is a possible later layer, not
+  part of this package.
+
+### 19.2 Board entry ownership
+
+TaskReview owns the Sidebar entry. A single visible-text **`Board`** button
+(`aria-label="Open Task Board"`, `id="workspaceTaskBoardBtn"`) sits beside the
+Tasks panel collapse control as a sibling (no nested buttons; the collapse control
+is wrapped in `.workspaceTasksHeaderCollapse`). It appears only when TaskReview is
+available (a Workspace and Index are ready gate the Tasks panel). It opens the
+single Board owner and never creates duplicate overlays. It is not added to the
+global toolbar and does not create a separate Tasks application context.
+
+### 19.3 Quick View ownership (the overlay)
+
+The Board is one stable in-application overlay (`#mmeTaskBoard`, `role="dialog"`,
+`aria-modal="true"`) created once by `ensureBoard()`. Lifecycle: `ensure → wire
+once → render from current Index → show/hide`. Reopening never re-creates the
+overlay and never duplicates wiring (idempotent guards). Opening preserves the
+active application context, pane layout, Workspace, and Editor instance; closing
+hides the overlay, restores focus to the invoking Board button where practical,
+and does not navigate or reset lifecycle state. Escape closes the Board when it is
+the visible top dialog, following the existing overlay-precedence grammar; no new
+modal manager is introduced. A single `mme-workspace-index-ready` listener (guarded)
+re-renders only while the Board is open.
+
+### 19.4 Four fixed columns
+
+The Board contains exactly the four lifecycle columns in order:
+
+`Backlog → Todo → Ongoing → Done`
+
+Grouping uses the lifecycle `effectiveStatus` (via the lifecycle owner's
+`effectiveStatusOf` when present), with the documented fallback: checked → Done;
+`status=backlog` → Backlog; `status=ongoing` → Ongoing; other unchecked → Todo.
+Unknown status values fall to Todo. Columns are not configurable; no Waiting,
+Blocked, Canceled, Archived, status customizations, or swimlanes.
+
+### 19.5 Workspace Index as read model; Markdown as source of truth
+
+The Board renders **only** from `WORKSPACE_INDEX_STATE`. There is no parallel Task
+store and no Task array is persisted to `localStorage`. Markdown remains the source
+of truth: the Board never writes checkbox markers, `status`, `opened`, `started`,
+or `completed` itself, and never patches the Workspace Index directly.
+
+### 19.6 applyTransition as the lifecycle mutation owner
+
+Every status change calls
+`globalThis.MME_TASK_LIFECYCLE.applyTransition(currentLine, { target, today })`.
+The Board supplies the **current physical line**, the **target status**, and the
+**canonical local today** — it does not reimplement lifecycle rules. The pure
+lifecycle owner decides checkbox state, status metadata, started/completed dates,
+and canonical serialization. The Board does not write `status=done` (the module
+never writes `status=` at all) and does not require explicit `status=todo`.
+
+### 19.7 Canonical local date owner
+
+`main.js` publishes `getLocalIsoDate` narrowly as
+`globalThis.getLocalIsoDate = getLocalIsoDate` (main.js is the single reader of
+the system clock). The Board calls only this public owner and passes `today`
+explicitly to the lifecycle module. The Board never calls `new Date()`,
+`Date.now()`, UTC conversion, or locale date formatting.
+
+### 19.8 Source-first mutation and persistence flow
+
+The status-change persistence flow (reusing existing owners — no alternate Save
+pipeline):
+
+1. the user chooses a new status;
+2. the Board retrieves the current source path/line from the indexed Task record;
+3. navigation is requested through the existing `openWorkspaceFile` owner, and the
+   Board awaits a definitive result;
+4. after the source opens, the Board revalidates the current physical line via the
+   existing TaskReview source resolver (`MME_TASK_REVIEW.findActualTaskLine`) using
+   source path, indexed line, canonical clean text, and the *current* Editor
+   content — never stale `raw`/indexed metadata or an assumed line number;
+5. `applyTransition(currentLine, { target, today })` returns the canonical line;
+6. the existing `__cmReplaceLine` bridge replaces exactly that resolved physical line;
+7. `saveSmart()` persists the change through the existing owner;
+8. the existing `scheduleWorkspaceIndexRebuild()` rebuilds the Workspace Index;
+9. the Board re-renders from the rebuilt Index (index-ready listener) and TaskReview
+   refreshes through its own existing index-ready path.
+
+The Board uses an in-progress guard and disables only the active card control while
+a mutation is pending; it does not block the whole application.
+
+### 19.9 Dirty-file and navigation protection
+
+A Task may belong to the active document or to another Journal/Concept. Because a
+modal Board overlay could obscure navigation/dirty-state prompts, the Board
+**temporarily hides itself** before requesting source navigation, then restores
+afterward. It distinguishes the three `openWorkspaceFile` outcomes:
+opened successfully (proceeds), cancelled (`null` / `ok:false,cancelled` — leaves
+all sources unchanged and restores the Board with the touched control reset), or
+failed/blocked (leaves source unchanged, refreshes the Board from the current
+Index, shows a concise message). File permissions are never bypassed and no
+cross-file writer is created. Stale indexed text is never overwritten.
+
+After a successful open, the Board revalidates the resolved line using the current
+Editor content. A no-match, ambiguous match, out-of-range, or text-inconsistent
+result aborts the mutation (preferring no change over editing the wrong occurrence
+of a duplicate label), resets the Move control, and refreshes from source. There is
+**no stable task ID** in this package; line drift after lifecycle metadata updates
+is handled by the existing source resolver's near-line fallback.
+
+### 19.10 Status movement interaction
+
+Status movement does **not** depend on drag-and-drop. Each card exposes one native
+**Move to…** select (Backlog/Todo/Ongoing/Done) — keyboard, touch, and mouse
+accessible, with the current status disabled. Drag-and-drop is not implemented in
+this package.
+
+### 19.11 Done-period filter
+
+- Default: **30** days. Options: **7 / 30 / 90 / All**. Custom period is deferred.
+- Persisted only under `markmap:taskBoard:doneWindow`; invalid stored values fall
+  back to `30`. Card positions, copied data, complete Board state, filtered arrays,
+  and open file content are never persisted.
+- **Recent-Done rule:** a Done Task is recent iff its `closedDate` is valid and
+  falls on one of the N calendar dates ending at the canonical local today — today
+  plus the previous **N−1** dates. The boundary is **inclusive**, date-only, with
+  no UTC shift.
+- **Undated Done** (no valid `closedDate`): excluded from 7/30/90 recent views;
+  included under **All**; counted (optionally shown) as *undated*; never assigned a
+  fabricated date.
+- The filter changes **visibility only**. It never archives, deletes, or modifies
+  Markdown, completed metadata, Reports, or Workspace Index counts.
+
+### 19.12 Source navigation (title click)
+
+Clicking a card title identifies the Workspace-relative source path, closes the
+Board, calls the existing TaskReview `openTaskSource` owner (no second navigation
+implementation), opens the source file, navigates to the best available Task line,
+and focuses the Editor where supported. This path performs no lifecycle mutation.
+
+### 19.13 Card content and empty/legacy states
+
+Cards show only task text, concise source context (kind • file name), an optional
+relevant lifecycle date (Started for Ongoing; Closed for Done when present), and
+the Move control. Raw metadata, full paths, internal identity, owner/priority/due/
+project/tags are not shown. Missing dates never block rendering; legacy Tasks stay
+visible. Concise empty states are used per column (e.g., "No tasks in progress.").
+No Workspace / no Index states prevent opening an empty four-column shell.
+
+### 19.14 Touch, keyboard, and responsive behavior
+
+Four columns are visible where width permits; at narrow widths the columns area
+scrolls horizontally with stable readable column widths, and the Board overlay
+honors safe-area insets. Touch scrolling is not blocked by card movement (native
+select, no drag). Restrained semantic accents (Backlog gray, Todo blue/neutral,
+Ongoing amber, Done green/subdued) never rely on color alone — column names and
+counts remain visible — and light/dark modes reuse existing CSS variables.
+Coarse-pointer targets follow existing application conventions. No separate mobile
+Board architecture and no mandatory primary-column state.
+
+### 19.15 Integrated T1B acceptance
+
+The Board is the main browser-acceptance surface for the T1B physical-Save
+reconciliation. Cases include: a new unchecked Task typed normally gains no
+metadata during typing or draft Auto-save and receives `opened=today` once on
+physical Save; middle insertion tags only the new unique Task; Todo→Ongoing adds
+`started`; Todo/Ongoing→Done checks the checkbox and adds `completed`; Done→Todo
+unchecks and removes `completed` while preserving `opened`/`started`; Todo→Backlog
+writes `status=backlog`; ambiguous duplicate labels do not swap metadata; TaskReview
+stays synchronized after rebuild and Index counts remain correct; Report output and
+Journals/Concepts remain correct; source navigation/Editor behavior stays sane with
+no duplicate render or log flood. Lifecycle defects found during that validation are
+fixed in their true owner (`task-lifecycle.js`, `main.js` Save reconciliation,
+Workspace Index refresh, or TaskReview compatibility) — never patched inside Board
+rendering. Any unexecuted browser case is reported honestly, never marked PASS.
+
+### 19.16 Future scope (deferred)
+
+- A full Task Manager mode is a possible future layer; this package only adds the
+  three-level architecture and the Quick View, and does not build architecture for
+  a full mode.
+- **Groups** integration is not part of this package.
+- **Project filters** are not part of this package. The Board header reserves space
+  such that a small future filter area (Group / Project / Search) can be added
+  without redesigning the entire Board; no disabled placeholders are rendered.

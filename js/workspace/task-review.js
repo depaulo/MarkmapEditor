@@ -245,18 +245,26 @@
     if (panel) {
       panel.innerHTML = `
         <div class="workspaceTasksHeader">
+          <span class="workspaceTasksHeaderCollapse">
+            <button
+              type="button"
+              class="workspacePanelHeaderButton"
+              data-workspace-panel-toggle="tasks"
+              aria-expanded="false"
+            >
+              <span class="workspacePanelHeaderLeft">
+                <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+                <span class="workspaceTasksTitle">Tasks</span>
+              </span>
+              <span id="workspaceTasksBadge" class="workspacePanelBadge">0</span>
+            </button>
+          </span>
           <button
             type="button"
-            class="workspacePanelHeaderButton"
-            data-workspace-panel-toggle="tasks"
-            aria-expanded="false"
-          >
-            <span class="workspacePanelHeaderLeft">
-              <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-              <span class="workspaceTasksTitle">Tasks</span>
-            </span>
-            <span id="workspaceTasksBadge" class="workspacePanelBadge">0</span>
-          </button>
+            id="workspaceTaskBoardBtn"
+            class="workspaceTaskBoardButton"
+            aria-label="Open Task Board"
+          >Board</button>
         </div>
         <div class="workspacePanelBody">
           <div id="workspaceTaskSearchRow" class="workspaceTaskSearchRow">
@@ -301,18 +309,26 @@
 
     panel.innerHTML = `
       <div class="workspaceTasksHeader">
+        <span class="workspaceTasksHeaderCollapse">
+          <button
+            type="button"
+            class="workspacePanelHeaderButton"
+            data-workspace-panel-toggle="tasks"
+            aria-expanded="false"
+          >
+            <span class="workspacePanelHeaderLeft">
+              <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+              <span class="workspaceTasksTitle">Tasks</span>
+            </span>
+            <span id="workspaceTasksBadge" class="workspacePanelBadge">0</span>
+          </button>
+        </span>
         <button
           type="button"
-          class="workspacePanelHeaderButton"
-          data-workspace-panel-toggle="tasks"
-          aria-expanded="false"
-        >
-          <span class="workspacePanelHeaderLeft">
-            <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-            <span class="workspaceTasksTitle">Tasks</span>
-          </span>
-          <span id="workspaceTasksBadge" class="workspacePanelBadge">0</span>
-        </button>
+          id="workspaceTaskBoardBtn"
+          class="workspaceTaskBoardButton"
+          aria-label="Open Task Board"
+        >Board</button>
       </div>
       <div class="workspacePanelBody">
         <div id="workspaceTaskSearchRow" class="workspaceTaskSearchRow">
@@ -905,6 +921,18 @@
       prioritySelect.addEventListener('change', () => {
         filterState.priority = prioritySelect.value;
         renderPanel();
+      });
+    }
+
+    // Board entry action (Quick View). Single click handler; idempotence is
+    // inherited from the wiredPanel === panel guard above. Delegates to the
+    // single Board owner; never creates duplicate overlays.
+    const boardBtn = document.getElementById('workspaceTaskBoardBtn');
+    if (boardBtn) {
+      boardBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        globalThis.MME_TASK_BOARD?.open?.(boardBtn);
       });
     }
 

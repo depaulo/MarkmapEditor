@@ -11,9 +11,9 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 
 // APP_VERSION is the single authoritative release/version owner. It names the
 // installed cache identity (APP_CACHE / RUNTIME_CACHE) for this release
-// boundary: Task Lifecycle physical-Save integration (T1B): js/main.js and
-// js/tasks/task-lifecycle.js joined the deterministic precache).
-const APP_VERSION = 'markmap-journal-pwa-v65-task-lifecycle-save-v1';
+// boundary: Simple Task Board Quick View. js/tasks/task-board.js and
+// css/task-board.css joined the deterministic precache.
+const APP_VERSION = 'markmap-journal-pwa-v66-simple-task-board-v1';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.
@@ -89,6 +89,11 @@ const LOCAL_APP_SHELL = [
   './js/links/wiki-links.js',
   './js/workspace/task-review.js',
   './js/templates/metadata-templates.js',
+
+  // Simple Task Board Quick View (T1B acceptance surface). Loaded via
+  // script-loader.js after task-review.js; css loaded via appendStylesheet.
+  './js/tasks/task-board.js',
+  './css/task-board.css',
   './js/templates/templates-menu.js',
   './js/export/export-actions.js',
   './js/export/export-menu.js',

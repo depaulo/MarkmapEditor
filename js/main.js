@@ -9064,6 +9064,16 @@ function getLocalIsoDate() {
   return `${year}-${month}-${day}`;
 }
 
+// Narrow public publication for the Task Board Quick View consumer.
+// main.js remains the single reader of the system clock; the Board calls this
+// public owner and passes `today` explicitly to the pure lifecycle module
+// (which never reads the clock itself). No duplicate date calculation is
+// introduced in consumer modules.
+try {
+  globalThis.getLocalIsoDate = getLocalIsoDate;
+  window.getLocalIsoDate = getLocalIsoDate;
+} catch {}
+
 function rewriteTaskMetadataComment(text, desiredChecked) {
   const str = String(text || '');
   const commentMatch = str.match(/(<!--\s*mme-task:)([\s\S]*?)(\s*-->)/i);
