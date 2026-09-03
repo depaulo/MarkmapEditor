@@ -1260,6 +1260,62 @@
       JSON.stringify({ one: one.line, two: two.line })
     );
 
+    // ---------- ACT B COMPOSITION: newIndices -> applySaveLifecycle(isNew:true) ----------
+    // Exercises the exact composition used by reconcileTasksBeforeSave():
+    // matcher classification feeds the save writer; the writer stays the only
+    // metadata author.
+    const DC = '2026-09-01';
+
+    // C1 unique middle insertion: only the inserted task receives opened
+    const midCur = ['A', 'NEW-MID', 'C'];
+    const mMid = matchTasksForSave(bas(['A', 'C']), bas(midCur));
+    let c1Ok = mMid.newIndices.length === 1 && mMid.ambiguous === 0;
+    if (c1Ok) {
+      const curText = midCur[mMid.newIndices[0]];
+      const rc = applySaveLifecycle('- [ ] ' + curText, { today: DC, isNew: true, checked: false, explicitStatus: null });
+      c1Ok = rc.ok && rc.changed && /opened=2026-09-01/.test(rc.line) && !/status=/.test(rc.line);
+    }
+    check(
+      'C1 composition: unique middle insertion -> opened added to new task only',
+      c1Ok,
+      JSON.stringify({ n: mMid.newIndices.length, a: mMid.ambiguous })
+    );
+
+    // C2 duplicate insertion stays ambiguous: nothing receives opened
+    const mDup = matchTasksForSave(bas(['A']), bas(['A', 'A']));
+    check(
+      'C2 composition: duplicate insertion -> newIndices empty, ambiguous counted',
+      mDup.newIndices.length === 0 && mDup.ambiguousIndices.length === 1 && mDup.ambiguous === 1,
+      JSON.stringify({ n: mDup.newIndices.length, a: mDup.ambiguous })
+    );
+
+    // C3 existing valid opened on a new task is preserved; opened not re-added
+    const rC3 = applySaveLifecycle('- [ ] NEW <!-- mme-task: opened=2026-08-15 -->', { today: DC, isNew: true, checked: false, explicitStatus: null });
+    check(
+      'C3 composition: existing valid opened preserved, added.opened false',
+      rC3.ok && /opened=2026-08-15/.test(rC3.line) && rC3.added && rC3.added.opened === false,
+      rC3.line
+    );
+
+    // C4 new checked task composition: opened + completed, never status=done
+    const mIns = matchTasksForSave(bas(['A']), bas(['A', 'NEW-DONE']));
+    let c4Ok = mIns.newIndices.length === 1;
+    if (c4Ok) {
+      const rc4 = applySaveLifecycle('- [x] NEW-DONE', { today: DC, isNew: true, checked: true, explicitStatus: null });
+      c4Ok =
+        rc4.ok &&
+        rc4.changed &&
+        /opened=2026-09-01/.test(rc4.line) &&
+        /completed=2026-09-01/.test(rc4.line) &&
+        !/status=/.test(rc4.line);
+    }
+    check(
+      'C4 composition: new checked task -> opened + completed, no status=done',
+      c4Ok,
+      JSON.stringify({ n: mIns.newIndices.length })
+    );
+
+
     // completion of stale recognized open status removes it; unknown status kept
     r = applySaveLifecycle('- [x] A <!-- mme-task: status=ongoing -->', { today: Y, isNew: false, checked: true, explicitStatus: 'ongoing' });
     check(

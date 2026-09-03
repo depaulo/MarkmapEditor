@@ -11,9 +11,13 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 
 // APP_VERSION is the single authoritative release/version owner. It names the
 // installed cache identity (APP_CACHE / RUNTIME_CACHE) for this release
-// boundary: Simple Task Board Quick View. js/tasks/task-board.js and
-// css/task-board.css joined the deterministic precache.
-const APP_VERSION = 'markmap-journal-pwa-v66-simple-task-board-v1';
+// boundary: Task Board / theme closure — board scroll repair, global toolbar
+// Dark/Light control (lower Markmap overlay control removed), and new-Task
+// opened=today physical-Save reconciliation with lifecycle validator
+// composition fixtures. index.html, js/main.js, css/task-board.css, and
+// js/tasks/task-lifecycle.js are deterministic precache assets, so a new
+// identity ensures installed clients receive the complete accepted package.
+const APP_VERSION = 'markmap-journal-pwa-v68-theme-cleanup-opened-v1';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.

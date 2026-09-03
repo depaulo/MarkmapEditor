@@ -232,12 +232,6 @@ function slugifyHeading(text) {
     try {
       localStorage.setItem(STORAGE_KEY, enabled ? '1' : '0');
     } catch {}
-
-    try {
-      if (typeof updateMapOverlayThemeButton === 'function') {
-        updateMapOverlayThemeButton();
-      }
-    } catch {}
   }
 
   async function refreshHtmlForTheme() {
@@ -296,18 +290,22 @@ function slugifyHeading(text) {
 
   applyDarkMode(initial);
 
-  // Optional backward compatibility:
-  // If btnDarkMode still exists in some older copy, wire it safely.
-  const oldBtn = document.getElementById('btnDarkMode');
-  if (oldBtn && !oldBtn.__bound) {
-    oldBtn.textContent = initial ? '☀️' : '🌙';
+  // Global top-toolbar Dark/Light control binding. This is the single global
+  // theme control in the top toolbar (reuses the established global theme API).
+  const themeBtn = document.getElementById('btnDarkMode');
+  if (themeBtn && !themeBtn.__bound) {
+    if (typeof updateGlobalThemeButton === 'function') {
+      updateGlobalThemeButton();
+    }
 
-    oldBtn.addEventListener('click', async () => {
+    themeBtn.addEventListener('click', async () => {
       await window.toggleDarkMode();
-      oldBtn.textContent = html.classList.contains('dark') ? '☀️' : '🌙';
+      if (typeof updateGlobalThemeButton === 'function') {
+        updateGlobalThemeButton();
+      }
     });
 
-    oldBtn.__bound = true;
+    themeBtn.__bound = true;
   }
 })();
 
@@ -8181,9 +8179,15 @@ async function changeGlobalLevel(delta) {
 // ================================
 // Map Overlay Controls
 // ================================
-function updateMapOverlayThemeButton() {
+// Global top-toolbar Dark/Light control. Updates the #btnDarkMode icon and
+// title to reflect the single application theme state (documentElement.dark),
+// which is owned by the theme API in main.js. Never introduces a second theme
+// source of truth. Consumed by the initial wiring and by the html.class
+// MutationObserver so the icon stays consistent regardless of which control
+// toggled the theme (toolbar, map overlay, or any future surface).
+function updateGlobalThemeButton() {
   try {
-    const btn = document.getElementById('mapBtnTheme');
+    const btn = document.getElementById('btnDarkMode');
     if (!btn) return;
 
     const isDark = document.documentElement.classList.contains('dark');
@@ -8200,7 +8204,6 @@ function wireMapOverlayControls() {
     const btnFit = document.getElementById('mapBtnFit');
     const btnExpand = document.getElementById('mapBtnExpandAll');
     const btnCollapse = document.getElementById('mapBtnCollapseAll');
-    const btnTheme = document.getElementById('mapBtnTheme');
 
     if (!overlay) {
       try {
@@ -8265,30 +8268,6 @@ function wireMapOverlayControls() {
       });
       btnCollapse.__bound = true;
     }
-
-    if (btnTheme && !btnTheme.__bound) {
-      btnTheme.addEventListener('click', async () => {
-        try {
-          if (typeof window.toggleDarkMode === 'function') {
-            await window.toggleDarkMode();
-          } else {
-            showToast('Dark mode function not ready', 'error', 2200);
-          }
-
-          updateMapOverlayThemeButton();
-        } catch (e) {
-          const msg = e?.message || String(e);
-          try {
-            log('❌ overlay dark mode failed: ' + msg);
-          } catch {}
-          showToast('Dark mode error: ' + msg, 'error', 3200);
-        }
-      });
-
-      btnTheme.__bound = true;
-    }
-
-    updateMapOverlayThemeButton();
 
     try {
       log('Map overlay controls: wired');
@@ -8665,7 +8644,9 @@ wireMapStyleModifier();
 
 try {
   const __themeObserver = new MutationObserver(() => {
-    updateMapOverlayThemeButton();
+    if (typeof updateGlobalThemeButton === 'function') {
+      updateGlobalThemeButton();
+    }
 
     if (typeof applyMapStyleCss === 'function') {
       applyMapStyleCss();
@@ -9144,6 +9125,7 @@ function reconcileTasksBeforeSave() {
       skippedReason: 'report-document',
       completedAdded: 0,
       completedRemoved: 0,
+      openedAdded: 0,
       ambiguous: 0,
     };
   }
@@ -9154,6 +9136,7 @@ function reconcileTasksBeforeSave() {
       skippedReason: 'no-baseline',
       completedAdded: 0,
       completedRemoved: 0,
+      openedAdded: 0,
       ambiguous: 0,
     };
   }
@@ -9164,6 +9147,7 @@ function reconcileTasksBeforeSave() {
       skippedReason: 'no-lifecycle',
       completedAdded: 0,
       completedRemoved: 0,
+      openedAdded: 0,
       ambiguous: 0,
     };
   }
@@ -9174,6 +9158,7 @@ function reconcileTasksBeforeSave() {
       skippedReason: 'no-tasks',
       completedAdded: 0,
       completedRemoved: 0,
+      openedAdded: 0,
       ambiguous: 0,
     };
   }
@@ -9183,6 +9168,7 @@ function reconcileTasksBeforeSave() {
   let changed = false;
   let completedAdded = 0;
   let completedRemoved = 0;
+  let openedAdded = 0;
 
   // T1B (ACT D): reorder-safe matching. matchTasksForSave aligns Tasks by
   // canonical text, so a checkbox change on a MOVED Task is still reconciled
@@ -9221,11 +9207,42 @@ function reconcileTasksBeforeSave() {
     }
   }
 
-  if (!changed) {
-    return { changed: false, text: currentText, completedAdded, completedRemoved, ambiguous };
+  // ACT B: source-proven NEW Tasks (unique insertions since the last
+  // successful Save) receive opened=today through the lifecycle owner.
+  // Only match.newIndices is processed: ambiguous regions, cap-skipped
+  // rewrites (skippedRewrite), deleted baseline entries, and legacy pairs are
+  // never touched here, which preserves the no-backfill policy. The writer is
+  // add-only-if-absent, so a valid hand-written opened date is preserved.
+  // explicitStatus uses the parser-normalized raw status only; Todo exists by
+  // absence and is never serialized. The lifecycle owner remains the only
+  // metadata writer (no manual mme-task construction in main.js).
+  for (const newIndex of match.newIndices || []) {
+    if (!Number.isInteger(newIndex)) continue;
+    const current = currentTasks[newIndex];
+    if (!current || typeof current.raw !== 'string' || !current.raw) continue;
+
+    const lineIndex = current.line - 1;
+    if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex >= lines.length) continue;
+
+    const res = lifecycle.applySaveLifecycle(current.raw, {
+      today,
+      isNew: true,
+      checked: Boolean(current.done),
+      explicitStatus: current.status || null,
+    });
+
+    if (res.ok && res.changed) {
+      lines[lineIndex] = res.line;
+      changed = true;
+      if (res.added && res.added.opened) openedAdded++;
+    }
   }
 
-  return { changed: true, text: lines.join('\n'), completedAdded, completedRemoved, ambiguous };
+  if (!changed) {
+    return { changed: false, text: currentText, completedAdded, completedRemoved, openedAdded, ambiguous };
+  }
+
+  return { changed: true, text: lines.join('\n'), completedAdded, completedRemoved, openedAdded, ambiguous };
 }
 
 function newDocument() {
@@ -9462,7 +9479,7 @@ async function saveSmart() {
   let text = md.value;
   if (reconciled.skippedReason) {
     log(
-      `TaskReconcile: skipped (${reconciled.skippedReason}); changed=false completed=0 reopened=0 ambiguous=${reconciled.ambiguous || 0}`
+      `TaskReconcile: skipped (${reconciled.skippedReason}); changed=false opened=0 completed=0 reopened=0 ambiguous=${reconciled.ambiguous || 0}`
     );
   } else if (reconciled.changed) {
     __programmaticTextChange++;
@@ -9476,11 +9493,11 @@ async function saveSmart() {
       __programmaticTextChange--;
     }
     log(
-      `TaskReconcile: result changed=true completed=${reconciled.completedAdded} reopened=${reconciled.completedRemoved} ambiguous=${reconciled.ambiguous}`
+      `TaskReconcile: result changed=true opened=${reconciled.openedAdded || 0} completed=${reconciled.completedAdded} reopened=${reconciled.completedRemoved} ambiguous=${reconciled.ambiguous}`
     );
   } else {
     log(
-      `TaskReconcile: no changes needed; changed=false completed=0 reopened=0 ambiguous=${reconciled.ambiguous || 0}`
+      `TaskReconcile: no changes needed; changed=false opened=0 completed=0 reopened=0 ambiguous=${reconciled.ambiguous || 0}`
     );
   }
 
