@@ -69,7 +69,6 @@
       <div class="btnSep" aria-hidden="true"></div>
 
       <div class="btnGroup" id="grpInsert">
-        <button id="btnAddImage" title="Add image">🖼️</button>
         <button id="btnTemplatesMarkmap" title="Templates Markmap">🧠 Markmap ▾</button>
         <button id="btnTemplatesPandoc" class="contextSlidesOnly" title="Templates Pandoc">
           📊 Pandoc ▾
@@ -84,20 +83,8 @@
       <div class="btnSep" aria-hidden="true"></div>
 
       <div class="btnGroup" id="grpViews">
-        <button
-          id="btnToggleEditor"
-          data-icon="🗂️"
-          title="Toggle editor"
-          aria-label="Toggle editor"
-        >
-          🗂️
-        </button>
-
         <button id="btnLogs" data-icon="📜" title="Toggle logs" aria-label="Toggle logs">📜</button>
 
-        <button id="btnHtml" data-icon="⟨/⟩" title="Toggle HTML" aria-label="Toggle HTML">
-          ⟨/⟩
-        </button>
         <button id="btnCompact" title="Toggle compact mode">⚡</button>
         <button
           id="btnDarkMode"
@@ -281,6 +268,7 @@
           aria-label="Editor edit tools"
         >
           <div class="editorOverlayToolRow editorOverlayToolRowInsert" aria-label="Insert tools">
+            <button id="btnAddImage" type="button" title="Add image">🖼️</button>
             <button type="button" data-editor-command="link" title="Insert link">🔗</button>
             <button type="button" data-editor-command="inlineCode" title="Inline code">
               ⟨/⟩

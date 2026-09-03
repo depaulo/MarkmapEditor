@@ -2932,8 +2932,8 @@ function renderWorkspaceProjectsPanel() {
                 title="${path}"
                 aria-label="Open Project ${name}, value ${valueDisplay}, expected order ${orderDisplay}, source ${sourceLabel}${line ? ' line ' + line : ''}"
               >
-                <span class="workspaceProjectRow">
-                  <span class="workspaceProjectName">${name}</span>
+                <span class="workspaceProjectName">${name}</span>
+                <span class="workspaceProjectMeta">
                   <span class="workspaceProjectValue">${valueDisplay}</span>
                   <span class="workspaceProjectOrder">${orderDisplay}</span>
                 </span>
@@ -2949,11 +2949,6 @@ function renderWorkspaceProjectsPanel() {
             <span class="workspaceProjectGroupChevron" aria-hidden="true">▾</span>
             <span class="workspaceProjectGroupTitle">${escapeHtml(group.display)}</span>
             <span class="workspaceProjectGroupCount">${groupCount}</span>
-          </div>
-          <div class="workspaceProjectLabelRow" aria-hidden="true">
-            <span class="workspaceProjectLabelName">Project name</span>
-            <span class="workspaceProjectLabelValue">Value</span>
-            <span class="workspaceProjectLabelOrder">Order</span>
           </div>
           <div class="workspaceProjectList">${items}</div>
         </div>
@@ -2995,8 +2990,8 @@ function renderWorkspaceProjectsPanel() {
             title="${path}"
             aria-label="Open Project ${name}, value ${valueDisplay}, expected order Unscheduled, source ${sourceLabel}${line ? ' line ' + line : ''}"
           >
-            <span class="workspaceProjectRow">
-              <span class="workspaceProjectName">${name}</span>
+            <span class="workspaceProjectName">${name}</span>
+            <span class="workspaceProjectMeta">
               <span class="workspaceProjectValue">${valueDisplay}</span>
             </span>
             <span class="workspaceProjectSource">${sourceDisplay}</span>
@@ -3011,10 +3006,6 @@ function renderWorkspaceProjectsPanel() {
           <span class="workspaceProjectGroupChevron" aria-hidden="true">▾</span>
           <span class="workspaceProjectGroupTitle">Unscheduled</span>
           <span class="workspaceProjectGroupCount">${unscheduled.length}</span>
-        </div>
-        <div class="workspaceProjectLabelRow" aria-hidden="true">
-          <span class="workspaceProjectLabelName">Project name</span>
-          <span class="workspaceProjectLabelValue">Value</span>
         </div>
         <div class="workspaceProjectList">${items}</div>
       </div>
@@ -6993,7 +6984,6 @@ function showHtmlPreview() {
       syncHtmlScrollToEditor('showHtmlPreview show');
       wireHtmlCloseButton();
       updateHtmlPreviewButtons();
-      setShowHideLabel('btnHtml', true, 'HTML');
       syncToolbarHeight();
       constrainHtmlControlsToPane();
       try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
@@ -7024,7 +7014,6 @@ function hideHtmlPreview() {
 
   wireHtmlCloseButton();
   updateHtmlPreviewButtons();
-  setShowHideLabel('btnHtml', false, 'HTML');
   syncToolbarHeight();
   constrainHtmlControlsToPane();
   try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
@@ -8079,7 +8068,6 @@ function toggleEditor() {
       splitEditorEl.style.display = 'none';
       document.body.classList.add('editor-hidden');
       log(`Editor HIDE (saved width=${lastEditorWidth})`);
-      setShowHideLabel('btnToggleEditor', false, 'Editor');
       syncToolbarHeight();
       return;
     }
@@ -8088,7 +8076,6 @@ function toggleEditor() {
     document.body.classList.remove('editor-hidden');
     if (lastEditorWidth) editorEl.style.width = lastEditorWidth;
     log(`Editor SHOW (restored width=${lastEditorWidth || '(default)'})`);
-    setShowHideLabel('btnToggleEditor', true, 'Editor');
     syncToolbarHeight();
   } catch (e) {
     log(`❌ toggleEditor() failed: ${e?.message || e}`);
@@ -9558,7 +9545,6 @@ if (btnCopyMd) {
   btnCopyMd.addEventListener('click', copyMarkdownToClipboard);
 }
 
-document.getElementById('btnHtml').addEventListener('click', toggleHtml);
 document.getElementById('btnLogs').addEventListener('click', toggleLogs);
 
 // HTML preview local panel buttons
@@ -9802,11 +9788,10 @@ wireHtmlCloseButton();
 document.getElementById('btnHtmlEdgeOpen')?.addEventListener('click', showHtmlPreview);
 
 // Editor visibility (hide/show) is now owned by js/editor/editor-visibility.js (R-SPLIT3).
-// The module wires btnToggleEditor / editorBtnHide / btnEditorEdgeOpen itself.
-if (
-  window.MME_EDITOR_VISIBILITY &&
-  !document.getElementById('btnToggleEditor').__editorVisibilityBound
-) {
+// The module wires editorBtnHide / btnEditorEdgeOpen itself (idempotent per
+// control); call it unconditionally here — the former btnToggleEditor guard
+// no longer applies because the top-toolbar access point was removed.
+if (window.MME_EDITOR_VISIBILITY) {
   window.MME_EDITOR_VISIBILITY.wireEditorVisibilityControls();
 }
 
@@ -11781,9 +11766,7 @@ function wireAppContextSelector() {
 wireAppContextSelector();
 
 syncToolbarHeight();
-setShowHideLabel('btnHtml', htmlPane.style.display === 'block', 'HTML');
 setShowHideLabel('btnLogs', logs.style.display === 'block', 'Logs');
-setShowHideLabel('btnToggleEditor', editorEl.style.display !== 'none', 'Editor');
 syncToolbarHeight();
 
 // ================================

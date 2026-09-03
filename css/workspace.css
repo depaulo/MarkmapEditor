@@ -680,6 +680,18 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
    border-top as the other top-level collapsible panels. */
 #workspaceTasksPanel {
   border-top: 1px solid var(--menu-border);
+  /* Tasks→Report boundary: the Report panel owns no border-top of its own,
+     so Tasks carries the shared separator on its bottom edge. Panel-root
+     level keeps the line visible in both collapsed and expanded states,
+     matching the other Sidebar panel boundaries without touching Report. */
+  border-bottom: 1px solid var(--menu-border);
+}
+
+/* Collapsed Tasks: keep title + badge, hide the contextual Board action.
+   Consumes the existing workspacePanelCollapsed state owned by
+   applyWorkspacePanelCollapsed(); no second collapse state, no JS. */
+#workspaceTasksPanel.workspacePanelCollapsed .workspaceTaskBoardButton {
+  display: none;
 }
 
 #workspaceTasksPanel[hidden] {
@@ -1822,46 +1834,27 @@ html.journal-sidebar-collapsed #workspaceProjectsPanel {
   line-height: 1;
 }
 
-.workspaceProjectLabelRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content max-content;
-  gap: 8px;
-  padding: 2px 8px 2px 16px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.5;
-  color: var(--text);
-}
-
-.workspaceProjectLabelName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workspaceProjectLabelValue {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.workspaceProjectLabelOrder {
-  text-align: right;
-  white-space: nowrap;
-}
+/* (The former .workspaceProjectLabelRow/.workspaceProjectLabelName/
+   .workspaceProjectLabelValue/.workspaceProjectLabelOrder table-column
+   labels were removed with the table presentation; cards carry their own
+   labels implicitly.) */
 
 .workspaceProjectList {
   display: flex;
   flex-direction: column;
+  gap: 6px;
 }
 
+/* Compact Project card: replaces the previous compressed table row.
+   The card itself remains the existing source-opening button. */
 .workspaceProjectItem {
   display: block;
+  box-sizing: border-box;
   width: 100%;
-  padding: 6px 8px 6px 16px;
-  border: none;
-  background: none;
+  padding: 7px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: transparent;
   cursor: pointer;
   font-size: 12px;
   color: var(--text);
@@ -1874,35 +1867,42 @@ html.journal-sidebar-collapsed #workspaceProjectsPanel {
 }
 
 .workspaceProjectItem:focus-visible {
-  outline: 1px solid var(--text);
+  outline: 2px solid rgba(34, 197, 94, 0.45);
+  /* Full-width cards sit inside .workspaceProjectsList (overflow-x: hidden),
+     so an outward outline is clipped at the list edges; drawing it just
+     inside the card keeps keyboard focus visible without layout shift. */
   outline-offset: -1px;
 }
 
-.workspaceProjectRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content max-content;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-}
-
 .workspaceProjectName {
+  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 500;
+  font-weight: 600;
+}
+
+/* Secondary row: value left, order right; wraps safely at narrow widths. */
+.workspaceProjectMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 8px;
+  margin-top: 2px;
+  min-width: 0;
 }
 
 .workspaceProjectValue {
-  text-align: right;
   font-size: 11px;
   opacity: 0.7;
   white-space: nowrap;
 }
 
 .workspaceProjectOrder {
-  text-align: right;
+  flex: 0 0 auto;
+  margin-left: auto;
   font-size: 11px;
   opacity: 0.8;
   white-space: nowrap;
@@ -1912,7 +1912,7 @@ html.journal-sidebar-collapsed #workspaceProjectsPanel {
   display: block;
   font-size: 10px;
   opacity: 0.55;
-  margin-top: 2px;
+  margin-top: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1923,22 +1923,14 @@ html.journal-sidebar-collapsed #workspaceProjectsPanel {
    Applies when the sidebar itself is resized narrowly, even if the
    browser viewport is wide. */
 @container (max-width: 260px) {
-  .workspaceProjectLabelRow {
-    display: none;
-  }
+  /* Cards stack naturally; the meta row wraps via flex-wrap. */
 
-  .workspaceProjectRow {
-    grid-template-columns: 1fr;
-    gap: 2px;
-  }
-
-  .workspaceProjectValue,
-  .workspaceProjectOrder {
-    text-align: left;
+  .workspaceProjectName {
+    white-space: normal;
   }
 
   .workspaceProjectItem {
-    padding: 8px 8px 8px 16px;
+    padding: 8px 10px;
   }
 }
 
@@ -3172,6 +3164,40 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
 #workspaceJournalsList > .workspaceFileItem,
 #workspaceConceptsList > .workspaceFileItem {
   flex: 0 0 auto;
+}
+
+/* ---- Journal / Concept row containment ----
+   Subtle rounded containment for selectable rows in the two sidebar file
+   lists only (presentation only; renderer, navigation, and active-file
+   tracking untouched). Reuses the theme-owned --border-subtle (flips with
+   html.dark), the existing radius/padding/hover vocabulary of
+   .workspaceFileItem, and the existing green active treatment, which stays
+   !important-stronger than hover and focus. Journal rows are nested inside
+   .workspaceJournalGroup wrappers, so the Journal selector is
+   descendant-scoped; Concept rows are direct children. Month/year group
+   titles (.workspaceJournalGroupTitle) remain outside the cards. */
+#workspaceJournalsList .workspaceFileItem,
+#workspaceConceptsList > .workspaceFileItem {
+  box-sizing: border-box;
+  border-color: var(--border-subtle);
+}
+
+/* Hover strengthens within the current vocabulary but stays visibly weaker
+   than the active/selected state. Same ID scope so it outranks the
+   ID-scoped default above and preserves the existing hover background. */
+#workspaceJournalsList .workspaceFileItem:hover,
+#workspaceConceptsList > .workspaceFileItem:hover {
+  border-color: var(--menu-border);
+}
+
+/* Keyboard focus reuses the Workspace/Task green focus vocabulary. The rows
+   are full-width inside lists with overflow-x: hidden, so the outline is
+   drawn just inside the card to avoid clipping; outline never affects
+   layout. Active rows keep their persistent treatment. */
+#workspaceJournalsList .workspaceFileItem:focus-visible,
+#workspaceConceptsList > .workspaceFileItem:focus-visible {
+  outline: 2px solid rgba(34, 197, 94, 0.45);
+  outline-offset: -1px;
 }
 
 @media (max-width: 767px) {

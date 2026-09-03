@@ -1,10 +1,11 @@
 // @ts-nocheck
 // R-SPLIT3 — Editor Visibility Controls
 // Centralized editor hide/show logic shared by:
-//   - top toolbar editor toggle (#btnToggleEditor)
 //   - editor hide handle (#editorBtnHide)
 //   - editor edge open handle (#btnEditorEdgeOpen)
-// This module owns the editor-hidden state, width save/restore, and control wiring.
+// This module owns the editor-hidden state, width save/restore, and control
+// wiring. (The former top-toolbar #btnToggleEditor access point was removed;
+// canonical show/hide/toggle APIs remain for the registry and other callers.)
 
 (function () {
   'use strict';
@@ -20,10 +21,6 @@
     return document.getElementById('splitEditor');
   }
 
-  function getToolbarBtn() {
-    return document.getElementById('btnToggleEditor');
-  }
-
   function getHideBtn() {
     return document.getElementById('editorBtnHide');
   }
@@ -36,25 +33,6 @@
     return document.body.classList.contains('editor-hidden');
   }
 
-  function setShowHideLabelSafe(btnId, isVisible, name) {
-    try {
-      if (typeof globalThis.setShowHideLabel === 'function') {
-        globalThis.setShowHideLabel(btnId, isVisible, name);
-        return;
-      }
-    } catch {}
-    const btn = document.getElementById(btnId);
-    if (btn) btn.textContent = `${isVisible ? 'Hide' : 'Show'} ${name}`;
-  }
-
-  function syncToolbarHeightSafe() {
-    try {
-      if (typeof globalThis.syncToolbarHeight === 'function') {
-        globalThis.syncToolbarHeight();
-      }
-    } catch {}
-  }
-
   function logSafe(msg) {
     try {
       if (typeof globalThis.log === 'function') {
@@ -64,6 +42,14 @@
     } catch {}
     try {
       console.log(msg);
+    } catch {}
+  }
+
+  function syncToolbarHeightSafe() {
+    try {
+      if (typeof globalThis.syncToolbarHeight === 'function') {
+        globalThis.syncToolbarHeight();
+      }
     } catch {}
   }
 
@@ -88,7 +74,6 @@
       document.body.classList.add('editor-hidden');
 
       logSafe(`Editor HIDE (saved width=${lastEditorWidth})`);
-      setShowHideLabelSafe('btnToggleEditor', false, 'Editor');
       syncToolbarHeightSafe();
       updateEditorVisibilityControls();
       try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
@@ -113,7 +98,6 @@
       if (lastEditorWidth) editorEl.style.width = lastEditorWidth;
 
       logSafe(`Editor SHOW (restored width=${lastEditorWidth || '(default)'})`);
-      setShowHideLabelSafe('btnToggleEditor', true, 'Editor');
       syncToolbarHeightSafe();
       updateEditorVisibilityControls();
       try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
@@ -152,18 +136,8 @@
   }
 
   function wireEditorVisibilityControls() {
-    const toolbarBtn = getToolbarBtn();
     const hideBtn = getHideBtn();
     const edgeBtn = getEdgeOpenBtn();
-
-    if (toolbarBtn && !toolbarBtn.__editorVisibilityBound) {
-      toolbarBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        toggleEditor();
-      });
-      toolbarBtn.__editorVisibilityBound = true;
-    }
 
     if (hideBtn && !hideBtn.__editorVisibilityBound) {
       hideBtn.addEventListener('click', (e) => {
