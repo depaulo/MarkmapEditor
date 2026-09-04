@@ -602,9 +602,12 @@ function parseMarkdownTasks(text) {
 
         const meta = task.metadata;
 
-    if (meta.priority) {
-      task.priority = String(meta.priority).trim() || null;
-    }
+    // Priority is owned by the pure shared normalizer: MME_TASK_LIFECYCLE.
+    // normalizeTask() (merged below) resolves canonical priority from the
+    // visible Task text tokens first, then valid `mme-task: priority=`
+    // metadata as fallback, else null. Raw metadata (including unknown or
+    // invalid priority values) survives unchanged in task.metadata. No
+    // additional priority parsing or promotion happens here.
     if (meta.owner) {
       task.owner = String(meta.owner).trim() || null;
     }
@@ -726,9 +729,9 @@ if (typeof window !== 'undefined') {
           },
         },
         {
-          label: 'Priority',
+          label: 'Priority (canonical: unrecognized metadata -> null, raw preserved)',
           line: '- [ ] Task <!-- mme-task: priority=high -->',
-          expected: { done: false, text: 'Task', metadata: { priority: 'high' }, priority: 'high' },
+          expected: { done: false, text: 'Task', metadata: { priority: 'high' }, priority: null },
         },
         {
           label: 'Owner',
@@ -748,7 +751,7 @@ if (typeof window !== 'undefined') {
               due: '2026-08-10',
             },
             completedDate: '2026-08-05',
-            priority: 'high',
+            priority: null,
             owner: 'Adelson',
             dueDate: '2026-08-10',
           },
@@ -9113,10 +9116,18 @@ function getCanonicalTaskText(rawLine) {
 
   let content = match[2] || '';
   content = content.replace(/<!--\s*mme-task:[\s\S]*?-->/gi, '').trim();
-  content = content
-    .replace(/#p[123]\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  // Single shared visible-priority-token removal grammar (pure lifecycle
+  // owner). Inline fallback preserves identical semantics if the lifecycle
+  // module is unexpectedly absent.
+  const __lifecycle = globalThis.MME_TASK_LIFECYCLE;
+  if (__lifecycle && typeof __lifecycle.removePriorityTokens === 'function') {
+    content = __lifecycle.removePriorityTokens(content);
+  } else {
+    content = content
+      .replace(/#p[123]\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
   return content;
 }
 

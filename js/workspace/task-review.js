@@ -13,9 +13,42 @@
   let taskStatusInProgress = false;
   let taskPriorityInProgress = false;
 
+  const STATUS_FILTER_KEY = 'markmap:taskReview:status';
+  const STATUS_FILTER_VALUES = ['open', 'backlog', 'todo', 'ongoing', 'done', 'all'];
+
+  // Conservative compatibility normalization:
+  // - legacy 'completed' -> 'done';
+  // - unknown or missing -> 'open'.
+  function normalizeStatusFilterValue(value) {
+    const v = String(value == null ? '' : value).trim().toLowerCase();
+    if (v === 'completed') return 'done';
+    return STATUS_FILTER_VALUES.includes(v) ? v : 'open';
+  }
+
+  // TaskReview-owned lifecycle preference. Safe storage access only; a storage
+  // failure never breaks TaskReview. No Workspace-, frontmatter-, or
+  // Mode-Session-backed persistence.
+  function statusFilterFromStored() {
+    try {
+      return normalizeStatusFilterValue(localStorage.getItem(STATUS_FILTER_KEY));
+    } catch {
+      return 'open';
+    }
+  }
+
+  function setStoredStatusFilter(value) {
+    const normalized = normalizeStatusFilterValue(value);
+    try {
+      localStorage.setItem(STATUS_FILTER_KEY, normalized);
+    } catch {
+      // Storage may be unavailable or blocked; filtering continues unpersisted.
+    }
+    return normalized;
+  }
+
   const filterState = {
     query: '',
-    status: 'open',
+    status: statusFilterFromStored(),
     priority: 'all',
   };
 
@@ -43,36 +76,30 @@
       .replace(/"/g, '"');
   }
 
-  function normalizePriorityTag(tag) {
-    const t = String(tag || '').trim().toLowerCase();
-    if (t === '#p1' || t === 'p1') return 'p1';
-    if (t === '#p2' || t === 'p2') return 'p2';
-    if (t === '#p3' || t === 'p3') return 'p3';
-    return '';
-  }
+  // ---- Shared priority grammar (single owner: MME_TASK_LIFECYCLE) ----
+  //
+  // Priority recognition, precedence, and visible-token removal are owned by
+  // the pure lifecycle module (priorityOf / removePriorityTokens). This module
+  // consumes the canonical shared task.priority ('p1'|'p2'|'p3'|null) from the
+  // Workspace Index record and no longer maintains a local grammar. The local
+  // wrapper below only guards against the lifecycle module being absent.
+  //
+  // Priority mutation (P1/P2/P3/clear) still writes the same visible #pN
+  // tokens to the physical Markdown line and saves through the existing owner.
 
-  function extractPriorityFromText(text) {
-    const tokens = String(text || '').match(/#p[123]\b/gi);
-    if (!tokens) return '';
-
-    const priorities = tokens.map((t) => normalizePriorityTag(t)).filter(Boolean);
-    if (priorities.length === 0) return '';
-
-    // Highest priority wins: p1 > p2 > p3
-    if (priorities.includes('p1')) return 'p1';
-    if (priorities.includes('p2')) return 'p2';
-    return 'p3';
-  }
-
-  function removePriorityTokens(text) {
+  function stripPriorityTokens(text) {
+    const lifecycle = globalThis.MME_TASK_LIFECYCLE;
+    if (lifecycle && typeof lifecycle.removePriorityTokens === 'function') {
+      return lifecycle.removePriorityTokens(text);
+    }
     return String(text || '').replace(/#p[123]\b/gi, '').replace(/\s+/g, ' ').trim();
   }
 
   // ---- Task data enrichment ----
 
   function enrichTask(task) {
-    const priority = extractPriorityFromText(task.text || '');
-    const displayText = priority ? removePriorityTokens(task.text) : (task.text || '');
+    const priority = task.priority || null;
+    const displayText = priority ? stripPriorityTokens(task.text) : (task.text || '');
     return {
       ...task,
       priority,
@@ -84,6 +111,29 @@
   }
 
   // ---- Filtering ----
+
+  // Pure lifecycle selection helper. Uses the shared normalized Task record
+  // (effectiveStatus from MME_TASK_LIFECYCLE.normalizeTask); never re-parses
+  // the raw comment and never inspects raw status text when the shared field
+  // is available. A defensive checkbox fallback exists only for the
+  // compatibility path where the shared field is unexpectedly absent.
+  // Never mutates the Task record.
+  function matchesStatusFilter(task, selectedStatus) {
+    const status = normalizeStatusFilterValue(selectedStatus);
+    if (status === 'all') return true;
+
+    let effective = task?.effectiveStatus;
+    if (!effective && typeof globalThis.MME_TASK_LIFECYCLE?.effectiveStatusOf === 'function') {
+      effective = globalThis.MME_TASK_LIFECYCLE.effectiveStatusOf(
+        Boolean(task?.done),
+        task?.metadata?.status ?? task?.status ?? ''
+      );
+    }
+
+    if (status === 'open') return effective !== 'done';
+    if (status === 'done') return effective === 'done';
+    return effective === status;
+  }
 
   function getAllTasks() {
     const index = getWorkspaceIndex();
@@ -99,31 +149,32 @@
     return getAllTasks().filter((t) => t.done);
   }
 
-  function getFilteredTasks() {
-    let tasks = getAllTasks();
+  // Pure AND composition of the visible-Task equation:
+  //   lifecycle match  AND  priority match  AND  text-search match.
+  // Operates on enriched Tasks (priority + displayText already applied) and
+  // returns a NEW array; never mutates Task records. No DOM access.
+  function applyTaskFilters(enrichedTasks, filters) {
+    const status = normalizeStatusFilterValue(filters?.status);
+    const priority = filters?.priority || 'all';
+    const query = String(filters?.query || '').trim().toLowerCase();
 
-    // Status filter
-    if (filterState.status === 'open') {
-      tasks = tasks.filter((t) => !t.done);
-    } else if (filterState.status === 'completed') {
-      tasks = tasks.filter((t) => t.done);
+    let tasks = Array.isArray(enrichedTasks) ? enrichedTasks : [];
+
+    if (status !== 'all') {
+      tasks = tasks.filter((t) => matchesStatusFilter(t, status));
     }
-    // 'all' — no filter
 
-    // Priority filter
-    if (filterState.priority === 'p1') {
+    if (priority === 'p1') {
       tasks = tasks.filter((t) => t.priority === 'p1');
-    } else if (filterState.priority === 'p2') {
+    } else if (priority === 'p2') {
       tasks = tasks.filter((t) => t.priority === 'p2');
-    } else if (filterState.priority === 'p3') {
+    } else if (priority === 'p3') {
       tasks = tasks.filter((t) => t.priority === 'p3');
-    } else if (filterState.priority === 'none') {
+    } else if (priority === 'none') {
       tasks = tasks.filter((t) => !t.priority);
     }
-    // 'all' — no filter
+    // 'all' — no priority filter
 
-    // Text search
-    const query = filterState.query.trim().toLowerCase();
     if (query) {
       tasks = tasks.filter((t) => {
         const searchable = [
@@ -139,6 +190,10 @@
     }
 
     return tasks;
+  }
+
+  function getFilteredTasks() {
+    return applyTaskFilters(getAllTasks(), filterState);
   }
 
   // ---- Grouping helper ----
@@ -231,12 +286,12 @@
 
     // Check if panel already has the Task Review markup
     const hasSearchInput = document.getElementById('workspaceTaskSearchInput');
-    const hasStatusFilters = document.querySelector('.workspaceTaskStatusFilters');
+    const hasStatusFilter = document.getElementById('workspaceTaskStatusFilter');
     const hasPriorityFilter = document.getElementById('workspaceTaskPriorityFilter');
     const hasSummary = document.getElementById('workspaceTasksSummary');
     const hasList = document.getElementById('workspaceTasksList');
 
-    if (panel && hasSearchInput && hasStatusFilters && hasPriorityFilter && hasSummary && hasList) {
+    if (panel && hasSearchInput && hasStatusFilter && hasPriorityFilter && hasSummary && hasList) {
       // Panel already upgraded
       return panel;
     }
@@ -277,11 +332,18 @@
             />
           </div>
           <div class="workspaceTaskFilterRow">
-            <div class="workspaceTaskStatusFilters">
-              <button type="button" class="workspaceTaskFilterBtn active" data-status="open">Open</button>
-              <button type="button" class="workspaceTaskFilterBtn" data-status="completed">Done</button>
-              <button type="button" class="workspaceTaskFilterBtn" data-status="all">All</button>
-            </div>
+            <select
+              id="workspaceTaskStatusFilter"
+              class="workspaceTaskStatusFilter"
+              aria-label="Task status filter"
+            >
+              <option value="open">Open</option>
+              <option value="backlog">Backlog</option>
+              <option value="todo">Todo</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="done">Done</option>
+              <option value="all">All</option>
+            </select>
             <select id="workspaceTaskPriorityFilter" class="workspaceTaskPriorityFilter">
               <option value="all">All priorities</option>
               <option value="p1">P1</option>
@@ -341,11 +403,18 @@
           />
         </div>
         <div class="workspaceTaskFilterRow">
-          <div class="workspaceTaskStatusFilters">
-            <button type="button" class="workspaceTaskFilterBtn active" data-status="open">Open</button>
-            <button type="button" class="workspaceTaskFilterBtn" data-status="completed">Done</button>
-            <button type="button" class="workspaceTaskFilterBtn" data-status="all">All</button>
-          </div>
+          <select
+            id="workspaceTaskStatusFilter"
+            class="workspaceTaskStatusFilter"
+            aria-label="Task status filter"
+          >
+            <option value="open">Open</option>
+            <option value="backlog">Backlog</option>
+            <option value="todo">Todo</option>
+            <option value="ongoing">Ongoing</option>
+            <option value="done">Done</option>
+            <option value="all">All</option>
+          </select>
           <select id="workspaceTaskPriorityFilter" class="workspaceTaskPriorityFilter">
             <option value="all">All priorities</option>
             <option value="p1">P1</option>
@@ -422,13 +491,17 @@
       : 'No tasks match';
 
     if (!filtered.length) {
+      const statusEmptyMessages = {
+        open: 'No open tasks',
+        backlog: 'No backlog tasks',
+        todo: 'No todo tasks',
+        ongoing: 'No ongoing tasks',
+        done: 'No done tasks',
+        all: 'No tasks',
+      };
       const msg = filterState.query
         ? 'No tasks match this search'
-        : filterState.status === 'open'
-        ? 'No open tasks'
-        : filterState.status === 'completed'
-        ? 'No completed tasks'
-        : 'No tasks';
+        : statusEmptyMessages[filterState.status] || 'No tasks';
       list.innerHTML = `<div class="workspaceTasksEmpty">${msg}</div>`;
       return;
     }
@@ -637,16 +710,17 @@
 
     let content = match[2] || '';
     content = content.replace(/<!--\s*mme-task:[\s\S]*?-->/gi, '').trim();
-    content = content.replace(/#p[123]\b/gi, '').replace(/\s+/g, ' ').trim();
+    content = stripPriorityTokens(content);
     return content;
   }
 
   // Normalize task text for comparison (preserves identity-bearing content)
   function normalizeTaskTextForComparison(text) {
-    return String(text || '')
+    let value = String(text || '')
       .replace(/^(\s*[-*+]\s+\[[ xX]\]\s+)/, '') // Remove checkbox prefix
-      .replace(/#p[123]\b/gi, '') // Remove priority tokens
-      .replace(/<!--\s*mme-task:[\s\S]*?-->/gi, '') // Remove recognized metadata comments
+      .replace(/<!--\s*mme-task:[\s\S]*?-->/gi, ''); // Remove recognized metadata comments
+    value = stripPriorityTokens(value); // Remove priority tokens (shared grammar)
+    return value
       .replace(/\s+/g, ' ') // Normalize whitespace
       .trim()
       .toLowerCase();
@@ -835,8 +909,9 @@
         const prefix = taskMatch[1];
         const content = taskMatch[2];
 
-        // Remove existing priority tokens
-        let newContent = content.replace(/#p[123]\b/gi, '').replace(/\s+/g, ' ').trim();
+        // Remove existing priority tokens (shared removal grammar; identical
+        // semantics: tokens removed, whitespace collapsed, trimmed)
+        let newContent = stripPriorityTokens(content);
 
         // Add new priority token
         if (newPriority === 'p1') newContent = newContent + ' #p1';
@@ -900,20 +975,17 @@
       });
     }
 
-    // Status filter buttons
-    const statusBtns = document.querySelectorAll('.workspaceTaskFilterBtn');
-    statusBtns.forEach((btn) => {
-      btn.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        statusBtns.forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        filterState.status = btn.dataset.status || 'open';
+    // Lifecycle status filter — one guarded change listener on the single
+    // semantic select. Selection persists immediately; render runs once.
+    const statusSelect = document.getElementById('workspaceTaskStatusFilter');
+    if (statusSelect) {
+      statusSelect.value = filterState.status;
+      statusSelect.addEventListener('change', () => {
+        filterState.status = setStoredStatusFilter(statusSelect.value);
+        statusSelect.value = filterState.status;
         renderPanel();
       });
-    });
+    }
 
     // Priority filter
     const prioritySelect = document.getElementById('workspaceTaskPriorityFilter');
@@ -1245,14 +1317,102 @@
     renderPanel();
   }
 
+  // ---- Deterministic pure validator (no DOM) ----
+  //
+  // Verifies TaskReview lifecycle selection and AND composition. Lifecycle
+  // semantics themselves remain owned by MME_TASK_LIFECYCLE; this validator
+  // only checks how TaskReview consumes the shared normalized Task record.
+
+  function runValidator() {
+    const results = [];
+    let passed = 0;
+    let failed = 0;
+
+    const check = (label, ok, detail) => {
+      results.push({ label, pass: Boolean(ok), detail: ok ? '' : detail == null ? '' : String(detail) });
+      if (ok) passed += 1;
+      else failed += 1;
+    };
+
+    // ---- matchesStatusFilter (shared normalized fields) ----
+    const backlogTask = { text: 'Backlog task', done: false, effectiveStatus: 'backlog', metadata: { status: 'backlog' } };
+    const todoTask = { text: 'Todo task', done: false, effectiveStatus: 'todo', metadata: {} };
+    const ongoingTask = { text: 'Ongoing task', done: false, effectiveStatus: 'ongoing', metadata: { status: 'ongoing' } };
+    const doneTask = { text: 'Done task', done: true, effectiveStatus: 'done', metadata: {} };
+    // Checkbox-authority fallback case (shared field absent, done wins over raw status)
+    const conflictTask = { text: 'Checked with ongoing', done: true, metadata: { status: 'ongoing' } };
+
+    check('A Open includes Backlog', matchesStatusFilter(backlogTask, 'open') === true);
+    check('B Open includes Todo', matchesStatusFilter(todoTask, 'open') === true);
+    check('C Open includes Ongoing', matchesStatusFilter(ongoingTask, 'open') === true);
+    check('D Open excludes Done', matchesStatusFilter(doneTask, 'open') === false);
+    check('E Backlog matches only Backlog', matchesStatusFilter(backlogTask, 'backlog') === true && matchesStatusFilter(todoTask, 'backlog') === false);
+    check('F Todo matches Todo-by-absence', matchesStatusFilter(todoTask, 'todo') === true);
+    check('G Todo excludes Backlog and Ongoing', matchesStatusFilter(backlogTask, 'todo') === false && matchesStatusFilter(ongoingTask, 'todo') === false);
+    check('H Ongoing matches only Ongoing', matchesStatusFilter(ongoingTask, 'ongoing') === true && matchesStatusFilter(todoTask, 'ongoing') === false);
+    check('I Done includes checked Task', matchesStatusFilter(doneTask, 'done') === true);
+    check('J Done checkbox authority over conflicting raw status', matchesStatusFilter(conflictTask, 'done') === true);
+    check('J2 unchecked with completed metadata is not Done', matchesStatusFilter({ done: false, effectiveStatus: 'todo', metadata: { completed: '2026-01-01' } }, 'done') === false);
+    const all = [backlogTask, todoTask, ongoingTask, doneTask];
+    check('K All includes every Task', all.every((t) => matchesStatusFilter(t, 'all') === true));
+
+    // ---- compatibility normalization ----
+    check('L legacy completed normalizes to done', normalizeStatusFilterValue('completed') === 'done');
+    check('M invalid saved status normalizes to open', normalizeStatusFilterValue('bogus') === 'open' && normalizeStatusFilterValue('') === 'open' && normalizeStatusFilterValue(null) === 'open');
+    check('M2 canonical values are stable', normalizeStatusFilterValue('BACKLOG') === 'backlog' && normalizeStatusFilterValue('all') === 'all');
+
+    // ---- AND composition via pure applyTaskFilters ----
+    // enrich a small fixture set with displayText/priority the way the panel does
+    const enriched = [backlogTask, todoTask, ongoingTask, doneTask].map(enrichTask);
+    const snapshot = JSON.stringify(enriched);
+
+    // Add a P1 Todo so the negative case has a real P1-open fixture.
+    const p1Todo = enrichTask({ text: 'Prio #p1 todo', done: false, priority: 'p1', effectiveStatus: 'todo', filePath: 'j/a.md', fileKind: 'journals', fileName: 'a.md', line: 1, heading: '' });
+    const fixtureAll = [enrichTask(backlogTask), p1Todo, enrichTask(ongoingTask), enrichTask(doneTask)];
+
+    const openP1 = applyTaskFilters(fixtureAll, { status: 'open', priority: 'p1', query: '' });
+    check('N lifecycle + P1 is AND', openP1.length === 1 && openP1[0].priority === 'p1');
+
+    const openNone = applyTaskFilters(fixtureAll, { status: 'open', priority: 'none', query: '' });
+    check('O lifecycle + No priority is AND', openNone.length === 2 && openNone.every((t) => !t.priority));
+
+    const openSearch = applyTaskFilters(fixtureAll, { status: 'open', priority: 'all', query: 'ongoing' });
+    check('P lifecycle + search is AND', openSearch.length === 1 && openSearch[0].text === 'Ongoing task');
+
+    const allThree = applyTaskFilters(fixtureAll, { status: 'open', priority: 'p1', query: 'prio' });
+    check('P2 search + priority + lifecycle all AND', allThree.length === 1 && allThree[0].text === 'Prio #p1 todo');
+
+    check('Q filtering does not mutate Task records', JSON.stringify(enriched) === snapshot && applyTaskFilters(fixtureAll, { status: 'all', priority: 'all', query: '' }).length === fixtureAll.length);
+
+    // display-text guarantees
+    const displayP1 = fixtureAll.find((t) => t.text === 'Prio #p1 todo');
+    check('R priority tokens absent from display text', displayP1 && displayP1.displayText === 'Prio todo');
+
+    const hashtag = enrichTask({ text: 'Discuss #project roadmap', done: false, effectiveStatus: 'todo', priority: null, filePath: 'j/a.md', fileKind: 'journals', fileName: 'a.md', line: 5, heading: '', tags: ['project'] });
+    check('S unrelated hashtags remain visible', hashtag.displayText.indexOf('#project') !== -1);
+    const hashtagSearch = applyTaskFilters([hashtag], { status: 'all', priority: 'all', query: '#project' });
+    check('S2 unrelated hashtags remain searchable', hashtagSearch.length === 1);
+
+    return {
+      ok: failed === 0,
+      total: results.length,
+      passed,
+      failed,
+      results,
+    };
+  }
+
   // ---- Public API ----
 
   const MME_TASK_REVIEW = {
     wire,
     refresh,
     setSearchQuery: (q) => { filterState.query = String(q || ''); renderPanel(); },
-    setStatusFilter: (s) => { filterState.status = s || 'open'; renderPanel(); },
+    setStatusFilter: (s) => { filterState.status = setStoredStatusFilter(s); renderPanel(); },
     setPriorityFilter: (p) => { filterState.priority = p || 'all'; renderPanel(); },
+    matchesStatusFilter,
+    normalizeStatusFilterValue,
+    applyTaskFilters,
     getFilteredTasks,
     getAllTasks,
     getOpenTasks,
@@ -1261,6 +1421,7 @@
     setTaskPriority,
     setTaskCompletion,
     findActualTaskLine, // Exposed for testing
+    validate: runValidator, // Deterministic, DOM-free
   };
 
   try {

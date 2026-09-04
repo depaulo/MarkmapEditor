@@ -265,8 +265,68 @@
     // closedDate is the alias of validated completedDate (Closed Date).
     result.closedDate = result.completedDate;
 
+    // Canonical shared priority: recognized visible token wins, valid
+    // `mme-task: priority=` metadata is the fallback, otherwise null.
+    // Checkbox authority and lifecycle status/date semantics are unchanged.
+    result.priority = priorityOf(src.text, metadata.priority);
+
     return result;
   }
+
+  // ---- Priority normalization (pure; single shared Task grammar) ----
+  //
+  // Owns the ONE priority-recognition grammar and the ONE visible-token
+  // removal grammar for every Task consumer (TaskReview, Task Board, Reports).
+  //
+  // Accepted visible tokens: #p1 / #p2 / #p3 (case-insensitive, current
+  // TaskReview token-boundary semantics preserved). Metadata fallback:
+  // `mme-task: priority=` accepted only when it normalizes to a recognized
+  // level ('p1'/'#p1' style values; same acceptance as the token grammar).
+  //
+  // Precedence: recognized visible token wins; otherwise valid metadata
+  // fallback; otherwise null. Duplicates resolve highest-first (p1 > p2 > p3;
+  // duplicate occurrences of one level resolve to that level). Invalid tokens
+  // and invalid metadata values are simply unrecognized (no error, no rewrite).
+  //
+  // Canonical unprioritized value is null. Never mutates input. Never writes
+  // source; the physical Markdown line is never touched here.
+
+  const PRIORITY_TOKEN_RE = /#p[123]\b/gi;
+
+  function normalizePriorityValue(value) {
+    const v = String(value == null ? '' : value).trim().toLowerCase();
+    if (v === '#p1' || v === 'p1') return 'p1';
+    if (v === '#p2' || v === 'p2') return 'p2';
+    if (v === '#p3' || v === 'p3') return 'p3';
+    return null;
+  }
+
+  // Pure priority resolution for one Task.
+  // priorityOf(text, metadataPriority) -> 'p1' | 'p2' | 'p3' | null
+  function priorityOf(text, metadataPriority) {
+    const tokens = String(text == null ? '' : text).match(PRIORITY_TOKEN_RE);
+
+    if (tokens && tokens.length) {
+      const levels = tokens.map((t) => normalizePriorityValue(t)).filter(Boolean);
+      if (levels.includes('p1')) return 'p1';
+      if (levels.includes('p2')) return 'p2';
+      if (levels.includes('p3')) return 'p3';
+    }
+
+    return normalizePriorityValue(metadataPriority);
+  }
+
+  // Pure visible-token removal for presentation/canonical text.
+  // Removes recognized #p1/#p2/#p3 tokens only; preserves all other text,
+  // unrelated hashtags, and mme-task comments (callers strip comments
+  // separately when their contract requires it). Never writes source.
+  function removePriorityTokens(text) {
+    return String(text == null ? '' : text)
+      .replace(/#p[123]\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
 
   // ---- Transitions (future Task Board contract) ----
 
@@ -1349,6 +1409,116 @@
     );
 
 
+    // ---------- SHARED PRIORITY NORMALIZATION (pure) ----------
+    // A. lowercase visible token
+    check('PR1 lowercase visible token #p1 -> p1', priorityOf('#p1 Buy milk', null) === 'p1');
+
+    // B. uppercase visible token
+    check('PR2 uppercase visible token #P2 -> p2', priorityOf('#P2 Buy milk', null) === 'p2');
+
+    // C. highest priority wins
+    check(
+      'PR3 highest priority wins (#p3 #p1 #p2 -> p1)',
+      priorityOf('#p3 #p1 #p2 mixed', null) === 'p1'
+    );
+
+    // D. duplicate same priority resolves to that level
+    check(
+      'PR4 duplicate same level (#p2 text #P2 -> p2)',
+      priorityOf('#p2 text #P2', null) === 'p2'
+    );
+
+    // E. visible token wins over metadata
+    check(
+      'PR5 visible token overrides metadata (#p2 text, meta p1 -> p2)',
+      priorityOf('#p2 text', 'p1') === 'p2'
+    );
+
+    // F. valid metadata fallback (case-insensitive)
+    check(
+      'PR6 metadata fallback (no token, meta P3 -> p3)',
+      priorityOf('Buy milk', 'P3') === 'p3'
+    );
+
+    // G. invalid metadata is unrecognized
+    check(
+      'PR7 invalid metadata (no token, meta urgent -> null)',
+      priorityOf('Buy milk', 'urgent') === null
+    );
+
+    // H. no priority
+    check('PR8 no token, no metadata -> null', priorityOf('Buy milk', null) === null);
+    check('PR8b empty text, empty metadata -> null', priorityOf('', '') === null);
+
+    // I. malformed visible token
+    check('PR9 malformed token #p4 -> null', priorityOf('#p4 Buy milk', null) === null);
+
+    // J. unrelated hashtag is not a priority token
+    check(
+      'PR10 unrelated hashtag (#project) -> null',
+      priorityOf('#project kickoff', null) === null
+    );
+
+    // K. checked Task uses the same priority normalization
+    t = normalizeTask({ done: true, metadata: {}, text: '#p1 Ship it' });
+    check(
+      'PR11 checked Task normalizes priority identically',
+      t.effectiveStatus === 'done' && t.priority === 'p1',
+      JSON.stringify(t)
+    );
+
+    // L. display cleaner: tokens removed, other text and hashtags retained,
+    //    physical input never mutated
+    const prioSource = 'Buy #p1 milk and #project beans';
+    const prioCleaned = removePriorityTokens(prioSource);
+    check(
+      'PR12 removePriorityTokens removes tokens, keeps text and hashtags',
+      prioCleaned === 'Buy milk and #project beans' && prioSource === 'Buy #p1 milk and #project beans',
+      JSON.stringify({ cleaned: prioCleaned, source: prioSource })
+    );
+    check(
+      'PR12b removePriorityTokens leaves mme-task comments to callers',
+      removePriorityTokens('Buy milk <!-- mme-task: priority=p1 -->') ===
+        'Buy milk <!-- mme-task: priority=p1 -->'
+    );
+
+    // M. normalizeTask integration: canonical priority on the shared record
+    t = normalizeTask({ done: false, metadata: { priority: 'p2' }, text: 'No token here' });
+    check(
+      'PR13 normalizeTask exposes canonical priority (metadata fallback)',
+      t.priority === 'p2' && t.metadata && t.metadata.priority === 'p2',
+      JSON.stringify(t)
+    );
+
+    // N. metadata precedence integration: visible token overrides fallback
+    t = normalizeTask({ done: false, metadata: { priority: 'p3' }, text: 'Do it #p1' });
+    check(
+      'PR14 normalizeTask visible token overrides metadata fallback',
+      t.priority === 'p1' && t.metadata.priority === 'p3',
+      JSON.stringify(t)
+    );
+    t = normalizeTask({ done: false, metadata: { priority: 'urgent' }, text: 'Do it' });
+    check(
+      'PR14b normalizeTask invalid metadata -> null, raw metadata preserved',
+      t.priority === null && t.metadata.priority === 'urgent',
+      JSON.stringify(t)
+    );
+    t = normalizeTask({ done: false, metadata: {}, text: 'Plain task' });
+    check('PR14c normalizeTask unprioritized -> null', t.priority === null, JSON.stringify(t));
+
+    // Malformed metadata value must survive round-trip physically.
+    r = applySaveLifecycle('- [ ] A <!-- mme-task: priority=urgent -->', {
+      today: T,
+      isNew: false,
+      checked: false,
+      explicitStatus: null,
+    });
+    check(
+      'PR15 save writer preserves unknown priority metadata',
+      r.ok && /priority=urgent/.test(r.line),
+      r.line
+    );
+
     return {
       ok: failed === 0,
       total: results.length,
@@ -1367,6 +1537,9 @@
     isValidIsoDate,
     normalizeTask,
     effectiveStatusOf,
+    priorityOf,
+    normalizePriorityValue,
+    removePriorityTokens,
     applyTransition,
     applySaveLifecycle,
     matchTasksForSave,

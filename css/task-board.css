@@ -146,6 +146,28 @@
   cursor: pointer;
 }
 
+/* Priority filter control shares the Done-period select visual vocabulary. */
+.taskBoardPriorityLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.taskBoardPriorityFilter {
+  height: 30px;
+  max-width: 150px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--toolbar-border);
+  background: var(--toolbar-bg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .taskBoardClose {
   height: 30px;
   padding: 0 14px;
@@ -348,6 +370,67 @@ html.dark .taskBoardColumn[data-column="done"] .taskBoardColumnName { color: #6e
   opacity: 0.6;
   padding: 12px 8px;
   text-align: center;
+}
+
+/* ---- Card context row: source label + priority badge ---- */
+
+.taskBoardCardContext {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.taskBoardCardSource {
+  flex: 1 1 auto;
+  min-width: 0;
+
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.72;
+  line-height: 1.3;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.taskBoardCard .workspaceTaskPriorityBadge {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Same subdued P1/P2/P3 color vocabulary as the Sidebar badge, scoped to the
+   Board card so a narrow column never shrinks or hides the badge text. */
+.taskBoardCard .workspaceTaskPriorityBadge.priority-p1 {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+.taskBoardCard .workspaceTaskPriorityBadge.priority-p2 {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+}
+
+.taskBoardCard .workspaceTaskPriorityBadge.priority-p3 {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+
+/* Completed (Done) cards: keep the source label and badge readable without
+   removing existing completion styling. Cards carry no global dim by column;
+   these guards ensure the contextual row is never muted below readability. */
+.taskBoardColumn[data-column="done"] .taskBoardCardSource {
+  opacity: 0.8;
+}
+
+.taskBoardCardSource:hover {
+  opacity: 1;
 }
 
 /* ---- Footer ---- */

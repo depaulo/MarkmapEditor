@@ -35,8 +35,14 @@
   // ---- Board constants ----
 
   const DONE_WINDOW_KEY = 'markmap:taskBoard:doneWindow';
-  const VALID_DONE_WINDOWS = ['7', '30', '90', 'all'];
   const DONE_WINDOW_DEFAULT = '30';
+  const PRIORITY_FILTER_KEY = 'markmap:taskBoard:priority';
+  const PRIORITY_FILTER_DEFAULT = 'all';
+  const VALID_PRIORITY_FILTERS = ['all', 'p1', 'p2', 'p3', 'none'];
+  const SORT_KEY = 'markmap:taskBoard:sort';
+  const SORT_DEFAULT = 'file';
+  const VALID_SORTS = ['file', 'opened-newest', 'opened-oldest', 'name'];
+  const VALID_DONE_WINDOWS = ['7', '30', '90', 'all'];
   const COLUMN_ORDER = ['backlog', 'todo', 'ongoing', 'done'];
 
   const STATUS_LABELS = {
@@ -167,6 +173,183 @@
     }
   }
 
+  // ---- Priority filter preference (Board-owned presentation) ----
+
+  // Normalizes a priority-filter control value. Only these are canonical:
+  // all | p1 | p2 | p3 | none. Unsupported, missing, malformed, or
+  // storage-corrupted values -> all. This normalizes the filter CONTROL, never
+  // Task source metadata and never Task priority grammar.
+  function normalizePriorityFilterValue(value) {
+    const v = String(value == null ? '' : value).trim().toLowerCase();
+    return VALID_PRIORITY_FILTERS.includes(v) ? v : PRIORITY_FILTER_DEFAULT;
+  }
+
+  function getStoredPriorityFilter() {
+    try {
+      return normalizePriorityFilterValue(localStorage.getItem(PRIORITY_FILTER_KEY));
+    } catch {
+      return PRIORITY_FILTER_DEFAULT;
+    }
+  }
+
+  function setStoredPriorityFilter(value) {
+    const normalized = normalizePriorityFilterValue(value);
+    try {
+      localStorage.setItem(PRIORITY_FILTER_KEY, normalized);
+    } catch {
+      // Storage may be unavailable or blocked; filtering continues unpersisted.
+    }
+    return normalized;
+  }
+
+  // Pure matching of a Task against the selected priority filter. Uses only
+  // the canonical task.priority. Never inspects raw lines, #pN, metadata
+  // comments, visible text, CSS classes, or badge markup. Never mutates.
+  function matchesPriorityFilter(task, filter) {
+    const f = normalizePriorityFilterValue(filter);
+    if (f === 'all') return true;
+
+    const priority = task?.priority;
+    if (f === 'none') return priority == null || priority === '';
+    return priority === f;
+  }
+
+  // ---- Sort preference (Board-owned presentation order) ----
+
+  // Normalizes a Sort control value. Only these are canonical:
+  // file | opened-newest | opened-oldest | name. Unsupported, missing,
+  // malformed, or corrupted values -> file. Never accepts aliases. Never a
+  // priority/manual/status/custom/drag sort.
+  function normalizeSortValue(value) {
+    const v = String(value == null ? '' : value).trim().toLowerCase();
+    return VALID_SORTS.includes(v) ? v : SORT_DEFAULT;
+  }
+
+  function getStoredSort() {
+    try {
+      return normalizeSortValue(localStorage.getItem(SORT_KEY));
+    } catch {
+      return SORT_DEFAULT;
+    }
+  }
+
+  function setStoredSort(value) {
+    const normalized = normalizeSortValue(value);
+    try {
+      localStorage.setItem(SORT_KEY, normalized);
+    } catch {
+      // Storage may be unavailable or blocked; sorting continues unpersisted.
+    }
+    return normalized;
+  }
+
+  // Deterministic, locale-independent string compare (stable across engines and
+  // repeated renders).
+  function cmpStrings(a, b) {
+    const sa = String(a == null ? '' : a);
+    const sb = String(b == null ? '' : b);
+    if (sa < sb) return -1;
+    if (sa > sb) return 1;
+    return 0;
+  }
+
+  // Unescaped, normalized visible Task text for comparison. Uses the shared
+  // priority-token cleaner (never raw Markdown with checkbox/mme-task/#pN).
+  // Unrelated hashtags remain part of the name. Does not mutate task.text.
+  function sortableTaskText(task) {
+    const lifecycle = globalThis.MME_TASK_LIFECYCLE;
+    if (lifecycle && typeof lifecycle.removePriorityTokens === 'function') {
+      return String(lifecycle.removePriorityTokens(task?.text || '') || '').toLowerCase();
+    }
+    return String(
+      String(task?.text || '').replace(/#p[123]\b/gi, '').replace(/\\s+/g, ' ').trim()
+    ).toLowerCase();
+  }
+
+  // Stable source identity for the File comparator. Prefers stable file
+  // identity (filePath -> fileName) so title changes never rearrange Tasks from
+  // the same file. Empty when no source identity exists.
+  function stableSourceIdentity(task) {
+    const filePath = String(task?.filePath || '');
+    if (filePath) return filePath;
+    const fileName = String(task?.fileName || '');
+    if (fileName) return fileName;
+    return '';
+  }
+
+  // Physical source line, numeric ascending; valid positive lines sort before
+  // missing/invalid lines; missing uses a large fixed fallback.
+  function sourceLineNum(task) {
+    const n = Number(task?.line);
+    return Number.isFinite(n) && n > 0 ? n : Number.MAX_SAFE_INTEGER;
+  }
+
+  // comparatorFor returns a deterministic comparator for a canonical sort value.
+  function comparatorFor(sortValue) {
+    const sort = normalizeSortValue(sortValue);
+
+    if (sort === 'opened-newest' || sort === 'opened-oldest') {
+      return function openedComparator(a, b) {
+        const dateA = parseDateNum(a?.openedDate);
+        const dateB = parseDateNum(b?.openedDate);
+        const validA = dateA !== null;
+        const validB = dateB !== null;
+
+        // Dated Tasks before undated Tasks in both Opened modes.
+        if (validA !== validB) return validA ? -1 : 1;
+
+        if (validA && validB && dateA !== dateB) {
+          return sort === 'opened-newest' ? dateB - dateA : dateA - dateB;
+        }
+
+        return fileCompare(a, b);
+      };
+    }
+
+    if (sort === 'name') {
+      return function nameComparator(a, b) {
+        const textA = sortableTaskText(a);
+        const textB = sortableTaskText(b);
+        if (textA !== textB) {
+          // Non-empty text before empty text.
+          if (!textA) return 1;
+          if (!textB) return -1;
+          return cmpStrings(textA, textB);
+        }
+        return fileCompare(a, b);
+      };
+    }
+
+    // file (default)
+    return fileCompare;
+  }
+
+  // File and source order:
+  //   1. stable source identity
+  //   2. physical source line ascending
+  //   3. normalized visible Task text
+  //   4. final stable fallback
+  function fileCompare(a, b) {
+    const idA = stableSourceIdentity(a);
+    const idB = stableSourceIdentity(b);
+    const idCmp = cmpStrings(idA, idB);
+    if (idCmp !== 0) return idCmp;
+
+    const lineA = sourceLineNum(a);
+    const lineB = sourceLineNum(b);
+    if (lineA !== lineB) return lineA - lineB;
+
+    const textCmp = cmpStrings(sortableTaskText(a), sortableTaskText(b));
+    if (textCmp !== 0) return textCmp;
+
+    return cmpStrings(`${idA}::${lineA}`, `${idB}::${lineB}`);
+  }
+
+  // Non-mutating per-column sort: never sorts a stored/Index array directly.
+  function sortColumn(columnTasks, sortValue) {
+    return (columnTasks || []).slice().sort(comparatorFor(sortValue));
+  }
+
   // ---- Status normalization ----
 
   function statusOf(task) {
@@ -233,18 +416,33 @@
   // - a Workspace Index object containing { tasks }
   // - a raw Task array
 
-  function viewModel(indexOrTasks, doneWindow, today) {
+  function viewModel(indexOrTasks, doneWindow, today, priorityFilter, sortValue) {
     const index =
       indexOrTasks && Array.isArray(indexOrTasks.tasks)
         ? indexOrTasks
         : { tasks: Array.isArray(indexOrTasks) ? indexOrTasks : [] };
 
+    const priority = normalizePriorityFilterValue(priorityFilter);
+    const sort = normalizeSortValue(sortValue);
+
     const grouped = groupTasks(index.tasks);
+
+    // Priority filter applies to every lifecycle column after Done eligibility.
+    const applyFilter = (tasks) => tasks.filter((t) => matchesPriorityFilter(t, priority));
+
+    // Sort applies independently per column AFTER filtering (presentation only).
+    const applySort = (tasks) => sortColumn(tasks, sort);
+
+    const backlog = applySort(applyFilter(grouped.backlog || []));
+    const todo = applySort(applyFilter(grouped.todo || []));
+    const ongoing = applySort(applyFilter(grouped.ongoing || []));
+
     const allDone = grouped.done || [];
     const recentDone = [];
     const undatedDone = [];
 
     allDone.forEach((task) => {
+      // Undated counting is Done-window data; keep it independent of priority.
       const closedDate = task.closedDate || task.completedDate || null;
 
       if (closedDate && isRecent(closedDate, today, doneWindow)) {
@@ -254,27 +452,29 @@
       }
     });
 
-    const visibleDone = doneWindow === 'all' ? allDone.slice() : recentDone;
+    const doneEligible = doneWindow === 'all' ? allDone.slice() : recentDone;
+    const done = applySort(applyFilter(doneEligible));
 
     return {
       columns: {
-        backlog: grouped.backlog || [],
-        todo: grouped.todo || [],
-        ongoing: grouped.ongoing || [],
-        done: visibleDone,
+        backlog,
+        todo,
+        ongoing,
+        done,
       },
 
       counts: {
-        backlog: (grouped.backlog || []).length,
-        todo: (grouped.todo || []).length,
-        ongoing: (grouped.ongoing || []).length,
-        done: visibleDone.length,
+        backlog: backlog.length,
+        todo: todo.length,
+        ongoing: ongoing.length,
+        done: done.length,
       },
 
       undatedDone,
       undatedCount: undatedDone.length,
       allDoneCount: allDone.length,
       doneWindow,
+      priorityFilter: priority,
     };
   }
 
@@ -288,8 +488,73 @@
     return 'No tasks completed in this period.';
   }
 
-  function cardHtml(task, status) {
-    const text = escapeHtml(task?.text || '(untitled task)');
+  // ---- Pure card presentation helpers (source label + priority badge) ----
+
+  // Resolves a compact source-document label from the existing Workspace Index
+  // records only. Never rescans a file and never re-parses Markdown.
+  // Resolution order:
+  //   1. meaningful parsed document title (byPath doc.title);
+  //   2. source filename (task.fileName, or parsed.name as backup);
+  //   3. compact path segment (final non-empty segment);
+  //   4. neutral fallback.
+  // Never mutates the Task or Index records; never exposes local device paths.
+  function resolveSourceLabel(task, byPath) {
+    const filePath = String(task?.filePath || task?.path || '');
+    const fileName = String(task?.fileName || task?.name || '');
+
+    if (byPath && typeof byPath.get === 'function' && filePath) {
+      const doc = byPath.get(filePath);
+      if (doc) {
+        const title = doc.title;
+        if (title && String(title).trim()) return String(title).trim();
+        if (!fileName && doc.name && String(doc.name).trim()) return String(doc.name).trim();
+      }
+    }
+
+    if (fileName && fileName.trim()) return fileName.trim();
+
+    const segments = String(filePath)
+      .replace(/\\/g, '/')
+      .split('/')
+      .filter(Boolean);
+    if (segments.length) {
+      const last = segments[segments.length - 1];
+      if (last) return last;
+    }
+
+    return 'Unknown source';
+  }
+
+  // Builds the priority badge span for a canonical priority ('p1' | 'p2' | 'p3').
+  // Any other value (null/unrecognized) produces no badge. Non-interactive span.
+  function priorityBadgeHtml(priority) {
+    if (priority !== 'p1' && priority !== 'p2' && priority !== 'p3') return '';
+    const up = priority.toUpperCase();
+    return `<span class="workspaceTaskPriorityBadge priority-${priority}">${up}</span>`;
+  }
+
+  // Card display text. Uses the shared priority-token cleaner (guarded) so a
+  // recognized #pN token never appears in the visible card title; unrelated
+  // hashtags and the rest of the text are preserved. Workspace Index Task
+  // records carry task.text (displayText is a TaskReview-only enrichment), so
+  // the shared cleaner is the correct Board path.
+  function cardDisplayText(task) {
+    const text = String(task?.text || '(untitled task)');
+    const lifecycle = globalThis.MME_TASK_LIFECYCLE;
+    if (lifecycle && typeof lifecycle.removePriorityTokens === 'function') {
+      const cleaned = lifecycle.removePriorityTokens(text);
+      return cleaned || text;
+    }
+    return (
+      String(text).replace(/#p[123]\b/gi, '').replace(/\s+/g, ' ').trim() || text
+    );
+  }
+
+  function cardHtml(task, status, byPath) {
+    const text = escapeHtml(cardDisplayText(task) || '(untitled task)');
+
+    const sourceLabel = escapeHtml(resolveSourceLabel(task, byPath));
+    const badge = priorityBadgeHtml(task?.priority);
 
     const kindLabel = escapeHtml(task?.fileKind || 'task');
 
@@ -323,8 +588,14 @@
       );
     }).join('');
 
+    const accessibleSource = sourceLabel && sourceLabel !== 'Unknown source' ? `, ${sourceLabel}` : '';
+
     return (
       `<div class="taskBoardCard" data-card-status="${status}">` +
+      `<div class="taskBoardCardContext">` +
+      `<span class="taskBoardCardSource" title="${sourceLabel}">${sourceLabel}</span>` +
+      `${badge}` +
+      `</div>` +
       `<button ` +
       `type="button" ` +
       `class="taskBoardCardTitle" ` +
@@ -332,7 +603,7 @@
       `data-path="${path}" ` +
       `data-kind="${kind}" ` +
       `data-line="${line}" ` +
-      `aria-label="Open source for: ${text}">` +
+      `aria-label="Open source for: ${text}${accessibleSource}">` +
       `${text}` +
       `</button>` +
       `<div class="taskBoardCardMeta">` +
@@ -367,7 +638,19 @@
       typeof globalThis.getLocalIsoDate === 'function' ? globalThis.getLocalIsoDate() : '';
 
     const doneWindow = doneWindowFromStored();
-    const model = viewModel(index, doneWindow, today);
+    const priorityFilter = getStoredPriorityFilter();
+    const sortValue = getStoredSort();
+    const model = viewModel(index, doneWindow, today, priorityFilter, sortValue);
+
+    const prioritySelect = document.getElementById('mmeTaskBoardPriorityFilter');
+    if (prioritySelect && prioritySelect.value !== priorityFilter) {
+      prioritySelect.value = priorityFilter;
+    }
+
+    const sortSelect = document.getElementById('mmeTaskBoardSort');
+    if (sortSelect && sortSelect.value !== sortValue) {
+      sortSelect.value = sortValue;
+    }
 
     const columnDefinitions = [
       ['backlog', 'Backlog', model.columns.backlog],
@@ -378,7 +661,7 @@
 
     container.innerHTML = columnDefinitions
       .map(([status, label, tasks]) => {
-        const cards = tasks.map((task) => cardHtml(task, status)).join('');
+        const cards = tasks.map((task) => cardHtml(task, status, index?.byPath)).join('');
 
         const empty =
           tasks.length === 0 ? `<div class="taskBoardEmpty">${emptyMessage(label)}</div>` : '';
@@ -420,7 +703,10 @@
     if (summary) {
       const openCount = model.counts.backlog + model.counts.todo + model.counts.ongoing;
 
-      summary.textContent = `${openCount} open · ` + `${model.undatedCount} undated done`;
+      const filterLabel = priorityFilter === 'all' ? '' : ` · ${priorityFilter.toUpperCase()}`;
+
+      summary.textContent =
+        `${openCount} open${filterLabel} · ` + `${model.undatedCount} undated done`;
     }
   }
 
@@ -466,6 +752,31 @@
       `<option value="30">30 days</option>` +
       `<option value="90">90 days</option>` +
       `<option value="all">All</option>` +
+      `</select>` +
+      `</label>` +
+      `<label class="taskBoardPriorityLabel">` +
+      `Priority` +
+      `<select ` +
+      `id="mmeTaskBoardPriorityFilter" ` +
+      `class="taskBoardPriorityFilter" ` +
+      `aria-label="Task Board priority filter">` +
+      `<option value="all">All priorities</option>` +
+      `<option value="p1">P1</option>` +
+      `<option value="p2">P2</option>` +
+      `<option value="p3">P3</option>` +
+      `<option value="none">No priority</option>` +
+      `</select>` +
+      `</label>` +
+      `<label class="taskBoardSortLabel">` +
+      `Sort` +
+      `<select ` +
+      `id="mmeTaskBoardSort" ` +
+      `class="taskBoardSort" ` +
+      `aria-label="Task Board sort order">` +
+      `<option value="file">File and source order</option>` +
+      `<option value="opened-newest">Opened, newest first</option>` +
+      `<option value="opened-oldest">Opened, oldest first</option>` +
+      `<option value="name">Task name A–Z</option>` +
       `</select>` +
       `</label>` +
       `<button ` +
@@ -529,6 +840,38 @@
         }
 
         setStoredDoneWindow(value);
+        renderColumns();
+      });
+    }
+
+    const prioritySelect = document.getElementById('mmeTaskBoardPriorityFilter');
+
+    if (prioritySelect) {
+      prioritySelect.addEventListener('change', () => {
+        const value = prioritySelect.value;
+
+        if (!VALID_PRIORITY_FILTERS.includes(value)) {
+          prioritySelect.value = PRIORITY_FILTER_DEFAULT;
+          return;
+        }
+
+        prioritySelect.value = setStoredPriorityFilter(value);
+        renderColumns();
+      });
+    }
+
+    const sortSelect = document.getElementById('mmeTaskBoardSort');
+
+    if (sortSelect) {
+      sortSelect.addEventListener('change', () => {
+        const value = sortSelect.value;
+
+        if (!VALID_SORTS.includes(value)) {
+          sortSelect.value = SORT_DEFAULT;
+          return;
+        }
+
+        sortSelect.value = setStoredSort(value);
         renderColumns();
       });
     }
@@ -1231,6 +1574,208 @@
       check('L0 lifecycle owner present', false, 'MME_TASK_LIFECYCLE missing');
     }
 
+    // ---------- CARD PRESENTATION: SOURCE LABEL + PRIORITY BADGE (pure) ----------
+    const cardByPath = new Map();
+    cardByPath.set('journals/a.md', { title: 'Alpha Journal', name: 'a.md', kind: 'journals' });
+    cardByPath.set('concepts/b.md', { title: '', name: 'b.md', kind: 'concepts' });
+
+    const srcTaskTitle = {
+      text: 'Do #p1 things #project',
+      done: false,
+      priority: 'p1',
+      filePath: 'journals/a.md',
+      fileName: 'a.md',
+      fileKind: 'journals',
+      line: 3,
+    };
+    const srcSnapshot = JSON.stringify(srcTaskTitle);
+
+    check('A parsed title wins', resolveSourceLabel(srcTaskTitle, cardByPath) === 'Alpha Journal');
+
+    check(
+      'B empty parsed title falls back to filename',
+      resolveSourceLabel({ text: 'x', filePath: 'concepts/b.md', fileName: 'b.md' }, cardByPath) === 'b.md'
+    );
+
+    check(
+      'C missing parsed record falls back to filename',
+      resolveSourceLabel({ text: 'x', filePath: 'missing.md', fileName: 'missing.md' }, new Map()) === 'missing.md'
+    );
+
+    check(
+      'D missing filename falls back to compact path segment',
+      resolveSourceLabel({ text: 'x', filePath: 'deep/outer/inner.md' }, new Map()) === 'inner.md'
+    );
+
+    check('E all missing -> neutral fallback', resolveSourceLabel({ text: 'x' }, new Map()) === 'Unknown source');
+
+    resolveSourceLabel(srcTaskTitle, cardByPath);
+    check('F resolver does not mutate Task or Index', JSON.stringify(srcTaskTitle) === srcSnapshot);
+
+    check('G P1 badge text', priorityBadgeHtml('p1').indexOf('>P1<') !== -1);
+    check('H P2 badge text', priorityBadgeHtml('p2').indexOf('>P2<') !== -1);
+    check('I P3 badge text', priorityBadgeHtml('p3').indexOf('>P3<') !== -1);
+    check('J null priority -> no badge', priorityBadgeHtml(null) === '');
+    check('K invalid priority -> no badge', priorityBadgeHtml('urgent') === '' && priorityBadgeHtml(undefined) === '' && priorityBadgeHtml(1) === '');
+    check(
+      'L badge class driven only by canonical priority',
+      priorityBadgeHtml('p2').indexOf('priority-p2') !== -1 && priorityBadgeHtml('p2').indexOf('priority-p1') === -1 &&
+        priorityBadgeHtml('p2').indexOf('priority-p3') === -1
+    );
+
+    const cleanTitleText = cardDisplayText(srcTaskTitle);
+    check(
+      'M card title cleaned, no #pN token',
+      cleanTitleText.indexOf('#p1') === -1 && cleanTitleText.indexOf('#project') !== -1
+    );
+    check('N unrelated hashtag remains visible', cleanTitleText.indexOf('#project') !== -1);
+
+    const renderedCard = cardHtml(srcTaskTitle, 'todo', cardByPath);
+    check(
+      'O source-navigation data attributes remain',
+      renderedCard.indexOf('data-task-open="1"') !== -1 &&
+        renderedCard.indexOf('data-path="journals/a.md"') !== -1 &&
+        renderedCard.indexOf('data-kind="journals"') !== -1 &&
+        renderedCard.indexOf('data-line="3"') !== -1
+    );
+    check(
+      'P priority badge is a non-interactive span',
+      renderedCard.indexOf('<span class="workspaceTaskPriorityBadge priority-p1">P1</span>') !== -1 &&
+        renderedCard.indexOf('workspaceTaskPriorityBadge priority-p1"') !== -1
+    );
+    check('P2 source label present on the card', renderedCard.indexOf('class="taskBoardCardSource" title="Alpha Journal"') !== -1);
+    check('P3 no badge for unprioritized card', cardHtml({ text: 'plain', priority: null, filePath: 'x.md', fileKind: 'concepts', fileName: 'x.md', line: 1 }, 'todo', new Map()).indexOf('workspaceTaskPriorityBadge') === -1);
+
+    check('Q card input not mutated during render', JSON.stringify(srcTaskTitle) === srcSnapshot);
+
+    // ---------- PRIORITY FILTER (pure) ----------
+    check('A normalize all -> all', normalizePriorityFilterValue('all') === 'all');
+    check('B normalize p1/p2/p3/none', normalizePriorityFilterValue('p1') === 'p1' && normalizePriorityFilterValue('p2') === 'p2' && normalizePriorityFilterValue('p3') === 'p3' && normalizePriorityFilterValue('none') === 'none');
+    check('B2 uppercase/whitespace normalize', normalizePriorityFilterValue('  P1 ') === 'p1');
+    check('C invalid filter -> all', normalizePriorityFilterValue('urgent') === 'all' && normalizePriorityFilterValue('p4') === 'all' && normalizePriorityFilterValue('p0') === 'all' && normalizePriorityFilterValue('high') === 'all' && normalizePriorityFilterValue(5) === 'all');
+    check('D empty/missing -> all', normalizePriorityFilterValue('') === 'all' && normalizePriorityFilterValue(null) === 'all' && normalizePriorityFilterValue(undefined) === 'all');
+
+    const prioSet = [
+      { id: 1, priority: 'p1' },
+      { id: 2, priority: 'p2' },
+      { id: 3, priority: 'p3' },
+      { id: 4, priority: null },
+      { id: 5, priority: 'urgent' }, // unsupported
+    ];
+    const prioSnapshot = JSON.stringify(prioSet);
+
+    check('E All includes every Task', prioSet.filter((t) => matchesPriorityFilter(t, 'all')).length === 5);
+    check('F P1 includes only P1', matchesPriorityFilter(prioSet[0], 'p1') === true && prioSet.filter((t) => matchesPriorityFilter(t, 'p1')).length === 1);
+    check('G P2 includes only P2', matchesPriorityFilter(prioSet[1], 'p2') === true && prioSet.filter((t) => matchesPriorityFilter(t, 'p2')).length === 1);
+    check('H P3 includes only P3', matchesPriorityFilter(prioSet[2], 'p3') === true && prioSet.filter((t) => matchesPriorityFilter(t, 'p3')).length === 1);
+    check('I No priority includes canonical null', matchesPriorityFilter(prioSet[3], 'none') === true);
+    check('J No priority handles missing defensively', matchesPriorityFilter({ priority: undefined }, 'none') === true && matchesPriorityFilter({ priority: '' }, 'none') === true && matchesPriorityFilter({}, 'none') === true);
+    check('K P1 excludes P2/P3/null', matchesPriorityFilter(prioSet[1], 'p1') === false && matchesPriorityFilter(prioSet[2], 'p1') === false && matchesPriorityFilter(prioSet[3], 'p1') === false);
+    check('X unsupported priority not in P1/P2/P3', matchesPriorityFilter(prioSet[4], 'p1') === false && matchesPriorityFilter(prioSet[4], 'p2') === false && matchesPriorityFilter(prioSet[4], 'p3') === false);
+    check('Y unsupported priority included by All', matchesPriorityFilter(prioSet[4], 'all') === true);
+
+    // Pipeline: lifecycle partition -> Done eligibility -> priority each column.
+    const modelTasks = [
+      { id: 'b1', done: false, priority: 'p1', effectiveStatus: 'backlog' },
+      { id: 't1', done: false, priority: 'p1', effectiveStatus: 'todo' },
+      { id: 't2', done: false, priority: 'p2', effectiveStatus: 'todo' },
+      { id: 'o1', done: false, priority: 'p3', effectiveStatus: 'ongoing' },
+      { id: 'd1', done: true, priority: 'p1', closedDate: '2026-09-01', completedDate: '2026-09-01', effectiveStatus: 'done' },
+      { id: 'd2', done: true, priority: 'p2', closedDate: '2026-09-01', completedDate: '2026-09-01', effectiveStatus: 'done' },
+      { id: 'd3', done: true, priority: null, closedDate: null, effectiveStatus: 'done' }, // undated
+    ];
+    const modelSnapshot = JSON.stringify(modelTasks);
+
+    const mP1 = viewModel(modelTasks, '30', '2026-09-02', 'p1');
+    check('F2 P1 -> todo column only p1', mP1.columns.todo.length === 1 && mP1.columns.todo[0].id === 't1');
+    check('M P1 applies to Backlog', mP1.columns.backlog.length === 1 && mP1.columns.backlog[0].id === 'b1');
+    check('N P1 applies to Todo', mP1.columns.todo.length === 1);
+    check('L P1 applies to Ongoing', mP1.columns.ongoing.length === 0);
+    check('O P1 applies to Done (eligible only)', mP1.columns.done.length === 1 && mP1.columns.done[0].id === 'd1');
+    check('R visible column counts reflect filtered arrays', mP1.counts.todo === 1 && mP1.counts.done === 1 && mP1.counts.ongoing === 0);
+
+    const mNone = viewModel(modelTasks, '30', '2026-09-02', 'none');
+    check('P Done-period filtering precedes priority (undated excluded from 30d)', mNone.columns.done.length === 0);
+
+    const mAll = viewModel(modelTasks, 'all', '2026-09-02', 'all');
+    check('P2 All + all -> all done incl undated', mAll.columns.done.length === 3);
+    const mNoneAll = viewModel(modelTasks, 'all', '2026-09-02', 'none');
+    check('Q Done-window + priority intersection (none + all -> undated only)', mNoneAll.columns.done.length === 1 && mNoneAll.columns.done[0].id === 'd3');
+    check('Q2 p1 + all done -> only d1 dated p1', viewModel(modelTasks, 'all', '2026-09-02', 'p1').columns.done.length === 1);
+
+    check('T filtering does not mutate Task records', JSON.stringify(modelTasks) === modelSnapshot);
+    check('U model input array not mutated', JSON.stringify(prioSet) === prioSnapshot);
+
+    const orderCheck = viewModel(modelTasks, '30', '2026-09-02', 'p1');
+    check('V relative order unchanged', orderCheck.columns.todo[0].id === 't1');
+
+    // W: rendering remains correct after filtering (badge + source label intact).
+    const filteredRendered = orderCheck.columns.backlog[0];
+    const cardBacklog = cardHtml(filteredRendered, 'backlog', cardByPath);
+    check('W badge rendering correct after filter', cardBacklog.indexOf('workspaceTaskPriorityBadge priority-p1') !== -1);
+    check('W2 source label rendering correct after filter', cardBacklog.indexOf('taskBoardCardSource') !== -1);
+
+    check('Z persistence normalizer never returns unsupported', ['all', 'p1', 'p2', 'p3', 'none'].indexOf(normalizePriorityFilterValue('bogus')) !== -1 && ['all', 'p1', 'p2', 'p3', 'none'].indexOf(normalizePriorityFilterValue('P2')) !== -1);
+
+    // ---------- SORT (pure, deterministic) ----------
+    check('A normalize file -> file', normalizeSortValue('file') === 'file');
+    check('B normalize opened-newest', normalizeSortValue('opened-newest') === 'opened-newest');
+    check('C normalize opened-oldest', normalizeSortValue('opened-oldest') === 'opened-oldest');
+    check('D normalize name', normalizeSortValue('name') === 'name');
+    check('D2 uppercase/whitespace', normalizeSortValue('  Name ') === 'name');
+    check('E invalid/empty -> file', normalizeSortValue('priority') === 'file' && normalizeSortValue('') === 'file' && normalizeSortValue(null) === 'file' && normalizeSortValue('manual') === 'file' && normalizeSortValue(5) === 'file');
+
+    // File comparator fixtures (mixed files, lines, names).
+    const sortTasks = [
+      { id: 'c', filePath: 'journals/b/day.md', fileName: 'day.md', line: 3, text: 'Zebra', openedDate: '2026-08-01' },
+      { id: 'a', filePath: 'journals/a/week.md', fileName: 'week.md', line: 1, text: 'Alpha', openedDate: '2026-08-05' },
+      { id: 'b', filePath: 'journals/a/week.md', fileName: 'week.md', line: 2, text: 'Beta', openedDate: '2026-08-02' },
+      { id: 'd', filePath: null, fileName: 'orphan.md', line: null, text: 'Delta', openedDate: '2026-08-03' },
+    ];
+    const sortSnapshot = JSON.stringify(sortTasks);
+
+    const fileSorted = sortColumn(sortTasks, 'file');
+    check('F File sort groups by stable file identity', fileSorted.indexOf(sortTasks[1]) < fileSorted.indexOf(sortTasks[2]) && fileSorted.indexOf(sortTasks[2]) < fileSorted.indexOf(sortTasks[0]));
+    check('G File sort uses source line ascending within a file', fileSorted[0].id === 'a' && fileSorted[1].id === 'b');
+    check('H File sort places positive line before missing line', fileSorted.indexOf(sortTasks[3]) === fileSorted.length - 1);
+    check('I File sort uses visible text as stable tie-breaker', sortColumn([{ filePath: 'x', line: 1, text: 'B' }, { filePath: 'x', line: 1, text: 'A' }], 'file')[0].text === 'A');
+
+    // Opened-newest / oldest.
+    const openedNewest = sortColumn(sortTasks, 'opened-newest');
+    check('J Opened newest sorts valid dates descending', openedNewest[0].openedDate === '2026-08-05');
+    check('K Opened newest undated after dated', sortColumn([{ text: 'u', openedDate: null }, { text: 'd', openedDate: '2026-01-01' }], 'opened-newest')[0].text === 'd');
+    check('L invalid date treated as undated', sortColumn([{ text: 'x' }, { text: 'y', openedDate: 'not-a-date' }], 'opened-newest')[1] !== undefined);
+    const openedOldest = sortColumn(sortTasks, 'opened-oldest');
+    check('M Opened oldest sorts valid dates ascending', openedOldest[0].openedDate === '2026-08-01');
+    check('N Opened oldest undated after dated', sortColumn([{ text: 'D', openedDate: '2026-01-01' }, { text: 'E', openedDate: null }], 'opened-oldest')[1].openedDate === null);
+    check('O Opened oldest uses file/source fallback for equal dates', (() => { const r = sortColumn([{ id: 'x', filePath: 'b', text: 'n' }, { id: 'y', filePath: 'a', text: 'm', openedDate: '2026-01-01' }], 'opened-oldest'); return r[r.length - 1].filePath === 'b'; })());
+
+    const nameSorted = sortColumn([{ text: 'banana' }, { text: 'Apple' }, { text: '' }, { text: 'apple #p1' }], 'name');
+    check('P Name sort case-insensitive', nameSorted[0].text === 'Apple' && nameSorted[1].text === 'apple #p1');
+    check('Q Name sort retains unrelated hashtag', nameSorted[1].text.indexOf('#p1') === -1 && nameSorted[0].text.toLowerCase() === 'apple');
+    check('R Name sort places non-empty before empty', nameSorted[nameSorted.length - 1].text === '');
+    check('S Name sort uses file/source fallback for equal names', (() => { const r = sortColumn([{ text: 'same', filePath: 'b' }, { text: 'same', filePath: 'a' }], 'name'); return r[0].filePath === 'a'; })());
+
+    check('AC unsupported legacy records do not throw', (() => { try { sortColumn([null, { text: undefined }, { line: -5 }], 'name'); return true; } catch (e) { return false; } })());
+
+    const perCol = viewModel([
+      { id: 'tN', done: false, priority: null, effectiveStatus: 'todo', text: 'n', filePath: 'a', line: 2, openedDate: null },
+      { id: 'tA', done: false, priority: null, effectiveStatus: 'todo', text: 'a', filePath: 'a', line: 1, openedDate: '2026-01-01' },
+    ], 'all', '2026-09-02', 'all', 'name');
+    check('T Sorting applies independently per column', perCol.columns.todo[0].id === 'tA');
+    check('U Sorting occurs after priority filtering', (() => { const r = viewModel([{ id: 'tp1', priority: 'p1', filePath: 'z', line: 1, text: 'a' }, { id: 'tp2', priority: null, filePath: 'a', line: 1, text: 'zzz' }], 'all', '2026-09-02', 'p1', 'name'); return r.columns.todo.length === 1; })());
+    check('V2 Sorting occurs after Done-period eligibility', (() => { const r = viewModel([{ id: 'd', done: true, closedDate: '2026-01-01', effectiveStatus: 'done', openedDate: '2026-01-02' }], '30', '2026-09-02', 'all', 'name'); return r.columns.done.length === 0; })());
+    check('W Sorting does not change lifecycle membership', (() => { const r = viewModel(sortTasks.concat([{ id: 'td', done: true, closedDate: '2026-09-01', effectiveStatus: 'done', line: 9, filePath: 'x' }]), '30', '2026-09-02', 'all', 'file'); return r.columns.todo.length === 4; })());
+    check('X Sorting does not mutate source records', JSON.stringify(sortTasks) === sortSnapshot);
+    check('Z Sorting does not modify priority/line', (() => { const pre = JSON.stringify(sortTasks); sortColumn(sortTasks, 'name'); return JSON.stringify(sortTasks) === pre; })());
+    check('AA Sorting does not modify source line', (() => { const pre = JSON.stringify(sortTasks); sortColumn(sortTasks, 'file'); return JSON.stringify(sortTasks) === pre; })());
+    check('AD persisted Sort normalizer never returns unsupported', ['file', 'opened-newest', 'opened-oldest', 'name'].indexOf(normalizeSortValue('bogus')) !== -1 && ['file', 'opened-newest', 'opened-oldest', 'name'].indexOf(normalizeSortValue('NAME')) !== -1);
+
+    // AB: rendered cards retain source label and badge after sorting.
+    const sortedForRender = sortColumn([{ id: 'p1x', text: 'do #p1 things #project', priority: 'p1', filePath: 'journals/a.md', fileName: 'a.md', fileKind: 'journals', line: 3 }], 'name');
+    const sortedCardHtml = cardHtml(sortedForRender[0], 'todo', cardByPath);
+    check('AB source labels + priority badges survive sorting', sortedCardHtml.indexOf('taskBoardCardSource') !== -1 && sortedCardHtml.indexOf('workspaceTaskPriorityBadge priority-p1') !== -1);
+
     return {
       ok: failed === 0,
       total: results.length,
@@ -1256,6 +1801,19 @@
     parseDateNum,
     isValidDoneWindow,
     doneWindowDefault,
+    resolveSourceLabel,
+    priorityBadgeHtml,
+    cardDisplayText,
+    cardHtml,
+    normalizePriorityFilterValue,
+    matchesPriorityFilter,
+    normalizeSortValue,
+    comparatorFor,
+    fileCompare,
+    sortColumn,
+    sortableTaskText,
+    PRIORITY_FILTER_KEY,
+    SORT_KEY,
     DONE_WINDOW_KEY,
     validate: runValidator,
   };
