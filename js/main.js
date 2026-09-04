@@ -3785,6 +3785,7 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
       text,
       fileName,
       fileHandle: file.handle,
+      lastModified: blob.lastModified || 0,
       reason,
     });
   });
@@ -4198,8 +4199,7 @@ function isSavedReportMarkdown(text) {
 }
 
 function setWritableHandleForCurrentFile(handle) {
-  currentSaveHandle = handle || null;
-  setStatus(modeLabel());
+  activateWritableHandle({ handle: handle || null, reason: 'setWritableHandleForCurrentFile' });
 }
 
 // ACT B: Shared programmatic text suppression helper.
@@ -4214,9 +4214,17 @@ function runProgrammaticTextChange(callback) {
   }
 }
 
-function openTextDocument({ text, fileName, fileHandle = null, reason = 'openTextDocument' }) {
-  currentFileName = fileName || 'journal.md';
-  currentSaveHandle = fileHandle || null;
+function openTextDocument({ text, fileName, fileHandle = null, lastModified = 0, reason = 'openTextDocument' }) {
+  // Common writable-handle activation owner: stops the previous Hot Reload
+  // timer, assigns/clears the handle, advances the handle generation, primes
+  // the new file's authoritative lastModified (using the provided value when
+  // available), and clears stale external state before polling restarts.
+  activateWritableHandle({
+    handle: fileHandle,
+    fileName: fileName || 'journal.md',
+    lastModified,
+    reason,
+  });
 
   // ACT B: Wrap text mutation with suppression helper to prevent false dirty.
   runProgrammaticTextChange(() => {
@@ -4566,7 +4574,7 @@ async function openVirtualReport(preparedResult) {
     }
 
     // 5. Clear physical handle.
-    currentSaveHandle = null;
+    activateWritableHandle({ handle: null, reason: 'openVirtualReport' });
 
     // 6. Clear Task baseline (Report documents are excluded from ACT D).
     __taskBaseline = null;
@@ -4623,7 +4631,7 @@ async function openVirtualReport(preparedResult) {
 
     // Defensive rollback: release the Report identity so a retry is possible.
     __virtualReportSession = null;
-    currentSaveHandle = null;
+    activateWritableHandle({ handle: null, reason: 'openVirtualReport rollback' });
 
     showToast?.('Report activation failed', 'error', 3500);
     return { ok: false, reason: 'activation-error', error: msg };
@@ -4682,6 +4690,10 @@ globalThis.MME_APP = {
     if (typeof state.dirty === 'boolean') {
       dirty = state.dirty;
     }
+
+    // Invalidate any in-flight prime/poll/post-save work captured before this
+    // restore so it cannot mutate the restored document state.
+    externalHandleGeneration += 1;
 
     // Update status/title once.
     setStatus(modeLabel());
@@ -5345,17 +5357,15 @@ async function openFromRecent(item) {
   if (!ok) throw new Error('Permission denied to read recent file');
 
   const f = await item.handle.getFile();
-  fileLastSeenModified = f.lastModified || Date.now();
-
-  externalStale = false;
-  externalStaleModified = 0;
 
   const text = await f.text();
 
-  currentSaveHandle = item.handle;
-  hotStart('openRecent');
-
-  currentFileName = f.name || item.name || 'markmap.md';
+  activateWritableHandle({
+    handle: item.handle,
+    fileName: f.name || item.name || 'markmap.md',
+    lastModified: f.lastModified || 0,
+    reason: 'openRecent',
+  });
 
   md.value = text;
   if (window.__cmSetText) window.__cmSetText(md.value);
@@ -5783,7 +5793,8 @@ let dirty = false;
 let currentFileName = 'markmap.md';
 
 let currentSaveHandle = null;
-
+let externalHandleGeneration = 0;
+let internalSaveInProgress = false;
 let fileLastSeenModified = 0;
 let externalStale = false;
 let externalStaleModified = 0;
@@ -5923,9 +5934,13 @@ function hotStop(reason) {
   } catch {}
 }
 
-async function hotPrime(handle) {
+async function hotPrime(handle, generation) {
   try {
     const f = await handle.getFile();
+    if (typeof generation === 'number' && (generation !== externalHandleGeneration || currentSaveHandle !== handle)) {
+      log('HotReload: stale prime ignored (generation mismatch)');
+      return;
+    }
     fileLastSeenModified = f.lastModified || Date.now();
     hotWarnedModified = 0;
     hotSetStatus('Hot ✓ ' + new Date(fileLastSeenModified).toLocaleString());
@@ -5958,8 +5973,10 @@ async function hotApplyReload(fileObj, reason) {
   }
 }
 
-function hotStart(reason) {
+async function hotPollTick(handle, generation) {
   try {
+    if (generation !== externalHandleGeneration || currentSaveHandle !== handle) return;
+    if (internalSaveInProgress) return;
     if (!hotEnabledEl || !hotEnabledEl.checked) {
       hotStop('disabled');
       return;
@@ -5969,69 +5986,95 @@ function hotStart(reason) {
       return;
     }
 
+    const f = await handle.getFile();
+
+    if (generation !== externalHandleGeneration || currentSaveHandle !== handle) return;
+    if (internalSaveInProgress) return;
+
+    const lm = f.lastModified || 0;
+    if (!lm) return;
+    if (lm === fileLastSeenModified) return;
+    if (hotWarnedModified === lm) return;
+
+    log('HotReload: external change detected (' + fileLastSeenModified + ' -> ' + lm + ')');
+
+    if (!dirty) {
+      fileLastSeenModified = lm;
+      hotWarnedModified = 0;
+      await hotApplyReload(f, 'hotReload(auto)');
+      if (generation === externalHandleGeneration && currentSaveHandle === handle)
+        hotSetStatus('Hot ✓ ' + new Date(fileLastSeenModified).toLocaleString());
+      return;
+    }
+
+    hotWarnedModified = lm;
+    hotSetStatus('Hot ⚠ External change detected');
+    const ok = confirm(
+      'O arquivo "' +
+        currentFileName +
+        '" foi alterado externamente.\n\nRecarregar agora e perder as alterações não salvas desta aba?'
+    );
+
+    if (generation !== externalHandleGeneration || currentSaveHandle !== handle) return;
+
+    if (ok) {
+      fileLastSeenModified = lm;
+      hotWarnedModified = 0;
+      await hotApplyReload(f, 'hotReload(confirm)');
+      if (generation === externalHandleGeneration && currentSaveHandle === handle)
+        hotSetStatus('Hot ✓ ' + new Date(fileLastSeenModified).toLocaleString());
+    } else {
+      externalStale = true;
+      externalStaleModified = lm;
+      hotSetStatus('Hot ⚠ OUT OF DATE');
+      setStatus(modeLabel());
+      updateDocumentTitle();
+      showToast('External change detected — you are out of date', 'error', 3200);
+      log('HotReload: user declined reload -> externalStale=true');
+    }
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    log('HotReload: stopped due to error: ' + msg);
+    hotStop('error');
+  }
+}
+
+function hotStart(generation, reason, alreadyPrimed) {
+  try {
+    if (!hotEnabledEl || !hotEnabledEl.checked) {
+      hotStop('disabled');
+      return;
+    }
+    if (!currentSaveHandle) {
+      hotStop('no handle');
+      return;
+    }
+    if (typeof generation !== 'number' || generation !== externalHandleGeneration) return;
+
     if (hotTimer) {
       clearInterval(hotTimer);
       hotTimer = null;
     }
 
-    hotPrime(currentSaveHandle).then(() => {
-      hotTimer = setInterval(async () => {
-        try {
-          if (!hotEnabledEl.checked) {
-            hotStop('disabled');
-            return;
-          }
-          if (!currentSaveHandle) {
-            hotStop('no handle');
-            return;
-          }
+    const handle = currentSaveHandle;
 
-          const f = await currentSaveHandle.getFile();
-          const lm = f.lastModified || 0;
-          if (!lm) return;
-          if (lm === fileLastSeenModified) return;
-          if (hotWarnedModified === lm) return;
-
-          log('HotReload: external change detected (' + fileLastSeenModified + ' -> ' + lm + ')');
-
-          if (!dirty) {
-            fileLastSeenModified = lm;
-            hotWarnedModified = 0;
-            await hotApplyReload(f, 'hotReload(auto)');
-            hotSetStatus('Hot ✓ ' + new Date(fileLastSeenModified).toLocaleString());
-            return;
-          }
-
-          hotWarnedModified = lm;
-          hotSetStatus('Hot ⚠ External change detected');
-          const ok = confirm(
-            'O arquivo "' +
-              currentFileName +
-              '" foi alterado externamente.\n\nRecarregar agora e perder as alterações não salvas desta aba?'
-          );
-          if (ok) {
-            fileLastSeenModified = lm;
-            hotWarnedModified = 0;
-            await hotApplyReload(f, 'hotReload(confirm)');
-            hotSetStatus('Hot ✓ ' + new Date(fileLastSeenModified).toLocaleString());
-          } else {
-            externalStale = true;
-            externalStaleModified = lm;
-            hotSetStatus('Hot ⚠ OUT OF DATE');
-            setStatus(modeLabel());
-            updateDocumentTitle();
-            showToast('External change detected — you are out of date', 'error', 3200);
-            log('HotReload: user declined reload -> externalStale=true');
-          }
-        } catch (e) {
-          const msg = e && e.message ? e.message : String(e);
-          log('HotReload: stopped due to error: ' + msg);
-          hotStop('error');
-        }
+    const beginPolling = () => {
+      if (generation !== externalHandleGeneration || currentSaveHandle !== handle) {
+        log('HotReload: activation superseded before polling (gen=' + generation + ')');
+        return;
+      }
+      hotTimer = setInterval(() => {
+        hotPollTick(handle, generation);
       }, 1500);
+      log('HotReload: started (' + reason + ') gen=' + generation);
+    };
 
-      log('HotReload: started (' + reason + ')');
-    });
+    if (alreadyPrimed) {
+      beginPolling();
+      return;
+    }
+
+    hotPrime(handle, generation).then(beginPolling);
   } catch (e) {
     try {
       log('HotReload: start failed: ' + (e && e.message ? e.message : e));
@@ -6039,10 +6082,55 @@ function hotStart(reason) {
   }
 }
 
-async function hotAfterSave() {
+function activateWritableHandle({ handle = null, fileName = null, lastModified = 0, reason = 'activateWritableHandle' } = {}) {
+  hotStop('activation: ' + reason);
+
+  currentSaveHandle = handle || null;
+  if (fileName) currentFileName = fileName;
+
+  externalHandleGeneration += 1;
+  hotWarnedModified = 0;
+
+  if (!handle) {
+    fileLastSeenModified = 0;
+    externalStale = false;
+    externalStaleModified = 0;
+    setStatus(modeLabel());
+    return;
+  }
+
+  externalStale = false;
+  externalStaleModified = 0;
+
+  if (lastModified) {
+    fileLastSeenModified = lastModified;
+    if (hotEnabledEl && hotEnabledEl.checked)
+      hotSetStatus('Hot ✓ ' + new Date(fileLastSeenModified).toLocaleString());
+    hotStart(externalHandleGeneration, reason, true);
+  } else {
+    // Prime unconditionally (independent of the Hot Reload toggle) so the
+    // authoritative timestamp is always established for the active handle;
+    // polling only installs if still current and enabled.
+    hotPrime(handle, externalHandleGeneration).then(() => {
+      hotStart(externalHandleGeneration, reason, true);
+    });
+  }
+
+  setStatus(modeLabel());
+}
+
+async function hotAfterSave(handle, generation) {
   try {
-    if (!currentSaveHandle) return;
-    const f = await currentSaveHandle.getFile();
+    const target = handle || currentSaveHandle;
+    if (!target) return 0;
+    const f = await target.getFile();
+    if (
+      typeof generation === 'number' &&
+      (generation !== externalHandleGeneration || currentSaveHandle !== target)
+    ) {
+      log('HotReload: stale post-save sync ignored (generation mismatch)');
+      return 0;
+    }
     fileLastSeenModified = f.lastModified || Date.now();
     hotWarnedModified = 0;
     externalStale = false;
@@ -6051,7 +6139,10 @@ async function hotAfterSave() {
       hotSetStatus('Hot ✓ ' + new Date(fileLastSeenModified).toLocaleString());
     setStatus(modeLabel());
     updateDocumentTitle();
-  } catch {}
+    return fileLastSeenModified;
+  } catch {
+    return 0;
+  }
 }
 
 if (hotEnabledEl && !hotEnabledEl.__bound) {
@@ -6060,7 +6151,7 @@ if (hotEnabledEl && !hotEnabledEl.__bound) {
       hotStop('toggle off');
       return;
     }
-    if (currentSaveHandle) hotStart('toggle on');
+    if (currentSaveHandle) hotStart(externalHandleGeneration, 'toggle on');
   });
   hotEnabledEl.__bound = true;
 }
@@ -8867,6 +8958,7 @@ async function ensureWritePermission(handle) {
 
 async function saveToHandle(handle, text) {
   log('saveToHandle(): begin');
+  const saveGeneration = externalHandleGeneration;
   const ok = await ensureWritePermission(handle);
   if (!ok) throw new Error('Write permission denied');
   const writable = await handle.createWritable();
@@ -8874,7 +8966,8 @@ async function saveToHandle(handle, text) {
   await writable.write(text);
   log(`saveToHandle(): wrote ${text.length} chars`);
   await writable.close();
-  if (typeof hotAfterSave === 'function') await hotAfterSave();
+  let savedModified = 0;
+  if (typeof hotAfterSave === 'function') savedModified = await hotAfterSave(handle, saveGeneration);
   log('saveToHandle(): closed');
   log('saveToHandle(): success');
   dirty = false;
@@ -8886,6 +8979,7 @@ async function saveToHandle(handle, text) {
   if (globalThis.WORKSPACE_STATE?.activeFile) {
     globalThis.scheduleWorkspaceIndexRebuild?.('save');
   }
+  return savedModified;
 }
 
 async function openSmart() {
@@ -8902,10 +8996,13 @@ async function openSmart() {
           },
         ],
       });
-      currentSaveHandle = handle;
-      hotStart('openSmart');
       const f = await handle.getFile();
-      currentFileName = f.name || 'markmap.md';
+      activateWritableHandle({
+        handle,
+        fileName: f.name || 'markmap.md',
+        lastModified: f.lastModified || 0,
+        reason: 'openSmart',
+      });
       updateDocumentTitle();
       await addRecentFile(handle, currentFileName);
       log(`🕘 Recents: added ${currentFileName}`);
@@ -8983,8 +9080,7 @@ async function openSmart() {
       `openSmart(): writable picker not usable. secure=${window.isSecureContext}, api=${'showOpenFilePicker' in window}, top=${isTopLevel()}`
     );
   }
-  currentSaveHandle = null;
-  hotStop('openSmart fallback');
+  activateWritableHandle({ handle: null, reason: 'openSmart fallback' });
   fileInput.value = '';
   fileInput.click();
   log('openSmart(): triggered read-only file input');
@@ -9263,16 +9359,11 @@ function newDocument() {
     // the NEW filename's draft, not the previous mode's draft.
     const previousFileName = currentFileName;
 
-    try {
-      hotStop('newDocument');
-    } catch {}
-
-    currentSaveHandle = null;
-    externalStale = false;
-    externalStaleModified = 0;
-    fileLastSeenModified = 0;
-
-    currentFileName = starter.defaultFileName;
+    activateWritableHandle({
+      handle: null,
+      fileName: starter.defaultFileName,
+      reason: 'newDocument',
+    });
 
     // Fix 6: Suppress programmatic dirty while setting text.
     __programmaticTextChange++;
@@ -9336,7 +9427,7 @@ fileInput.addEventListener('change', async (e) => {
     }
     currentFileName = f.name || 'markmap.md';
     updateDocumentTitle();
-    currentSaveHandle = null;
+    activateWritableHandle({ handle: null, reason: 'read-only open' });
     const openedText = await f.text();
     md.value = openedText;
     if (window.__cmSetText) window.__cmSetText(md.value);
@@ -9395,8 +9486,19 @@ async function saveAsSmart(text) {
           },
         ],
       });
-      await saveToHandle(handle, text);
-      currentSaveHandle = handle;
+      internalSaveInProgress = true;
+      let savedModified = 0;
+      try {
+        savedModified = await saveToHandle(handle, text);
+      } finally {
+        internalSaveInProgress = false;
+      }
+      activateWritableHandle({
+        handle,
+        fileName: handle.name || suggestedName,
+        lastModified: savedModified,
+        reason: 'saveAs',
+      });
       captureTaskBaseline();
       dirty = false;
       setStatus(modeLabel());
@@ -9489,6 +9591,7 @@ async function saveSmart() {
   }
 
   if (currentSaveHandle) {
+    internalSaveInProgress = true;
     try {
       log('saveSmart(): attempting overwrite via currentSaveHandle');
       if (!(await confirmOverwriteExternal())) return { ok: false, reason: 'canceled' };
@@ -9500,6 +9603,8 @@ async function saveSmart() {
     } catch (e) {
       log(`saveSmart(): overwrite failed -> ${e?.message || e}`);
       log('saveSmart(): falling back to Save As...');
+    } finally {
+      internalSaveInProgress = false;
     }
   } else {
     log('saveSmart(): no writable handle -> using Save As');
