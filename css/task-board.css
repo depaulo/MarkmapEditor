@@ -168,6 +168,28 @@
   cursor: pointer;
 }
 
+/* Sort control shares the Done-period/Priority select visual vocabulary. */
+.taskBoardSortLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.taskBoardSort {
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--toolbar-border);
+  background: var(--toolbar-bg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .taskBoardClose {
   height: 30px;
   padding: 0 14px;
@@ -278,6 +300,12 @@ html.dark .taskBoardColumn[data-column="backlog"] .taskBoardColumnName { color: 
 html.dark .taskBoardColumn[data-column="todo"] .taskBoardColumnName { color: #93c5fd; }
 html.dark .taskBoardColumn[data-column="ongoing"] .taskBoardColumnName { color: #fcd34d; }
 html.dark .taskBoardColumn[data-column="done"] .taskBoardColumnName { color: #6ee7b7; }
+
+/* Native select rendering (closed control, arrow, dropdown popup) follows the
+   app theme. Scoped to the Task Board panel; light mode keeps browser defaults. */
+html.dark .taskBoardPanel select {
+  color-scheme: dark;
+}
 
 /* ---- Cards ---- */
 

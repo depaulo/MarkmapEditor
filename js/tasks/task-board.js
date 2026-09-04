@@ -1752,7 +1752,7 @@
 
     const nameSorted = sortColumn([{ text: 'banana' }, { text: 'Apple' }, { text: '' }, { text: 'apple #p1' }], 'name');
     check('P Name sort case-insensitive', nameSorted[0].text === 'Apple' && nameSorted[1].text === 'apple #p1');
-    check('Q Name sort retains unrelated hashtag', nameSorted[1].text.indexOf('#p1') === -1 && nameSorted[0].text.toLowerCase() === 'apple');
+    check('Q name sort excludes priority token from sortable text', sortableTaskText(nameSorted[1]).indexOf('#p1') === -1 && sortableTaskText(nameSorted[1]) === 'apple');
     check('R Name sort places non-empty before empty', nameSorted[nameSorted.length - 1].text === '');
     check('S Name sort uses file/source fallback for equal names', (() => { const r = sortColumn([{ text: 'same', filePath: 'b' }, { text: 'same', filePath: 'a' }], 'name'); return r[0].filePath === 'a'; })());
 

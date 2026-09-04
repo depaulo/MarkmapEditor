@@ -11,13 +11,13 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 
 // APP_VERSION is the single authoritative release/version owner. It names the
 // installed cache identity (APP_CACHE / RUNTIME_CACHE) for this release
-// boundary: external-sync reliability — active-handle generation
-// synchronization, generation-bound Hot Reload polling, internal-Save polling
-// guard, and Workspace/Save As handle synchronization. index.html, js/main.js,
-// css/workspace.css, and js/editor/editor-visibility.js are deterministic
-// precache assets, so a new identity ensures installed clients receive the
-// complete accepted package.
-const APP_VERSION = 'markmap-journal-pwa-v70-external-sync-v1';
+// boundary: Task Experience Enrichment — shared Task priority normalization,
+// Task Sidebar lifecycle filtering, Task Board source labels, P1/P2/P3
+// priority badges, Board priority filtering, Board sorting, and Board
+// dark-mode select and header consistency. All changed assets are
+// deterministic precache entries, so a new identity ensures installed clients
+// receive the complete accepted package.
+const APP_VERSION = 'markmap-journal-pwa-v71-task-experience-v1';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.
