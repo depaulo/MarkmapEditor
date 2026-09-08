@@ -371,34 +371,16 @@ async function openToday() {
   if (!String(text || '').trim()) {
     text = `---
 type: journal
-date: ${dateString}
-created: ${dateString}
-updated:
-status: active
 tags: []
 ---
 
-# Daily Capture — ${dateString}
+# ${dateString}
 
-Tags:
-
-## Plan
-- [ ]
-
-## Capture
--
-
-## Decisions
--
+## Notes
 
 ## Tasks
-- [ ]
 
-## Links
--
-
-## Review
--
+## Projects
 `;
 
 

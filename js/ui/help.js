@@ -384,13 +384,22 @@ function getJournalHelpHtml() {
       </p>
       <code class="helpCode">journals/2026-07-05.md
 
-# 2026-07-05 — Daily Capture
+---
+type: journal
+tags: []
+---
 
-Type: Journal
-Status: active
-Tags: #customer #strategy
-Created: 2026-07-05
-Updated: 2026-07-05</code>
+# 2026-07-05
+
+## Notes
+
+## Tasks
+
+## Projects</code>
+      <p>
+        Frontmatter stays in the physical Markdown source; reveal it any time its
+        Metadata placeholder is collapsed.
+      </p>
       <div class="helpCallout">
         Simple rule: use a journal when the note belongs to today.
       </div>
@@ -490,13 +499,18 @@ function getConceptHelpHtml() {
       </p>
       <code class="helpCode">concepts/ProductNews.md
 
+---
+type: concept
+tags: []
+---
+
 # ProductNews
 
-Type: Concept
-Status: active
-Tags: #product #customer
-Created:
-Updated:</code>
+## Notes
+
+## Tasks
+
+## Projects</code>
     </section>
 
     <section class="helpSection">
@@ -571,28 +585,18 @@ concepts/OpportunityBrief.md</code>
 
     <section class="helpSection">
       <h2>Recommended Concept Structure</h2>
-      <code class="helpCode"># ConceptName
+      <code class="helpCode">---
+type: concept
+tags: []
+---
 
-Type: Concept
-Status: active
-Tags:
-Created:
-Updated:
-
-## Summary
--
+# ConceptName
 
 ## Notes
--
-
-## Related Concepts
--
 
 ## Tasks
-- [ ]
 
-## Sources
--</code>
+## Projects</code>
     </section>
   `;
 }

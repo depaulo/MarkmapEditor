@@ -4764,42 +4764,18 @@ function createConceptStarterMarkdown(fileName) {
     .replace(/\.md$/i, '')
     .trim();
 
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const dateString = `${yyyy}-${mm}-${dd}`;
-
-  const today = new Date().toISOString().slice(0, 10);
-
-  return `
----
+  return `---
 type: concept
-created: ${dateString}
-updated:
-status: active
 tags: []
 ---
 
-
 # ${title}
 
-Tags:
-
-## Summary
--
-
 ## Notes
--
-
-## Related Concepts
--
 
 ## Tasks
-- [ ]
 
-## Sources
--
+## Projects
 `;
 }
 // This will be inserted after line 2917 (after the closing brace of createConceptStarterMarkdown)
