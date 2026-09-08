@@ -17,7 +17,7 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 // dark-mode select and header consistency. All changed assets are
 // deterministic precache entries, so a new identity ensures installed clients
 // receive the complete accepted package.
-const APP_VERSION = 'markmap-journal-pwa-v71-task-experience-v1';
+const APP_VERSION = 'markmap-journal-pwa-v72-metadata-starters-v1';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.

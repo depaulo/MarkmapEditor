@@ -96,6 +96,52 @@ function stripMmeTaskMetadataForRender(mdText) {
   return out.join('\n');
 }
 
+// Removes the leading YAML frontmatter block from a DERIVED HTML Preview
+// render copy only. The renderer otherwise interprets the opening `---`
+// delimiter as a horizontal rule and the closing delimiter as Setext heading
+// syntax, showing frontmatter as visible document content.
+//
+// Contract: render-copy-only; never mutates editor state or physical source;
+// no YAML parsing or serialization; preserves line count so downstream line
+// mapping stays stable; returns the input unchanged when no complete leading
+// frontmatter block exists (no opening delimiter, opening delimiter not at the
+// start, or unclosed block). Ordinary horizontal rules elsewhere are untouched.
+function stripLeadingFrontmatterForRender(markdown) {
+  const text = String(markdown ?? '');
+
+  // Opening delimiter must be the first logical line of the document.
+  const lines = text.split('\n');
+  const firstLine = lines[0] ?? '';
+
+  if (firstLine.replace(/\r$/, '').trim() !== '---') {
+    return text;
+  }
+
+  // Locate the corresponding closing delimiter line.
+  let closingIndex = -1;
+
+  for (let i = 1; i < lines.length; i += 1) {
+    if (lines[i].replace(/\r$/, '').trim() === '---') {
+      closingIndex = i;
+      break;
+    }
+  }
+
+  if (closingIndex === -1) {
+    return text;
+  }
+
+  // Blank out the leading block (delimiters included) in the derived copy,
+  // preserving the original line count and each line's CR style.
+  const renderLines = lines.slice();
+
+  for (let i = 0; i <= closingIndex; i += 1) {
+    renderLines[i] = lines[i].endsWith('\r') ? '\r' : '';
+  }
+
+  return renderLines.join('\n');
+}
+
 async function renderHtmlWithShiki(mdText) {
   const highlighter = await initShiki();
 
@@ -203,8 +249,12 @@ async function renderHtmlWithShiki(mdText) {
     return result || str;
   };
 
-  const renderSource = stripMmeTaskMetadataForRender(mdText);
-  return marked.parse(renderSource, { renderer });
+  // Derived HTML render copy: hide leading frontmatter and mme-task metadata
+  // from visible output. md.value / CodeMirror / physical source untouched.
+  const htmlRenderSource = stripMmeTaskMetadataForRender(
+    stripLeadingFrontmatterForRender(mdText)
+  );
+  return marked.parse(htmlRenderSource, { renderer });
 }
 
 function slugifyHeading(text) {
