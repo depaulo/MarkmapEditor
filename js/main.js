@@ -3765,6 +3765,25 @@ async function openWorkspaceSearchResultFile(path, preferredKind = '') {
   return fileRecord;
 }
 
+// ACT C1 — Report-aware duplicate-current no-op predicate.
+// Previously the current-file no-op relied only on MME_NAVIGATION.sameLocation,
+// which compares the remembered navigation-history location. That path match is
+// NOT sufficient to conclude the requested file is already displayed: while a
+// virtual or saved Report is active, the Editor shows the Report even when
+// WORKSPACE_STATE.activeFile / navigation-history still reference the source
+// path. A real physical open must occur so the existing Report guard and the
+// identity-clear/physical-open cleanup can run.
+//
+// Returns true (no-op eligible) only when:
+//   - the requested target is the same location as the remembered navigation
+//     current (sameLocation passed in from the caller); AND
+//   - no Report identity is active.
+// Pure and side-effect free so it can be validated in isolation.
+function isWorkspaceCurrentFileNoop({ reportActive, sameLocation }) {
+  if (reportActive) return false;
+  return Boolean(sameLocation);
+}
+
 async function openWorkspaceFile(file, kind = '', reason = 'workspace open file', options = {}) {
   if (!file || !file.handle) {
     throw new Error('Workspace file handle missing');
@@ -3819,7 +3838,10 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
       source: reason,
     };
 
-    if (globalThis.MME_NAVIGATION.sameLocation?.(current, target)) {
+    if (isWorkspaceCurrentFileNoop({
+      reportActive: canReconcileDrawioReport(),
+      sameLocation: globalThis.MME_NAVIGATION.sameLocation?.(current, target),
+    })) {
       log?.(`Workspace: noop — ${filePath} is already current`);
       return file;
     }

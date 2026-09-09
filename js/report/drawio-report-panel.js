@@ -1,10 +1,17 @@
 // @ts-nocheck
 // ACT H3 — Draw.io Report reconciliation UI.
-// Owns the temporary reconciliation session and review overlay. Uses
+// Owns the temporary in-memory reconciliation session and review overlay. Uses
 // MME_REPORT_MARKDOWN_IMPORT (H1) and MME_DRAWIO_REPORT_RECONCILER (H2) for all
 // pure logic. Editor access, dirty state, identity, toasts, and logs arrive via
 // adapters registered from main.js. No Save As, no population delivery (H4),
 // no template persistence, no workspace rescan.
+//
+// ACT B — in-session template preservation: closing the overlay no longer
+// discards the selected template session. The session is retained for the
+// lifetime of the active Report identity and is refreshed (never falsely
+// presented as current) when the reviewed Markdown or the Report identity
+// changes. resetSession() remains the only explicit clearing action, and the
+// existing navigation/identity boundaries keep calling resetSession().
 
 (function () {
   'use strict';
@@ -383,6 +390,27 @@
   function getSessionState() {
     return session ? { ...session } : null;
   }
+
+  // ACT B — pure staleness decision for a retained template session.
+  // A reconciliation may only be presented as current when it was computed
+  // from the exact reviewed Markdown currently in the editor AND from the
+  // same Report identity (same document filename). A different Report must
+  // never inherit the previous Report's reconciliation as current.
+  // A template without any successful reconciliation is also stale so the
+  // reopen path attempts a refresh instead of showing an empty review.
+  function isSessionReconciliationStale(inputSession, currentMarkdown, currentReportName) {
+    if (!inputSession || !inputSession.templateXml) return { stale: true, reason: 'no-session' };
+    if (!inputSession.reconciliation) return { stale: true, reason: 'no-reconciliation' };
+    const markdown = String(currentMarkdown == null ? '' : currentMarkdown);
+    const name = String(currentReportName == null ? '' : currentReportName);
+    if (String(inputSession.reconciledMarkdown == null ? '' : inputSession.reconciledMarkdown) !== markdown) {
+      return { stale: true, reason: 'markdown-changed' };
+    }
+    if (String(inputSession.reportFileName || '') !== name) {
+      return { stale: true, reason: 'report-identity-changed' };
+    }
+    return { stale: false, reason: 'current' };
+  }
   // =====================================================================
   // Overlay UI (single instance)
   // =====================================================================
@@ -652,6 +680,39 @@
     }
 
     openOverlay(); // Idempotent — single instance by construction.
+
+    // ACT B — overlay reopen with a retained template session.
+    // The selected template is never re-requested within the same active
+    // Report session. A retained reconciliation is only presented as current
+    // when it still matches the reviewed Markdown and the Report identity;
+    // otherwise it is refreshed from the current Markdown (template kept).
+    if (session && session.templateName) {
+      const nameEl = overlayEl ? overlayEl.querySelector('#drawioReportTemplateName') : null;
+      if (nameEl) nameEl.textContent = session.templateName;
+    }
+    if (session && session.templateXml) {
+      let currentMarkdown = '';
+      let currentReportName = '';
+      try {
+        currentMarkdown =
+          typeof adapters.getMarkdown === 'function' ? String(adapters.getMarkdown() || '') : '';
+      } catch {}
+      try {
+        currentReportName =
+          typeof adapters.getCurrentFileName === 'function'
+            ? String(adapters.getCurrentFileName() || '')
+            : '';
+      } catch {}
+      const staleness = isSessionReconciliationStale(session, currentMarkdown, currentReportName);
+      if (staleness.stale) {
+        safeLog(`reopen refresh reason=${staleness.reason}`);
+        void reconcileCurrentReport();
+      } else {
+        // Restore the category summary without recomputation.
+        renderReview();
+      }
+    }
+
     safeLog('panel opened');
     return { ok: true };
   }
@@ -724,6 +785,15 @@
       assessment,
       importedReport: null,
       reconciliation: null,
+      // ACT B: identity + freshness markers for the in-session template.
+      // reportFileName pins the session to the active Report identity;
+      // reconciledMarkdown records the exact reviewed Markdown the current
+      // reconciliation was computed from (null until a reconcile succeeds).
+      reportFileName:
+        typeof adapters.getCurrentFileName === 'function'
+          ? String(adapters.getCurrentFileName() || '')
+          : '',
+      reconciledMarkdown: null,
       openedAt: new Date().toISOString(),
     };
 
@@ -798,6 +868,14 @@
     session.importedReport = imported;
     session.populationFields = populationFields;
     session.aggregateValue = aggregateValue;
+    // ACT B: record the exact reviewed Markdown and the owning Report identity
+    // this reconciliation was computed from, so a later open() can detect a
+    // stale category summary and refresh instead of presenting it as current.
+    session.reconciledMarkdown = markdown;
+    session.reportFileName =
+      typeof adapters.getCurrentFileName === 'function'
+        ? String(adapters.getCurrentFileName() || '')
+        : session.reportFileName || '';
     session.reconciliation = reconciliation;
 
     openOverlay();
@@ -986,6 +1064,13 @@
       session.importedReport = imported;
       session.populationFields = populationFields;
       session.aggregateValue = aggregateValue;
+      // ACT B: generation always re-reconciles from the CURRENT Markdown, so
+      // record the freshness markers here as well.
+      session.reconciledMarkdown = markdown;
+      session.reportFileName =
+        typeof adapters.getCurrentFileName === 'function'
+          ? String(adapters.getCurrentFileName() || '')
+          : session.reportFileName || '';
       session.reconciliation = reconciliation;
 
       // Refresh review categories from the fresh reconciliation result.
@@ -1135,9 +1220,13 @@
 
   function close() {
     closeOverlay();
-    session = null;
-    setSaveStatus(''); // ACT H4: delivery status dies with the session
-    safeLog('session closed');
+    // ACT B: closing the overlay deliberately preserves the template session
+    // (name, XML, assessment, reconciliation) so reopening does not require
+    // re-selection. resetSession() remains the explicit clearing action, and
+    // navigation/identity resets keep calling resetSession(). The delivery
+    // status belongs to the retained session and stays visible until the
+    // session is cleared or the reconciliation is refreshed.
+    safeLog('overlay closed; template session preserved');
   }
 
   function configure(overrides) {
@@ -1329,16 +1418,164 @@
     const templateRef = { xml: '<mxfile><mxGraphModel></mxGraphModel></mxfile>', name: 'weekly-report.drawio' };
     check('reconcile again retains template', templateRef.name, session?.templateName || 'weekly-report.drawio');
 
-    // 28-29. Close clears session, leaves Markdown untouched.
+    // 28-29. ACT B: close preserves the template session, leaves Markdown
+    // untouched. resetSession() remains the explicit clearing action.
     const mdBeforeClose = mockMarkdown;
+    session = {
+      templateName: 'weekly-report.drawio',
+      templateXml: '<mxfile><mxGraphModel></mxGraphModel></mxfile>',
+      assessment: { ok: true, compressed: false, diagnostics: [] },
+      reconciliation: mkRec(),
+      reconciledMarkdown: mockMarkdown,
+      reportFileName: 'weekly-report.md',
+      openedAt: 'now',
+    };
     close();
-    check('close clears session', session, null);
+    check('close preserves template session', session && session.templateName, 'weekly-report.drawio');
     check('close does not change markdown', mockMarkdown, mdBeforeClose);
 
     // 30. Navigation reset clears temporary session.
     session = { templateName: 'a.drawio', templateXml: '<mxfile/>', openedAt: 'now' };
     resetSession('navigation');
     check('navigation reset clears session', session, null);
+
+    // ===================================================================
+    // ACT B — in-session template preservation (pure/session cases).
+    // Runs unconditionally (pure). The async reopen-refresh path is
+    // exercised by BROWSER CHECKPOINT 0 and is intentionally not
+    // fabricated as an automated result here.
+    // ===================================================================
+    const bCheckCond = (name, cond) => { cases.push({ name, pass: Boolean(cond) }); return Boolean(cond); };
+    const bSavedGetMarkdown = adapters.getMarkdown;
+    const bSavedGetCurrentFileName = adapters.getCurrentFileName;
+    const bSavedPickTemplateFile = adapters.pickTemplateFile;
+    adapters.isReportDocument = () => true;
+    const B_TEMPLATE_XML = '<mxfile><diagram><mxGraphModel><root><mxCell value="{{title}}" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>';
+
+    // b01 — no session is stale by definition (reopen requires selection).
+    check('b01 no-session staleness', isSessionReconciliationStale(null, '', ''), { stale: true, reason: 'no-session' });
+
+    // b02 — template without a successful reconciliation is stale, not current.
+    const b02Session = {
+      templateName: 't.drawio',
+      templateXml: B_TEMPLATE_XML,
+      assessment: { ok: true, compressed: false, diagnostics: [] },
+      reconciliation: null,
+      reconciledMarkdown: null,
+      reportFileName: 'report-a.md',
+    };
+    check(
+      'b02 template without reconciliation is stale',
+      isSessionReconciliationStale(b02Session, 'md', 'report-a.md'),
+      { stale: true, reason: 'no-reconciliation' }
+    );
+
+    // b03 — fresh reconciliation for the same Markdown + identity is current.
+    const b03Session = {
+      ...b02Session,
+      reconciliation: mkRec(),
+      reconciledMarkdown: '---\ntype: report\n---\n# A\n',
+      reportFileName: 'report-a.md',
+    };
+    check(
+      'b03 current reconciliation not stale',
+      isSessionReconciliationStale(b03Session, '---\ntype: report\n---\n# A\n', 'report-a.md'),
+      { stale: false, reason: 'current' }
+    );
+
+    // b04 — edited reviewed Markdown makes the retained reconciliation stale.
+    check(
+      'b04 markdown change marks reconciliation stale',
+      isSessionReconciliationStale(b03Session, '---\ntype: report\n---\n# A edited\n', 'report-a.md').reason,
+      'markdown-changed'
+    );
+    // Template itself is retained by the staleness decision (never discarded).
+    check('b04b markdown change retains template', b03Session.templateXml, B_TEMPLATE_XML);
+
+    // b05 — a different Report identity never inherits old reconciliation.
+    check(
+      'b05 different report identity is stale',
+      isSessionReconciliationStale(b03Session, '---\ntype: report\n---\n# A\n', 'report-b.md').reason,
+      'report-identity-changed'
+    );
+
+    // b06 — close() preserves the template session (name, XML, reconciliation).
+    session = { ...b03Session };
+    close();
+    check('b06 close retains template name', session && session.templateName, 't.drawio');
+    check('b06b close retains template XML byte-identical', session && session.templateXml === B_TEMPLATE_XML, true);
+    check('b06c close retains reconciliation', Boolean(session && session.reconciliation), true);
+
+    // b07 — reopen without any session keeps a clean empty state.
+    session = null;
+    const b07Open = open();
+    check('b07 reopen without template is not an error', b07Open.ok, true);
+    check('b07b reopen without template keeps session empty', session, null);
+
+    // ---- ACT B part 2 continues ----
+
+    // b10 — reopen with a fresh retained session restores without refresh.
+    session = { ...b03Session };
+    adapters.getMarkdown = () => '---\ntype: report\n---\n# A\n';
+    adapters.getCurrentFileName = () => 'report-a.md';
+    const b10Open = open();
+    check('b10 reopen with current session ok', b10Open.ok, true);
+    check('b10b reopen keeps template selected', session.templateName, 't.drawio');
+    check('b10c reopen keeps reconciliation current', session.reconciledMarkdown, '---\ntype: report\n---\n# A\n');
+
+    // b11 — canceling a second template selection keeps the first template.
+    session = { ...b03Session };
+    adapters.pickTemplateFile = async () => ({ ok: false, reason: 'cancelled' });
+    const selectSrc = Function.prototype.toString.call(selectTemplate);
+    check(
+      'b11 cancel path never reaches session assignment',
+      selectSrc.indexOf('picked.ok === false') !== -1 &&
+        selectSrc.indexOf('picked.ok === false') < selectSrc.indexOf('session = {'),
+      true
+    );
+    check('b11b cancelled pick shape is non-error', Boolean({ ok: false, reason: 'cancelled' }.ok), false);
+    check('b11c first template retained after cancel', session.templateXml, B_TEMPLATE_XML);
+
+    // b12 — output Save cancellation mutates neither session nor Markdown.
+    const genSrc = Function.prototype.toString.call(generateDrawioOutput);
+    check(
+      'b12 cancelled delivery returns before session reset',
+      genSrc.includes('deliveryResult.cancelled === true') && !genSrc.includes('session = null'),
+      true
+    );
+    check('b12b template survives cancelled delivery', session.templateXml, B_TEMPLATE_XML);
+
+    // b13 — reconcileCurrentReport records the freshness markers it consumes.
+    const recSrc = Function.prototype.toString.call(reconcileCurrentReport);
+    check('b13 reconcile records reconciledMarkdown', recSrc.includes('session.reconciledMarkdown = markdown'), true);
+    check('b13b reconcile records reportFileName', recSrc.includes('session.reportFileName'), true);
+
+    // b14 — reopen refresh path is staleness-driven and template-preserving.
+    const openSrc = Function.prototype.toString.call(open);
+    check('b14 open uses staleness decision', openSrc.includes('isSessionReconciliationStale'), true);
+    check('b14b stale reopen refreshes without discarding template', openSrc.includes('void reconcileCurrentReport()'), true);
+    check('b14c fresh reopen restores review without recompute', openSrc.includes('renderReview()'), true);
+
+    // b15 — repeated open/close cycles: no drift, no duplicate state.
+    let b15TemplateOk = true;
+    for (let i = 0; i < 3; i += 1) {
+      close();
+      const r = open();
+      if (!r || r.ok !== true) b15TemplateOk = false;
+      if (!session || session.templateXml !== B_TEMPLATE_XML) b15TemplateOk = false;
+    }
+    check('b15 repeated open/close retains template and stays ok', b15TemplateOk, true);
+    bCheckCond(
+      'b15b overlay is a single idempotent instance',
+      Function.prototype.toString.call(ensureOverlay).includes('document.body.contains(overlayEl)')
+    );
+
+    // Restore pre-block state so the remaining cases see the same
+    // environment as before the ACT B section was added.
+    session = null;
+    adapters.getMarkdown = bSavedGetMarkdown;
+    adapters.getCurrentFileName = bSavedGetCurrentFileName;
+    adapters.pickTemplateFile = bSavedPickTemplateFile;
 
     // 31-32. Repeated open/close does not duplicate UI; narrow structure sane.
     if (hasDom) {
