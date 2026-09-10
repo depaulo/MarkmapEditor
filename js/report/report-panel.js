@@ -764,14 +764,11 @@
   }
 
   function handleGenerate() {
-    // Click-time defense: read the current canGenerateReport adapter.
-    // Do not rely only on the disabled button.
-    if (typeof adapters.canGenerateReport === 'function' && !adapters.canGenerateReport()) {
-      safeStatus('Return to the workspace before generating another Report.', 'error');
-      log('Report: generation blocked reason=report-already-active');
-      return;
-    }
-
+    // Generate New Report: this always prepares the current configuration. If a
+    // Report is already active, openVirtualReport (adapter) runs the coordinated
+    // Save/Discard/Cancel decision for the current Report before replacing it.
+    // The new configuration (prepareReport) is validated BEFORE that decision, so
+    // an invalid new Report never discards the active Report.
     const prepared = prepareReport();
 
     if (!prepared.ok) {
@@ -809,9 +806,13 @@
       return;
     }
 
-    // A Report document is currently active: block generation.
+    // A Report document is currently active. Unlike the old blocking rule, the
+    // panel stays usable while a Report is active — the action becomes
+    // "Generate New Report" (a fresh virtual Report from the current config).
     const reportActive =
-      typeof adapters.canGenerateReport === 'function' && !adapters.canGenerateReport();
+      typeof adapters.canReconcileDrawioReport === 'function'
+        ? Boolean(adapters.canReconcileDrawioReport())
+        : false;
 
     const wsState = workspaceState || getCurrentWorkspaceState();
     const workspaceReady = Boolean(wsState && wsState.ready === true);
@@ -824,7 +825,6 @@
     const enabledCount = (temporaryConfig.sections || []).filter((s) => s.enabled).length;
 
     const valid =
-      !reportActive &&
       rangeResult.ok === true &&
       workspaceReady &&
       enabledCount > 0 &&
@@ -832,16 +832,17 @@
 
     if (generate) {
       generate.disabled = !valid;
+      generate.textContent = reportActive ? 'Generate New Report' : 'Generate Report';
       generate.title = reportActive
-        ? 'Return to the workspace before generating another Report.'
+        ? valid
+          ? 'Create a new Report from the current configuration.'
+          : 'Configure a valid range, scope, and at least one section'
         : valid
           ? ''
           : 'Configure a valid range, scope, and at least one section';
     }
 
-    if (reportActive) {
-      safeStatus('Return to the workspace before generating another Report.', 'error');
-    } else if (!workspaceReady) {
+    if (!workspaceReady) {
       safeStatus('Open a workspace to generate a Report.');
     } else if (!rangeResult.ok) {
       safeStatus(rangeResult.message || 'Invalid date range.', 'error');

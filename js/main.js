@@ -3850,7 +3850,15 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
   const blob = await file.handle.getFile();
   const text = await blob.text();
 
-  if (!globalThis.MME_APP?.confirmDiscardIfDirty?.()) {
+  // No duplicate decision for a Report transition: guardUnsavedReportBeforePhysicalOpen
+  // above already resolved Save / Discard / Cancel for an unsaved virtual Report and
+  // returned action 'saved' or 'discarded'. Only run the generic dirty-document guard
+  // when no Report decision was made (not-report), so the same transition never asks
+  // the dirty question twice.
+  if (
+    (!guard ? true : guard.action === 'not-report') &&
+    !globalThis.MME_APP?.confirmDiscardIfDirty?.()
+  ) {
     return null;
   }
 
@@ -4564,6 +4572,67 @@ if (!window.__mmeDrawioReportPanelReadyBound) {
   window.__mmeDrawioReportPanelReadyBound = true;
 }
 
+// ACT: One coordinated Save / Discard / Cancel decision when creating a new
+// Report while an existing Report is active (Generate New Report).
+// Returns:
+//   { ok: true,  action: 'saved' | 'discarded' }  after the old Report is cleared
+//   { ok: true,  action: 'not-report' }            no active Report
+//   { ok: false, cancelled: true,  reason: 'report-navigation-cancelled' }
+//   { ok: false, cancelled: false, reason: 'report-save-failed' }
+// A clean active Report (no dirty edits) proceeds directly without a prompt.
+// On proceed it clears the previous Report identity and its Draw.io session so
+// reconciliation from the old Report never leaks into the new one. This helper
+// never opens the new Report nor mutates the new configuration.
+async function resolveActiveReportForNewReport() {
+  const session = __virtualReportSession;
+  if (!session || session.kind !== 'report') {
+    return { ok: true, action: 'not-report' };
+  }
+
+  // Clean Report: no lifecycle decision needed — clear it and proceed.
+  if (!dirty) {
+    __virtualReportSession = null;
+    try {
+      globalThis.MME_DRAWIO_REPORT_PANEL?.resetSession?.('navigation');
+    } catch {}
+    return { ok: true, action: 'discarded' };
+  }
+
+  const decision = resolveSaveDiscardCancelDecision({
+    saveMessage: 'The current Report has not been saved.\n\nSave before creating a new Report?',
+    discardMessage: 'Discard the current Report and create a new one?',
+  });
+
+  if (decision.action === 'cancel') {
+    log?.('Report: new-generation cancelled — current Report unchanged');
+    return { ok: false, cancelled: true, reason: 'report-navigation-cancelled' };
+  }
+
+  if (decision.action === 'save') {
+    const saveResult = await saveSmart();
+    if (!saveResult || saveResult.ok !== true) {
+      log?.(`Report: new-generation save did not succeed (${saveResult?.reason || 'unknown'})`);
+      return { ok: false, cancelled: false, reason: 'report-save-failed' };
+    }
+  } else if (decision.action === 'discard') {
+    try {
+      clearDraft(currentFileName);
+    } catch (e) {
+      log?.(`Report: new-generation draft clear failed: ${e?.message || e}`);
+    }
+  }
+
+  // Clear the previous Report identity + its Draw.io session.
+  if (__virtualReportSession && __virtualReportSession.kind === 'report') {
+    __virtualReportSession = null;
+    try {
+      globalThis.MME_DRAWIO_REPORT_PANEL?.resetSession?.('navigation');
+    } catch {}
+  }
+
+  return { ok: true, action: decision.action === 'save' ? 'saved' : 'discarded' };
+}
+
 async function openVirtualReport(preparedResult) {
   if (!preparedResult || typeof preparedResult !== 'object') {
     showToast?.('Report preparation failed: invalid result', 'error', 3000);
@@ -4580,17 +4649,26 @@ async function openVirtualReport(preparedResult) {
     return { ok: false, reason: 'empty-markdown', error: 'Report preparation failed: empty markdown' };
   }
 
-  // 0. Defensive guard: a Report document is already active.
-  //    Do not capture the current Report, do not replace editor content,
-  //    do not clear handles or Task baseline.
+  // 0. A Report is already active — this is now "Generate New Report". Run the
+  //    coordinated Save / Discard / Cancel decision for the CURRENT Report, then
+  //    proceed to replace it only if the user approves. The new configuration is
+  //    validated and prepared by the panel (prepareReport) BEFORE this point, so
+  //    an invalid new config never discards the active Report.
   if (__virtualReportSession && __virtualReportSession.kind === 'report') {
-    log?.('Report: generation blocked reason=report-already-active');
-    showToast?.('Return to the workspace before generating another Report.', 'warn', 3000);
-    return {
-      ok: false,
-      reason: 'report-already-active',
-      error: 'Return to the workspace before generating another Report.',
-    };
+    const decision = await resolveActiveReportForNewReport();
+    if (!decision || decision.ok !== true) {
+      log?.(
+        `Report: new-generation blocked reason=${decision?.reason || 'report-guard'} cancelled=${Boolean(decision?.cancelled)}`
+      );
+      showToast?.('Report generation canceled — current Report unchanged.', 'warn', 3000);
+      return {
+        ok: false,
+        cancelled: decision?.cancelled === true,
+        reason: decision?.reason || 'report-already-active',
+        error: 'The current Report was not changed.',
+      };
+    }
+    log?.(`Report: prior Report resolved with action=${decision.action}; creating new virtual Report`);
   }
 
   // 1. Dirty-source decision using resolveSaveDiscardCancelDecision().
