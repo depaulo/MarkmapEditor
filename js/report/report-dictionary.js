@@ -6,7 +6,7 @@
   const SCHEMA_VERSION = 'mme-report-dictionary-v1';
 
   const DEFAULT_SECTION_ORDER = Object.freeze([
-    { id: 'summary', label: 'Summary and Highlights', enabled: true },
+    { id: 'summary', label: 'Summary & Highlights', enabled: true },
     { id: 'completed-tasks', label: 'Completed Tasks', enabled: true },
     { id: 'project-forecast', label: 'Project Forecast', enabled: true },
     { id: 'forecast-totals', label: 'Forecast Totals', enabled: true },
@@ -124,50 +124,190 @@
     if (!Array.isArray(pairs)) {
       // Pre-scan: extract {{field name}}: tokenized lines BEFORE parser dispatch.
       // This is independent of WORKSPACE_PARSER availability.
+      //
+      // Two accepted field forms:
+      //   INLINE:    {{field}}: value on one line (blank value allowed)
+      //   MULTILINE: {{field}}: with no non-whitespace value after the colon
+      //              opens a block that ends ONLY at the exact matching
+      //              {{/field}} token. Blank lines, emphasis, and flat lists
+      //              inside the block are preserved as the field value.
+      // Any other non-empty line is text outside a field and is reported as
+      // a blocking diagnostic (no entered text may disappear silently).
       const lines = String(reportNotes || '').split(/\r?\n/);
       const nonBraceLines = [];
+      const normalizeKeyInner = (s) =>
+        String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const NOTES_FRIENDLY_KEY_RE = /^[A-Za-z][A-Za-z0-9 _-]*\s*:/;
+      const NOTES_CLOSE_RE = /^\{\{\s*\/\s*([\s\S]*?)\s*\}\}$/;
+      const NOTES_OPEN_RE = /^\{\{\s*([\s\S]*?)\s*\}\}\s*:\s*(.*)$/;
 
-      for (const line of lines) {
-        const t = line.trim();
-        if (!t || /^#{1,6}\s/.test(t)) continue;
+      let lineIdx = 0;
+      while (lineIdx < lines.length) {
+        const raw = lines[lineIdx];
+        lineIdx += 1;
+        const t = raw.trim();
+        if (!t) continue;
+
+        // Closing marker while not inside a block: stray close.
+        const strayClose = t.match(NOTES_CLOSE_RE);
+        if (strayClose) {
+          const closeKey = normalizeKeyInner(strayClose[1]);
+          diagnostics.push({
+            code: 'notes-stray-close',
+            message: `Report Notes has the closing tag {{/${closeKey}}} without a matching opening.`,
+          });
+          continue;
+        }
 
         // Handle {{field name}}: tokenized format
-        const braceMatch = t.match(/^\{\{\s*([\s\S]*?)\s*\}\}\s*:\s*(.*)$/);
+        const braceMatch = t.match(NOTES_OPEN_RE);
         if (braceMatch) {
-          const inner = String(braceMatch[1] || '').trim();
-          // Normalize the inner content directly:
-          // lowercase, trim whitespace, collapse repeated internal spaces.
-          // (normalizeBraceToken expects the full {{...}} form, not the bare inner text.)
-          const nk = inner.toLowerCase().replace(/\s+/g, ' ').trim();
+          const nk = normalizeKeyInner(braceMatch[1]);
           if (!nk) {
             diagnostics.push({
               code: 'note-invalid-key',
-              message: 'Invalid report note key: ' + inner,
+              message: 'Invalid report note key: ' + String(braceMatch[1] || '').trim(),
             });
             continue;
           }
+          const inlineValue = String(braceMatch[2] || '').trim();
+          if (inlineValue) {
+            notes.push({
+              key: nk,
+              token: '{{' + nk + '}}',
+              label: getNoteLabel(nk),
+              value: inlineValue,
+              order,
+            });
+            order += 1;
+            continue;
+          }
+
+          // MULTILINE block: ends only at the exact matching {{/nk}} token.
+          // Disambiguation for the blank-field scaffold: when the next
+          // non-blank line is another field marker (opening or closing),
+          // this "{{field}}:" line is a BLANK inline field, not a block —
+          // there is no content to assign, so nothing is implicitly
+          // terminated. Only actual content before the close forms a block,
+          // and a content block never ends at another field marker.
+          const label = getNoteLabel(nk);
+          let peek = lineIdx;
+          let nextNonBlank = '';
+          while (peek < lines.length) {
+            const probe = lines[peek].trim();
+            if (probe) { nextNonBlank = probe; break; }
+            peek += 1;
+          }
+          const nextIsFieldMarker =
+            !nextNonBlank ||
+            NOTES_CLOSE_RE.test(nextNonBlank) ||
+            NOTES_OPEN_RE.test(nextNonBlank);
+          // A "{{field}}:" line followed by its own matching close with no
+          // content between is a BLANK block field (a deliberately empty
+          // scaffold), not an error — the closing tag is consumed as part of
+          // the blank field, ahead of the "next is a field marker" branch.
+          if (nextIsFieldMarker && nextNonBlank && NOTES_CLOSE_RE.test(nextNonBlank)) {
+            const closePeek = normalizeKeyInner(nextNonBlank.match(NOTES_CLOSE_RE)[1]);
+            if (closePeek === nk) {
+              lineIdx = peek + 1;
+              notes.push({
+                key: nk,
+                token: '{{' + nk + '}}',
+                label,
+                value: '',
+                order,
+              });
+              order += 1;
+              continue;
+            }
+          }
+          if (nextIsFieldMarker) {
+            notes.push({
+              key: nk,
+              token: '{{' + nk + '}}',
+              label,
+              value: '',
+              order,
+            });
+            order += 1;
+            continue;
+          }
+
+          const blockLines = [];
+          let closed = false;
+          while (lineIdx < lines.length) {
+            const blockRaw = lines[lineIdx];
+            lineIdx += 1;
+            const bt = blockRaw.trim();
+            if (!bt) {
+              if (blockLines.length) blockLines.push(blockRaw);
+              continue;
+            }
+            const closeMatch = bt.match(NOTES_CLOSE_RE);
+            if (closeMatch) {
+              const closeKey = normalizeKeyInner(closeMatch[1]);
+              if (closeKey === nk) {
+                closed = true;
+                break;
+              }
+              diagnostics.push({
+                code: 'notes-mismatched-close',
+                message: `Expected the closing tag {{/${nk}}}, but found {{/${closeKey}}}.`,
+              });
+              continue;
+            }
+            const nestedOpen = bt.match(NOTES_OPEN_RE);
+            if (nestedOpen) {
+              const nestedKey = normalizeKeyInner(nestedOpen[1]);
+              diagnostics.push({
+                code: 'notes-nested-field',
+                message: `Expected the closing tag {{/${nk}}} before starting the field {{${nestedKey}}}.`,
+              });
+              continue;
+            }
+            blockLines.push(blockRaw);
+          }
+          if (!closed) {
+            diagnostics.push({
+              code: 'notes-unclosed-block',
+              message: `${label} is missing its closing tag {{/${nk}}}.`,
+            });
+          }
+          const blockValue = blockLines
+            .join('\n')
+            .replace(/^\s*\n/, '')
+            .replace(/\s+$/, '');
           notes.push({
             key: nk,
             token: '{{' + nk + '}}',
-            label: getNoteLabel(nk),
-            value: (braceMatch[2] || '').trim(),
+            label,
+            value: blockValue,
             order,
           });
           order += 1;
           continue;
         }
 
-        // Friendly format: keep for parser or regex fallback.
-        nonBraceLines.push(t);
+        // Friendly one-line "Key: value" fields remain accepted.
+        // Any other non-empty line is text outside a field: report it as a
+        // blocking diagnostic instead of passing it on for silent dropping.
+        if (NOTES_FRIENDLY_KEY_RE.test(t)) {
+          nonBraceLines.push(t);
+        } else {
+          diagnostics.push({
+            code: 'notes-text-outside-field',
+            message: `Report Notes contains text outside a field: "${t.length > 80 ? t.slice(0, 80) + '…' : t}"`,
+          });
+        }
       }
 
       const parser =
         (typeof globalThis !== 'undefined' && globalThis.WORKSPACE_PARSER?.parseDictionaryPairs) ||
         (typeof window !== 'undefined' && window.WORKSPACE_PARSER?.parseDictionaryPairs) ||
         null;
-        if (parser) {
-          try {
-            pairs = parser(nonBraceLines.join('\n'));
+      if (parser) {
+        try {
+          pairs = parser(nonBraceLines.join('\n'));
         } catch (e) {
           diagnostics.push({
             code: 'notes-parse-failed',
@@ -209,6 +349,32 @@
       order += 1;
     }
     return { notes, diagnostics };
+  }
+
+  // ---------------------------------------------------------------------
+  // Inline Report Notes contract validation.
+  //
+  // Report Notes is a structured pre-generation input. Two accepted field
+  // forms exist — INLINE "{{field}}: value" and MULTILINE "{{field}}:" …
+  // "{{/field}}" blocks — plus legacy friendly "Key: value" one-line
+  // fields. Everything else is invalid and BLOCKS generation:
+  //   - missing block close;
+  //   - mismatched block close;
+  //   - a nested field opened before the current block closes;
+  //   - a stray closing tag without a matching opening;
+  //   - non-empty text outside any field (no silent data loss).
+  // Blank/whitespace lines outside fields are accepted. Duplicate fields
+  // follow the current duplicate policy (entries kept; later value wins at
+  // field build). Pure reader: never mutates its input. The generator
+  // renders field values under normal Markdown headings — Notes markers
+  // never appear in the generated Report.
+  // ---------------------------------------------------------------------
+  function validateReportNotes(reportNotes) {
+    const result = parseReportNotes(reportNotes);
+    return {
+      ok: result.diagnostics.length === 0,
+      diagnostics: result.diagnostics.slice(),
+    };
   }
 
   function projectTask(t) {
@@ -609,7 +775,7 @@
     check('notes count', notesResult.notes.length, 3);
     check('notes title key', notesResult.notes[0]?.key, 'report.title');
     check('notes summary key', notesResult.notes[1]?.key, 'report.summary');
-    check('notes malformed diag', notesResult.diagnostics.some((d) => d.code === 'note-malformed'), true);
+    check('notes malformed diag', notesResult.diagnostics.some((d) => d.code === 'notes-text-outside-field' && d.message.includes('Bad Line Here')), true);
 
     // 20-23. Sections
     const secResult = normalizeSectionOrder([
@@ -685,6 +851,104 @@
     const genAfter = JSON.stringify(genDict);
     check('generator does not mutate dictionary', genAfter, genBefore);
 
+    // -----------------------------------------------------------------
+    // Report Notes structured contract (inline + multiline blocks) and
+    // section label alignment.
+    // -----------------------------------------------------------------
+    const NOTES_FIXTURE_INPUT = [
+      '{{title}}: Weekly Business Report',
+      '{{summary}}:',
+      '**Brazil remains the priority market.**',
+      '',
+      '- Supplier qualification',
+      '- Installation planning',
+      '{{/summary}}',
+      '{{highlights}}: Supplier qualification progressed.',
+      '{{risks}}: No major risks recorded.',
+      '{{next steps}}:',
+      '1. Confirm installation pricing',
+      '2. Validate the delivery schedule',
+      '{{/next steps}}',
+    ].join('\n');
+    const notesBefore = JSON.stringify(NOTES_FIXTURE_INPUT);
+
+    // N1. inline standard fields consumed; valid notes have no diagnostics
+    const nValid = parseReportNotes(NOTES_FIXTURE_INPUT);
+    check('N1 inline highlights consumed', nValid.notes.some((n) => n.key === 'highlights' && n.value === 'Supplier qualification progressed.'), true);
+    check('N1b inline risks consumed', nValid.notes.some((n) => n.key === 'risks' && n.value === 'No major risks recorded.'), true);
+    check('N1c no structural diagnostics on valid notes', nValid.diagnostics.length, 0);
+
+    // N2. multiline block value preserved (emphasis, blank line, list)
+    const nSummary = nValid.notes.find((n) => n.key === 'summary');
+    check('N2 multiline summary value', nSummary?.value, '**Brazil remains the priority market.**\n\n- Supplier qualification\n- Installation planning');
+
+    // N3. ordered-list block value preserved
+    const nNext = nValid.notes.find((n) => n.key === 'next steps');
+    check('N3 multiline next steps value', nNext?.value, '1. Confirm installation pricing\n2. Validate the delivery schedule');
+
+    // N4. inline + multiline coexist; blank block value stays blank
+    const nBlank = parseReportNotes('{{summary}}:\n{{risks}}: something');
+    check('N4 blank block value stays blank', nBlank.notes.some((n) => n.key === 'summary' && n.value === ''), true);
+
+    // N5. structural errors block with field-identifying messages
+    const nMissing = validateReportNotes('{{summary}}:\nBrazil remains the priority market.');
+    check('N5 missing close blocks', nMissing.ok, false);
+    check('N5b missing close message', nMissing.diagnostics.some((d) => d.code === 'notes-unclosed-block' && d.message.includes('{{/summary}}')), true);
+
+    const nMismatch = validateReportNotes('{{highlights}}:\nText.\n{{/risks}}');
+    check('N6 mismatched close blocks', nMismatch.diagnostics.some((d) => d.code === 'notes-mismatched-close' && d.message.includes('Expected the closing tag {{/highlights}}') && d.message.includes('{{/risks}}')), true);
+
+    const nNested = validateReportNotes('{{summary}}:\nSome text\n{{risks}}: oops\n{{/summary}}');
+    check('N7 nested field blocks', nNested.diagnostics.some((d) => d.code === 'notes-nested-field' && d.message.includes('{{/summary}}') && d.message.includes('{{risks}}')), true);
+
+    const nOutside = validateReportNotes('{{risks}}: fine\nSome stray text.\n{{next steps}}: ok');
+    check('N8 text outside field blocks', nOutside.diagnostics.some((d) => d.code === 'notes-text-outside-field' && d.message.includes('Some stray text.')), true);
+
+    const nStray = validateReportNotes('{{risks}}: ok\n{{/summary}}');
+    check('N9 stray close blocks', nStray.diagnostics.some((d) => d.code === 'notes-stray-close' && d.message.includes('{{/summary}}')), true);
+
+    // N10. whitespace outside fields is accepted
+    const nWs = validateReportNotes('{{risks}}: ok\n\n   \n\n{{next steps}}: ok\n');
+    check('N10 whitespace outside fields accepted', nWs.ok, true);
+
+    // N11. mismatched close inside a block: block still ends at exact token
+    const nMismatchThenClose = parseReportNotes('{{summary}}:\nA\n{{/risks}}\nB\n{{/summary}}');
+    check('N11 block ends at exact matching token', nMismatchThenClose.notes.find((n) => n.key === 'summary')?.value, 'A\nB');
+
+
+    // N12. duplicate policy: entries kept, later value wins at field build
+    const nDupInline = parseReportNotes('{{summary}}: first\n{{summary}}: second');
+    check('N12 duplicate inline entries kept', nDupInline.notes.filter((n) => n.key === 'summary').length, 2);
+    const nDupBlock = parseReportNotes('{{summary}}:\nfirst\n{{/summary}}\n{{summary}}:\nsecond\n{{/summary}}');
+    check('N12b duplicate block entries kept', nDupBlock.notes.filter((n) => n.key === 'summary').length, 2);
+    const nDupMixed = parseReportNotes('{{summary}}: inline\n{{summary}}:\nblocked\n{{/summary}}');
+    check('N12c inline+block duplicates kept', nDupMixed.notes.filter((n) => n.key === 'summary').length, 2);
+
+    // N13. custom (unknown) fields are accepted field entries
+    const nCustom = parseReportNotes('{{customer message}}:\nThe customer requested:\n\n- revised pricing\n{{/customer message}}');
+    check('N13 custom multiline field consumed', nCustom.notes.some((n) => n.key === 'customer message' && n.value === 'The customer requested:\n\n- revised pricing'), true);
+    check('N13b custom field has no diagnostics', nCustom.diagnostics.length, 0);
+
+    // N14. Notes input remains unmodified
+    check('N14 notes input unmutated', JSON.stringify(NOTES_FIXTURE_INPUT), notesBefore);
+
+    // N15. valid structured notes generate an ok dictionary carrying values
+    const dictValid = buildReportDictionary({
+      indexState: idx,
+      startDate: '2026-08-03',
+      endDate: '2026-08-09',
+      sections: [{ id: 'summary', enabled: true }],
+      projectMode: 'all',
+      reportNotes: NOTES_FIXTURE_INPUT,
+    });
+    check('N15 valid structured notes generate ok dictionary', dictValid?.ok, true);
+    check('N15b dictionary carries the multiline summary', (dictValid?.notes || []).find((n) => n.key === 'summary')?.value, nSummary?.value);
+
+    // N16. summary section label owns both generated headings
+    check('N16 label is Summary & Highlights', DEFAULT_SECTION_ORDER[0]?.label, 'Summary & Highlights');
+    const orderedLabel = normalizeSectionOrder([{ id: 'summary', enabled: true }]).sections?.[0]?.label;
+    check('N16b normalized label preserved', orderedLabel, 'Summary & Highlights');
+
     const failed = results.filter((r) => !r.pass);
     return { ok: failed.length === 0, total: results.length, passed: results.length - failed.length, failed: failed.length, cases: results };
   }
@@ -695,6 +959,7 @@
     normalizeReportKey,
     normalizeReportRange,
     parseReportNotes,
+    validateReportNotes,
     selectCompletedTasks,
     selectProjects,
     calculateProjectTotals,

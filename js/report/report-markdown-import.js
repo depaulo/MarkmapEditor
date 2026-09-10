@@ -151,15 +151,51 @@
     // \s* and [^{}] from spanning newlines, which otherwise corrupts values
     // when a blank token line precedes another token line (e.g. {{region}}:
     // followed by {{ali summary}}: value).
+    //
+    // Multiline extension: inside a "## Template Fields" section, a token
+    // line with NO value after the colon opens a multiline value that runs
+    // until the next token line, the next "## " heading, or the end of the
+    // body. Blank lines and Markdown inside the captured block are preserved
+    // (leading/trailing blanks trimmed). Outside Template Fields the
+    // single-line contract is unchanged.
     const tokenRe = /^\s*\{\{\s*([^{}\r\n]+?)\s*\}\}\s*:\s*(.*)$/;
+    const tokenLineRe = /^\s*\{\{\s*[^{}\r\n]+?\s*\}\}\s*:/;
     const lines = source.split(/\r?\n/);
+    let currentSectionId = '';
+    let idx = 0;
 
-    for (const line of lines) {
+    while (idx < lines.length) {
+      const line = lines[idx];
+      idx += 1;
+
+      const headingMatch = line.match(/^##\s+(.+?)\s*$/);
+      if (headingMatch) {
+        currentSectionId = normalizeFieldName(headingMatch[1]);
+        continue;
+      }
+
       const match = tokenRe.exec(line);
       if (!match) continue;
       const key = normalizeFieldName(match[1]);
       if (!key) continue;
-      const value = String(match[2] == null ? '' : match[2]).trim();
+      let value = String(match[2] == null ? '' : match[2]).trim();
+
+      if (!value && currentSectionId === 'template fields') {
+        const blockLines = [];
+        while (idx < lines.length) {
+          const blockLine = lines[idx];
+          const blockTrimmed = blockLine.trim();
+          if (/^##\s+/.test(blockTrimmed)) break;
+          if (tokenLineRe.test(blockLine)) break;
+          blockLines.push(blockLine);
+          idx += 1;
+        }
+        value = blockLines
+          .join('\n')
+          .replace(/^\s*\n/, '')
+          .replace(/\s+$/, '');
+      }
+
       if (Object.prototype.hasOwnProperty.call(fields, key)) {
         diagnostics.push({
           level: 'warning',
@@ -459,6 +495,56 @@
     // --- 30. ordinary external Markdown is not a Report ---
     check('30 ordinary markdown not classified', isReportMarkdown('text without any report frontmatter'), false);
     check('30b external doc rejected', importReviewedReport('# Medical Journal\n\nno frontmatter').ok, false);
+
+    // --- 31. multiline custom Template Fields entries import round-trip ---
+    // Mirrors the generator's canonical output: multiline custom fields are
+    // emitted as "{{field}}:" followed by preserved Markdown content.
+    const genCanonical = [
+      '---',
+      'type: report',
+      'period_start: 2026-08-03',
+      'period_end: 2026-08-09',
+      '---',
+      '',
+      '# Weekly Business Report',
+      '',
+      '## Summary',
+      '',
+      '**Brazil remains the priority market.**',
+      '',
+      '- Supplier qualification',
+      '- Installation planning',
+      '',
+      '## Template Fields',
+      '',
+      '{{customer message}}:',
+      'The customer requested:',
+      '',
+      '- revised pricing;',
+      '- an updated schedule.',
+      '',
+      '{{account ref}}: ACME-42',
+    ].join('\n') + '\n';
+    const genImport = importReviewedReport(genCanonical);
+
+    // 31a. standard section read as the summary field (multiline preserved)
+    check('31 standard section imported', genImport.fields.summary?.value, '**Brazil remains the priority market.**\n\n- Supplier qualification\n- Installation planning');
+    // 31b. multiline custom field extracted from Template Fields
+    check('31b multiline custom field imported', genImport.fields['customer message']?.value, 'The customer requested:\n\n- revised pricing;\n- an updated schedule.');
+    // 31c. inline custom field inside Template Fields
+    check('31c inline custom field imported', genImport.fields['account ref']?.value, 'ACME-42');
+    // 31d. custom field identifiers available in field order
+    check('31d custom fields in field order', genImport.fieldOrder.includes('customer message') && genImport.fieldOrder.includes('account ref'), true);
+
+    // --- 32. frontmatter never becomes reconciliation fields ---
+    check('32 no frontmatter-derived fields', !genImport.fieldOrder.includes('type') && !genImport.fieldOrder.includes('period_start') && !genImport.fieldOrder.includes('project_scope'), true);
+
+    // --- 33. multiline capture is scoped to Template Fields only ---
+    // A blank token line OUTSIDE Template Fields keeps the single-line
+    // contract (no speculative content capture).
+    const outsideMd = buildRealReportFixture() + '\n\n## Loose\n\n{{loose}}:\nCaptured content that must stay in the section.\n';
+    const outsideImport = importReviewedReport(outsideMd);
+    check('33 blank token outside Template Fields stays empty', outsideImport.fields.loose?.value, '');
 
     const failed = cases.filter((item) => !item.pass);
     return {

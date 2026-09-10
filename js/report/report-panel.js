@@ -94,7 +94,7 @@
     if (ordered.length === 0) {
       // Fallback minimal catalog — only used if ACT E cannot be reached.
       ordered = [
-        { id: 'summary', label: 'Summary and Highlights', enabled: true, order: 0 },
+        { id: 'summary', label: 'Summary & Highlights', enabled: true, order: 0 },
         { id: 'completed-tasks', label: 'Completed Tasks', enabled: true, order: 1 },
         { id: 'project-forecast', label: 'Project Forecast', enabled: true, order: 2 },
         { id: 'forecast-totals', label: 'Forecast Totals', enabled: true, order: 3 },
@@ -627,6 +627,22 @@
       diagnostics.push({ code: 'no-enabled-sections', message: 'Enable at least one Report section.' });
     }
 
+    // Inline Report Notes contract: Notes is a structured pre-generation
+    // input supporting INLINE "{{field}}: value" and MULTILINE
+    // "{{field}}:" … "{{/field}}" blocks. Structural errors (missing or
+    // mismatched close, nested field, stray close, text outside a field)
+    // BLOCK generation here — no entered text may be lost silently. The
+    // generated Report renders field values under normal Markdown headings;
+    // custom fields become "## Template Fields" entries.
+    if (typeof dict.validateReportNotes === 'function') {
+      const notesValidation = dict.validateReportNotes(cfg.reportNotes || '');
+      if (!notesValidation.ok) {
+        for (const d of notesValidation.diagnostics) {
+          diagnostics.push({ code: d.code, message: d.message });
+        }
+      }
+    }
+
     const wsState = getCurrentWorkspaceState();
     if (!wsState || wsState.ready !== true) {
       diagnostics.push({ code: 'workspace-not-ready', message: 'Open a workspace to generate a Report.' });
@@ -890,10 +906,10 @@
 
   function escapeHtml(text) {
     return String(text || '')
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>')
-      .replace(/"/g, '"');
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   // ---- Developer validator / fixtures (dormant) ----
@@ -959,7 +975,40 @@
     // 18. malformed note diagnostics delegated to dict (dict.parseReportNotes if available)
     if (dict && typeof dict.parseReportNotes === 'function') {
       const noteResult = dict.parseReportNotes('Title: Weekly Report\nBad Line Here');
-      check('malformed note diagnostic surfaced', noteResult.diagnostics.some((d) => d.code === 'note-malformed'), true);
+      check('note structural diagnostic surfaced', noteResult.diagnostics.some((d) => d.code === 'notes-text-outside-field'), true);
+    }
+
+    // 18b. Report Notes structured contract: section label + Notes gate
+    if (dict && typeof dict.validateReportNotes === 'function') {
+      // One control owns both generated headings; label must read exactly
+      // "Summary & Highlights" (single section id 'summary' -> both headings).
+      const ordered = dict.normalizeSectionOrder([]).sections || [];
+      check('S&H label exact', ordered[0]?.label, 'Summary & Highlights');
+      check('S&H single section id', ordered[0]?.id, 'summary');
+
+      // Valid structured Notes (inline + multiline) produce no diagnostics.
+      const validNotesResult = validateWithState({ ready: true });
+      check(
+        'notes gate accepts valid structured notes',
+        (validNotesResult.diagnostics || []).some((d) => String(d.code || '').startsWith('notes-')),
+        false
+      );
+
+      // A "{{field}}:" line with content but no closing marker is an
+      // unclosed content block: blocked.
+      const originalNotes = temporaryConfig.reportNotes;
+      temporaryConfig.reportNotes = '{{summary}}:\nBrazil remains the priority market.';
+      const contResult = validateWithState({ ready: true });
+      temporaryConfig.reportNotes = originalNotes;
+      const contDiagnostics = contResult.diagnostics || [];
+      const unclosed = contDiagnostics.find((d) => d.code === 'notes-unclosed-block');
+      check('notes gate blocks unclosed content block', Boolean(unclosed), true);
+      check(
+        'notes gate message identifies the field',
+        Boolean(unclosed && String(unclosed.message || '').includes('{{/summary}}')),
+        true
+      );
+      check('notes gate blocks generation', contResult.ok, false);
     }
 
     // 19. workspace not ready

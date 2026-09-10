@@ -1103,8 +1103,16 @@
           : 'generation begin mode=complete'
       );
       // ---- Population via the single H2 entry point ----
+      // formatMarkdownForHtmlCells: the template cell owns eligibility — an
+      // mxCell whose style contains the exact token html=1 receives a safe
+      // Markdown-derived HTML fragment when the field value has a supported
+      // structure; every other occurrence keeps the existing plain path.
       const templateXmlBefore = String(session.templateXml);
-      const populated = reconciler.populateTemplate(templateXmlBefore, populationFields);
+      const populated = reconciler.populateTemplate(
+        templateXmlBefore,
+        populationFields,
+        { formatMarkdownForHtmlCells: true }
+      );
 
       if (!populated || populated.ok !== true) {
         setSaveStatus('The Draw.io output could not be generated from this template.', 'error');

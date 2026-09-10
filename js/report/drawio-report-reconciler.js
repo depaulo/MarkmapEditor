@@ -241,6 +241,19 @@
     const replaceBlank = options.replaceBlank === true;
     let output = source;
 
+    // Markdown-in-HTML-cells path — occurrence-aware, html=1 formatted cells.
+    // Enabled by the explicit true option (production passes it). The plain
+    // default (no option) stays intact for the public API.
+    if (options.formatMarkdownForHtmlCells === true) {
+      output = populateWithMarkdownHtml(source, reconciliation.fields, replaceBlank);
+      return {
+        ok: true,
+        xml: output,
+        reconciliation,
+        diagnostics: reconciliation.diagnostics.slice(),
+      };
+    }
+
     for (const placeholder of reconciliation.placeholders) {
       const field = reconciliation.fields[placeholder.key];
       if (!field) continue;
@@ -261,6 +274,235 @@
 
   function escapeRegExp(value) {
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // =====================================================================
+  // ACT B — Pure restricted Markdown value → Draw.io HTML fragment.
+  // Emits only a small safe subset (div, br, strong, em, ul, ol, li), never
+  // attributes, never p/b/i/code/a/style/class/id. Any unsupported block
+  // construct, raw HTML, or ambiguity causes whole-field plain fallback.
+  // =====================================================================
+  function escapeHtmlInlineText(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  }
+
+  // Returns an unsupported reason (string) or null when the whole field may
+  // proceed to formatting. Detects any construct outside the approved subset.
+  function detectFragmentUnsupported(value) {
+    const s = String(value == null ? '' : value);
+    if (!s.trim()) return null;
+    for (const line of s.split(/\r?\n/)) {
+      if (/<\/?[a-zA-Z][^>]*>/.test(line)) return 'raw-html';
+      if (line.includes('\u0060')) return 'code';
+      if (/^[ \t]{0,3}#{1,6}\s/.test(line)) return 'heading';
+      if (/^[ \t]*>[ \t]/.test(line)) return 'blockquote';
+      if (/^[ \t]*[-*]\s+\[[ xX]\]/.test(line)) return 'task-checkbox';
+      if (line.includes('|')) return 'table';
+      if (/!\[[^\]]*]\([^)]*\)/.test(line)) return 'image';
+      if (/\[[^\]]+\]\([^)]*\)/.test(line)) return 'link';
+      if (/^[ \t]{2,}\S/.test(line)) return 'indented-or-nested';
+      if (/\\[*_#]/.test(line)) return 'escaped-marker';
+    }
+    return null;
+  }
+
+  // Whether the value contains at least one supported formatting structure.
+  function fragmentHasFormatting(value) {
+    const s = String(value == null ? '' : value);
+    if (/\n\s*\n/.test(s)) return true; // multiple paragraphs
+    if (/[ \t]{2,}\n/.test(s)) return true; // hard break
+    if (/\*\*[^*]+\*\*/.test(s)) return true; // bold
+    if (/(^|[^\w*])\*[^*]+?\*(?![\w*])/.test(s)) return true; // asterisk-italic
+    if (/(^|[^\w_])_[^_]+_(?![\w_])/.test(s)) return true; // underscore-italic
+    if (/^[ \t]*([-+]|\d{1,3}\.)[ \t]+\S/m.test(s)) return true; // list
+    return false;
+  }
+
+  // Conservative inline emphasis renderer -> produces literal tags + raw text.
+  function renderInline(value) {
+    let t = String(value == null ? '' : value);
+    t = t.replace(/\*\*\*[^*]+\*\*\*/g, (m) => '<strong><em>' + m.slice(3, m.length - 3) + '</em></strong>');
+    t = t.replace(/\*\*[^*]+\*\*/g, (m) => '<strong>' + m.slice(2, m.length - 2) + '</strong>');
+    t = t.replace(/(^|[^\w*])\*([^*]+)\*(?![\w*])/g, '$1<em>$2</em>');
+    t = t.replace(/(^|[^\w_])_([^_]+)_(?![\w_])/g, '$1<em>$2</em>');
+    return t;
+  }
+
+  // Escape only text portions of a string already containing literal tags,
+  // leaving the allowed tags themselves unescaped.
+  function escapeFragmentText(htmlWithTags) {
+    const parts = String(htmlWithTags).split(/(<[^>]+>)/);
+    return parts.map((p, i) => (i % 2 === 1 ? p : escapeHtmlInlineText(p))).join('');
+  }
+
+  function renderParagraph(lines) {
+    const parts = [];
+    for (let i = 0; i < lines.length; i += 1) {
+      const hard = /[ \t]{2,}$/.test(lines[i]);
+      const line = lines[i].replace(/[ \t]{2,}$/, '').replace(/^\s+/, '').trim();
+      parts.push(renderInline(line));
+      if (i < lines.length - 1) parts.push(hard ? '<br>' : ' ');
+    }
+    const inner = parts.join('');
+    return inner ? `<div>${inner}</div>` : '';
+  }
+
+  function emitList(lines) {
+    const first = String(lines[0] || '').trim();
+    const ordered = /^\s*\d{1,3}\.\s/.test(first);
+    const items = lines.map((line) => {
+      const m = String(line).match(/^[ \t]*([-+]|\d{1,3}\.)[ \t]+(.*)$/);
+      const content = m ? m[2] : String(line);
+      return `<li>${renderInline(String(content).trim())}</li>`;
+    }).join('');
+    return ordered ? `<ol>${items}</ol>` : `<ul>${items}</ul>`;
+  }
+
+  function isListItem(line) {
+    return /^[ \t]*([-+]|\d{1,3}\.)[ \t]+\S/.test(String(line));
+  }
+
+  function buildFragment(value) {
+    const s = String(value == null ? '' : value).replace(/\r\n/g, '\n');
+    const lines = s.split('\n');
+    const blocks = [];
+    let cur = [];
+    for (const ln of lines) {
+      if (ln.trim() === '') {
+        if (cur.length) { blocks.push(cur); cur = []; }
+      } else {
+        cur.push(ln);
+      }
+    }
+    if (cur.length) blocks.push(cur);
+
+    const frags = [];
+    for (const block of blocks) {
+      let html = '';
+      let i = 0;
+      while (i < block.length) {
+        if (isListItem(block[i])) {
+          const items = [];
+          while (i < block.length && isListItem(block[i])) { items.push(block[i]); i += 1; }
+          html += emitList(items);
+        } else {
+          const para = [];
+          while (i < block.length && !isListItem(block[i])) { para.push(block[i]); i += 1; }
+          html += renderParagraph(para);
+        }
+      }
+      frags.push(html);
+    }
+    return frags.join('');
+  }
+
+  // Public converter. Returns { ok:true, html } for formatted output, or
+  // { ok:false, reason } for plain fallback.
+  function convertMarkdownToHtmlFragment(value) {
+    const raw = String(value == null ? '' : value);
+    if (!raw.trim()) return { ok: false, reason: 'empty' };
+    const unsupported = detectFragmentUnsupported(raw);
+    if (unsupported) return { ok: false, reason: unsupported };
+    if (!fragmentHasFormatting(raw)) return { ok: false, reason: 'plain' };
+    let html;
+    try {
+      html = escapeFragmentText(buildFragment(raw));
+    } catch (e) {
+      return { ok: false, reason: 'conversion-error' };
+    }
+    if (!html || !html.trim()) return { ok: false, reason: 'empty-fragment' };
+    return { ok: true, html };
+  }
+
+  // =====================================================================
+  // Markdown-in-HTML-cells population (production path for
+  // formatMarkdownForHtmlCells: true). Scans each <mxCell ...> opening tag,
+  // reads its style for the exact `html=1` token, and replaces placeholders
+  // only inside the value attribute. Everything else stays byte-identical.
+  // A placeholder in a non-html cell or in a non-value attribute falls back
+  // to the existing plain replacement or is left untouched as appropriate.
+  // =====================================================================
+  function hasHtmlCellEligibility(style) {
+    const tokens = String(style == null ? '' : style).split(';');
+    for (const tok of tokens) {
+      const t = tok.trim();
+      if (t === 'html=1') return true;
+      if (t.startsWith('html=') && t !== 'html=1') return false;
+    }
+    return false;
+  }
+
+  // Reads attributes of an mxCell opening-tag string.
+  // Returns [{ name, content, contentStartAbs, contentEndAbs }] where the
+  // content offsets are relative to the start of the tag substring (inside
+  // the surrounding quotes).
+  function scanCellAttrs(tag) {
+    const attrs = [];
+    const attrRe = /([A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*("([^"]*)"|'([^']*)')/g;
+    let mm;
+    while ((mm = attrRe.exec(tag))) {
+      const whole = mm[0];
+      const eqIdx = whole.indexOf('=');
+      const quoteChar = whole[eqIdx + 1];
+      const content = mm[3] != null ? mm[3] : mm[4];
+      const contentStartAbs = mm.index + eqIdx + 2;
+      const contentEndAbs = mm.index + whole.length - 1;
+      attrs.push({ name: mm[1], content, contentStartAbs, contentEndAbs, quoteChar });
+    }
+    return attrs;
+  }
+
+  function replaceValueInner(inner, fields, eligible, replaceBlank) {
+    const tokenRe = /\{\{\s*([^{}]+?)\s*\}\}/g;
+    return String(inner).replace(tokenRe, (full, keyRaw) => {
+      const key = normalizeFieldName(keyRaw);
+      if (!key) return full;
+      const field = fields ? fields[key] : undefined;
+      const value = field ? String(field.value == null ? '' : field.value) : '';
+      if (!value.trim()) return replaceBlank ? '' : full;
+      if (eligible) {
+        const conv = convertMarkdownToHtmlFragment(value);
+        if (conv.ok) return escapeXmlReplacement(conv.html);
+      }
+      return escapeXmlReplacement(value);
+    });
+  }
+
+  function renderCellTag(tag, fields, replaceBlank) {
+    const attrs = scanCellAttrs(tag);
+    const styleAttr = attrs.find((a) => a.name === 'style');
+    const eligible = hasHtmlCellEligibility(styleAttr ? styleAttr.content : '');
+    let newTag = tag;
+    for (const a of attrs) {
+      if (a.name !== 'value') continue;
+      const newInner = replaceValueInner(a.content, fields, eligible, replaceBlank);
+      if (newInner !== a.content) {
+        newTag = newTag.slice(0, a.contentStartAbs) + newInner + newTag.slice(a.contentEndAbs);
+      }
+      break;
+    }
+    return newTag;
+  }
+
+  function populateWithMarkdownHtml(source, fields, replaceBlank) {
+    const tagRe = /<mxCell\b[\s\S]*?(\/>|>)/g;
+    let out = '';
+    let last = 0;
+    let m;
+    tagRe.lastIndex = 0;
+    while ((m = tagRe.exec(source))) {
+      out += source.slice(last, m.index);
+      const tagRaw = m[0];
+      out += renderCellTag(tagRaw, fields, replaceBlank);
+      last = m.index + tagRaw.length;
+    }
+    out += source.slice(last);
+    return out;
   }
 
   function buildDrawioTemplateFixture() {
@@ -533,6 +775,131 @@
     check('39d direct-root compressed detection unchanged', assessTemplateXml('<mxfile><diagram>abc123encoded</diagram></mxfile>').diagnostics.some((d) => d.code === 'template-compressed'), true);
     check('39e declaration-led assessment shape unchanged', [typeof declCompressed.ok, typeof declCompressed.compressed, Array.isArray(declCompressed.diagnostics)], ['boolean', 'boolean', true]);
 
+    // ===================================================================
+    // ACT A — Baseline contract assertions. These lock in the plain
+    // population path so the formatted html=1 path is proven to leave it
+    // byte-identical when the option is absent.
+    // ===================================================================
+    const baseAmpXml = '<mxfile><diagram><mxGraphModel><root><mxCell id="1" parent="0"/><mxCell id="2" value="{{summary}}" style="text;html=0" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>';
+    const basePlainFieldsA = { summary: { key: 'summary', token: '{{summary}}', value: 'First line\n\n**Bold second line**', source: 'section' } };
+    const basePlainPop = populateTemplate(baseAmpXml, basePlainFieldsA);
+    // With format disabled (default), a multi-paragraph emphasized value stays
+    // on the existing plain XML-escaped path.
+    check('A01 default population is plain (no format option)', basePlainPop.xml.includes('First line&#xa;&#xa;**Bold second line**'), true);
+    check('A02 default does not emit HTML div', basePlainPop.xml.includes('&lt;div&gt;'), false);
+    check('A03 default does not emit strong tag', basePlainPop.xml.includes('&lt;strong&gt;'), false);
+    check('A04 default newline is numeric entity', basePlainPop.xml.includes('&#xa;'), true);
+    const A05 = populateTemplate(baseAmpXml, basePlainFieldsA);
+    check('A05 default population deterministic', basePlainPop.xml, A05.xml);
+    check('A06 default population is byte-stable vs options omitted', populateTemplate(baseAmpXml, basePlainFieldsA).xml, basePlainPop.xml);
+
+    // Baseline: unresolved + unknown placeholders preserved regardless of html=0 style.
+    check('A08 unresolved placeholder preserved (plain default)', basePlainPop.xml.trim().endsWith('{{summary}}'), false);
+    const A09xml = '<mxfile><diagram><mxGraphModel><root><mxCell id="1" parent="0"/><mxCell id="2" value="A {{summary}} B {{ghost}}" style="html=1" vertex="1" parent="1"/></root></mxGraphModel></diagram></mxfile>';
+    const A09fields = { summary: { key: 'summary', token: '{{summary}}', value: 'val', source: 'token' } };
+    const A09pop = populateTemplate(A09xml, A09fields);
+    check('A09 default global replacement replaces summary', A09pop.xml.includes('A val B {{ghost}}'), true);
+    check('A09b default global leaves unknown ghost', A09pop.xml.includes('{{ghost}}'), true);
+
+    // Baseline: field input not mutated.
+    const A10Before = JSON.stringify(basePlainFieldsA);
+    populateTemplate(baseAmpXml, basePlainFieldsA);
+    check('A10 default field input unmutated', JSON.stringify(basePlainFieldsA), A10Before);
+
+    // Baseline: XML declaration + compression unchanged (regression lock).
+    check('A11 default declaration-led population preserved', populateTemplate(declFixture, fields).xml.startsWith('<?xml'), true);
+    check('A12 default compressed rejection unchanged', assessTemplateXml('<mxfile><diagram>abc123encoded</diagram></mxfile>').diagnostics.some((d) => d.code === 'template-compressed'), true);
+
+    // ===================================================================
+    // ACT B — restricted Markdown fragment converter cases.
+    // ===================================================================
+    const convB = (v) => convertMarkdownToHtmlFragment(v);
+    check('B01 plain one-line stays plain', convB('Just a simple line.').reason, 'plain');
+    check('B02 two paragraphs -> two divs', (convB('A\n\nB').html || '').split('<div>').length - 1, 2);
+    check('B03 hard break -> br', convB('line  \nsecond').html.includes('<br>'), true);
+    check('B04 bold -> strong', convB('**Bold** text').html.includes('<strong>'), true);
+    check('B05 italic -> em', convB('*Italic* text').html.includes('<em>'), true);
+    check('B06 bold-italic -> strong+em', (() => { const h = convB('***Both*** x').html || ''; return h.includes('<strong>') && h.includes('<em>'); })(), true);
+    check('B07 unordered list -> ul/li', (() => { const h = convB('- one\n- two').html || ''; return h.includes('<ul>') && (h.match(/<li>/g) || []).length === 2; })(), true);
+    check('B08 ordered list -> ol/li', (() => { const h = convB('1. one\n2. two').html || ''; return h.includes('<ol>') && (h.match(/<li>/g) || []).length === 2; })(), true);
+    check('B09 paragraph + list', (() => { const h = convB('Intro\n\n- a\n- b').html || ''; return h.includes('<div>') && h.includes('<ul>'); })(), true);
+    check('B10 unicode preserved', convB('**Más café** 😀').html.includes('Más'), true);
+    const ampConv = convB('**A** & B');
+    check('B11 ampersand escaped at html layer', ampConv.ok, true);
+    check('B11b ampersand entity present', (ampConv.html || '').includes('&amp;'), true);
+    check('B12 double quote escaped', (convB('**say** "hi"').html || '').includes('&quot;'), true);
+    check('B13 apostrophe escaped', (convB("**it's** long").html || '').includes('&apos;'), true);
+    check('B14 angle brackets plain fallback', convB('5 < 10 and > 2').reason, 'plain');
+    check('B15 raw HTML fallback', convB('<b>hi</b>').reason, 'raw-html');
+    check('B16 script-like fallback', convB('x<script>alert(1)</script>').reason, 'raw-html');
+    check('B17 table fallback', convB('a | b\n---|---').reason, 'table');
+    check('B18 code fence fallback', convB('x\n```\ncode\n```').reason, 'code');
+    check('B19 nested-list fallback', convB('  - nested').reason, 'indented-or-nested');
+    check('B20 task-checkbox fallback', convB('- [ ] todo').reason, 'task-checkbox');
+    check('B21 image fallback', convB('![alt](img.png)').reason, 'image');
+    check('B22 heading fallback', convB('## Head').reason, 'heading');
+    check('B23 blockquote fallback', convB('> quote').reason, 'blockquote');
+    check('B24 unmatched markers fallback', convB('* unclosed').reason, 'plain');
+    check('B25 identifier underscores literal', convB('USD_50_000 cost').reason, 'plain');
+    check('B26 escaped markers literal', convB('C:\\*not italic\\* x').reason, 'escaped-marker');
+    check('B27 empty value', convB('').reason, 'empty');
+
+    // ACT B allowlist: formatted output emits only div/br/strong/em/ul/ol/li,
+    // never attributes, never script/style/id/class/event-handler.
+    const B28 = convB('**Bold** title\n\n- one\n- two\n\n*Ital* end');
+    const B28html = B28.html || '';
+    const B28tags = B28html.match(/<\/?[a-z0-9]+/g) || [];
+    const B28clean = B28tags.map((t) => t.replace(/[</?]/g, ''));
+    check('B28 allowlist div/br/strong/em/ul/ol/li only', B28clean.every((tag) => ['div', 'br', 'strong', 'em', 'ul', 'ol', 'li'].includes(tag)), true);
+    check('B28b no class/style/id/on attributes', !B28html.includes('class=') && !B28html.includes('style=') && !B28html.includes('id=') && !/on[a-z]+=/.test(B28html), true);
+    check('B28c no p/b/i/code/a emitted', !B28html.includes('<p>') && !B28html.includes('<b>') && !B28html.includes('<i>') && !B28html.includes('<code>') && !B28html.includes('<a '), true);
+
+    // ===================================================================
+    // Markdown-in-HTML-cells population cases (occurrence-aware, html=1).
+    // ===================================================================
+    const Cfields = {
+      summary: { key: 'summary', token: '{{summary}}', value: '**Bold** and *italic*', source: 'token' },
+      next: { key: 'next', token: '{{next}}', value: '1. a\n2. b', source: 'token' },
+      blank: { key: 'blank', token: '{{blank}}', value: '', source: 'token' },
+    };
+    const Cxml = '<mxfile><root><mxCell id="0"/><mxCell id="1" parent="0"/>' +
+      '<mxCell id="2" value="{{summary}}" style="text;html=0" vertex="1" parent="1"/>' +
+      '<mxCell id="3" value="{{summary}}" style="text;html=1" vertex="1" parent="1"/>' +
+      '<mxCell id="4" value="{{next}}" style="text;html=1" vertex="1" parent="1"/>' +
+      '<mxCell id="5" value="{{blank}}" style="text;html=1" vertex="1" parent="1"/>' +
+      '<mxCell id="6" value="{{ghost}}" style="text;html=1" vertex="1" parent="1"/>' +
+      '</root></mxfile>';
+    const Cplain = populateTemplate(Cxml, Cfields);
+    const Cfmt = populateTemplate(Cxml, Cfields, { formatMarkdownForHtmlCells: true });
+    const Chtml0 = /value="([^"]*)" style="text;html=0"/.exec(Cfmt.xml);
+    check('C01 formatted html=0 cell stays plain', Chtml0 ? Chtml0[1].includes('&lt;strong&gt;') : false, false);
+    check('C02 formatted html=1 cell has strong', Cfmt.xml.includes('&lt;strong&gt;'), true);
+    check('C03 formatted html=1 cell has em', Cfmt.xml.includes('&lt;em&gt;'), true);
+    check('C04 formatted next -> ol', Cfmt.xml.includes('&lt;ol&gt;'), true);
+    check('C05 blank placeholder preserved', Cfmt.xml.includes('{{blank}}'), true);
+    check('C06 unknown placeholder preserved', Cfmt.xml.includes('{{ghost}}'), true);
+    check('C07 optionless population stays plain', !Cplain.xml.includes('&lt;strong&gt;'), true);
+
+    const Corder = '<mxfile><root><mxCell id="1" value="{{summary}}" style="html=1"/>' +
+      '<mxCell id="2" style="html=1" value="{{summary}}"/></root></mxfile>';
+    const CorderPop = populateTemplate(Corder, Cfields, { formatMarkdownForHtmlCells: true });
+    check('C08 value-before-style parsed', CorderPop.xml.includes('&lt;strong&gt;'), true);
+    check('C08b style-before-value parsed', (CorderPop.xml.match(/&lt;strong&gt;/g) || []).length, 2);
+
+    const Cnot = { summary: { key: 'summary', token: '{{summary}}', value: '**Bold** only', source: 'token' } };
+    const Cmy = '<mxfile><root><mxCell id="1" value="{{summary}}" style="text;myhtml=1"/></root></mxfile>';
+    check('C10 myhtml=1 not eligible', populateTemplate(Cmy, Cnot, { formatMarkdownForHtmlCells: true }).xml.includes('&lt;strong&gt;'), false);
+    const Chtml10 = '<mxfile><root><mxCell id="1" value="{{summary}}" style="text;html=10"/></root></mxfile>';
+    check('C11 html=10 not eligible', populateTemplate(Chtml10, Cnot, { formatMarkdownForHtmlCells: true }).xml.includes('&lt;strong&gt;'), false);
+
+    const CmultiCells = {
+      a: { key: 'a', token: '{{a}}', value: '**A**', source: 'token' },
+      b: { key: 'b', token: '{{b}}', value: 'B', source: 'token' },
+    };
+    const CmultiXml = '<mxfile><root><mxCell id="1" value="{{a}} & {{b}} {{ghost}}" style="html=1"/></root></mxfile>';
+    const CmultiPop = populateTemplate(CmultiXml, CmultiCells, { formatMarkdownForHtmlCells: true });
+    check('C12 multiple placeholders one cell', CmultiPop.xml.includes('&lt;strong&gt;') && CmultiPop.xml.includes('& B') && CmultiPop.xml.includes('{{ghost}}'), true);
+
     const failed = cases.filter((item) => !item.pass);
     const result = {
       ok: failed.length === 0,
@@ -561,6 +928,7 @@
     extractPlaceholders,
     reconcile,
     buildMissingTemplateFieldsMarkdown,
+    convertMarkdownToHtmlFragment,
     populateTemplate,
     validateDrawioReportReconciler,
   });

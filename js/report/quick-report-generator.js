@@ -156,6 +156,48 @@
     'undated-completed-tasks': renderUndatedTasks,
   };
 
+  // Standard Notes fields become normal generated Markdown sections. Any
+  // other Notes field is a custom field and is preserved under
+  // "## Template Fields" so it can flow to the reviewed Markdown and Draw.io
+  // reconciliation instead of being discarded.
+  const STANDARD_NOTE_KEYS = new Set([
+    'title',
+    'summary',
+    'highlights',
+    'risks',
+    'next steps',
+    'management notes',
+  ]);
+
+  function isStandardNoteKey(key) {
+    // Canonical 'report.*' forms (e.g. from injected pairs) normalize to the
+    // bare standard name; underscores collapse to spaces.
+    const bare = String(key || '')
+      .replace(/^report\./, '')
+      .replace(/_/g, ' ')
+      .trim()
+      .toLowerCase();
+    return STANDARD_NOTE_KEYS.has(bare);
+  }
+
+  function renderTemplateFields(dict) {
+    const custom = (dict.notes || []).filter((n) => !isStandardNoteKey(n?.key));
+    if (!custom.length) return '';
+    const lines = ['## Template Fields', ''];
+    for (const n of custom) {
+      const key = String(n.key || '').trim();
+      const value = String(n.value == null ? '' : n.value);
+      if (!key) continue;
+      if (value.includes('\n')) {
+        // Multiline custom value: token line, then the preserved content.
+        lines.push('{{' + key + '}}:', value, '');
+      } else {
+        lines.push('{{' + key + '}}: ' + value.trim(), '');
+      }
+    }
+    return lines.join('\n');
+  }
+
   function buildMarkdown(dictionary) {
     if (!dictionary || dictionary.ok === false) {
       return '# Report\n\n_Report could not be generated._\n';
@@ -192,6 +234,14 @@
     const managementNotes = getStandardNoteValue(dictionary, 'management notes');
     if (managementNotes) {
       lines.push('## Management Notes', '', managementNotes, '');
+    }
+
+    // Custom (non-standard) Notes fields are preserved as canonical
+    // "## Template Fields" entries in source order. Closing Notes markers
+    // never reach the generated Markdown.
+    const templateFields = renderTemplateFields(dictionary);
+    if (templateFields) {
+      lines.push(templateFields);
     }
 
     let md = lines.join('\n');
@@ -358,6 +408,68 @@
     // 15. markdown ends with exactly one newline after trailing section
     checkMd('exactly one final newline', md1.endsWith('\n'), true);
     checkMd('no double final newline', md1.endsWith('\n\n'), false);
+
+    // ---- Custom Report Notes fields → canonical "## Template Fields" ----
+    // Standard fields become normal Markdown sections; unknown/custom fields
+    // are preserved in source order under "## Template Fields"; Notes opening
+    // and closing markers never appear in the generated Markdown.
+    const customNotesDict = dictModule.buildReportDictionary({
+      indexState: baseInput.indexState,
+      startDate: '2026-08-03',
+      endDate: '2026-08-09',
+      sections: [{ id: 'summary', enabled: true }],
+      projectMode: 'all',
+      reportNotes: [
+        '{{summary}}:',
+        '**Brazil remains the priority market.**',
+        '',
+        '- Supplier qualification',
+        '{{/summary}}',
+        '{{highlights}}: Supplier qualification progressed.',
+        '{{customer message}}:',
+        'The customer requested:',
+        '',
+        '- revised pricing;',
+        '- an updated schedule.',
+        '{{/customer message}}',
+        '{{account ref}}: ACME-42',
+      ].join('\n'),
+    });
+    const customNotesMd = buildMarkdown(customNotesDict);
+
+    // Standard fields remain normal headings with normal content.
+    checkMd('G1 summary is a normal heading', customNotesMd.includes('## Summary\n\n**Brazil remains the priority market.**\n\n- Supplier qualification'), true);
+    checkMd('G1b highlights is a normal heading', customNotesMd.includes('## Highlights\n\nSupplier qualification progressed.'), true);
+
+    // Custom fields preserved under Template Fields, multiline + inline forms.
+    checkMd('G2 template fields heading present', customNotesMd.includes('## Template Fields'), true);
+    checkMd('G2b custom multiline field preserved', customNotesMd.includes('{{customer message}}:\nThe customer requested:\n\n- revised pricing;\n- an updated schedule.'), true);
+    checkMd('G2c custom inline field preserved', customNotesMd.includes('{{account ref}}: ACME-42'), true);
+
+    // Notes markers never leak into the generated Markdown.
+    checkMd('G3 no standard opening markers', customNotesMd.includes('{{summary}}') || customNotesMd.includes('{{highlights}}'), false);
+    checkMd('G3b no closing markers at all', /\{\{\//.test(customNotesMd), false);
+
+    // Custom fields keep source order (message before account ref).
+    checkMd('G4 custom fields in source order', customNotesMd.indexOf('{{customer message}}') < customNotesMd.indexOf('{{account ref}}'), true);
+
+    // Template Fields renders after standard sections.
+    checkMd('G5 template fields after standard sections', customNotesMd.indexOf('## Template Fields') > customNotesMd.indexOf('## Summary'), true);
+
+    // No custom fields → no Template Fields heading.
+    const plainDict = dictModule.buildReportDictionary({
+      indexState: baseInput.indexState,
+      startDate: '2026-08-03',
+      endDate: '2026-08-09',
+      sections: [{ id: 'summary', enabled: true }],
+      projectMode: 'all',
+      reportNotes: '{{summary}}: Only standard.',
+    });
+    checkMd('G6 no custom fields means no Template Fields heading', buildMarkdown(plainDict).includes('## Template Fields'), false);
+
+    // Section ordering remains controlled only by section controls: custom
+    // fields never participate in the ordered section list.
+    check('G7 sections list unchanged by custom fields', JSON.stringify(customNotesDict.sections.map((s) => s.id)), JSON.stringify(plainDict.sections.map((s) => s.id)));
 
     const failed = results.filter((r) => !r.pass);
     return { ok: failed.length === 0, total: results.length, passed: results.length - failed.length, failed: failed.length, cases: results };
