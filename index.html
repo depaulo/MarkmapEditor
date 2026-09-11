@@ -35,6 +35,8 @@
     <link rel="stylesheet" href="./css/menus.css" />
     <link rel="stylesheet" href="./css/overlays.css" />
     <link rel="stylesheet" href="./css/workspace.css" />
+    <link rel="stylesheet" href="./css/release-notes.css" />
+    <link rel="stylesheet" href="./css/contextual-help.css" />
   </head>
   <body>
     <div id="toolbar">
@@ -91,7 +93,9 @@
           type="button"
           title="Toggle dark/light mode"
           aria-label="Toggle dark/light mode"
-        >🌙</button>
+        >
+          🌙
+        </button>
       </div>
 
       <div class="btnSep" aria-hidden="true"></div>
@@ -117,13 +121,16 @@
       <div class="btnSep" aria-hidden="true"></div>
 
       <div class="btnGroup" id="grpHelp">
-        <button
-          id="btnHelp"
-          type="button"
-          title="Help / Reference"
-          aria-label="Help / Reference"
-        >
+        <button id="btnHelp" type="button" title="Help" aria-label="Help for the current mode">
           ?
+        </button>
+        <button
+          id="btnReleaseNotes"
+          type="button"
+          title="Release Notes"
+          aria-label="Open Release Notes"
+        >
+          ✨
         </button>
       </div>
 
@@ -204,9 +211,7 @@
                 <span class="workspaceJournalsTitle">Journals</span>
               </span>
 
-              <span id="workspaceJournalsBadge" class="workspacePanelBadge">
-                0
-              </span>
+              <span id="workspaceJournalsBadge" class="workspacePanelBadge"> 0 </span>
             </button>
           </div>
 
@@ -228,9 +233,7 @@
                 <span class="workspaceConceptsTitle">Concepts</span>
               </span>
 
-              <span id="workspaceConceptsBadge" class="workspacePanelBadge">
-                0
-              </span>
+              <span id="workspaceConceptsBadge" class="workspacePanelBadge"> 0 </span>
             </button>
           </div>
 
@@ -270,9 +273,7 @@
           <div class="editorOverlayToolRow editorOverlayToolRowInsert" aria-label="Insert tools">
             <button id="btnAddImage" type="button" title="Add image">🖼️</button>
             <button type="button" data-editor-command="link" title="Insert link">🔗</button>
-            <button type="button" data-editor-command="inlineCode" title="Inline code">
-              ⟨/⟩
-            </button>
+            <button type="button" data-editor-command="inlineCode" title="Inline code">⟨/⟩</button>
             <button type="button" data-editor-command="bullet" title="Unordered list">•</button>
             <button type="button" data-editor-command="ordered" title="Ordered list">1.</button>
             <button
@@ -318,664 +319,344 @@
         <div id="cmHost"></div>
         <textarea id="md">
 
-# 🧠 Markmap Editor — Release 40
-
-Markdown-first editor with interactive Markmap, Journal Workspace, Concepts, HTML Preview, Pandoc Slides, templates, exports, overlays, workspace panels, and modularized app structure.
-
-## 🎯 Objetivo
-
-- Um editor simples e rápido de Markdown que gera um mindmap interativo com Markmap.
-- Manter a experiência pequena, prática, profissional e confiável.
-- Preservar o fluxo principal:
-  - Editar Markdown à esquerda.
-  - Navegar pelo mindmap à direita.
-  - Ver HTML Preview quando necessário.
-  - Trabalhar com journals/concepts em workspace local.
-  - Salvar/exportar de forma confiável.
-- Organizar a interface por contexto:
-  - Controles do mindmap dentro da área do Markmap.
-  - Controles do editor dentro da área do CodeMirror.
-  - Ações de arquivo dentro do fluxo Open/Save.
-  - Templates contextuais por modo.
-  - Exportações dentro de um menu Export dedicado.
-  - Workspace panels dentro do modo Journal.
-- Permitir uso como:
-  - editor Markdown standalone;
-  - mindmap visual;
-  - journal/concept workspace local;
-  - fonte Markdown para slides editáveis via Pandoc/PowerPoint.
-
----
-
-## 🧭 Como o app funciona
-
-- Você edita Markdown no editor.
-- O mindmap atualiza com debounce enquanto você digita e também no blur.
-- O app tenta preservar zoom, pan e folds durante edições normais.
-- HTML Preview renderiza Markdown com headings, listas, imagens, links, tabelas, anchors e code blocks destacados.
-- O scroll Editor → HTML usa headings como âncoras para melhorar a precisão em arquivos maiores.
-- O clique no Markmap usa source-line metadata quando disponível, melhorando jumps em headings duplicados.
-- Dark Mode muda o tema sem reconstruir desnecessariamente o mindmap.
-- Toasts mostram feedback rápido:
-  - Saved
-  - Downloaded
-  - Exported
-  - Reloaded
-  - Errors
-- Overlays deixam controles perto do contexto onde são usados:
-  - Markmap Overlay no mapa.
-  - Editor Overlay no editor.
-  - HTML Preview controls no painel HTML.
-  - Export no menu Export.
-  - Help modal contextual.
-- O modo Journal usa workspace local com:
-  - journals
-  - concepts
-  - assets/images
-  - archive
-  - tags
-  - tasks
-  - backlinks/related
-  - workspace index
-- O modo Slides/Pandoc permite escrever Markdown orientado a apresentações e exportar Markdown fonte para conversão externa com Pandoc.
-
----
-
-## ✅ Features implementadas
-
-### 1) Arquivos / Salvamento
-
-- Open menu com:
-  - New document.
-  - Browse.
-  - Recent files.
-  - Clear draft for current file.
-  - Clear recent files.
-- Save único:
-  - Sobrescreve o arquivo original quando existe handle gravável.
-  - Se não for possível sobrescrever, usa Save As.
-  - Se Save As não estiver disponível, usa download com sufixo de data.
-- Cancelar Save As não gera fallback nem altera estado.
-- Proteção contra sobrescrever arquivo alterado externamente.
-- Status e título da aba refletem:
-  - arquivo atual;
-  - dirty state;
-  - external stale state.
-- Workflow recomendado:
-  - Save sobrescreve arquivo aberto quando possível.
-  - Save As é usado apenas quando necessário.
-  - Download é fallback final.
-
----
-
-### 2) Recent Files
-
-- Lista de arquivos recentes graváveis usando handles persistidos.
-- Reabertura rápida pelo menu Open.
-- Opção para limpar recentes.
-- Integração com IndexedDB para manter file handles quando o browser suporta.
-- Fallback seguro quando permissões ou APIs não estão disponíveis.
-
----
-
-### 3) Novo documento
-
-- Criação de documento novo pelo menu Open.
-- Confirmação antes de descartar alterações não salvas.
-- Nome inicial contextual conforme o modo.
-- Novo documento não possui handle gravável até ser salvo.
-- Hot Reload é interrompido ao criar documento novo.
-- Draft anterior pode ser limpo com segurança.
-
----
-
-### 4) Mindmap engine
-
-- Render programático com:
-  - `Transformer`
-  - `Markmap.create()`
-  - `mm.setData(root)`
-- Instância persistente de Markmap.
-- Atualização debounced durante digitação.
-- Atualização imediata no blur.
-- Carregamento incremental de assets usados pelo Markmap.
-- Boot retry para casos em que a engine Markmap demora a carregar.
-- Logs detalhados para:
-  - render;
-  - assets;
-  - criação da instância;
-  - erros;
-  - restore de zoom/pan.
-
----
-
-### 5) Preservação de estado visual
-
-- Preserva zoom e pan.
-- Salva/restaura view state em `localStorage`.
-- Tenta preservar folds/collapses durante renders de edição, blur e hot reload.
-- Evita render desnecessário do mindmap no toggle de Dark Mode.
-- Restaura view state após `mm.setData()`.
-- Salva view state após interações:
-  - wheel;
-  - pointerup;
-  - touchend.
-- Usa restore imediato e `requestAnimationFrame` em alguns cenários para maior estabilidade visual.
-
----
-
-### 6) Markmap Overlay Controls
-
-- Controles do mindmap ficam dentro da área renderizada do Markmap.
-- Overlay inclui:
-  - +1 nível
-  - -1 nível
-  - Fit map
-  - Expand all
-  - Collapse all
-  - Dark/Light Mode
-  - Map Style
-- Os cliques no overlay não interferem com drag/pan/click nos nodes do Markmap.
-- O botão Dark/Light usa API global de tema.
-- O ícone do botão de tema é atualizado automaticamente.
-- O overlay respeita Compact Mode e Dark Mode.
-
----
-
-### 7) Markmap → Editor jump
-
-- Clique em node do mindmap leva o editor para a origem correspondente no Markdown.
-- Estratégia de match:
-  - Markmap source-line metadata;
-  - path/context heading match;
-  - exact heading match;
-  - fuzzy heading match.
-- Melhor precisão com headings repetidos.
-- Feedback visual de node ativo.
-- Suprime renders indesejados causados por blur durante interação com o mapa.
-- Logs mostram o tipo de match usado.
-
----
-
-### 8) Editor / CodeMirror
-
-- Editor com CodeMirror.
-- Syntax highlight para Markdown.
-- Fold gutter.
-- Word wrap.
-- Tab indent.
-- Bracket matching.
-- Auto-close de brackets/aspas.
-- Search & Replace via atalhos do CodeMirror.
-- Search também disponível via botão visual no overlay do editor.
-- Fallback para textarea se CodeMirror falhar.
-- Ajustes visuais para Dark Mode.
-- Helpers globais para:
-  - obter texto atual;
-  - substituir conteúdo;
-  - inserir texto no cursor;
-  - scroll para linha;
-  - obter linha atual;
-  - aplicar operações multi-line;
-  - abrir painel de busca.
-
----
-
-### 9) Editor Overlay Controls
-
-- Controles específicos do editor ficam dentro da área do CodeMirror.
-- Overlay do editor inclui:
-  - Search
-  - Copy Markdown
-  - painel expansível de ferramentas rápidas.
-- Search abre o painel de busca do CodeMirror quando disponível.
-- Copy Markdown copia o conteúdo Markdown atual.
-- O overlay respeita Compact Mode e Dark Mode.
-
----
-
-### 10) Quick Insert Toolbar
-
-- Link.
-- Inline code.
-- Bold.
-- Italic.
-- Bold Italic.
-- Strikethrough.
-- Checkbox.
-- Unordered list.
-- Ordered list.
-- Indent / Outdent.
-- Ações multi-line para listas e indentação.
-- Proteção para seleção que termina no começo da próxima linha/heading.
-- Usa helpers do CodeMirror quando disponíveis.
-- Usa fallback textarea quando necessário.
-- Mantém seleção/cursor de forma mais previsível.
-
----
-
-### 11) Headers menu
-
-- Menu `H ▾` com:
-  - H1 Title
-  - H2 Section
-  - H3 Subsection
-  - H4
-  - H5
-  - Remove heading
-- Permite transformar linhas selecionadas em headings.
-- Permite remover heading mantendo o texto.
-- Funciona com seleção simples ou multi-line.
-- Fecha ao clicar fora do menu.
-
----
-
-### 12) Add Image
-
-- Menu Add Image com:
-  - Online URL.
-  - Local relative image.
-- Online URL exige link direto para arquivo de imagem.
-- Em modo standalone, imagem local usa:
-  - `./images/<filename>`
-- Em workspace, imagem local é copiada para:
-  - `assets/images/<filename>`
-- Referência Markdown em journals/concepts usa:
-  - `../assets/images/<filename>`
-- Inserção usa CodeMirror quando disponível.
-- Fallback para textarea quando necessário.
-- Toast/logs para ações e erros.
-- Imagens no HTML Preview e no mindmap têm constraints visuais para evitar quebra de layout.
-
----
-
-### 13) HTML Preview / Sync
-
-- Toggle do painel HTML.
-- Renderização via `marked`.
-- GFM habilitado.
-- Tabelas estilizadas.
-- Imagens responsivas.
-- Heading anchors no HTML preview.
-- Refresh do HTML durante renders quando o painel está aberto.
-- Refresh do HTML/Shiki quando Dark Mode muda e o painel está aberto.
-- Scroll sync Editor → HTML baseado em:
-  - heading order;
-  - heading occurrence;
-  - interpolação entre headings;
-  - fallback por ratio para documentos sem headings.
-- Mais preciso em arquivos grandes do que scroll por ratio puro.
-- HTML Preview close/edge controls foram movidos para perto do viewer.
-
----
-
-### 14) Shiki / Code blocks
-
-- Highlight de fenced code blocks via Shiki.
-- Tema claro/escuro alinhado ao Dark Mode.
-- Botão Copy em code blocks.
-- Copiar inline code clicando no código.
-- Styling para inline code.
-- Suporte a várias linguagens comuns:
-  - JavaScript
-  - TypeScript
-  - Python
-  - Bash
-  - JSON
-  - Markdown
-  - HTML
-  - CSS
-  - YAML
-  - XML
-- Fallback seguro para code blocks quando Shiki falha.
-
----
-
-### 15) Dark Mode
-
-- Toggle via Markmap Overlay.
-- Persistência em `localStorage`.
-- Respeita preferência inicial do sistema quando não há configuração salva.
-- Atualiza HTML/Shiki quando o HTML View está aberto.
-- Não dispara expansão desnecessária do mindmap.
-- API global de tema:
-  - `window.toggleDarkMode()`
-  - `window.setDarkMode(enabled)`
-  - `window.isDarkMode()`
-
----
-
-### 16) Hot Reload
-
-- Detecta mudanças externas em arquivos abertos com handle gravável.
-- Recarrega automaticamente quando não há alterações locais.
-- Pede confirmação quando há alterações locais.
-- Marca estado stale quando o usuário recusa reload.
-- Mostra status Hot Reload no topo.
-- Integra com título da aba usando `!` quando há alteração externa recusada.
-- Integra com Save para atualizar `fileLastSeenModified`.
-
----
-
-### 17) Auto-save draft
-
-- Salva rascunho periodicamente quando há alterações não salvas.
-- Intervalo atual: 30 segundos.
-- Oferece restauração ao abrir o mesmo arquivo.
-- Limpa draft após save/download bem-sucedido.
-- Permite limpar manualmente o draft atual pelo Open menu.
-- Clear Draft não altera conteúdo, dirty state ou render.
-- Toast/logs para draft salvo, restaurado e limpo.
-
----
-
-### 18) Templates — Org + My
-
-- Templates Org read-only embutidos no app.
-- Templates My salvos em `localStorage`.
-- Criar My template.
-- Duplicar Org → My.
-- Editar My template.
-- Renomear My template.
-- Deletar My template.
-- Importar My templates de JSON.
-- Exportar My templates para JSON.
-- Modal de edição multi-line para templates.
-- Templates sobrevivem a atualizações do app porque ficam em storage separado.
-- Templates são contextuais:
-  - Editor
-  - Journal
-  - Concept
-  - Pandoc / Slides
-
----
-
-### 19) Toolbar UX
-
-- Top toolbar mais limpo.
-- Botões de View em modo ícone com tooltips:
-  - Toggle editor.
-  - Toggle logs.
-  - Toggle HTML.
-- Compact Mode para reduzir altura/padding/fonte.
-- Hot Reload vira `HR` em Compact Mode.
-- Layout com splitters para editor/mapa/HTML.
-- Mostrar/Ocultar editor para modo apresentação.
-- Menu de exportação consolidado.
-- Controles contextuais movidos para overlays.
-
----
-
-### 20) Export Menu
-
-- Menu único `Export ▾`.
-- Export Mindmap como SVG estático.
-- Export HTML Preview como `.html` standalone.
-- Export Slides Markdown como `.md` no modo Slides/Pandoc.
-- SVG export:
-  - clona o SVG atual;
-  - adiciona background;
-  - injeta estilos para preservar aparência;
-  - exporta conforme tema atual.
-- HTML export:
-  - usa o renderer atual com Shiki;
-  - gera HTML standalone;
-  - inclui CSS básico;
-  - mantém code blocks destacados.
-- Export My Templates como JSON continua disponível no menu Templates.
-
----
-
-### 21) Map Style Modifier
-
-- Botão 🎨 no Markmap Overlay.
-- Modal Map Style com:
-  - Theme
-  - Layout
-  - Node length
-  - Links
-- Theme presets:
-  - Default
-  - Ocean
-  - Forest
-  - Sunset
-  - Mono
-- Layout presets:
-  - Default
-  - Compact
-  - Spacious
-- Node length presets:
-  - Short
-  - Medium
-  - Long
-  - Free
-- Link styles:
-  - Solid
-  - Dashed
-  - Dotted
-- Reset to Default.
-- Apply.
-- Persistência em `localStorage`.
-- Default restaura a paleta original do Markmap.
-- SVG export respeita o estilo visual atual.
-
----
-
-### 22) KaTeX / Math
-
-- Renderização de math funciona no mindmap.
-- Sintaxe inline suportada no mindmap:
-  - `$...$`
-- Sintaxe block suportada no mindmap:
-  - `$$...$$`
-- HTML Preview ainda não renderiza KaTeX visualmente.
-
----
-
-### 23) Logs e diagnóstico
-
-- Painel de logs.
-- Tratamento de:
-  - `window.error`
-  - `unhandledrejection`
-- Logs de ambiente:
-  - URL atual.
-  - Protocolo.
-  - Secure context.
-  - Top-level frame.
-  - File System Access API.
-- Logs de render.
-- Logs de Hot Reload.
-- Logs de folds.
-- Logs de export.
-- Logs de Quick Insert.
-- Logs de overlay controls.
-- Logs de workspace.
-- Logs de service worker/PWA diagnostics.
-
----
-
-### 24) Título dinâmico da aba
-
-- Formato:
-  - `MME - <arquivo>`
-- `*` quando há alterações não salvas.
-- `!` quando há alteração externa recusada/stale.
-- Atualizado após:
-  - open;
-  - save;
-  - dirty state;
-  - hot reload;
-  - external stale state.
-
----
-
-## 📓 Journal Workspace
-
-### Estrutura do workspace
-
-O modo Journal trabalha com uma pasta local organizada assim:
-
-~~~text
-workspace/
-  journals/
-  concepts/
-  assets/
-    images/
-  archive/
-  system/
-~~~
-
-### Journals
-
-- Journals são arquivos de captura diária.
-- Usados para:
-  - reuniões;
-  - decisões;
-  - tarefas;
-  - notas rápidas;
-  - conversas com clientes;
-  - follow-ups;
-  - ideias do dia.
-- O botão Today abre ou cria o journal do dia.
-- Journals aparecem na timeline do workspace.
-
-### Concepts
-
-- Concepts são páginas persistentes de conhecimento.
-- Usados para:
-  - contas/clientes;
-  - oportunidades;
-  - parceiros;
-  - feedback de produto;
-  - notas de mercado;
-  - concorrentes;
-  - iniciativas;
-  - playbooks.
-- Concepts podem ser relacionados a journals usando links como:
-  - `[[ConceptName]]`
-
-### Workspace Index
-
-- Indexa arquivos do workspace.
-- Conta:
-  - journals;
-  - concepts;
-  - tags;
-  - tasks;
-  - open tasks;
-  - done tasks;
-  - links.
-- Rebuild automático após abrir workspace ou alterar arquivo.
-- Botão refresh manual disponível.
-
-### Active Panel
-
-- Mostra o arquivo ativo.
-- Exibe informações relevantes do documento.
-- Atualiza ao abrir journals/concepts.
-- Integra com active highlight no sidebar.
-
-### Related Panel
-
-- Mostra arquivos relacionados/backlinks.
-- Permite abrir journals/concepts relacionados.
-- Usa normalização de kind/path para evitar erros entre:
-  - `journal` / `journals`
-  - `concept` / `concepts`
-
-### Open Tasks Panel
-
-- Mostra tarefas abertas do workspace.
-- Agrupa por arquivo de origem.
-- Permite abrir arquivos a partir das tarefas.
-
-### Tags Panel
-
-- Indexa tags do workspace.
-- Permite navegar por tag.
-- Mostra arquivos relacionados à tag selecionada.
-
-### Archive
-
-- Archive move arquivos para fora da visão ativa sem deletar.
-- Recomendado usar archive em vez de delete quando quiser preservar histórico.
-
----
-
-## 📊 Pandoc Slides Mode
-
-O modo Slides/Pandoc permite escrever Markdown orientado a apresentações.
-
-### Como funciona
-
-1. Escreva slides em Markdown.
-2. Use templates Pandoc quando quiser acelerar a estrutura.
-3. Use comentários de layout para preservar intenção visual.
-4. Exporte pelo menu:
-
-~~~text
-Export ▾ → Export Slides Markdown (.md)
-~~~
-
-5. Converta fora do browser usando Pandoc:
-
-~~~bash
-pandoc slides.md -o output.pptx --reference-doc=PandocTemplateV4.pptx
-~~~
-
-### Características atuais
-
-- Exporta Markdown fonte.
-- Preserva headings.
-- Preserva comentários de layout.
-- Preserva speaker notes.
-- Preserva columns.
-- Preserva imagens.
-- Preserva tabelas.
-- Não roda Pandoc dentro do browser.
-
-### Estruturas comuns suportadas
-
-- Title slide.
-- Agenda.
-- Executive Summary.
-- Key points.
-- Two columns.
-- Image + text.
-- Text + image.
-- Tables.
-- Speaker notes.
-- Action list.
-- KPI / metric slides.
-- Strategic options.
-- Roadmap-style slides.
-
-### Speaker notes
-
-~~~markdown
-::: notes
-Presenter notes go here.
-:::
-~~~
-
-### Columns
-
-~~~markdown
-:::: {.columns}
-::: {.column}
-## Left
-- Point 1
-- Point 2
-:::
-
-::: {.column}
-## Right
-- Point A
-- Point B
-:::
-::::
-~~~
+# 🧠 Welcome to MarkmapEditor
+
+MarkmapEditor is a Markdown-first workspace for writing, organizing ideas, exploring documents as interactive mindmaps, and creating useful outputs from the same source.
+
+This document is editable. Try changing a heading, adding a list item, or writing a new section. The Markmap and HTML Preview update from your Markdown.
+
+## 🎯 What can I do here?
+
+Use MarkmapEditor to:
+
+- write and edit Markdown;
+- explore document structure as an interactive mindmap;
+- preview the rendered document as HTML;
+- keep journals, concepts, Tasks, links, and Projects in a local workspace;
+- generate structured Reports;
+- create editable Draw.io Report outputs;
+- prepare presentation source in Slides mode.
+
+Your Markdown remains the source of truth. Markmap, HTML Preview, Reports, and visual outputs are derived from it.
+
+## 🚀 Start here
+
+1. Edit this document in the Editor pane.
+2. Add or rename a heading.
+3. Watch the Markmap update.
+4. Open HTML Preview to see the rendered document.
+5. Use **Open** to choose an existing Markdown file.
+6. Use **Save** to save changes to the current writable file.
+7. Switch to **Journal** or **Slides** when you want a different workflow.
+
+You can always select **?** in the toolbar for Help about the active mode.
+
+## 🗺️ Understand the three views
+
+### Editor
+
+The Editor contains the canonical Markdown source. Make document changes here.
+
+### Markmap
+
+The Markmap turns headings and nested content into a visual structure. Select a node to navigate back to the related Markdown.
+
+### HTML Preview
+
+HTML Preview shows the document as rendered content, including headings, lists, tables, links, images, and code blocks.
+
+The three views represent the same document. The Markdown in the Editor remains authoritative.
+
+## ✍️ Try Markdown
+
+Edit the examples below and observe how the other views respond.
+
+### Headings
+
+Headings define the document structure and become branches in the Markmap.
+
+```markdown
+# Document title
+
+## Main section
+
+### Subsection
+
+#### Detail
+```
+
+### Emphasis
+
+```markdown
+**Bold text**
+
+*Italic text*
+
+***Bold and italic text***
+
+~~Strikethrough~~ text
+
+`Inline code`
+```
+
+Rendered examples:
+
+- **Bold text**
+- *Italic text*
+- ***Bold and italic text***
+- ~~Strikethrough~~
+- `Inline code`
+
+### Bullet lists
+
+```markdown
+- First item
+- Second item
+  - Nested item
+  - Another nested item
+- Third item
+```
+
+- First item
+- Second item
+  - Nested item
+  - Another nested item
+- Third item
+
+### Numbered lists
+
+```markdown
+1. Confirm the scope
+2. Review the proposal
+3. Schedule the next meeting
+```
+
+1. Confirm the scope
+2. Review the proposal
+3. Schedule the next meeting
+
+### Tasks
+
+A Task begins as a normal Markdown checkbox:
+
+```markdown
+- [ ] Open Task
+- [x] Completed Task
+```
+
+Try these Tasks:
+
+- [ ] Add a new section to this document
+- [ ] Open HTML Preview
+- [ ] Explore the Markmap controls
+- [x] Open MarkmapEditor
+
+In Journal mode, Tasks can also appear in Task Review and Task Board.
+
+### Blockquotes
+
+```markdown
+> Markdown should remain simple enough to read as plain text.
+>
+> Visual tools should help without taking ownership away from the source.
+```
+
+> Markdown should remain simple enough to read as plain text.
+>
+> Visual tools should help without taking ownership away from the source.
+
+### Links
+
+A standard Markdown link:
+
+```markdown
+[Markmap website](https://markmap.js.org/)
+```
+
+A workspace Wiki Link:
+
+```markdown
+[[Customer Name]]
+[[Project Name|Open Project]]
+```
+
+Wiki Links are most useful in Journal mode, where they connect journals and concepts in the active workspace.
+
+### Tables
+
+```markdown
+| Item | Status | Owner |
+|---|---|---|
+| Proposal | In progress | Commercial |
+| Scope | Review | Technical |
+| Meeting | Planned | Team |
+```
+
+| Item | Status | Owner |
+|---|---|---|
+| Proposal | In progress | Commercial |
+| Scope | Review | Technical |
+| Meeting | Planned | Team |
+
+### Code blocks
+
+Use three backticks and optionally include the language name:
+
+````markdown
+```javascript
+function greet(name) {
+  console.log(`Hello, ${name}`);
+}
+```
+````
+
+```javascript
+function greet(name) {
+  console.log(`Hello, ${name}`);
+}
+```
+
+HTML Preview can apply syntax highlighting to supported code blocks.
+
+### Images
+
+Use a standard Markdown image reference:
+
+```markdown
+![Description](./images/example.png)
+```
+
+In a Journal workspace, local images are normally stored in the workspace assets folder. Use **Add Image** to create the appropriate reference.
+
+### Math
+
+Inline math:
+
+```markdown
+$x = {-b \pm \sqrt{b^2-4ac} \over 2a}$
+```
+
+Block math:
+
+```markdown
+$$
+E = mc^2
+$$
+```
+
+Math is currently intended primarily for the Markmap view. HTML Preview may display the source syntax rather than rendered math.
+
+## 📁 Open and save files
+
+### Open
+
+Use the Open menu to:
+
+- create a new document;
+- browse for a Markdown file;
+- reopen a recent writable file;
+- clear a recovery draft when necessary.
+
+### Save
+
+Select **Save** to overwrite the current writable Markdown file.
+
+If the active document does not have a writable file handle, MarkmapEditor uses **Save As**. Canceling Save As leaves the document unchanged.
+
+### Recovery drafts
+
+MarkmapEditor may store a local recovery draft when there are unsaved changes. A recovery draft helps prevent accidental loss, but it does not replace saving the physical Markdown file.
+
+## 📓 Journal mode
+
+Journal mode adds a local workspace around Markdown.
+
+Use Journal mode to:
+
+- capture daily notes;
+- maintain persistent concept pages;
+- connect pages with Wiki Links;
+- review Tasks;
+- browse Tags and related pages;
+- manage Projects;
+- generate Reports.
+
+Start with:
+
+1. Switch to **Journal**.
+2. Select **Open Workspace**.
+3. Choose a local workspace folder.
+4. Select **Today** to open or create today's journal.
+5. Use **New Concept** for a persistent knowledge page.
+
+Contextual **?** buttons provide detailed guidance for Reports, Projects, Tasks, and Related pages.
+
+## 📊 Slides mode
+
+Slides mode helps prepare presentation-oriented Markdown for an external Pandoc workflow.
+
+Use Slides mode to:
+
+- structure slides in Markdown;
+- add speaker notes;
+- create columns and presentation layouts;
+- export Slides Markdown;
+- convert the exported source with Pandoc and a PowerPoint reference template.
+
+Slides mode keeps presentation content editable as Markdown.
+
+## 🎨 Adjust the workspace
+
+Use the toolbar and pane controls to:
+
+- show or hide the Editor;
+- show or hide the Markmap;
+- open HTML Preview;
+- resize panes;
+- use fullscreen or focused views;
+- change Markmap appearance;
+- switch between light and dark themes;
+- export supported outputs.
+
+Most controls stay close to the pane or feature they affect.
+
+## 🧭 Where should I go next?
+
+If you want to write a normal Markdown file:
+
+> Continue editing this document or select **Open**.
+
+If you want journals, concepts, Tasks, links, Projects, and Reports:
+
+> Switch to **Journal** and open a workspace.
+
+If you want presentation source:
+
+> Switch to **Slides**.
+
+If you want to understand a feature:
+
+> Select **?** in the toolbar or the contextual **?** beside that feature.
+
+If you want to see what changed:
+
+> Select **✨ Release Notes**.
+
+## ✅ Your turn
+
+Try one of these:
+
+- rename this document;
+- add a heading;
+- create a nested list;
+- add an open Task;
+- open HTML Preview;
+- hide and restore a pane;
+- switch to Journal mode;
+- return to Editor and continue writing.
+
+MarkmapEditor works best when Markdown stays simple and the visual tools remain derived from it.
+
 
 ---
 
@@ -1044,104 +725,10 @@ $$
 
 ---
 
-## ⚠️ Observações / Known Issues
-
-- Abrir via `file://` pode limitar recursos do browser, especialmente storage, File System Access API, módulos e service worker.
-- Preferir rodar via:
-  - GitHub Pages;
-  - Codespaces;
-  - servidor local;
-  - localhost.
-- File System Access API funciona melhor em Chromium-based browsers.
-- Read-only open não permite sobrescrever o arquivo original sem handle gravável.
-- O workspace é local no PC do usuário; GitHub Pages hospeda o app, não os arquivos do workspace.
-- O usuário precisa selecionar/autorizar o workspace local no navegador.
-- Permissões de file handles podem variar conforme browser, perfil e segurança.
-- Imagens locais standalone `./images/...` dependem do contexto do Markdown exportado.
-- Imagens em workspace devem ficar em:
-  - `assets/images/`
-- Hot Reload funciona melhor com arquivos abertos em modo gravável.
-- A preservação de folds depende da estrutura/ordem dos nodes; grandes reorganizações podem alterar o mapeamento.
-- Export SVG é estático.
-- Export HTML Preview exporta o conteúdo renderizado do Markdown, não um mindmap interativo.
-- HTML Preview ainda não renderiza KaTeX visualmente.
-- Service worker pode manter versão antiga se `APP_VERSION` não for atualizado.
-- Ao criar novos arquivos JS/CSS, é necessário adicioná-los ao `LOCAL_APP_SHELL` no `sw.js`.
-- Se a versão publicada parecer antiga, usar:
-  - reload;
-  - hard reload;
-  - `resetServiceWorkerAndCaches()`.
-- Logs iniciais podem mostrar pequenos avisos de timing durante boot, desde que depois apareçam estados corretos como:
-  - context boot com `hasApi=true`;
-  - workspace panels setup complete;
-  - active highlight function ready = true.
-- App instalado via GitHub Pages e app rodando no Codespace usam origens diferentes, portanto caches/service workers/localStorage são separados.
-- Se raw JavaScript aparecer na tela, isso indica fragmento solto no `index.html` fora de `<script>`. O `index.html` deve conter apenas script tags válidas e não deve manter restos do workspace controller inline.
-
----
-
-## 📝 Current Status
-
-- Editor Markdown funcionando.
-- CodeMirror funcionando.
-- Markmap render funcionando.
-- HTML Preview funcionando.
-- Shiki/code blocks funcionando.
-- Save/Open/Recent workflow funcionando.
-- Hot Reload funcionando.
-- Auto-save draft funcionando.
-- Templates Org/My funcionando.
-- Add Image funcionando.
-- Export SVG funcionando.
-- Export HTML Preview funcionando.
-- Export Slides Markdown funcionando.
-- Journal Workspace funcionando.
-- Concepts funcionando.
-- Workspace Index funcionando.
-- Related/Backlinks funcionando.
-- Open Tasks funcionando.
-- Tags funcionando.
-- Active Panel funcionando.
-- Journal Timeline funcionando.
-- Help modal contextual funcionando.
-- Welcome modal funcionando.
-- GitHub Pages/PWA flow preparado.
-- Modularização inicial concluída para UI, templates, export, image, workspace controller e workspace highlight.
-
----
-
-## 📌 Implementation Strategy
-
-- Manter o app pequeno, prático e confiável.
-- Preferir melhorias incrementais a grandes reescritas.
-- Testar após cada split/refactor.
-- Sempre rodar `node --check` nos arquivos JS alterados.
-- Sempre atualizar `sw.js` quando arquivos estáticos forem criados/removidos.
-- Sempre fazer bump de `APP_VERSION` quando JS/CSS/HTML mudar.
-- Evitar deixar implementações duplicadas entre `main.js` e módulos extraídos.
-- Evitar remover código grande sem antes confirmar que o novo módulo funciona.
-- Para futuras mudanças:
-  - implementar;
-  - testar;
-  - limpar código antigo;
-  - validar cache/service worker;
-  - publicar.
-
-## ✅ Release 40 Summary
-
--Release 40 consolida o app como:
-  - editor Markdown;
-  - mindmap interativo;
-  - workspace local de journals/concepts;
-  - ferramenta de HTML Preview;
-  - fonte Markdown para slides Pandoc;
-  - PWA publicável via GitHub Pages;
-  - app parcialmente modularizado e mais fácil de manter.
--Esta versão é adequada como baseline estável para uso diário e futuras melhorias incrementais.
-
-    </textarea>
-  </div>
-  <div class="splitter" id="splitEditor"></div>
+    </textarea
+        >
+      </div>
+      <div class="splitter" id="splitEditor"></div>
       <div id="viewer">
         <button
           id="btnHtmlEdgeOpen"
@@ -1151,12 +738,7 @@ $$
         >
           ⟨/⟩
         </button>
-        <button
-          id="btnEditorEdgeOpen"
-          type="button"
-          title="Show Editor"
-          aria-label="Show Editor"
-        >
+        <button id="btnEditorEdgeOpen" type="button" title="Show Editor" aria-label="Show Editor">
           ›
         </button>
         <div id="mapPane">
@@ -1429,12 +1011,7 @@ $$
       </div>
     </div>
     <div id="helpOverlay" class="helpOverlay" hidden>
-      <div
-        class="helpPanel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="helpTitle"
-      >
+      <div class="helpPanel" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
         <div class="helpHeader">
           <div>
             <div id="helpTitle" class="helpTitle">Help / Reference</div>
@@ -1453,6 +1030,8 @@ $$
               ← Welcome
             </button>
 
+            <button id="btnHelpBack" type="button" title="Back" aria-label="Back">←</button>
+
             <button
               id="btnHelpClose"
               type="button"
@@ -1466,6 +1045,31 @@ $$
         </div>
 
         <div id="helpBody" class="helpBody"></div>
+      </div>
+    </div>
+    <div id="releaseNotesOverlay" class="releaseNotesOverlay" hidden>
+      <div
+        class="releaseNotesPanel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="releaseNotesTitle"
+      >
+        <div class="releaseNotesHeader">
+          <div>
+            <div id="releaseNotesTitle" class="releaseNotesTitle">Release Notes</div>
+            <div id="releaseNotesSubtitle" class="releaseNotesSubtitle"></div>
+          </div>
+          <button
+            id="btnReleaseNotesClose"
+            type="button"
+            class="releaseNotesClose"
+            title="Close Release Notes"
+            aria-label="Close Release Notes"
+          >
+            ×
+          </button>
+        </div>
+        <div id="releaseNotesBody" class="releaseNotesBody"></div>
       </div>
     </div>
     <div id="welcomeOverlay" class="welcomeOverlay" hidden>
@@ -1511,11 +1115,7 @@ $$
                   Use Editor mode for standalone Markdown files, mindmaps, outlines, notes, and
                   general writing.
                 </p>
-                <button
-                  type="button"
-                  class="welcomeReferenceBtn"
-                  data-help-context="editor"
-                >
+                <button type="button" class="welcomeReferenceBtn" data-help-topic="mode-editor">
                   Editor Reference
                 </button>
               </div>
@@ -1530,11 +1130,7 @@ $$
                   Use Journal mode for workspace-based writing with journals, concepts, search,
                   backlinks, tags, open tasks, and archive.
                 </p>
-                <button
-                  type="button"
-                  class="welcomeReferenceBtn"
-                  data-help-context="journal"
-                >
+                <button type="button" class="welcomeReferenceBtn" data-help-topic="mode-journal">
                   Journal Reference
                 </button>
               </div>
@@ -1548,11 +1144,7 @@ $$
                 <p>
                   Use Pandoc / Slides mode for presentation-oriented Markdown and export workflows.
                 </p>
-                <button
-                  type="button"
-                  class="welcomeReferenceBtn"
-                  data-help-context="slides"
-                >
+                <button type="button" class="welcomeReferenceBtn" data-help-topic="mode-slides">
                   Slides Reference
                 </button>
               </div>
@@ -1565,7 +1157,15 @@ $$
         </div>
 
         <div class="welcomeFooter">
-          <button id="btnWelcomeContinue" type="button" class="welcomePrimary" title="Start using Markmap Editor" aria-label="Start using Markmap Editor">Start</button>
+          <button
+            id="btnWelcomeContinue"
+            type="button"
+            class="welcomePrimary"
+            title="Start using Markmap Editor"
+            aria-label="Start using Markmap Editor"
+          >
+            Start
+          </button>
         </div>
       </div>
     </div>
