@@ -1,12 +1,27 @@
 // @ts-nocheck
 // Help / Reference modal logic.
 // Extracted from js/main.js into a standalone UI module.
+// Content is owned by js/ui/help-content.js (MME_HELP_TOPICS registry).
 // ================================
 // Help / Reference Modal
 // ================================
 
-// UX-MODE1.2: Help navigation origin state.
-let helpOrigin = 'toolbar';
+// Navigation state for mode-aware Help and contextual Help.
+let helpOrigin = 'toolbar';     // 'toolbar' | 'welcome'
+let helpStack = [];             // stack of topic IDs
+let helpReturnTarget = null;    // 'welcome' | 'release-notes' | null
+let helpReturnEl = null;        // element to return focus to on Close
+
+// Topic registry (loaded by help-content.js via script-loader before this file).
+var TOPICS = (typeof globalThis !== 'undefined' && globalThis.MME_HELP_TOPICS) || [];
+var TOPIC_MAP = {};
+(function () {
+  try { TOPICS = globalThis.MME_HELP_TOPICS || []; } catch {}
+  try { TOPICS = window.MME_HELP_TOPICS || TOPICS; } catch {}
+  if (Array.isArray(TOPICS)) {
+    TOPICS.forEach(function (t) { if (t && t.id) TOPIC_MAP[t.id] = t; });
+  }
+})();
 
 function setHelpOrigin(origin) {
   helpOrigin = origin === 'welcome' ? 'welcome' : 'toolbar';
@@ -18,13 +33,13 @@ function getHelpOrigin() {
 
 function updateHelpBackToWelcomeVisibility() {
   try {
-    const btn = document.getElementById('btnHelpBackToWelcome');
+    var btn = document.getElementById('btnHelpBackToWelcome');
     if (btn) btn.hidden = getHelpOrigin() !== 'welcome';
   } catch {}
 }
 
 function getCurrentHelpContext() {
-  const contextId =
+  var contextId =
     globalThis.currentAppContextId ||
     document.documentElement.dataset.appContext ||
     localStorage.getItem('markmap:appContext') ||
@@ -35,9 +50,9 @@ function getCurrentHelpContext() {
   }
 
   if (contextId === 'journal') {
-    const workspaceState = globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
+    var workspaceState = globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
 
-    const activeKind =
+    var activeKind =
       typeof normalizeWorkspaceKindForCompare === 'function'
         ? normalizeWorkspaceKindForCompare(workspaceState?.activeFile?.kind || '')
         : String(workspaceState?.activeFile?.kind || '').trim();
@@ -52,67 +67,189 @@ function getCurrentHelpContext() {
   return 'editor';
 }
 
+function contextToTopicId(context) {
+  if (context === 'slides') return 'mode-slides';
+  if (context === 'journal' || context === 'concept') return 'mode-journal';
+  return 'mode-editor';
+}
+
+function getCurrentHelpTopic() {
+  return contextToTopicId(getCurrentHelpContext());
+}
+
 function getHelpContextTitle(context) {
-  if (context === 'journal') return 'Journal Workspace Reference';
-  if (context === 'concept') return 'Concept Reference';
-  if (context === 'slides') return 'Pandoc / Slides Reference';
-  return 'Markdown Editor Reference';
+  var topic = TOPIC_MAP[contextToTopicId(context)];
+  if (topic) return topic.title;
+  return 'Help / Reference';
 }
 
 function getHelpContextSubtitle(context) {
-  if (context === 'journal') {
-    return 'Journals, tags, tasks, backlinks, assets, archive, and daily workflow.';
+  var topic = TOPIC_MAP[contextToTopicId(context)];
+  if (topic) return topic.subtitle;
+  return 'Contextual reference for the current mode.';
+}
+
+function renderHelpTopic(topicId) {
+  var topic = TOPIC_MAP[topicId];
+  if (!topic) {
+    log?.('Help: unknown topic ' + topicId);
+    return;
   }
 
-  if (context === 'concept') {
-    return 'Persistent knowledge pages, backlinks, tags, tasks, and concept links.';
+  var titleEl = document.getElementById('helpTitle');
+  var subtitleEl = document.getElementById('helpSubtitle');
+  var body = document.getElementById('helpBody');
+
+  if (!body) {
+    log?.('Help: body missing');
+    return;
   }
 
-  if (context === 'slides') {
-    return 'Pandoc-compatible Markdown, slide blocks, notes, layouts, images, and export source.';
-  }
+  if (titleEl) titleEl.textContent = topic.title;
+  if (subtitleEl) subtitleEl.textContent = topic.subtitle;
 
-  return 'Markdown syntax, mindmap structure, preview, images, tasks, links, code, and tables.';
+  body.innerHTML = topic.html || '';
+  try { body.scrollTop = 0; } catch {}
+
+  updateNavVisibility();
+
+  var overlay = document.getElementById('helpOverlay');
+  if (overlay) {
+    overlay.hidden = false;
+    overlay.style.display = 'flex';
+    try { overlay.focus?.(); } catch {}
+  }
+}
+
+function updateNavVisibility() {
+  var btnBack = document.getElementById('btnHelpBack');
+  var btnBackWelcome = document.getElementById('btnHelpBackToWelcome');
+
+  var hasStack = helpStack.length > 1;
+  var hasReturn = !!helpReturnTarget;
+
+  if (btnBackWelcome) btnBackWelcome.hidden = getHelpOrigin() !== 'welcome';
+  if (btnBack) btnBack.hidden = !(hasStack || hasReturn);
+
+  log?.('Help: nav stack=' + helpStack.length + ' origin=' + getHelpOrigin() +
+    ' returnTarget=' + (helpReturnTarget || 'none'));
 }
 
 function showHelpOverlay() {
-  const overlay = document.getElementById('helpOverlay');
-
+  var overlay = document.getElementById('helpOverlay');
   if (!overlay) {
     log?.('Help: overlay missing');
     return;
   }
-
-  renderHelpContent();
-
   overlay.hidden = false;
-
-  // Ensure modal overlay display works even if some other code manipulates inline styles.
-  // Using display:flex matches overlays.css.
   overlay.style.display = 'flex';
-
-  try {
-    overlay.focus?.();
-  } catch {}
-
-  log?.(`Help: shown context=${getCurrentHelpContext()}`);
+  try { overlay.focus?.(); } catch {}
 }
 
 function hideHelpOverlay() {
-  const overlay = document.getElementById('helpOverlay');
-
+  var overlay = document.getElementById('helpOverlay');
   if (overlay) {
     overlay.hidden = true;
+  }
+
+  // Return focus to the invoker.
+  if (helpReturnEl) {
+    try { helpReturnEl.focus({ preventScroll: true }); } catch {}
+    helpReturnEl = null;
+  } else {
+    try { document.getElementById('btnHelp')?.focus?.(); } catch {}
   }
 
   log?.('Help: hidden');
 }
 
+function goBack() {
+  if (helpStack.length > 1) {
+    // Mode → feature: pop to mode topic.
+    helpStack.pop();
+    var prev = helpStack[helpStack.length - 1];
+    renderHelpTopic(prev);
+    try { document.getElementById('btnHelpBack')?.focus?.(); } catch {}
+  } else if (helpReturnTarget) {
+    // From Welcome or Release Notes: exit Help.
+    hideHelpOverlay();
+    if (helpReturnTarget === 'release-notes') {
+      try { window.showReleaseNotes?.(); } catch {}
+    } else if (helpReturnTarget === 'welcome') {
+      try { window.showWelcomeOverlay?.(); } catch {}
+    }
+    helpReturnTarget = null;
+    helpStack = [];
+  }
+}
+
+function openHelpTopic(topicId, options) {
+  options = options || {};
+  var topic = TOPIC_MAP[topicId];
+  if (!topic) {
+    log?.('Help: unknown topic ' + topicId);
+    return;
+  }
+
+  var origin = options.origin || 'toolbar';
+  setHelpOrigin(origin);
+
+  if (options.fromWelcome) {
+    helpStack = [topicId];
+    helpReturnTarget = 'welcome';
+    helpReturnEl = null;
+  } else if (options.fromReleaseNotes) {
+    helpStack = [topicId];
+    helpReturnTarget = 'release-notes';
+    helpReturnEl = null;
+  } else if (options.fromPanel) {
+    var modeTopic = getCurrentHelpTopic();
+    helpStack = [modeTopic, topicId];
+    helpReturnTarget = null;
+    helpReturnEl = options.returnEl || null;
+  } else {
+    helpStack = [topicId];
+    helpReturnTarget = null;
+    helpReturnEl = null;
+  }
+
+  renderHelpTopic(topicId);
+  showHelpOverlay();
+}
+
+function showHelpForContext(context, options) {
+  var valid = context === 'journal' || context === 'concept' || context === 'slides' || context === 'editor';
+  var target = valid ? context : 'editor';
+  var topicId = contextToTopicId(target);
+
+  // UX-MODE1.2: Every Help opening path assigns its origin explicitly.
+  setHelpOrigin(options && typeof options === 'object' ? options.origin : 'toolbar');
+
+  if (getHelpOrigin() === 'welcome') {
+    openHelpTopic(topicId, { fromWelcome: true });
+  } else {
+    openHelpTopic(topicId, { origin: 'toolbar', returnEl: document.getElementById('btnHelp') || null });
+  }
+
+  log?.('Help: context=' + target + ' topic=' + topicId + ' origin=' + getHelpOrigin());
+}
+
+function renderHelpContent() {
+  var topicId = getCurrentHelpTopic();
+  setHelpOrigin('toolbar');
+  helpStack = [topicId];
+  helpReturnTarget = null;
+  helpReturnEl = document.getElementById('btnHelp') || null;
+  renderHelpTopic(topicId);
+  showHelpOverlay();
+}
+
 function wireHelpOverlay() {
-  const btnHelp = document.getElementById('btnHelp');
-  const overlay = document.getElementById('helpOverlay');
-  const btnClose = document.getElementById('btnHelpClose');
-  const btnBackToWelcome = document.getElementById('btnHelpBackToWelcome');
+  var btnHelp = document.getElementById('btnHelp');
+  var overlay = document.getElementById('helpOverlay');
+  var btnClose = document.getElementById('btnHelpClose');
+  var btnBack = document.getElementById('btnHelpBack');
+  var btnBackToWelcome = document.getElementById('btnHelpBackToWelcome');
 
   if (!overlay) {
     log?.('Help: wire skipped; overlay missing');
@@ -123,598 +260,63 @@ function wireHelpOverlay() {
     return;
   }
 
-  btnHelp?.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setHelpOrigin('toolbar');
-    showHelpOverlay();
+  btnHelp?.addEventListener('click', function () {
+    var topicId = getCurrentHelpTopic();
+    openHelpTopic(topicId, { origin: 'toolbar', returnEl: btnHelp });
   });
 
-  btnClose?.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
+  btnClose?.addEventListener('click', function (e) {
+    e?.preventDefault?.();
     hideHelpOverlay();
   });
 
-  // UX-MODE1.1: Back to Welcome button. One deterministic return transition
-  // owned here (not delegated to showWelcomeOverlay's side effects).
-  btnBackToWelcome?.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    // Duplicate-activation guard: ignore clicks once the transition started.
-    if (overlay.__returningToWelcome) return;
-    overlay.__returningToWelcome = true;
-
-    try {
-      // 1. Hide Help explicitly.
-      hideHelpOverlay();
-
-      // 2. Neutral origin state so a later direct Help open is clean.
-      setHelpOrigin('toolbar');
-
-      // 3. Present the central Welcome hub (also re-asserts Help hidden).
-      globalThis.showWelcomeOverlay?.();
-
-      // 4. Confirm Help remains hidden after the transition.
-      const helpAfter = document.getElementById('helpOverlay');
-      if (helpAfter && !helpAfter.hidden) {
-        helpAfter.hidden = true;
-      }
-    } finally {
-      overlay.__returningToWelcome = false;
-    }
-
-    log?.('Help: back to Welcome');
+  btnBack?.addEventListener('click', function (e) {
+    e?.preventDefault?.();
+    goBack();
   });
 
-  overlay.addEventListener('keydown', (event) => {
+    btnBackToWelcome?.addEventListener('click', function (e) {
+    e?.preventDefault?.();
+    setHelpOrigin('toolbar');
+    helpStack = [];
+    helpReturnTarget = null;
+    helpReturnEl = null;
+    hideHelpOverlay();
+    try { window.showWelcomeOverlay?.(); } catch {}
+  });
+
+  overlay.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') {
       event.preventDefault();
-      event.stopPropagation();
-      hideHelpOverlay();
+      if (helpStack.length > 1 || helpReturnTarget) {
+        goBack();
+      } else {
+        hideHelpOverlay();
+      }
     }
   });
 
-  updateHelpBackToWelcomeVisibility();
+  overlay.addEventListener('click', function (event) {
+    // Handle in-Help topic links (Journal Help → feature topics).
+    var topicLink = event.target.closest('[data-help-topic]');
+    if (topicLink) {
+      event.preventDefault();
+      event.stopPropagation();
+      var tid = topicLink.getAttribute('data-help-topic');
+      if (tid && typeof globalThis.openHelpTopic === 'function') {
+        globalThis.openHelpTopic(tid, { origin: 'toolbar', returnEl: btnHelp });
+      }
+      return;
+    }
+
+    if (event.target === overlay) {
+      hideHelpOverlay();
+    }
+  });
 
   overlay.__helpBound = true;
 
   log?.('Help: wired');
-}
-
-function renderHelpContentForContext(context) {
-  const title = document.getElementById('helpTitle');
-  const subtitle = document.getElementById('helpSubtitle');
-  const body = document.getElementById('helpBody');
-
-  if (!body) {
-    log?.('Help: body missing');
-    return;
-  }
-
-  if (title) title.textContent = getHelpContextTitle(context);
-  if (subtitle) subtitle.textContent = getHelpContextSubtitle(context);
-
-  if (context === 'journal') {
-    body.innerHTML = getJournalHelpHtml();
-  } else if (context === 'concept') {
-    body.innerHTML = getConceptHelpHtml();
-  } else if (context === 'slides') {
-    body.innerHTML = getSlidesHelpHtml();
-  } else {
-    body.innerHTML = getEditorHelpHtml();
-  }
-
-  // A newly opened reference always starts at the top; a previous
-  // reference's scroll position must never be reused.
-  try {
-    body.scrollTop = 0;
-  } catch {}
-
-  // Back-to-Welcome visibility is synchronized only after the final origin
-  // is assigned and before the overlay is revealed, so it can never flash
-  // in the wrong state or depend on a later pass.
-  updateHelpBackToWelcomeVisibility();
-
-  const overlay = document.getElementById('helpOverlay');
-  if (overlay) {
-    overlay.hidden = false;
-    overlay.style.display = 'flex';
-    try { overlay.focus?.(); } catch {}
-  }
-}
-
-function renderHelpContent() {
-  renderHelpContentForContext(getCurrentHelpContext());
-}
-
-function showHelpForContext(context, options) {
-  const valid = context === 'journal' || context === 'concept' || context === 'slides' || context === 'editor';
-  const target = valid ? context : 'editor';
-
-  // UX-MODE1.2: Every Help opening path assigns its origin explicitly so no
-  // previous Welcome-origin value can leak into a later direct Help opening.
-  setHelpOrigin(options && typeof options === 'object' ? options.origin : 'toolbar');
-
-  log?.(`Help: force context=${target} origin=${getHelpOrigin()}`);
-  renderHelpContentForContext(target);
-
-  // One concise diagnostic for Welcome-origin references only.
-  if (getHelpOrigin() === 'welcome') {
-    try {
-      const backBtn = document.getElementById('btnHelpBackToWelcome');
-      const backDisplay = backBtn
-        ? globalThis.getComputedStyle?.(backBtn).display || '(n/a)'
-        : '(missing)';
-      log?.(
-        `Help: reference shown context=${target} origin=welcome backHidden=${backBtn ? backBtn.hidden : '(missing)'} backDisplay=${backDisplay}`
-      );
-    } catch {}
-  }
-}
-
-function getEditorHelpHtml() {
-  return `
-    <section class="helpSection">
-      <h2>Markdown + Mindmap Basics</h2>
-      <p>
-        Editor mode is for standalone Markdown files, outlines, notes, and mindmaps.
-        Write Markdown in the editor and use the mindmap / preview views to review structure.
-      </p>
-      <div class="helpCallout">
-        Best mindmap results come from clear headings and nested lists.
-      </div>
-    </section>
-
-    <section class="helpSection">
-      <h2>Headings</h2>
-      <p>Use headings to create the main document structure.</p>
-      <code class="helpCode"># Main topic
-## Section
-### Detail</code>
-      <p>
-        Headings are also used by the HTML preview index and source-line navigation.
-      </p>
-    </section>
-
-    <section class="helpSection">
-      <h2>Lists and Nesting</h2>
-      <p>Use bullets for mindmap branches and supporting details.</p>
-      <code class="helpCode">- Main point
-  - Supporting point
-  - Another detail
-- Next point</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Tasks</h2>
-      <p>Use Markdown tasks for actions. In workspace mode, open tasks are indexed.</p>
-      <code class="helpCode">- [ ] Open task
-- [x] Completed task</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Links</h2>
-      <p>Use normal Markdown links for URLs.</p>
-      <code class="helpCode">https://www.microsoft.com
-
-https://example.com</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Images</h2>
-      <p>In standalone Editor mode, use an images folder next to the Markdown file.</p>
-      <code class="helpCode">./images/architecture-view.png</code>
-      <p>
-        If you are using a workspace, image paths usually point to assets/images from
-        journals or concepts.
-      </p>
-      <code class="helpCode">../assets/images/architecture-view.png</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Code Blocks</h2>
-      <p>
-        Use fenced code blocks. The HTML preview supports syntax highlighting for common languages.
-      </p>
-      <code class="helpCode">\`\`\`js
-console.log('Hello');
-\`\`\`
-
-\`\`\`python
-print('Hello')
-\`\`\`
-
-\`\`\`yaml
-status: active
-\`\`\`</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Tables</h2>
-      <p>Use Markdown tables for simple structured data.</p>
-      <code class="helpCode">| Item | Status |
-|---|--|
-| Option A | Open |
-| Option B | Done |</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Horizontal Rules</h2>
-      <p>Use horizontal rules to visually separate sections.</p>
-      <code class="helpCode">---</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Preview and Export</h2>
-      <p>
-        Use HTML Preview for cleaner reading. Use Export for Markdown, HTML Preview,
-        or Mindmap SVG depending on mode.
-      </p>
-      <div class="helpCallout">
-        Mermaid diagrams are not part of the supported reference yet. Add them later after Mermaid support is implemented.
-      </div>
-    </section>
-  `;
-}
-
-function getJournalHelpHtml() {
-  return `
-    <section class="helpSection">
-      <h2>Journal Workspace</h2>
-      <p>
-        Journal mode is for working inside a workspace folder with journals, concepts,
-        search, backlinks, tags, tasks, assets, and archive.
-      </p>
-      <code class="helpCode">workspace/
-  journals/
-  concepts/
-  assets/
-    images/
-  archive/
-  system/</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Journals</h2>
-      <p>
-        Journals are daily capture files. Use journals for things that happen today:
-        meetings, thoughts, decisions, customer conversations, tasks, and quick notes.
-      </p>
-      <code class="helpCode">journals/2026-07-05.md
-
----
-type: journal
-tags: []
----
-
-# 2026-07-05
-
-## Notes
-
-## Tasks
-
-## Projects</code>
-      <p>
-        Frontmatter stays in the physical Markdown source; reveal it any time its
-        Metadata placeholder is collapsed.
-      </p>
-      <div class="helpCallout">
-        Simple rule: use a journal when the note belongs to today.
-      </div>
-    </section>
-
-    <section class="helpSection">
-      <h2>Journal Titles</h2>
-      <p>
-        Journal file names should normally stay date-based, such as 2026-07-05.md.
-        The H1 title can be more descriptive and appears in the Journal timeline.
-      </p>
-      <code class="helpCode"># 2026-07-05 — Customer discovery and product feedback</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Tags</h2>
-      <p>
-        Tags help group topics across journals and concepts. Tags are indexed in the Tags panel.
-      </p>
-      <code class="helpCode">Tags: #customer #pipeline #strategy
-
-Inline tags also work:
-- Discussed #pricing and #partner motion.</code>
-      <p>
-        Recommended tag style: lowercase words, no spaces, use hyphens when needed.
-      </p>
-      <code class="helpCode">#customer
-#product-feedback
-#region-latam</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Tasks</h2>
-      <p>
-        Use Markdown tasks. Open tasks appear in the Open Tasks panel and are grouped by source file.
-      </p>
-      <code class="helpCode">- [ ] Send follow-up email
-- [ ] Validate opportunity with partner
-- [x] Add meeting notes</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Concept Links and Related</h2>
-      <p>
-        Link from a journal to a concept when a daily note belongs to a persistent topic.
-        The Related panel uses these links to show backlinks.
-      </p>
-      <code class="helpCode">[[ProductNews]]
-
-[[CustomerDiscovery]]
-
-concepts/ProductNews.md</code>
-      <div class="helpCallout">
-        Journal = capture. Concept = organize.
-      </div>
-    </section>
-
-    <section class="helpSection">
-      <h2>Images and Assets</h2>
-      <p>
-        Workspace images should live in assets/images. From journals, use:
-      </p>
-      <code class="helpCode">../assets/images/diagram.png</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Archive</h2>
-      <p>
-        Archive removes files from the active workspace view without deleting them.
-        Use archive instead of delete when you want to preserve history.
-      </p>
-    </section>
-
-    <section class="helpSection">
-      <h2>Recommended Daily Workflow</h2>
-      <ul>
-        <li>Open Today / Daily Capture.</li>
-        <li>Capture quick notes during the day.</li>
-        <li>Add tasks using - [ ].</li>
-        <li>Add tags for topics you want to find later.</li>
-        <li>Link recurring topics to concepts with [[ConceptName]].</li>
-        <li>Create concepts when a topic becomes important or reusable.</li>
-        <li>Review Open Tasks, Tags, Related, and the Journal timeline.</li>
-      </ul>
-    </section>
-  `;
-}
-
-function getConceptHelpHtml() {
-  return `
-    <section class="helpSection">
-      <h2>Concepts</h2>
-      <p>
-        Concepts are persistent knowledge pages. Use concepts for topics that should live over time:
-        accounts, opportunities, product feedback, market notes, partners, competitors,
-        playbooks, and recurring initiatives.
-      </p>
-      <code class="helpCode">concepts/ProductNews.md
-
----
-type: concept
-tags: []
----
-
-# ProductNews
-
-## Notes
-
-## Tasks
-
-## Projects</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Journals vs Concepts</h2>
-      <div class="helpGrid">
-        <div>
-          <h3>Journal</h3>
-          <p>Use for daily capture, meetings, tasks, and what happened today.</p>
-        </div>
-        <div>
-          <h3>Concept</h3>
-          <p>Use for durable knowledge, recurring topics, and things you will revisit.</p>
-        </div>
-      </div>
-      <div class="helpCallout">
-        Journal = capture. Concept = organize.
-      </div>
-    </section>
-
-    <section class="helpSection">
-      <h2>Concept Links</h2>
-      <p>
-        Concepts become useful when journals and other concepts link to them.
-      </p>
-      <code class="helpCode">[[OpportunityBrief]]
-
-[[CustomerDiscovery]]
-
-concepts/OpportunityBrief.md</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Backlinks / Related</h2>
-      <p>
-        When a concept is active, the Related panel shows journals and concepts that reference it.
-        This helps you see where the idea came from and where it is being used.
-      </p>
-    </section>
-
-    <section class="helpSection">
-      <h2>Tags</h2>
-      <p>
-        Use tags to make concepts discoverable by topic.
-      </p>
-      <code class="helpCode">Tags: #customer #opportunity #partner #market-note</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Tasks Inside Concepts</h2>
-      <p>
-        Concept tasks are useful when the action belongs to a durable topic.
-      </p>
-      <code class="helpCode">## Tasks
-- [ ] Validate value proposition
-- [ ] Add customer example
-- [x] Link related journal notes</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Business Concept Examples</h2>
-      <ul>
-        <li>Account / Customer Profile</li>
-        <li>Opportunity Brief</li>
-        <li>Partner Profile</li>
-        <li>Product Feedback</li>
-        <li>Market / Region Note</li>
-        <li>Competitor Profile</li>
-        <li>Stakeholder Map</li>
-        <li>Playbook / Process Note</li>
-      </ul>
-    </section>
-
-    <section class="helpSection">
-      <h2>Recommended Concept Structure</h2>
-      <code class="helpCode">---
-type: concept
-tags: []
----
-
-# ConceptName
-
-## Notes
-
-## Tasks
-
-## Projects</code>
-    </section>
-  `;
-}
-
-function getSlidesHelpHtml() {
-  return `
-    <section class="helpSection">
-      <h2>Pandoc / Slides Mode</h2>
-      <p>
-        Pandoc / Slides mode is for writing presentation-oriented Markdown.
-        The app exports Markdown source. An external Pandoc workflow can convert it to PowerPoint.
-      </p>
-      <div class="helpCallout">
-        The app prepares Markdown. It does not run Pandoc in the browser.
-      </div>
-    </section>
-
-    <section class="helpSection">
-      <h2>Slide Blocks</h2>
-      <p>
-        Use one slide block per slide. Slide templates are already written in Pandoc-compatible Markdown.
-      </p>
-      <code class="helpCode"># Executive Summary
-
-&lt;!-- Target PPT layout: Title and Content --&gt;
-&lt;!-- Source layout: content --&gt;
-
-- Point 1
-- Point 2
-- Point 3</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Layout Comments</h2>
-      <p>
-        Layout comments describe the intended PowerPoint template target and preserve the old source layout mapping.
-      </p>
-      <code class="helpCode">&lt;!-- Target PPT layout: Image Left + Text Right --&gt;
-&lt;!-- Source layout: image-text --&gt;</code>
-      <p>
-        These comments are kept in the Markdown export and can be used by future tooling.
-      </p>
-    </section>
-
-    <section class="helpSection">
-      <h2>Speaker Notes</h2>
-      <p>Use Pandoc-compatible notes blocks for presenter notes.</p>
-      <code class="helpCode">::: notes
-Presenter notes go here.
-:::</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Columns</h2>
-      <p>Use Pandoc-compatible columns for two-column or multi-column slide layouts.</p>
-      <code class="helpCode">:::: {.columns}
-::: {.column}
-## Left
-- Point 1
-- Point 2
-:::
-
-::: {.column}
-## Right
-- Point A
-- Point B
-:::
-:::</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Images</h2>
-      <p>
-        In a workspace, store images in assets/images and reference them from slide Markdown.
-      </p>
-      <code class="helpCode">../assets/images/market-opportunity.png</code>
-      <p>Outside a workspace, use an images folder next to the Markdown file.</p>
-      <code class="helpCode">./images/market-opportunity.png</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Tables</h2>
-      <p>Use Markdown tables for comparison or risk slides.</p>
-      <code class="helpCode">| Criteria | Option A | Option B |
-|---|---|---|
-| Cost | Low | Medium |
-| Impact | Medium | High |</code>
-    </section>
-
-    <section class="helpSection">
-      <h2>Common Slide Templates</h2>
-      <ul>
-        <li>Title Slide — Title + Subtitle</li>
-        <li>Agenda — Bullet List</li>
-        <li>Executive Summary — Key Points</li>
-        <li>Growth Strategy — Two Columns</li>
-        <li>Market Opportunity — Image + Text</li>
-        <li>Product Roadmap — Text + Image</li>
-        <li>Strategic Options — Three Columns</li>
-        <li>Operating Model Overview — 2x2 Grid</li>
-        <li>Revenue Growth Potential — KPI</li>
-        <li>Option Comparison — Table</li>
-        <li>Next Steps — Action List</li>
-      </ul>
-    </section>
-
-    <section class="helpSection">
-      <h2>Export Workflow</h2>
-      <p>
-        Use Export Slides Markdown (.md). Then pass the exported Markdown file to your external Pandoc workflow.
-      </p>
-      <code class="helpCode">pandoc slides.md -o output.pptx --reference-doc=PandocTemplateV4.pptx</code>
-      <p>
-        The exported Markdown should preserve headings, layout comments, images, speaker notes,
-        columns, and tables.
-      </p>
-    </section>
-  `;
 }
 
 (function () {
@@ -735,15 +337,14 @@ Presenter notes go here.
     globalThis.wireHelpOverlay = wireHelpOverlay;
     globalThis.renderHelpContent = renderHelpContent;
     globalThis.showHelpForContext = showHelpForContext;
-    window.showHelpOverlay = showHelpOverlay;
-    window.hideHelpOverlay = hideHelpOverlay;
-    window.wireHelpOverlay = wireHelpOverlay;
-    window.renderHelpContent = renderHelpContent;
-    window.showHelpForContext = showHelpForContext;
+    globalThis.openHelpTopic = openHelpTopic;
 
     // UX-MODE1.2: Expose navigation origin state.
     globalThis.setHelpOrigin = setHelpOrigin;
     globalThis.getHelpOrigin = getHelpOrigin;
+
+    window.showHelpForContext = showHelpForContext;
+    window.openHelpTopic = openHelpTopic;
     window.setHelpOrigin = setHelpOrigin;
     window.getHelpOrigin = getHelpOrigin;
   } catch {}

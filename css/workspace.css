@@ -591,6 +591,30 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
   text-align: left;
 }
 
+/* Shared right-controls container for panels with contextual Help.
+   Holds existing action (if any) + contextual Help button + final
+   badge/count/status. Kept at the right edge; the final indicator remains
+   the last element on the right. Never wraps into the panel body. */
+.workspacePanelHeaderControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+/* Collapse toggle should use the remaining available width when a
+   right-controls container is present, so the title truncates and the
+   badge/controls stay right-aligned against the same edge. */
+.workspaceProjectsHeader > .workspacePanelHeaderButton,
+.workspaceTasksHeader > .workspacePanelHeaderButton,
+.workspaceReportHeader > .workspacePanelHeaderButton,
+.workspaceRelatedHeader > .workspacePanelHeaderButton {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
 .workspacePanelHeaderButton:hover {
   background: var(--surface-hover);
 }
@@ -660,6 +684,7 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
 .workspaceIndexHeader,
 .workspaceRelatedHeader,
 .workspaceTasksHeader,
+.workspaceReportHeader,
 .workspaceJournalsHeader,
 .workspaceConceptsHeader,
 .workspaceTagsHeader {
@@ -1761,7 +1786,6 @@ html.journal-sidebar-collapsed #workspaceProjectsPanel {
 }
 
 #workspaceProjectsBadge {
-  margin-left: auto;
   font-size: 11px;
   opacity: 0.7;
   white-space: nowrap;

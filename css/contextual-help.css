@@ -1,0 +1,55 @@
+/* Contextual Help buttons — small "?" buttons in panel headers. */
+.ctxHelpBtn {
+  flex: 0 0 auto;
+
+  min-width: 34px;
+  height: 30px;
+  padding: 0 8px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 6px;
+  border: 1px solid var(--toolbar-border);
+
+  background: var(--toolbar-bg, rgba(127, 127, 127, 0.14));
+  color: var(--text);
+
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.ctxHelpBtn:hover {
+  opacity: 1;
+  background: var(--menu-hover);
+}
+
+.ctxHelpBtn:focus-visible {
+  outline: 2px solid var(--focus-ring, #3b82f6);
+  outline-offset: 1px;
+}
+
+html.dark .ctxHelpBtn {
+  background: var(--toolbar-bg, rgba(255, 255, 255, 0.06));
+}
+
+/* Contextual Help controls stay inside collapsed panel headers: they live
+   in the header control container (never the body), matching the counted
+   in-collapse contract of Board / Refresh / Open / Index controls. */
+.workspacePanelCollapsed .ctxHelpBtn {
+  display: inline-flex !important;
+}
+
+@media (max-width: 760px) {
+  .ctxHelpBtn {
+    min-width: 28px;
+    height: 26px;
+    font-size: 11px;
+  }
+}

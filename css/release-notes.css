@@ -1,0 +1,285 @@
+/* ================================ Release Notes ================================
+   Canonical Release Notes viewer styles. Single owner of .releaseNotes* rules.
+   Uses tokens from css/theme.css. Loaded via index.html with script-loader
+   fallback (appendStylesheet, idempotent).
+   ================================================================================ */
+
+.releaseNotesOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(6px);
+}
+
+.releaseNotesOverlay[hidden] {
+  display: none !important;
+}
+
+.releaseNotesPanel {
+  min-height: 0;
+  max-height: min(840px, calc(100vh - 32px));
+  max-height: min(840px, calc(100dvh - 32px));
+  width: min(920px, 96vw);
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+
+  border-radius: 16px;
+  border: 1px solid var(--menu-border);
+
+  background: var(--menu-bg);
+  color: var(--text);
+
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+}
+
+.releaseNotesHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+
+  padding: 18px 22px 14px;
+
+  border-bottom: 1px solid var(--menu-border);
+}
+
+.releaseNotesTitle {
+  font-size: 22px;
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+.releaseNotesSubtitle {
+  margin-top: 6px;
+
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.72;
+}
+
+.releaseNotesClose {
+  flex: 0 0 auto;
+
+  width: 34px;
+  height: 32px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 8px;
+  border: 1px solid var(--toolbar-border);
+
+  background: var(--toolbar-bg);
+  color: var(--text);
+
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+.releaseNotesClose:hover {
+  background: var(--menu-hover);
+}
+
+.releaseNotesBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 18px 22px;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.releaseNotesEntry {
+  margin-bottom: 18px;
+}
+
+.releaseEntryHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 10px 0;
+
+  border-bottom: 1px solid var(--menu-border);
+}
+
+.releaseEntryVersion {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.releaseEntryTitle {
+  margin-left: 8px;
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.releaseToggle {
+  flex: 0 0 auto;
+
+  padding: 4px 10px;
+
+  border-radius: 6px;
+  border: 1px solid var(--toolbar-border);
+
+  background: var(--toolbar-bg, rgba(127, 127, 127, 0.14));
+  color: var(--text);
+
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.releaseToggle:hover {
+  background: var(--menu-hover);
+}
+
+.releaseEntryContent {
+  padding: 12px 0 6px;
+}
+
+/* Boolean-attribute correctness: a false state must truly hide the entry
+   body even if any future display rule is added. */
+.releaseEntryContent[hidden] {
+  display: none;
+}
+
+.releaseEntrySummary {
+  margin: 0 0 10px;
+
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+.releaseChangeGroup {
+  margin-bottom: 12px;
+}
+
+.releaseChangeGroup strong {
+  display: block;
+  margin-bottom: 4px;
+
+  font-size: 13px;
+}
+
+.releaseChangeGroup ul {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.releaseChangeGroup li {
+  margin: 2px 0;
+  font-size: 13px;
+  opacity: 0.82;
+}
+
+.releaseTryIt {
+  display: block;
+
+  margin: 10px 0;
+  padding: 10px 12px;
+
+  border-radius: 10px;
+  border: 1px solid var(--menu-border);
+
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--text);
+
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.releaseUiPath {
+  margin: 8px 0;
+
+  font-size: 13px;
+  opacity: 0.82;
+}
+
+.releaseLimitations {
+  margin-top: 10px;
+}
+
+.releaseLimitations strong {
+  display: block;
+  margin-bottom: 4px;
+
+  font-size: 13px;
+}
+
+.releaseLimitations ul {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.releaseLimitations li {
+  margin: 2px 0;
+  font-size: 13px;
+  opacity: 0.82;
+}
+
+.releaseHelpLink {
+  margin-top: 10px;
+
+  padding: 6px 10px;
+
+  border-radius: 8px;
+  border: 1px solid var(--toolbar-border);
+
+  background: var(--toolbar-bg, rgba(127, 127, 127, 0.14));
+  color: var(--text);
+
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.releaseHelpLink:hover {
+  background: var(--menu-hover);
+}
+
+html.dark .releaseNotesOverlay {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+html.dark .releaseEntryContent {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+@media (max-width: 760px) {
+  .releaseNotesOverlay {
+    padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    align-items: stretch;
+  }
+
+  .releaseNotesPanel {
+    max-height: 92vh;
+  }
+
+  .releaseNotesTitle {
+    font-size: 20px;
+  }
+}

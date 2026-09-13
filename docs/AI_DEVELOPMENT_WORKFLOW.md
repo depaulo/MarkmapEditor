@@ -795,7 +795,119 @@ future feature appears easy or isolated.
 
 ---
 
-## 26. General Rule
+## 26. Release Closure (Mandatory)
+
+Every accepted package must close with all of the following documented:
+
+- accepted runtime behavior;
+- static validation;
+- browser acceptance;
+- contextual Help review;
+- validation-backed examples;
+- Release Notes entry;
+- semantic version decision;
+- cache identity update;
+- LOCAL_APP_SHELL verification;
+- one-time What's New verification;
+- permanent history verification;
+- cache-boundary smoke;
+- checkpoint commit;
+- separately authorized push.
+
+A package is closed only when each item is verified or an approved exception
+is recorded.
+
+Experiment and non-release rules:
+
+- An experiment does not create a release, version change, Help update, or
+  Release Notes entry until its production behavior is accepted.
+- A rejected feature receives no Release Notes entry.
+- Browser-pending work does not close a release; it stays pending until
+  browser-proven, then is reconsidered at a later closure.
+
+Planned syntax and roadmap behavior must not be documented as implemented.
+
+Preservation of historical validation evidence:
+
+- Historical validation evidence (records of what previously ran, where, and
+  what it proved) is preserved verbatim. New work never rewrites or re-labels
+  past evidence; updates are recorded as current operational documentation,
+  not as edits to historical proof.
+
+Unresolved tool-call guard:
+
+- If a validation tool-call fails or returns no result, the package is not
+  closed and no checkpoint is created. Resolve the failure or record an
+  approved exception before declaring closure.
+
+---
+
+## 27. Semantic Version Policy
+
+MarkmapEditor uses semantic product versions of the form MAJOR.MINOR.PATCH.
+
+- An accepted moderate user-facing inclusion increments MINOR.
+- An accepted correction inside an existing inclusion increments PATCH.
+- The first completed core releases as 1.0.0.
+- A major second-generation architecture releases as 2.0.0.
+- An experiment ships with no version change.
+- A rejected feature gets no release entry.
+- Browser-pending work does not close a release.
+- A package may contain several accepted commits before its release boundary.
+  The product version changes once during final release closure, not once per
+  commit.
+
+Four-part numbers (e.g. 0.6001) and channel labels (e.g. v73) are not
+long-term user-facing product versions.
+
+### First semantic release
+
+0.6.0 is the first semantic MarkmapEditor release. Earlier vNN values were
+cache identities, not product versions, and are not reconstructed as semantic
+Release Notes entries.
+
+---
+
+## 28. Pre-1.0 Roadmap
+
+- 0.6.x — Help, Permanent Release Notes, semantic versioning, and release closure.
+- 0.7.x — Projects minimal declaration and managed metadata.
+- 0.8.x — Projects Expanded View editing and normalized Report integration.
+- 0.9.x — Basic Reminders and first-generation stabilization.
+- 0.10.x — Visual hierarchy and interface distinction.
+- 1.0.0 — First-generation core completion.
+- 2.0.0 — Second-generation architecture and larger experiences.
+
+Roadmap descriptions are planning intent, not release-note text, until reviewed
+at the gate for each package.
+
+### Version 2 candidates (recorded, not implemented)
+
+Version 1 is not blocked by these items. They are candidates for a later
+second-generation release:
+
+- optional-feature configuration architecture (must hide UI without deleting or
+  rewriting Markdown or managed comments);
+- internal Draw.io architecture;
+- shared @ attribute vocabulary;
+- context-aware @ completion;
+- optional @ insertion control;
+- shared attributes for Tasks, Projects, and Reminders;
+- decision on People / assignee identity;
+- advanced Reminder recurrence;
+- Reveal.js completion;
+- major redesigns;
+- deferred Report window composition;
+- HTML-pane tabs;
+- generalized pane surfaces.
+
+The shared @ language is not part of Version 1. This release does not advertise
+@ syntax, slash commands, autocomplete, people assignment, or advanced
+reminder recurrence.
+
+---
+
+## 29. General Rule
 
 Inspect first.
 Plan before editing.

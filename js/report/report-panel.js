@@ -219,8 +219,10 @@
             <span class="workspacePanelChevron" aria-hidden="true">▶</span>
             <span class="workspaceReportTitle">Report</span>
           </span>
-          <span id="workspaceReportBadge" class="workspacePanelBadge">Config</span>
         </button>
+        <span class="workspacePanelHeaderControls">
+          <span id="workspaceReportBadge" class="workspacePanelBadge">Config</span>
+        </span>
       </div>
 
       <div class="workspacePanelBody">

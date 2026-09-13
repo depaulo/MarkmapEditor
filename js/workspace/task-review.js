@@ -300,26 +300,26 @@
     if (panel) {
       panel.innerHTML = `
         <div class="workspaceTasksHeader">
-          <span class="workspaceTasksHeaderCollapse">
-            <button
-              type="button"
-              class="workspacePanelHeaderButton"
-              data-workspace-panel-toggle="tasks"
-              aria-expanded="false"
-            >
-              <span class="workspacePanelHeaderLeft">
-                <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-                <span class="workspaceTasksTitle">Tasks</span>
-              </span>
-              <span id="workspaceTasksBadge" class="workspacePanelBadge">0</span>
-            </button>
-          </span>
           <button
             type="button"
-            id="workspaceTaskBoardBtn"
-            class="workspaceTaskBoardButton"
-            aria-label="Open Task Board"
-          >Board</button>
+            class="workspacePanelHeaderButton"
+            data-workspace-panel-toggle="tasks"
+            aria-expanded="false"
+          >
+            <span class="workspacePanelHeaderLeft">
+              <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+              <span class="workspaceTasksTitle">Tasks</span>
+            </span>
+          </button>
+          <span class="workspacePanelHeaderControls">
+            <button
+              type="button"
+              id="workspaceTaskBoardBtn"
+              class="workspaceTaskBoardButton"
+              aria-label="Open Task Board"
+            >Board</button>
+            <span id="workspaceTasksBadge" class="workspacePanelBadge">0</span>
+          </span>
         </div>
         <div class="workspacePanelBody">
           <div id="workspaceTaskSearchRow" class="workspaceTaskSearchRow">
@@ -371,26 +371,26 @@
 
     panel.innerHTML = `
       <div class="workspaceTasksHeader">
-        <span class="workspaceTasksHeaderCollapse">
-          <button
-            type="button"
-            class="workspacePanelHeaderButton"
-            data-workspace-panel-toggle="tasks"
-            aria-expanded="false"
-          >
-            <span class="workspacePanelHeaderLeft">
-              <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-              <span class="workspaceTasksTitle">Tasks</span>
-            </span>
-            <span id="workspaceTasksBadge" class="workspacePanelBadge">0</span>
-          </button>
-        </span>
         <button
           type="button"
-          id="workspaceTaskBoardBtn"
-          class="workspaceTaskBoardButton"
-          aria-label="Open Task Board"
-        >Board</button>
+          class="workspacePanelHeaderButton"
+          data-workspace-panel-toggle="tasks"
+          aria-expanded="false"
+        >
+          <span class="workspacePanelHeaderLeft">
+            <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+            <span class="workspaceTasksTitle">Tasks</span>
+          </span>
+        </button>
+        <span class="workspacePanelHeaderControls">
+          <button
+            type="button"
+            id="workspaceTaskBoardBtn"
+            class="workspaceTaskBoardButton"
+            aria-label="Open Task Board"
+          >Board</button>
+          <span id="workspaceTasksBadge" class="workspacePanelBadge">0</span>
+        </span>
       </div>
       <div class="workspacePanelBody">
         <div id="workspaceTaskSearchRow" class="workspaceTaskSearchRow">

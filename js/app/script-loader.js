@@ -30,7 +30,6 @@ function appendStylesheet(href) {
   appendScript('./js/navigation/navigation-history.js');
 
   appendScript('./js/ui/welcome.js');
-  appendScript('./js/ui/help.js');
   appendScript('./js/templates/templates-data.js');
 
   appendScript('./js/export/export-actions.js');
@@ -76,6 +75,22 @@ function appendStylesheet(href) {
   // so MME_VIEW_LAYOUT exists when main.js registers pane adapters.
   appendStylesheet('./css/view-layout.css');
   appendScript('./js/ui/view-layout.js');
+
+  // Release foundation (ACT C–F): canonical release identity first, then
+  // Help / Release Notes content + viewers. All must load before main.js, and
+  // stylesheets stay idempotent via appendStylesheet for the cache boundary.
+  appendScript('./js/release/release.js');
+  appendScript('./js/ui/help-content.js');
+  appendScript('./js/ui/help.js');
+  appendScript('./js/ui/release-notes-content.js');
+  appendScript('./js/ui/release-notes.js');
+  appendScript('./js/ui/contextual-help.js');
+
+  // Release foundation styles — loaded dynamically; also declared statically
+  // in index.html as the first-paint fallback so markup renders consistently
+  // even if a script load races.
+  appendStylesheet('./css/release-notes.css');
+  appendStylesheet('./css/contextual-help.css');
 
   appendScript('./js/main.js', {
     onload: function () {

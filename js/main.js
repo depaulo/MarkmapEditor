@@ -1732,11 +1732,12 @@ function ensureWorkspaceRelatedPanel() {
           <span class="workspacePanelChevron" aria-hidden="true">▶</span>
           <span class="workspaceRelatedTitle">Related</span>
         </span>
-
+      </button>
+      <span class="workspacePanelHeaderControls">
         <span id="workspaceRelatedBadge" class="workspacePanelBadge">
           0 related
         </span>
-      </button>
+      </span>
     </div>
 
     <div class="workspacePanelBody">
@@ -1791,11 +1792,12 @@ function ensureWorkspaceTasksPanel() {
           <span class="workspacePanelChevron" aria-hidden="true">▶</span>
           <span class="workspaceTasksTitle">Open Tasks</span>
         </span>
-
+      </button>
+      <span class="workspacePanelHeaderControls">
         <span id="workspaceTasksBadge" class="workspacePanelBadge">
           0 open
         </span>
-      </button>
+      </span>
     </div>
 
     <div class="workspacePanelBody">
@@ -2801,32 +2803,34 @@ function ensureWorkspaceProjectsPanel() {
   panel.hidden = true;
 
   panel.innerHTML = `
-    <button
-      type="button"
-      class="workspacePanelHeaderButton"
-      data-workspace-panel-toggle="projects"
-      aria-expanded="false"
-    >
-      <span class="workspacePanelHeaderLeft">
-        <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-        <span class="workspaceProjectsTitle">Projects</span>
-      </span>
-
-      <span class="workspacePanelHeaderRight">
-        <span id="workspaceProjectsBadge" class="workspacePanelBadge">
-          0
+    <div class="workspaceProjectsHeader">
+      <button
+        type="button"
+        class="workspacePanelHeaderButton"
+        data-workspace-panel-toggle="projects"
+        aria-expanded="false"
+      >
+        <span class="workspacePanelHeaderLeft">
+          <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+          <span class="workspaceProjectsTitle">Projects</span>
         </span>
+      </button>
+      <span class="workspacePanelHeaderControls">
         <button
           id="workspaceProjectsOpenButton"
           type="button"
+          class="workspaceProjectsAction"
           title="Open full Workspace Index"
           aria-label="Open full Workspace Index"
           data-workspace-action="open-index"
         >
           ▤
         </button>
+        <span id="workspaceProjectsBadge" class="workspacePanelBadge">
+          0
+        </span>
       </span>
-    </button>
+    </div>
 
     <div class="workspacePanelBody">
       <div id="workspaceProjectsSummary" class="workspaceProjectsSummary">
@@ -3306,6 +3310,36 @@ function finalizeWorkspaceSidebar() {
     renderWorkspaceRelatedPanel();
     renderWorkspaceTagsPanel?.();
     renderWorkspaceProjectsPanel();
+
+    // ACT F: contextual Help buttons (idempotent helper; panels own only topic IDs).
+    // Accepted visual reference:
+    //   Projects   [count] [?]
+    //   Tasks      [count] [?]
+    //   Report     [Config] [?]
+    //   Related    [count] [?]
+    // Buttons live inside the exact header control containers so they stay
+    // visible when the panel is collapsed.
+    try {
+      if (typeof globalThis.attachContextualHelpButton === 'function') {
+        var __attachCtxHelp = globalThis.attachContextualHelpButton;
+        var __reportPanel = document.getElementById('workspaceReportPanel');
+        if (__reportPanel) {
+          __attachCtxHelp({ panel: __reportPanel, helpTopicId: 'journal-reports' });
+        }
+        var __projectsPanel = document.getElementById('workspaceProjectsPanel');
+        if (__projectsPanel) {
+          __attachCtxHelp({ panel: __projectsPanel, helpTopicId: 'journal-projects' });
+        }
+        var __tasksPanel = document.getElementById('workspaceTasksPanel');
+        if (__tasksPanel) {
+          __attachCtxHelp({ panel: __tasksPanel, helpTopicId: 'journal-tasks' });
+        }
+        var __relatedPanel = document.getElementById('workspaceRelatedPanel');
+        if (__relatedPanel) {
+          __attachCtxHelp({ panel: __relatedPanel, helpTopicId: 'journal-links' });
+        }
+      }
+    } catch {}
 
     log?.('Workspace: panels setup complete');
   } catch (e) {
@@ -5253,7 +5287,7 @@ window.addEventListener('unhandledrejection', (e) =>
   log(`❌ unhandledrejection: ${e.reason?.message || e.reason}`)
 );
 
-log(`Release 40: main.js started ✅`);
+log(`MarkmapEditor ${globalThis.MME_RELEASE?.productVersion || window.MME_RELEASE?.productVersion || '(unversioned)'} started ✅`);
 log(`Env: href=${location.href}`);
 log(`Env: protocol=${location.protocol}`);
 log(`Env: isSecureContext=${window.isSecureContext}`);
@@ -12054,7 +12088,21 @@ wireHelpOverlay?.();
 
 startAutoSave();
 
+// Boot contract (Welcome precedence over What's New):
+// - If Welcome must display on this boot: show Welcome, suppress automatic
+//   What's New for this boot, do NOT mark the release as seen.
+// - On a later boot, if the current release remains unseen: show What's New once.
+// - Welcome and What's New never display simultaneously (separate overlays,
+//   separate storage/acknowledgment state).
 maybeShowWelcomeOverlay();
+try {
+  if (typeof window.shouldShowWelcome === 'function' && window.shouldShowWelcome()) {
+    log?.('Release: Welcome shown; automatic What\'s New suppressed for this boot');
+  } else if (typeof window.showWhatsNewIfNeeded === 'function') {
+    var __whatsNewShown = window.showWhatsNewIfNeeded();
+    log?.('Release: automatic What\'s New shown=' + String(!!__whatsNewShown));
+  }
+} catch {}
 
 // Debounced rendering via MME_RENDER (R-SPLIT4 + R-RENDER1)
 const RENDER_DEBOUNCE_MS = 1000;

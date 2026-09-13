@@ -1128,6 +1128,28 @@ html.dark #mapStyleApply {
   background: var(--menu-hover);
 }
 
+/* Back button for Help navigation stack (mode → feature) */
+#btnHelpBack {
+  height: 32px;
+  padding: 0 12px;
+
+  border-radius: 8px;
+  border: 1px solid var(--toolbar-border);
+
+  background: var(--toolbar-bg);
+  color: var(--text);
+
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+#btnHelpBack:hover {
+  background: var(--menu-hover);
+}
+
 .helpBody h2 {
   margin: 0 0 8px;
   font-size: 17px;
@@ -1200,6 +1222,35 @@ html.dark #mapStyleApply {
   line-height: 1.45;
 }
 
+.helpTopicLink {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 6px 10px;
+
+  border-radius: 8px;
+  border: 1px solid var(--menu-border);
+
+  background: var(--toolbar-bg, rgba(127, 127, 127, 0.14));
+  color: var(--text);
+
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.helpTopicLink:hover {
+  background: var(--menu-hover);
+}
+
+.helpBody ol {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.helpBody li {
+  margin: 2px 0;
+}
+
 html.dark .helpSection {
   background: rgba(255, 255, 255, 0.045);
 }
@@ -1213,7 +1264,7 @@ html.dark .helpSection {
     max-height: 92vh;
   }
 
-  .helpTitle {
+    .helpTitle {
     font-size: 20px;
   }
 }

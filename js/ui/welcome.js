@@ -144,25 +144,26 @@ function wireWelcomeOverlay() {
     }
   });
 
-  // Welcome reference shortcuts -> reuse Help modal for the requested context.
-  document.querySelectorAll('.welcomeReferenceBtn').forEach((btn) => {
+    document.querySelectorAll('.welcomeReferenceBtn').forEach((btn) => {
     btn.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-
+      const topicId = btn.dataset.helpTopic;
       const ctx = btn.dataset.helpContext || 'editor';
 
-      // UX-MODE1.2: hide Welcome before showing Help to avoid overlap.
-      // Use requestAnimationFrame to avoid click-through overlapping overlays.
       hideWelcomeOverlay({ remember: false });
 
       requestAnimationFrame(() => {
         try {
-          globalThis.showHelpForContext?.(ctx, { origin: 'welcome' });
+          if (topicId && typeof globalThis.openHelpTopic === 'function') {
+            globalThis.openHelpTopic(topicId, { origin: 'welcome' });
+          } else {
+            globalThis.showHelpForContext?.(ctx, { origin: 'welcome' });
+          }
         } catch {}
       });
 
-      log?.(`Welcome: reference requested context=${ctx}`);
+      log?.(`Welcome: reference requested topic=${topicId || 'null'} context=${ctx}`);
     });
   });
 
