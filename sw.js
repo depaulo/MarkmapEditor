@@ -11,13 +11,12 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 
 // APP_VERSION is the single authoritative release/version owner. It names the
 // installed cache identity (APP_CACHE / RUNTIME_CACHE) for this release
-// boundary: Task Experience Enrichment — shared Task priority normalization,
-// Task Sidebar lifecycle filtering, Task Board source labels, P1/P2/P3
-// priority badges, Board priority filtering, Board sorting, and Board
-// dark-mode select and header consistency. All changed assets are
+// boundary: MarkmapEditor 0.6.0 — Help and Release Notes foundation
+// (permanent Help content, contextual Help, Release Notes viewer, What's New,
+// and the canonical release identity module). All changed assets are
 // deterministic precache entries, so a new identity ensures installed clients
 // receive the complete accepted package.
-const APP_VERSION = 'markmap-journal-pwa-v72-metadata-starters-v1';
+const APP_VERSION = 'markmap-journal-pwa-0.6.0-help-release-foundation';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.
@@ -41,6 +40,11 @@ const LOCAL_APP_SHELL = [
   './css/menus.css',
   './css/overlays.css',
   './css/workspace.css',
+  // Release Notes and contextual Help stylesheets (index.html <link> +
+  // script-loader.js appendStylesheet). Precached so the 0.6.0 offline shell
+  // renders the complete Release Notes and contextual Help surfaces.
+  './css/release-notes.css',
+  './css/contextual-help.css',
   // Screen Layout runtime stylesheet. Loaded dynamically by script-loader.js
   // (appendStylesheet) — precached here so it is a deterministic release asset
   // instead of a stale-able runtime-cached copy (S4B device-testing finding).
@@ -54,6 +58,13 @@ const LOCAL_APP_SHELL = [
   './js/ui/welcome.js',
 
   './js/ui/help.js',
+  // Release foundation (0.6.0 Help and Release Notes). Loaded by
+  // script-loader.js in this same order (release identity first).
+  './js/release/release.js',
+  './js/ui/help-content.js',
+  './js/ui/release-notes-content.js',
+  './js/ui/release-notes.js',
+  './js/ui/contextual-help.js',
   './js/templates/templates-data.js',
   './js/templates/templates-menu.js',
   './js/templates/metadata-templates.js',
