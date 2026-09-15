@@ -4149,6 +4149,67 @@ function confirmDiscardIfDirty() {
   return confirm('Current document has unsaved changes. Discard?');
 }
 
+// Update Ready (0.6.1): the single application-owned reload-safety
+// coordinator. The PWA update module (js/pwa/update-ready.js) consumes only
+// the returned enum and never inspects dirty state, file handles, Report
+// identity, Draw.io state, recovery drafts, or external stale state.
+// Returns one of:
+//   'proceed-clean' | 'proceed-after-save' | 'proceed-after-discard'
+//   | 'cancel' | 'failure'
+// Uses the existing coordinated Save / Discard / Cancel decision owner
+// (resolveSaveDiscardCancelDecision) and the existing Save owner (saveSmart).
+// Draw.io / in-memory session state is intentionally NOT reset here; the
+// authorized page reload discards it naturally.
+async function resolveBeforeApplicationReload(options) {
+  const reason = (options && options.reason) || 'reload';
+  log?.(`ReloadSafety: resolve reason=${reason}`);
+
+  // Clean document (and any capability-gated clean surface): proceed.
+  if (!dirty) {
+    return 'proceed-clean';
+  }
+
+  // Dirty document / unsaved virtual Report: one coordinated decision using
+  // the accepted Save / Discard / Cancel owner. No second generic prompt.
+  const decision = resolveSaveDiscardCancelDecision({
+    saveMessage: 'Save before reloading MarkmapEditor?',
+    discardMessage: 'Discard the unsaved changes and reload MarkmapEditor?',
+  });
+
+  if (decision.action === 'cancel') {
+    return 'cancel';
+  }
+
+  if (decision.action === 'discard') {
+    // Discard authorizes reload without saving; dirty state and recovery
+    // drafts are owned by their existing paths and are not forced here.
+    return 'proceed-after-discard';
+  }
+
+  // Save: proceed only after successful physical persistence.
+  let saveResult = null;
+  try {
+    saveResult = await saveSmart();
+  } catch (err) {
+    log?.(`ReloadSafety: save threw ${String(err)}`);
+    return 'failure';
+  }
+
+  if (saveResult && saveResult.ok) {
+    return 'proceed-after-save';
+  }
+
+  // Existing saveSmart() failure taxonomy: unavailable capability, canceled
+  // Save As, permission denial, or physical write failure.
+  const saveReason = (saveResult && saveResult.reason) || 'unknown';
+  log?.(`ReloadSafety: save not ok reason=${saveReason}`);
+  if (saveReason === 'canceled' || saveReason === 'cancelled' || saveReason === 'abort') {
+    return 'cancel';
+  }
+  return 'failure';
+}
+
+
 // ACT G1: Decision helper for Report generation when the current source is dirty.
 // Uses two sequential window.confirm calls and returns one of:
 //   { action: 'save' }    — Save before generating the Report
@@ -4829,6 +4890,7 @@ async function openVirtualReport(preparedResult) {
 globalThis.MME_APP = {
   isDirty: () => dirty,
   confirmDiscardIfDirty,
+  resolveBeforeApplicationReload,
   openTextDocument,
   setWritableHandleForCurrentFile,
   showToast,
@@ -7044,6 +7106,43 @@ function normalizeAssetList(x) {
   return Array.isArray(x) ? x : [x];
 }
 
+// Offline dependency diagnostics (0.6.1). markmap's own loaders throw the raw
+// non-OK Response for stylesheets and reject with the raw Event for script
+// elements, which is otherwise reported only as "[object Response]" /
+// "[object Event]". This describes the failure precisely; it never replaces or
+// swallows the original error.
+function describeAssetFailure(err) {
+  try {
+    if (typeof Response !== 'undefined' && err instanceof Response) {
+      return `Response(status=${err.status} statusText=${err.statusText || ''} type=${err.type || ''} url=${err.url || '(n/a)'})`;
+    }
+    if (typeof Event !== 'undefined' && err instanceof Event) {
+      const target = err.target || null;
+      const url = (target && (target.src || target.href)) || '(n/a)';
+      const tag = target && target.tagName ? target.tagName : '(n/a)';
+      return `Event(type=${err.type || ''} target=${tag} url=${url})`;
+    }
+    if (err instanceof Error) {
+      return `${err.name || 'Error'}: ${err.message || ''}`;
+    }
+    return `non-Error ${Object.prototype.toString.call(err)}`;
+  } catch {
+    return 'unavailable';
+  }
+}
+
+function describeAssetItem(item) {
+  try {
+    if (typeof item === 'string') return item;
+    const data = item && item.data ? item.data : {};
+    const url = data.src || data.href || '';
+    const type = (item && item.type) || '';
+    return `${type}${url ? ':' + url : ''}`;
+  } catch {
+    return '(unavailable)';
+  }
+}
+
 function filterNewAssets(items, set) {
   const out = [];
   for (const it of items) {
@@ -7056,7 +7155,7 @@ function filterNewAssets(items, set) {
   return out;
 }
 
-async function ensureAssets(features) {
+async function ensureAssets(features, phase = 'render') {
   const { loadCSS, loadJS } = window.markmap;
   const t = ensureTransformer();
   const assets = t.getUsedAssets(features);
@@ -7066,15 +7165,31 @@ async function ensureAssets(features) {
   const newScripts = filterNewAssets(scripts, loadedJs);
   if (newStyles.length) {
     log(`Mindmap engine: loading ${newStyles.length} new CSS asset(s)`);
-    await loadCSS(newStyles);
+    try {
+      await loadCSS(newStyles);
+    } catch (assetErr) {
+      log(
+        `❌ Mindmap engine: CSS asset load failed phase=${phase} count=${newStyles.length} ` +
+          `assets=[${newStyles.map(describeAssetItem).join(' | ')}] cause=${describeAssetFailure(assetErr)}`
+      );
+      throw assetErr;
+    }
   } else {
     log('Mindmap engine: CSS assets unchanged');
   }
   if (newScripts.length) {
     log(`Mindmap engine: loading ${newScripts.length} new JS asset(s)`);
-    await loadJS(newScripts, {
-      getMarkmap: () => window.markmap,
-    });
+    try {
+      await loadJS(newScripts, {
+        getMarkmap: () => window.markmap,
+      });
+    } catch (assetErr) {
+      log(
+        `❌ Mindmap engine: JS asset load failed phase=${phase} count=${newScripts.length} ` +
+          `assets=[${newScripts.map(describeAssetItem).join(' | ')}] cause=${describeAssetFailure(assetErr)}`
+      );
+      throw assetErr;
+    }
   } else {
     log('Mindmap engine: JS assets unchanged');
   }
@@ -7108,7 +7223,7 @@ async function updateMindmap(source) {
   const { Markmap } = window.markmap;
   const { root, features } = t.transform(md.value);
   log(`${source}: transform() OK`);
-  await ensureAssets(features);
+  await ensureAssets(features, source);
   if (!mm) {
     log(`${source}: creating Markmap instance (persistent)`);
     mm = Markmap.create(mapSvg, getCurrentMapLayoutOptions(), root);
@@ -7195,7 +7310,7 @@ function render(source = 'render()') {
       }
       log(`${source}: end`);
     } catch (err) {
-      log(`❌ ${source} crashed: ${err?.message || err}`);
+      log(`❌ ${source} crashed: ${describeAssetFailure(err)}`);
     }
   })();
 }

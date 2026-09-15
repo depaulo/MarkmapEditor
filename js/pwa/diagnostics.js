@@ -295,6 +295,16 @@ if ('serviceWorker' in navigator) {
         waiting: reg.waiting ? reg.waiting.scriptURL : null,
         installing: reg.installing ? reg.installing.scriptURL : null,
       });
+
+      // Hand the EXISTING registration to the Update Ready module (0.6.1).
+      // No second register() call; init is idempotent. Never blocks boot.
+      try {
+        if (typeof globalThis.MME_UPDATE_READY?.initUpdateReady === 'function') {
+          globalThis.MME_UPDATE_READY.initUpdateReady(reg);
+        }
+      } catch (err) {
+        pwaDebugLog('⚠️ Update Ready init failed', { error: String(err) });
+      }
     } catch (err) {
       pwaDebugLog('❌ Service worker registration failed', {
         error: String(err),

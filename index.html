@@ -34,6 +34,7 @@
     <link rel="stylesheet" href="./css/html-preview.css" />
     <link rel="stylesheet" href="./css/menus.css" />
     <link rel="stylesheet" href="./css/overlays.css" />
+    <link rel="stylesheet" href="./css/update-ready.css" />
     <link rel="stylesheet" href="./css/workspace.css" />
     <link rel="stylesheet" href="./css/release-notes.css" />
     <link rel="stylesheet" href="./css/contextual-help.css" />
@@ -1170,6 +1171,45 @@ $$
       </div>
     </div>
 
+    <!-- Update Ready card (0.6.1). Non-modal, application-level, never
+         traps focus or blocks editing. Shown only by js/pwa/update-ready.js. -->
+    <div
+      id="updateReadyCard"
+      role="status"
+      aria-live="polite"
+      aria-label="MarkmapEditor update ready"
+      hidden
+    >
+      <div class="updateReadyHeading">
+        <span class="updateReadyTitle">Update ready</span>
+        <button
+          id="updateReadyClose"
+          type="button"
+          class="updateReadyClose"
+          aria-label="Apply the MarkmapEditor update later"
+          title="Later"
+        >×</button>
+      </div>
+      <div class="updateReadyBody">A new MarkmapEditor version has been downloaded. Reload to use it.</div>
+      <div class="updateReadyApplying" hidden>Applying update…</div>
+      <div class="updateReadyFailure" hidden>The update could not be applied. Your current work was not changed.</div>
+      <div class="updateReadyActions">
+        <button
+          id="updateReadyLater"
+          type="button"
+          class="updateReadyBtn updateReadyBtnSecondary"
+          aria-label="Apply the MarkmapEditor update later"
+        >Later</button>
+        <button
+          id="updateReadyReload"
+          type="button"
+          class="updateReadyBtn updateReadyBtnPrimary"
+          aria-label="Reload MarkmapEditor to apply the update"
+        >Reload</button>
+      </div>
+    </div>
+
+    <script src="./js/pwa/update-ready.js"></script>
     <script src="./js/pwa/diagnostics.js"></script>
   </body>
 </html>

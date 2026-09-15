@@ -1,0 +1,117 @@
+/* =========================== */
+/* Update Ready card (0.6.1)   */
+/* =========================== */
+
+/* Non-modal application notification. Fixed to the viewport lower-right,
+   never blocks editing, never traps focus. Offsets are browser-owned and may
+   be corrected at Browser Checkpoint 1. */
+
+#updateReadyCard {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9000;
+  max-width: 360px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--menu-border, rgba(0, 0, 0, 0.2));
+  background: var(--panel-bg, #ffffff);
+  color: inherit;
+  font: 13px system-ui;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#updateReadyCard[hidden] {
+  display: none;
+}
+
+.updateReadyHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.updateReadyTitle {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.updateReadyClose {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.updateReadyBody {
+  white-space: normal;
+  line-height: 1.45;
+  color: inherit;
+}
+
+.updateReadyApplying,
+.updateReadyFailure {
+  white-space: normal;
+  line-height: 1.45;
+  color: inherit;
+}
+
+.updateReadyFailure {
+  font-weight: 500;
+}
+
+.updateReadyActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.updateReadyBtn {
+  font: 13px system-ui;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--menu-border, rgba(0, 0, 0, 0.2));
+  background: transparent;
+  color: inherit;
+}
+
+.updateReadyBtnPrimary {
+  background: var(--accent, #2563eb);
+  border-color: var(--accent, #2563eb);
+  color: #fff;
+}
+
+.updateReadyBtn:hover,
+.updateReadyClose:hover {
+  filter: brightness(0.97);
+}
+
+.updateReadyBtn:focus-visible,
+.updateReadyClose:focus-visible {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: 2px;
+}
+
+html.dark #updateReadyCard {
+  border-color: var(--menu-border, rgba(255, 255, 255, 0.2));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+/* Narrow / compact viewports: full available width with safe side margins,
+   wrapped body text, buttons still reachable, no page-width expansion. */
+html.compact #updateReadyCard {
+  left: 16px;
+  right: 16px;
+  max-width: none;
+}
