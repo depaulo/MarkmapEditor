@@ -443,8 +443,13 @@
   // current occurrence of identical text is NOT assumed to be the Nth baseline
   // occurrence. Proving that would require a stable Task ID (deferred).
 
-  // Narrow safety cap for automatic Opened-date tagging.
-  const MAX_SAFE_NEW_PER_GAP = 8;
+  // Global safety ceilings for automatic Opened-date tagging.
+  // (Combined stabilization, D1: the former per-gap cap (8) was removed. A
+  // pure-insertion region (bDel===0) whose candidates are all baseline-absent
+  // under the existing duplicate checks is source-proven new regardless of gap
+  // size; mixed/replacement regions remain fully ambiguous, and these total
+  // ceilings still fold anything above MAX_SAFE_NEW_TOTAL /
+  // MAX_SAFE_INSERT_TOTAL to conservative, untagged ambiguity.)
   const MAX_SAFE_NEW_TOTAL = 16;
   const MAX_SAFE_INSERT_TOTAL = 20;
 
@@ -549,14 +554,12 @@
             candidates.push(j);
           }
         }
-        if (candidates.length > MAX_SAFE_NEW_PER_GAP) {
-          // Per-gap cap engaged: fold candidates to ambiguous, no tagging.
-          skippedRewrite = true;
-          ambiguous += candidates.length;
-          for (const idx of candidates) ambiguousIndices.push(idx);
-        } else {
-          newIndices = newIndices.concat(candidates);
-        }
+        // D1: pure-insertion candidates whose visible text is baseline-absent
+        // are source-proven new; the former per-gap cap no longer folds them.
+        // Duplicate-text candidates were already routed to ambiguity above,
+        // and the global MAX_SAFE_NEW_TOTAL / MAX_SAFE_INSERT_TOTAL ceilings
+        // below still skip anything above the approved limits.
+        newIndices = newIndices.concat(candidates);
       } else if (cIns === 0 && bDel === 0) {
         // Fully matched region: nothing to do.
       } else {
@@ -1226,6 +1229,37 @@
       'M12 large rewrite -> skippedRewrite, no new tagging',
       m.skippedRewrite === true && m.newIndices.length === 0,
       JSON.stringify({ skippedRewrite: m.skippedRewrite, n: m.newIndices.length })
+    );
+
+    // Combined stabilization (D1): bulk pure insertion of unique labels is proven.
+    const bulkN = (n) => {
+      const b = bas(['A']);
+      const c = bas(['A'].concat(Array.from({ length: n }, (_, k) => 'N' + (k + 1))));
+      return matchTasksForSave(b, c);
+    };
+    m = bulkN(10);
+    check(
+      'M13 ten unique pure-insertion -> all new proven (per-gap cap removed)',
+      m.newIndices.length === 10 && m.ambiguous === 0 && m.skippedRewrite === false,
+      JSON.stringify({ n: m.newIndices.length, a: m.ambiguous, s: m.skippedRewrite })
+    );
+    m = bulkN(16);
+    check(
+      'M13b sixteen unique pure-insertion -> exactly at MAX_SAFE_NEW_TOTAL, still proven',
+      m.newIndices.length === 16 && m.ambiguous === 0 && m.skippedRewrite === false,
+      JSON.stringify({ n: m.newIndices.length, a: m.ambiguous })
+    );
+    m = bulkN(17);
+    check(
+      'M14 seventeen unique pure-insertion -> conservative skip above MAX_SAFE_NEW_TOTAL',
+      m.skippedRewrite === true && m.newIndices.length === 0 && m.ambiguous === 17,
+      JSON.stringify({ s: m.skippedRewrite, a: m.ambiguous })
+    );
+    m = bulkN(21);
+    check(
+      'M14b twenty-one unique pure-insertion -> conservative skip above both ceilings',
+      m.skippedRewrite === true && m.newIndices.length === 0 && m.ambiguous === 21,
+      JSON.stringify({ s: m.skippedRewrite, a: m.ambiguous })
     );
 
 

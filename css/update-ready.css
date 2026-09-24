@@ -16,8 +16,11 @@
   padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid var(--menu-border, rgba(0, 0, 0, 0.2));
-  background: var(--panel-bg, #ffffff);
-  color: inherit;
+  /* --menu-bg/--text are the shared theme tokens (--panel-bg was never a
+     theme variable; its #ffffff fallback is what rendered a bright card in
+     dark mode). Light mode resolves to the same white surface as before. */
+  background: var(--menu-bg, #ffffff);
+  color: var(--text, #1a1a1a);
   font: 13px system-ui;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
   display: flex;
@@ -103,9 +106,48 @@
   outline-offset: 2px;
 }
 
+/* Dark mode: the card joins the application's existing menu/dialog surface
+   language (theme tokens --menu-bg/--menu-border/--text/--btn-*). It uses a
+   dark surface instead of the previous near-white fallback, the shadow is a
+   dark elevation (never a light glow), and the buttons reuse the existing
+   dark toolbar button tokens so Reload stays noticeable but not dominant.
+   Presentation only — no selector outside #updateReadyCard is affected and no
+   update behavior is changed. */
 html.dark #updateReadyCard {
-  border-color: var(--menu-border, rgba(255, 255, 255, 0.2));
+  background: var(--menu-bg, #2d2d2d);
+  border-color: var(--menu-border, #3e3e42);
+  color: var(--text, #d4d4d4);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+html.dark #updateReadyCard .updateReadyBtn {
+  border-color: var(--btn-border, #555);
+}
+
+html.dark #updateReadyCard .updateReadyBtnPrimary {
+  background: var(--btn-bg, #2d2d30);
+  border-color: var(--btn-border, #555);
+  color: var(--text, #d4d4d4);
+}
+
+html.dark #updateReadyCard .updateReadyBtnPrimary:hover {
+  background: var(--btn-hover, #3a3a3d);
+}
+
+html.dark #updateReadyCard .updateReadyBtnPrimary:active {
+  background: var(--btn-active, #434346);
+}
+
+/* In dark mode the shared hover feedback brightens instead of darkening. */
+html.dark #updateReadyCard .updateReadyBtn:hover,
+html.dark #updateReadyCard .updateReadyClose:hover {
+  filter: brightness(1.25);
+}
+
+html.dark #updateReadyCard .updateReadyBtn:focus-visible,
+html.dark #updateReadyCard .updateReadyClose:focus-visible {
+  outline: 2px solid #4fc3f7;
+  outline-offset: 2px;
 }
 
 /* Narrow / compact viewports: full available width with safe side margins,

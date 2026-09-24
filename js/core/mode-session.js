@@ -165,16 +165,46 @@
     } catch {}
 
     // 2. Restore text.
-    // ACT B: Use the shared suppression helper to prevent false dirty=true
-    // during programmatic text mutation. The helper increments the lexical
-    // counter that the input handler reads, so the synthetic input event
-    // dispatched by CodeMirror's updateListener is suppressed.
-    if (typeof globalThis.MME_APP?.runProgrammaticTextChange === 'function') {
-      globalThis.MME_APP.runProgrammaticTextChange(() => {
-        globalThis.__cmSetText(String(session.text || ''));
-      });
-    } else {
-      setCurrentEditorTextSafe(session.text);
+    // ACT (ModeSession safe restoration): the editor text owner is the #md
+    // textarea; the CodeMirror bridge (__cmSetText) is published
+    // asynchronously by js/editor/codemirror-bootstrap.js and may be absent
+    // while the module graph resolves, or permanently absent after
+    // fallbackToTextarea (body.cmFailed). This mirrors the application-owned
+    // canonical setter used by openTextDocument / applyDrawioReportMarkdown:
+    // write the textarea unconditionally, then mirror into CodeMirror only
+    // when the bridge exists — both writes inside the shared
+    // programmatic-change suppression helper so the synthetic CM input event
+    // cannot flip dirty state.
+    // When CodeMirror is not ready yet, the textarea write is still correct:
+    // the bootstrap seeds EditorState from #md.value at initialization, so the
+    // pending module adopts the restored text. No deferred callback, listener,
+    // timeout, or pending-restore state is used, so a stale cross-mode
+    // restoration is structurally impossible and each restore applies exactly
+    // once (the coordinated textarea + bridge writes are the canonical
+    // application write pattern, not a duplicate restoration).
+    // setCurrentEditorTextSafe is used only when neither the textarea nor the
+    // bridge could accept the text.
+    const nextText = String(session.text ?? '');
+    const cmBridgeReady = typeof globalThis.__cmSetText === 'function';
+    const runSuppressed = (fn) => (
+      typeof globalThis.MME_APP?.runProgrammaticTextChange === 'function'
+        ? globalThis.MME_APP.runProgrammaticTextChange(fn)
+        : fn()
+    );
+    let applied = false;
+    runSuppressed(() => {
+      const textarea = document.getElementById('md');
+      if (textarea) {
+        textarea.value = nextText;
+        applied = true;
+      }
+      if (cmBridgeReady) {
+        globalThis.__cmSetText(nextText);
+        applied = true;
+      }
+    });
+    if (!applied) {
+      setCurrentEditorTextSafe(nextText);
     }
 
     // 3. Restore dirty state via the bridge.

@@ -9752,7 +9752,7 @@ fileInput.addEventListener('change', async (e) => {
   }
 });
 
-async function saveAsSmart(text) {
+async function saveAsSmart(text, taskAmbiguous = 0) {
   if (!globalThis.MME_WORKSPACE_CAPABILITIES?.canActive?.('saveAs')) {
     const activeId = globalThis.MME_WORKSPACE_CAPABILITIES?.getActiveId?.() || 'current workspace';
     globalThis.MME_APP?.showToast?.(`Save As is not available in ${activeId}`, 'warn', 2000);
@@ -9786,6 +9786,11 @@ async function saveAsSmart(text) {
         reason: 'saveAs',
       });
       captureTaskBaseline();
+      if (taskAmbiguous > 0) {
+        log(
+          `TaskReconcile: baseline refreshed after successful Save As (unresolved Task candidates remain: ambiguous=${taskAmbiguous}; no automatic recovery)`
+        );
+      }
       dirty = false;
       setStatus(modeLabel());
       log('saveAsSmart(): saved via picker; currentSaveHandle updated');
@@ -9868,7 +9873,15 @@ async function saveSmart() {
       __programmaticTextChange--;
     }
     log(
-      `TaskReconcile: result changed=true opened=${reconciled.openedAdded || 0} completed=${reconciled.completedAdded} reopened=${reconciled.completedRemoved} ambiguous=${reconciled.ambiguous}`
+      `TaskReconcile: result changed=true opened=${reconciled.openedAdded || 0} completed=${reconciled.completedAdded} reopened=${reconciled.completedRemoved} ambiguous=${reconciled.ambiguous}` +
+        (reconciled.ambiguous > 0
+          ? ' (unresolved Task candidates remain; no metadata assigned)'
+          : '')
+    );
+  } else if (reconciled.ambiguous > 0) {
+    // D5: ambiguity must never be reported as a clean reconciliation.
+    log(
+      `TaskReconcile: unresolved Task candidates remain (no metadata assigned); changed=false opened=0 completed=0 reopened=0 ambiguous=${reconciled.ambiguous}`
     );
   } else {
     log(
@@ -9883,7 +9896,13 @@ async function saveSmart() {
       if (!(await confirmOverwriteExternal())) return { ok: false, reason: 'canceled' };
       await saveToHandle(currentSaveHandle, text);
       captureTaskBaseline();
-      log('TaskReconcile: baseline refreshed after successful save');
+      if (reconciled.ambiguous > 0) {
+        log(
+          `TaskReconcile: baseline refreshed after successful save (unresolved Task candidates remain: ambiguous=${reconciled.ambiguous}; no automatic recovery)`
+        );
+      } else {
+        log('TaskReconcile: baseline refreshed after successful save');
+      }
       log('saveSmart(): overwrite OK');
       return { ok: true };
     } catch (e) {
@@ -9895,7 +9914,7 @@ async function saveSmart() {
   } else {
     log('saveSmart(): no writable handle -> using Save As');
   }
-  const result = await saveAsSmart(text);
+  const result = await saveAsSmart(text, reconciled.ambiguous || 0);
 
   // ACT G: After a successful Save As, mark the Report as saved.
   if (
