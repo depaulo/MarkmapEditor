@@ -142,6 +142,51 @@ function stripLeadingFrontmatterForRender(markdown) {
   return renderLines.join('\n');
 }
 
+// Expands [[Wiki Link]] tokens inside one leaf text run for HTML Preview.
+// Extracted verbatim from the former inline text renderer body so the leaf path
+// stays a small testable helper. Syntax, span class, data attribute, title
+// attribute, alias handling and entity escaping are unchanged.
+function wikiExpand(str) {
+  const value = String(str ?? '');
+  const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
+
+  let result = '';
+  let lastIndex = 0;
+  let match;
+
+  while ((match = WIKI_RE.exec(value)) !== null) {
+    // Add text before this match
+    if (match.index > lastIndex) {
+      result += escapeHtml(value.slice(lastIndex, match.index));
+    }
+
+    const inner = match[1];
+    const pipeIndex = inner.indexOf('|');
+    let target = pipeIndex !== -1 ? inner.slice(0, pipeIndex) : inner;
+    const label = pipeIndex !== -1 ? inner.slice(pipeIndex + 1) : target;
+
+    target = target.trim();
+    const displayLabel = label.trim();
+
+    if (target) {
+      // Escape attributes
+      const escapedTarget = escapeHtml(target);
+      const escapedLabel = escapeHtml(displayLabel);
+
+      result += `<span class="wikiLink" data-wiki-target="${escapedTarget}" title="Wiki link: ${escapedTarget}">${escapedLabel}</span>`;
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < value.length) {
+    result += escapeHtml(value.slice(lastIndex));
+  }
+
+  return result || value;
+}
+
 async function renderHtmlWithShiki(mdText) {
   const highlighter = await initShiki();
 
@@ -203,50 +248,31 @@ async function renderHtmlWithShiki(mdText) {
     }
   };
 
-  // R-LINK1: Transform wiki links in HTML Preview
-  renderer.text = function (text) {
-    // Support both newer (token object) and older (string) marked API
-    const str =
-      typeof text === 'object' && text !== null
-        ? String(text.text ?? text.raw ?? '')
-        : String(text || '');
-    const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
+  // R-LINK1: Transform wiki links in HTML Preview.
+  // marked 15's own Renderer.text contract is reproduced here so inline
+  // Markdown inside list items is not lost:
+  //   tokens  -> delegate to the parser. TIGHT and LOOSE list items wrap their
+  //              inline content in a text token that CARRIES child tokens;
+  //              reading token.text alone emitted `**Bold**` literally and
+  //              double escaped loose task checkboxes.
+  //   escaped -> markup the default listitem renderer already made safe (task
+  //              checkbox) must pass through verbatim.
+  //   else    -> escape the leaf run and expand [[wiki links]] (wikiExpand).
+  // renderer.listitem is intentionally NOT overridden: no full list item is
+  // parsed twice and no Markdown regex rewriting is introduced.
+  renderer.text = function (token) {
+    const anyToken = typeof token === 'object' && token !== null ? token : null;
 
-    let result = '';
-    let lastIndex = 0;
-    let match;
-
-    while ((match = WIKI_RE.exec(str)) !== null) {
-      // Add text before this match
-      if (match.index > lastIndex) {
-        result += escapeHtml(str.slice(lastIndex, match.index));
+    if (anyToken) {
+      if (anyToken.tokens && this.parser && typeof this.parser.parseInline === 'function') {
+        return this.parser.parseInline(anyToken.tokens);
       }
-
-      const inner = match[1];
-      const pipeIndex = inner.indexOf('|');
-      let target = pipeIndex !== -1 ? inner.slice(0, pipeIndex) : inner;
-      const label = pipeIndex !== -1 ? inner.slice(pipeIndex + 1) : target;
-
-      target = target.trim();
-      const displayLabel = label.trim();
-
-      if (target) {
-        // Escape attributes
-        const escapedTarget = escapeHtml(target);
-        const escapedLabel = escapeHtml(displayLabel);
-
-        result += `<span class="wikiLink" data-wiki-target="${escapedTarget}" title="Wiki link: ${escapedTarget}">${escapedLabel}</span>`;
-      }
-
-      lastIndex = match.index + match[0].length;
+      if (anyToken.escaped) return String(anyToken.text ?? '');
+      return wikiExpand(String(anyToken.text ?? ''));
     }
 
-    // Add remaining text
-    if (lastIndex < str.length) {
-      result += escapeHtml(str.slice(lastIndex));
-    }
-
-    return result || str;
+    // Legacy string-argument renderer signature.
+    return wikiExpand(String(token ?? ''));
   };
 
   // Derived HTML render copy: hide leading frontmatter and mme-task metadata
