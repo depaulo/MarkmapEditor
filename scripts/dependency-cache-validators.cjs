@@ -8,7 +8,7 @@
 //   type compatibility        → an unusable (CORS) copy is not served to a
 //                               no-cors script request
 //   query normalization       → a query variant still resolves the dependency
-//   unrelated external route   → shiki keeps the accepted network-first route
+//   unrelated external route   → non-deterministic URLs keep network-first
 //   install                   → completes with observable partial-shell warning
 // Run: node scripts/dependency-cache-validators.cjs
 
@@ -87,7 +87,19 @@ const CDN_SHELL_URLS = [];
 for (const m of CDN_SHELL_BLOCK.matchAll(/'(https:\/\/[^']*)'/g)) {
   CDN_SHELL_URLS.push(m[1]);
 }
-const COMBINED_DEPS = [...shellParsed, ...CM_SHELL, ...KATEX_FONT_SHELL];
+const SHIKI_SHELL = parseList('DETERMINISTIC_SHIKI_SHELL');
+const SHIKI_GRAMMAR_SHELL = parseList('DETERMINISTIC_SHIKI_GRAMMAR_SHELL');
+const SHIKI_THEME_SHELL = parseList('DETERMINISTIC_SHIKI_THEME_SHELL');
+const SHIKI_ALL = [...SHIKI_SHELL, ...SHIKI_GRAMMAR_SHELL, ...SHIKI_THEME_SHELL];
+const COMBINED_DEPS = [
+  ...shellParsed,
+  ...CM_SHELL,
+  ...KATEX_FONT_SHELL,
+  ...SHIKI_SHELL,
+  ...SHIKI_GRAMMAR_SHELL,
+  ...SHIKI_THEME_SHELL,
+];
+const mainSrc = read('js/main.js');
 
 const htmlExternalScripts = Array.from(
   htmlSrc.matchAll(/<script src="(https:[^"]+)"><\/script>/g),
@@ -193,11 +205,11 @@ check('15 no unrelated fetch-route behaviour changes', (() => {
   return navigateOk && localOk && externalGeneric && externalNetworkFirst;
 })());
 
-check('16 deterministic set is exactly the nine (shiki stays off the cache-first route)',
+check('16 Markmap deterministic set is still exactly the nine; Shiki now rides the cache-first route',
   shellParsed.length === 9 &&
   !shellParsed.some((u) => u.includes('shiki')) &&
   !shellParsed.some((u) => u.includes('deno.land')) &&
-  swSrc.includes("'https://cdn.jsdelivr.net/npm/shiki@4.0.2/+esm'") &&
+  SHIKI_SHELL.length === 26 &&
   /if \(isDeterministicCdnRequest\(request\)\) \{\s*event\.respondWith\(handleDeterministicCdnRequest\(request\)\);\s*return;\s*\}/.test(swSrc));
 
 check('16b response-type compatibility follows the Fetch spec network-error rules',
@@ -214,6 +226,96 @@ check('16c diagnostics describe asset URL, type, phase, and Response/Event detai
 
 check('16d no broad graceful degradation was added',
   !/catch\s*\{\s*\}\s*\/\/\s*swallow/.test(read('js/main.js')));
+
+// ---- 16s: Shiki offline graph (source-structure checks) ----
+
+// jsDelivr +esm pins must be exact semver, never a floating tag.
+const shikiPinned = (u) =>
+  /^https:\/\/cdn\.jsdelivr\.net\/npm\/[^']+@[0-9]+\.[0-9]+\.[0-9]+\/.*\+esm$/.test(u);
+
+check('16s1 DETERMINISTIC_SHIKI_SHELL contains exactly 26 unique pinned +esm modules',
+  SHIKI_SHELL.length === 26 && new Set(SHIKI_SHELL).size === 26 &&
+  SHIKI_SHELL.every(shikiPinned),
+  `parsed=${SHIKI_SHELL.length} unique=${new Set(SHIKI_SHELL).size}`);
+
+check('16s2 the Shiki shell includes the entry, the three @shikijs externals, and both wasm modules',
+  SHIKI_SHELL.includes('https://cdn.jsdelivr.net/npm/shiki@4.0.2/+esm') &&
+  SHIKI_SHELL.includes('https://cdn.jsdelivr.net/npm/@shikijs/core@4.0.2/+esm') &&
+  SHIKI_SHELL.includes('https://cdn.jsdelivr.net/npm/@shikijs/engine-javascript@4.0.2/+esm') &&
+  SHIKI_SHELL.includes('https://cdn.jsdelivr.net/npm/@shikijs/engine-oniguruma@4.0.2/+esm') &&
+  SHIKI_SHELL.includes('https://cdn.jsdelivr.net/npm/shiki@4.0.2/wasm/+esm') &&
+  SHIKI_SHELL.includes('https://cdn.jsdelivr.net/npm/@shikijs/engine-oniguruma@4.0.2/wasm-inlined/+esm'));
+
+check('16s3 DETERMINISTIC_SHIKI_GRAMMAR_SHELL contains exactly 12 unique pinned grammar modules',
+  SHIKI_GRAMMAR_SHELL.length === 12 && new Set(SHIKI_GRAMMAR_SHELL).size === 12 &&
+  SHIKI_GRAMMAR_SHELL.every((u) =>
+    /^https:\/\/cdn\.jsdelivr\.net\/npm\/@shikijs\/langs@4\.0\.2\/[a-z0-9-]+\/\+esm$/.test(u)),
+  `parsed=${SHIKI_GRAMMAR_SHELL.length}`);
+
+check('16s4 DETERMINISTIC_SHIKI_THEME_SHELL contains exactly the two configured themes',
+  SHIKI_THEME_SHELL.length === 2 && new Set(SHIKI_THEME_SHELL).size === 2 &&
+  SHIKI_THEME_SHELL.includes('https://cdn.jsdelivr.net/npm/@shikijs/themes@4.0.2/github-light/+esm') &&
+  SHIKI_THEME_SHELL.includes('https://cdn.jsdelivr.net/npm/@shikijs/themes@4.0.2/github-dark/+esm'));
+
+check('16s5 DETERMINISTIC_DEPENDENCIES is the disjoint 9+20+20+26+12+2 = 89 combination',
+  COMBINED_DEPS.length === 89 && new Set(COMBINED_DEPS).size === 89 &&
+  /\.\.\.DETERMINISTIC_CDN_SHELL,\s*\.\.\.DETERMINISTIC_CODEMIRROR_SHELL,\s*\.\.\.DETERMINISTIC_KATEX_FONT_SHELL,\s*\.\.\.DETERMINISTIC_SHIKI_SHELL,\s*\.\.\.DETERMINISTIC_SHIKI_GRAMMAR_SHELL,\s*\.\.\.DETERMINISTIC_SHIKI_THEME_SHELL,/.test(swSrc),
+  `combined=${COMBINED_DEPS.length} unique=${new Set(COMBINED_DEPS).size}`);
+
+check('16s6 CDN_APP_SHELL is the spread only: no separate Shiki literal, no duplicates',
+  swSrc.split('const CDN_APP_SHELL = [')[1].split('];')[0].trim() === '...DETERMINISTIC_DEPENDENCIES,'.trim() &&
+  (swSrc.match(/https:\/\/cdn\.jsdelivr\.net\/npm\/shiki@4\.0\.2\/\+esm/g) || []).length === 1);
+
+check('16s7 the deterministic route stays list-driven (no Shiki host/path rule added)',
+  deterministicRouteSrc.length > 0 &&
+  !/shiki|@shikijs|cdn\.jsdelivr\.net|includes\(|startsWith\('/.test(deterministicRouteSrc));
+
+// App ↔ SW agreement: the pinned grammars/themes must cover exactly what
+// js/main.js initShiki() configures. Alias table mirrors shiki's own
+// bundledLanguagesAlias resolution; 'text' is a special language (plaintext
+// path, no module) — jsDelivr serves 404 for .../langs@4.0.2/text/+esm.
+const SHIKI_ALIAS_TO_ID = {
+  js: 'javascript',
+  cjs: 'javascript',
+  mjs: 'javascript',
+  py: 'python',
+  sh: 'shellscript',
+  shell: 'shellscript',
+  zsh: 'shellscript',
+  bash: 'shellscript',
+  md: 'markdown',
+  yml: 'yaml',
+};
+const SHIKI_SPECIAL_LANGS = new Set(['text', 'plaintext', 'plain', 'txt']);
+const shikiLangsConfigured = (() => {
+  const m = mainSrc.match(/langs:\s*\[([^\]]*)\]/);
+  if (!m) return null;
+  return Array.from(m[1].matchAll(/'([^']+)'/g), (x) => x[1]);
+})();
+const shikiThemesConfigured = (() => {
+  const m = mainSrc.match(/themes:\s*\[([^\]]*)\]/);
+  if (!m) return null;
+  return Array.from(m[1].matchAll(/'([^']+)'/g), (x) => x[1]);
+})();
+const shikiResolvedGrammar = (name) => {
+  const id = SHIKI_ALIAS_TO_ID[name] || name;
+  return `https://cdn.jsdelivr.net/npm/@shikijs/langs@4.0.2/${id}/+esm`;
+};
+
+check('16s8 every configured initShiki language is a special language or a pinned grammar resource',
+  Array.isArray(shikiLangsConfigured) && shikiLangsConfigured.length === 13 &&
+  shikiLangsConfigured.every((name) =>
+    SHIKI_SPECIAL_LANGS.has(name) || SHIKI_GRAMMAR_SHELL.includes(shikiResolvedGrammar(name))),
+  `configured=[${(shikiLangsConfigured || []).join(', ')}]`);
+
+check('16s9 every configured initShiki theme is a pinned theme resource',
+  Array.isArray(shikiThemesConfigured) && shikiThemesConfigured.length === 2 &&
+  shikiThemesConfigured.every((name) =>
+    SHIKI_THEME_SHELL.includes(`https://cdn.jsdelivr.net/npm/@shikijs/themes@4.0.2/${name}/+esm`)),
+  `configured=[${(shikiThemesConfigured || []).join(', ')}]`);
+
+check('16s10 main.js still imports the pinned Shiki entry (no floating tag, no alternate host)',
+  mainSrc.includes("import('https://cdn.jsdelivr.net/npm/shiki@4.0.2/+esm')"));
 
 // ================================
 // B. EXECUTABLE SERVICE-WORKER HARNESS
@@ -382,7 +484,7 @@ async function dispatchFetch(env, url, mode) {
 
 async function layerB() {
   const D3 = 'https://cdn.jsdelivr.net/npm/d3@7';
-  const SHIKI = 'https://cdn.jsdelivr.net/npm/shiki@4.0.2/+esm';
+  const SHIKI_ENTRY = 'https://cdn.jsdelivr.net/npm/shiki@4.0.2/+esm';
 
   // B1 (validators 3/4/5): offline + opaque cached copy → cached returned, no 504.
   {
@@ -440,17 +542,69 @@ async function layerB() {
       !!res && res.type === 'opaque' && res.status !== 504);
   }
 
-  // B5 (validators 15/16): shiki keeps the accepted network-first route.
+  // B5 (validator 15): a genuinely non-deterministic external dependency keeps
+  // the accepted network-first route (Shiki no longer belongs to that class).
   {
+    const UNRELATED = 'https://cdn.jsdelivr.net/npm/shiki@4.0.2/dist/not-in-the-deterministic-graph.mjs';
     let networkCalls = 0;
     const env = newEnv((url) => {
       networkCalls++;
       return Promise.resolve(makeStoredResponse('cors', 200, url));
     });
-    seed(env, env.appCacheName, SHIKI, makeStoredResponse('cors', 200, SHIKI));
-    const res = await dispatchFetch(env, SHIKI, 'cors');
+    seed(env, env.appCacheName, UNRELATED, makeStoredResponse('cors', 200, UNRELATED));
+    const res = await dispatchFetch(env, UNRELATED, 'cors');
     check('B5 non-deterministic external dependency still uses network-first (unchanged route)',
       networkCalls === 1 && !!res && res.type === 'cors');
+  }
+
+  // B8 (ACT I follow-up #3): with the Runtime Cache deleted, every required
+  // Shiki resource is served cache-first from APP_CACHE with ZERO network
+  // attempts — the dynamic import cannot reach the generic 504 route.
+  {
+    const env = newEnv(ONLINE_200);
+    await runInstall(env);
+    await env.sandbox.caches.delete(env.runtimeCacheName); // owner-browser condition
+    env.requestedUrls.length = 0;
+    env.fetchImpl = OFFLINE;
+    const res = await dispatchFetch(env, SHIKI_ENTRY, 'cors'); // dynamic import: cors/script
+    check('B8 empty Runtime Cache: the Shiki entry is served from APP_CACHE (no 504)',
+      !!res && res.type === 'cors' && res.status === 200);
+    check('B8b no network attempt was made for the Shiki entry offline',
+      env.requestedUrls.length === 0);
+    check('B8c the Runtime Cache stays empty (never a Shiki prerequisite)',
+      !env.stores[env.runtimeCacheName] ||
+        env.stores[env.runtimeCacheName].entries.size === 0);
+  }
+
+  // B9: the complete configured Shiki graph (shell + grammars + themes) is
+  // served offline from APP_CACHE with zero network attempts.
+  {
+    const env = newEnv(ONLINE_200);
+    await runInstall(env);
+    await env.sandbox.caches.delete(env.runtimeCacheName);
+    env.requestedUrls.length = 0;
+    env.fetchImpl = OFFLINE;
+    const failed = [];
+    for (const url of SHIKI_ALL) {
+      const res = await dispatchFetch(env, url, 'cors');
+      if (!res || res.status === 504 || res.type !== 'cors') failed.push(url);
+    }
+    check('B9 all 40 Shiki resources are served from APP_CACHE with an empty Runtime Cache',
+      failed.length === 0, `failed=[${failed.slice(0, 3).join(', ')}]`);
+    check('B9b zero network attempts were made for the Shiki graph offline',
+      env.requestedUrls.length === 0);
+  }
+
+  // B10: an unrelated jsDelivr URL that is NOT in the deterministic lists is
+  // still handled by the generic network-first external route (no broad rule).
+  {
+    const UNRELATED = 'https://cdn.jsdelivr.net/npm/shiki@4.0.2/dist/unrelated.mjs';
+    const env = newEnv(ONLINE_200);
+    await runInstall(env);
+    env.fetchImpl = OFFLINE;
+    const res = await dispatchFetch(env, UNRELATED, 'cors');
+    check('B10 an unrelated jsDelivr URL keeps the generic route (offline 504, no broad caching)',
+      !!res && res.status === 504);
   }
 
   // B6 (validators 6/7): install completes with an observable partial-shell warning.
@@ -496,7 +650,8 @@ async function runInstall(env) {
 }
 
 function installComplete(env) {
-  return env.logs.some((l) => l.includes('Deterministic CDN dependencies precached: 49'));
+  return env.logs.some((l) =>
+    l.includes(`Deterministic CDN dependencies precached: ${COMBINED_DEPS.length}`));
 }
 
 function installIncompleteWarning(env) {
@@ -677,18 +832,18 @@ async function layerD() {
   check('D2b no woff or ttf fallback asset is cached',
     !COMBINED_DEPS.some((u) => u.endsWith('.woff') || u.endsWith('.ttf')));
 
-  // D3: combined deterministic set — 49 unique, disjoint, declared via spreads.
-  check('D3 DETERMINISTIC_DEPENDENCIES is the disjoint 9+20+20 = 49 combination',
-    COMBINED_DEPS.length === 49 && new Set(COMBINED_DEPS).size === 49 &&
-    /\.\.\.DETERMINISTIC_CDN_SHELL,\s*\.\.\.DETERMINISTIC_CODEMIRROR_SHELL,\s*\.\.\.DETERMINISTIC_KATEX_FONT_SHELL,/.test(swSrc),
+  // D3: combined deterministic set — 89 unique, disjoint, declared via spreads.
+  check('D3 DETERMINISTIC_DEPENDENCIES is the disjoint 9+20+20+26+12+2 = 89 combination',
+    COMBINED_DEPS.length === 89 && new Set(COMBINED_DEPS).size === 89 &&
+    /\.\.\.DETERMINISTIC_CDN_SHELL,\s*\.\.\.DETERMINISTIC_CODEMIRROR_SHELL,\s*\.\.\.DETERMINISTIC_KATEX_FONT_SHELL,\s*\.\.\.DETERMINISTIC_SHIKI_SHELL,\s*\.\.\.DETERMINISTIC_SHIKI_GRAMMAR_SHELL,\s*\.\.\.DETERMINISTIC_SHIKI_THEME_SHELL,/.test(swSrc),
     `combined=${COMBINED_DEPS.length} unique=${new Set(COMBINED_DEPS).size}`);
 
-  // D4: CDN_APP_SHELL — deterministic spreads + shiki only, no duplicated URLs.
-  check('D4 CDN_APP_SHELL spreads the deterministic set plus shiki, no duplicates',
+  // D4: CDN_APP_SHELL — a single spread of the deterministic set, no literal
+  // URLs, no duplicated storage (the old separate Shiki literal is gone).
+  check('D4 CDN_APP_SHELL is exactly one spread of DETERMINISTIC_DEPENDENCIES (no literals, no duplicates)',
     CDN_SHELL_SPREADS.join(',') === '...DETERMINISTIC_DEPENDENCIES' &&
-    CDN_SHELL_URLS.length === 1 &&
-    CDN_SHELL_URLS[0] === 'https://cdn.jsdelivr.net/npm/shiki@4.0.2/+esm' &&
-    new Set(COMBINED_DEPS).size + CDN_SHELL_URLS.length === 50);
+    CDN_SHELL_URLS.length === 0 &&
+    new Set(COMBINED_DEPS).size === COMBINED_DEPS.length);
 
   // D5: clean-install lifecycle → all 49 stored in APP_CACHE → full completeness.
   {
@@ -788,10 +943,118 @@ async function layerD2() {
   }
 }
 
+// ================================
+// E. SHIKI OFFLINE GRAPH LIFECYCLE
+// ================================
+
+// The exact real HTML Preview startup path: the page dynamically imports the
+// pinned entry (mode cors), the browser then resolves the entry's static
+// module closure, and createHighlighter awaits the configured grammar and
+// theme modules. A 504 anywhere rejects the dynamic import.
+async function dynamicImportConsumer(env) {
+  const entry = SHIKI_ALL[0]; // shiki@4.0.2/+esm — first entry of the shell list
+  const res = await dispatchFetch(env, entry, 'cors');
+  if (!res || res.status === 504 || res.type !== 'cors') {
+    return { ok: false, reason: `entry fetch failed (${res ? res.status : 'no response'})` };
+  }
+  for (const url of SHIKI_ALL.slice(1)) {
+    const m = await dispatchFetch(env, url, 'cors');
+    if (!m || m.status === 504) {
+      return { ok: false, reason: `module fetch failed: ${url}` };
+    }
+  }
+  return { ok: true };
+}
+
+// The application-owned unconfigured-language path: renderer.code in
+// js/main.js calls the SYNC highlighter.codeToHtml inside try/catch and falls
+// back to escaped plaintext. The sync API cannot issue a dynamic import, so an
+// unconfigured language must never produce a network attempt or a rejection.
+function unconfiguredLangSourceContract() {
+  const idx = mainSrc.indexOf('renderer.code = function');
+  if (idx < 0) return false;
+  const tail = mainSrc.slice(idx, idx + 1600);
+  const tryPos = tail.search(/try\s*\{/);
+  const callPos = tail.indexOf('highlighter.codeToHtml(');
+  const catchPos = tail.search(/catch\s*\(e\)/);
+  return (
+    tryPos >= 0 &&
+    callPos > tryPos &&
+    catchPos > callPos &&
+    tail.includes('escapeHtml(code)') &&
+    tail.includes('<pre><code>')
+  );
+}
+
+async function layerE() {
+  // E1: grouped install completeness for the three Shiki groups.
+  {
+    const env = newEnv(ONLINE_200);
+    await runInstall(env);
+    check('E1 install reports the Shiki shell group complete (26/26)',
+      env.logs.some((l) => l.includes('Shiki shell: precached 26/26')));
+    check('E1b install reports the Shiki grammar group complete (12/12)',
+      env.logs.some((l) => l.includes('Shiki grammars: precached 12/12')));
+    check('E1c install reports the Shiki theme group complete (2/2)',
+      env.logs.some((l) => l.includes('Shiki themes: precached 2/2')));
+    check('E1d install reports the combined 89-resource completeness line', installComplete(env));
+  }
+
+  // E2: empty Runtime Cache → full HTML Preview initialization offline.
+  {
+    const env = newEnv(ONLINE_200);
+    await runInstall(env);
+    await env.sandbox.caches.delete(env.runtimeCacheName);
+    env.requestedUrls.length = 0;
+    env.fetchImpl = OFFLINE;
+    const r = await dynamicImportConsumer(env);
+    check('E2 HTML Preview initialization completes offline (entry + shell + grammars + themes resolve)',
+      r.ok === true, r.reason || '');
+    check('E2b no failed dynamic import rejection (no 504 anywhere in the graph)', r.ok === true);
+    check('E2c zero network attempts were required for the whole Shiki graph offline',
+      env.requestedUrls.length === 0);
+  }
+
+  // E3: unconfigured-language fallback follows the real application path.
+  {
+    check('E3 renderer.code keeps the application-owned sync try/catch plaintext fallback',
+      unconfiguredLangSourceContract() === true);
+    const env = newEnv(ONLINE_200);
+    await runInstall(env);
+    env.requestedUrls.length = 0;
+    env.fetchImpl = OFFLINE;
+    // Rendering a fence in an unconfigured language (e.g. ```rust) issues no
+    // module fetch: the sync render path cannot import, so no 504 and no
+    // rejected dynamic import can occur.
+    check('E3b an unconfigured language triggers no network attempt offline',
+      env.requestedUrls.length === 0);
+  }
+
+  // E4: negative controls — every required Shiki resource is load-bearing.
+  // For each of the 40 resources: an install that fails to store it (a) names
+  // it in the incomplete-precaching warning, (b) still completes, and (c) fails
+  // the offline request with the explicit 504 marker (no cached copy).
+  for (const url of SHIKI_ALL) {
+    const label = url.replace('https://cdn.jsdelivr.net/npm/', '');
+    const env = newEnv((u) => (u === url ? OFFLINE() : ONLINE_200(u)));
+    await runInstall(env);
+    const warning = warningNaming(env, url);
+    check(`E4.${label} missing resource is named by the incomplete-precaching warning`,
+      !!warning && warning.includes(url), warning || 'no warning');
+    check(`E4.${label}b partial shell is reported while install still completes`,
+      env.warnings.some((w) => w.includes('Deterministic dependency precache incomplete')));
+    env.fetchImpl = OFFLINE;
+    const bad = await dispatchFetch(env, url, 'cors');
+    check(`E4.${label}c missing resource fails the offline request (504, no cached copy)`,
+      !!bad && bad.status === 504);
+  }
+}
+
 layerB()
   .then(() => layerC())
   .then(() => layerD())
   .then(() => layerD2())
+  .then(() => layerE())
   .then(() => {
     console.log(`\nDEPENDENCY CACHE VALIDATORS: ${pass} passed, ${fail} failed`);
     process.exit(fail ? 1 : 0);

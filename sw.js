@@ -212,21 +212,104 @@ const DETERMINISTIC_KATEX_FONT_SHELL = [
   'https://cdn.jsdelivr.net/npm/katex@0.16.18/dist/fonts/KaTeX_Typewriter-Regular.woff2',
 ];
 
+// Shiki offline presentation graph (shiki@4.0.2, jsDelivr +esm). The +esm
+// entry is NOT self-contained: it statically imports three @shikijs modules
+// (proven from the live jsDelivr response Link headers and the bundle source),
+// whose transitive static closure is exactly 24 modules, and its bundled
+// createHighlighter lazily imports the Oniguruma engine wasm entry
+// (engine: () => createOnigurumaEngine(import("/npm/shiki@4.0.2/wasm/+esm"))),
+// which is invoked on every HTML Preview startup.
+//
+// DETERMINISTIC_SHIKI_SHELL (26) = 24 static ESM modules in total (including
+// the shiki@4.0.2/+esm entry) + 2 engine/WASM ESM modules
+// (shiki@4.0.2/wasm/+esm → @shikijs/engine-oniguruma@4.0.2/wasm-inlined/+esm,
+// which carries the base64-inlined oniguruma wasm; no external .wasm fetch,
+// no worker, no other runtime asset exists in the graph).
+//
+// Version pinning is explicit (exact semver + /+esm). A shiki upgrade requires
+// re-crawling this closure (documented review point). Runtime
+// language/theme data are pinned separately in DETERMINISTIC_SHIKI_GRAMMAR_SHELL
+// and DETERMINISTIC_SHIKI_THEME_SHELL because they change with the
+// js/main.js initShiki() configuration, not with the module graph.
+const DETERMINISTIC_SHIKI_SHELL = [
+  'https://cdn.jsdelivr.net/npm/shiki@4.0.2/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/core@4.0.2/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/engine-javascript@4.0.2/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/engine-oniguruma@4.0.2/+esm',
+  'https://cdn.jsdelivr.net/npm/shiki@4.0.2/wasm/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/engine-oniguruma@4.0.2/wasm-inlined/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/primitive@4.0.2/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/types@4.0.2/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/vscode-textmate@10.0.2/+esm',
+  'https://cdn.jsdelivr.net/npm/hast-util-to-html@9.0.5/+esm',
+  'https://cdn.jsdelivr.net/npm/ccount@2.0.1/+esm',
+  'https://cdn.jsdelivr.net/npm/comma-separated-tokens@2.0.3/+esm',
+  'https://cdn.jsdelivr.net/npm/hast-util-whitespace@3.0.0/+esm',
+  'https://cdn.jsdelivr.net/npm/html-void-elements@3.0.0/+esm',
+  'https://cdn.jsdelivr.net/npm/property-information@7.0.0/+esm',
+  'https://cdn.jsdelivr.net/npm/space-separated-tokens@2.0.2/+esm',
+  'https://cdn.jsdelivr.net/npm/stringify-entities@4.0.4/+esm',
+  'https://cdn.jsdelivr.net/npm/zwitch@2.0.4/+esm',
+  'https://cdn.jsdelivr.net/npm/character-entities-html4@2.1.0/+esm',
+  'https://cdn.jsdelivr.net/npm/character-entities-legacy@3.0.0/+esm',
+  'https://cdn.jsdelivr.net/npm/oniguruma-to-es@4.3.4/+esm',
+  'https://cdn.jsdelivr.net/npm/oniguruma-parser@0.12.1/parser/+esm',
+  'https://cdn.jsdelivr.net/npm/oniguruma-parser@0.12.1/traverser/+esm',
+  'https://cdn.jsdelivr.net/npm/regex-recursion@6.0.2/+esm',
+  'https://cdn.jsdelivr.net/npm/regex@6.0.1/internals/+esm',
+  'https://cdn.jsdelivr.net/npm/regex-utilities@2.3.0/+esm',
+];
+
+// Configured Shiki grammar resources (12): the canonical language modules
+// resolved by shiki's own bundledLanguagesAlias map for the langs configured in
+// js/main.js initShiki(). 'bash' resolves to id 'shellscript'
+// (aliases: bash, sh, shell, zsh); 'text' is a special language
+// (isSpecialLang plaintext path) and requires NO resource — jsDelivr serves 404
+// for /npm/@shikijs/langs@4.0.2/text/+esm, proving it is never imported.
+// These are dynamic imports awaited by createHighlighter, so each one is
+// required at normal HTML Preview startup; a missing one rejects initShiki.
+// Changing the initShiki() langs array requires re-deriving this list.
+const DETERMINISTIC_SHIKI_GRAMMAR_SHELL = [
+  'https://cdn.jsdelivr.net/npm/@shikijs/langs@4.0.2/javascript/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/langs@4.0.2/jsx/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/langs@4.0.2/typescript/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/langs@4.0.2/tsx/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/langs@4.0.2/python/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/langs@4.0.2/shellscript/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/langs@4.0.2/json/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/langs@4.0.2/markdown/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/langs@4.0.2/html/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/langs@4.0.2/css/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/langs@4.0.2/yaml/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/langs@4.0.2/xml/+esm',
+];
+
+// Configured Shiki theme resources (2): the themes configured in js/main.js
+// initShiki(), both awaited by createHighlighter at startup. Pure data modules
+// (no imports, no runtime assets).
+const DETERMINISTIC_SHIKI_THEME_SHELL = [
+  'https://cdn.jsdelivr.net/npm/@shikijs/themes@4.0.2/github-light/+esm',
+  'https://cdn.jsdelivr.net/npm/@shikijs/themes@4.0.2/github-dark/+esm',
+];
+
 // Combined unique deterministic resource set: the single canonical identity
 // used by request canonicalization, cache matching, and install completeness.
-// Expected total: 49 (9 Markmap + 20 CodeMirror + 20 KaTeX fonts, disjoint).
+// Expected total: 89 (9 Markmap + 20 CodeMirror + 20 KaTeX fonts
+// + 26 Shiki shell + 12 Shiki grammars + 2 Shiki themes, disjoint).
 const DETERMINISTIC_DEPENDENCIES = [
   ...DETERMINISTIC_CDN_SHELL,
   ...DETERMINISTIC_CODEMIRROR_SHELL,
   ...DETERMINISTIC_KATEX_FONT_SHELL,
+  ...DETERMINISTIC_SHIKI_SHELL,
+  ...DETERMINISTIC_SHIKI_GRAMMAR_SHELL,
+  ...DETERMINISTIC_SHIKI_THEME_SHELL,
 ];
 
+// Install-time CDN storage is exactly the deterministic set; Shiki no longer
+// carries a separate literal here (it lives in its own deterministic groups and
+// is served through the same cache-first deterministic route offline).
 const CDN_APP_SHELL = [
   ...DETERMINISTIC_DEPENDENCIES,
-
-  // Shiki keeps its accepted network-first external route; the only role of
-  // CDN_APP_SHELL here is deterministic install-time storage.
-  'https://cdn.jsdelivr.net/npm/shiki@4.0.2/+esm',
 ];
 
 function isHttpRequest(request) {
@@ -415,6 +498,9 @@ async function reportDeterministicCdnCompleteness(cache) {
     ['Markmap dependencies', DETERMINISTIC_CDN_SHELL],
     ['CodeMirror modules', DETERMINISTIC_CODEMIRROR_SHELL],
     ['KaTeX fonts', DETERMINISTIC_KATEX_FONT_SHELL],
+    ['Shiki shell', DETERMINISTIC_SHIKI_SHELL],
+    ['Shiki grammars', DETERMINISTIC_SHIKI_GRAMMAR_SHELL],
+    ['Shiki themes', DETERMINISTIC_SHIKI_THEME_SHELL],
   ];
 
   const groupNames = [];
