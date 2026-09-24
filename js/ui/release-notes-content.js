@@ -17,7 +17,67 @@
   //   limitations?, helpTopic? (links to a Help topic ID).
   const RELEASES = Object.freeze([
     {
+      version: '0.6.1',
+      title: 'MarkmapEditor 0.6.1: Foundation reliability and workflow polish',
+      summary: t`Version 0.6.1 closes the 0.6.x foundation work. After a successful
+installation the application starts offline with the Editor, Markmap, HTML
+Preview, syntax highlighting, workspace navigation, Wiki Links, Tasks, and Help.
+Updates are applied through a user-controlled Update Ready step, and several
+workflow details are more reliable: mode switching, saving several new Tasks at
+once, list formatting in HTML Preview, and the Update Ready card in dark mode.`,
+      expanded: true,
+      changes: [
+        {
+          group: 'Offline foundation',
+          items: [
+            'The core experience works offline once the application has been installed: Editor, Markmap, HTML Preview with syntax highlighting, the Workspace, Wiki Links, Tasks, and Help.',
+            'Offline startup does not need a previous online session beyond the installation itself.',
+            'Help and Release Notes remain available offline from the installed application.',
+          ],
+        },
+        {
+          group: 'Updates',
+          items: [
+            'Updates are applied through Update Ready: the card appears when a new version is ready, and you choose when to reload.',
+            'The Update Ready card now follows the dark theme, so it reads as part of the interface in either appearance.',
+            'While offline, update checks are skipped and resume automatically when you are online again.',
+          ],
+        },
+        {
+          group: 'Editing, modes, and Tasks',
+          items: [
+            'Editor and Journal keep their own unsaved text while you switch between modes.',
+            'Switching modes no longer risks restoring the other mode text over the active one.',
+            'Saving a document initializes lifecycle information for new Tasks it can safely recognize; pasting several new Tasks at once is supported within a conservative limit.',
+            'Tasks that cannot be identified safely are left untouched instead of being changed incorrectly.',
+            'Inline formatting inside HTML Preview list items renders correctly, including bold, italic, inline code, links, Wiki Links, nested lists, and formatted Task text.',
+          ],
+        },
+        {
+          group: 'What stayed the same',
+          items: [
+            'Markdown remains the canonical source; Markmap, HTML Preview, Reports, and visual outputs are derived from it.',
+            'A physical Save remains the owner of Task lifecycle initialization; draft autosave does not replace it.',
+            'Existing files, Task metadata, and workspace content are not converted or reformatted by this release.',
+          ],
+        },
+      ],
+      tryIt: t`1. Open MarkmapEditor online once after the update.
+2. When Update Ready appears, select Reload.
+3. Continue editing, using the Workspace, Markmap, and HTML Preview normally.
+4. The installed application can reopen its core experience offline.`,
+      uiPath: 'Toolbar → Update Ready → Reload (updates apply when you choose)',
+      limitations: [
+        'Tasks above the conservative bulk-reconciliation limit remain untouched rather than being given lifecycle information incorrectly.',
+        'Duplicate or otherwise ambiguous Tasks may remain untouched when a safe identity cannot be established.',
+        'HTML Preview math rendering is outside this release and continues to follow the currently documented Markmap-oriented behavior.',
+        'Offline support covers the core application surfaces; it is not a guarantee that every external or optional function is available offline.',
+      ],
+      helpTopic: 'mode-editor',
+    },
+    {
       version: '0.6.0',
+      expanded: false,
       title: 'MarkmapEditor 0.6.0: Help and Release Notes',
       summary: t`Version 0.6.0 introduces mode-aware Help, contextual guidance for key Journal
 features, permanent Release Notes, and one-time What's New notices. It also
@@ -94,8 +154,7 @@ The customer requested:
   ]);
 
   // Newest first. The current release opens expanded; older releases open
-  // collapsed. 0.6.0 is the first semantic release and opens expanded by
-  // default.
+  // collapsed.
   const RELEASES_NEWEST_FIRST = Object.freeze(
     RELEASES.slice().sort((a, b) => {
       const av = a.version.split('.').map(Number);

@@ -51,8 +51,9 @@ check('46 sw.js has exactly one message listener',
 check('47 clients.claim remains present', swSrc.includes('sw.clients.claim();'));
 check('48 prefix cleanup remains present', /CACHE_PREFIX/.test(swSrc) && /caches\.delete/.test(swSrc));
 check('49 fetch handler remains present', swSrc.includes("addEventListener('fetch'"));
-check('50 sw.js APP_VERSION remains semantic 0.6.0',
-  swSrc.includes("APP_VERSION = 'markmap-journal-pwa-0.6.0-help-release-foundation'"));
+check('50 sw.js APP_VERSION is the accepted 0.6.1 closure identity',
+  swSrc.includes("APP_VERSION = 'markmap-journal-pwa-0.6.1-foundation-closure'") &&
+  !swSrc.includes("APP_VERSION = 'markmap-journal-pwa-0.6.0-help-release-foundation'"));
 check('68 update-ready assets in LOCAL_APP_SHELL exactly once',
   countInShell('css/update-ready.css') === 1 && countInShell('js/pwa/update-ready.js') === 1,
   `css=${countInShell('css/update-ready.css')} js=${countInShell('js/pwa/update-ready.js')}`);
@@ -165,10 +166,21 @@ check('no focus listener', !urSrc.includes("'focus'"));
 // RELEASE INTEGRITY (61-67)
 // ================================
 check('61 no lastSeenKey write in update module', !/lastSeen/.test(urSrc));
-check('63 Release Notes content has no 0.6.1 entry', !rncSrc.includes('0.6.1'));
-check('64 productVersion remains 0.6.0', relSrc.includes("productVersion: '0.6.0'"));
-check('65 release cache identity remains semantic 0.6.0',
-  relSrc.includes("cacheIdentity: 'markmap-journal-pwa-0.6.0-help-release-foundation'"));
+check('63 Release Notes content includes the accepted 0.6.1 entry',
+  rncSrc.includes('0.6.1') && !/test1|0\.6\.2-test|v7x-metadata/.test(rncSrc));
+check('64 productVersion is 0.6.1',
+  relSrc.includes("productVersion: '0.6.1'") && !relSrc.includes("productVersion: '0.6.0'"));
+check('65 release cache identity is the accepted 0.6.1 closure identity',
+  relSrc.includes("cacheIdentity: 'markmap-journal-pwa-0.6.1-foundation-closure'"));
+check('66 release identity agrees with sw.js APP_VERSION', (() => {
+  const m = swSrc.match(/APP_VERSION = '([^']+)'/);
+  return !!m && relSrc.includes("cacheIdentity: '" + m[1] + "'");
+})());
+check('67 What\'s New ownership derives from MME_RELEASE (no hardcoded version)', (() => {
+  const relNotesUi = read('js/ui/release-notes.js');
+  return /MME_RELEASE\.productVersion|REL\.productVersion|release\.productVersion/.test(relNotesUi) &&
+    !/0\.6\.[01]/.test(relNotesUi);
+})());
 
 // ================================
 // EXECUTABLE STUB VALIDATION (js/pwa/update-ready.js)

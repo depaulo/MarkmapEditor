@@ -12,11 +12,14 @@
  *
  * The marked runtime is resolved from, in order:
  *   1. process.env.MME_MARKED_PATH
- *   2. <home>/.mme-marked.js           (cached copy)
- *   3. the same CDN build index.html loads (cached to <home>/.mme-marked.js)
+ *   2. <home>/.mme-marked.js           (cached copy of the pinned build)
+ *   3. the pinned CDN build index.html loads — marked@15.0.12
+ *      (https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js, cached to
+ *      <home>/.mme-marked.js)
  * When no runtime can be resolved the run FAILS with an explicit
  * MARKED RUNTIME UNAVAILABLE report: dependency absence is never reported as a
- * successful validation.
+ * successful validation. A resolved bundle whose banner version or version
+ * sidecar does not match the pinned application URL also FAILS (V1/V2).
  *
  * Usage: node scripts/html-preview-render-validators.cjs
  */
@@ -29,7 +32,12 @@ const https = require('https');
 const ROOT = path.resolve(__dirname, '..');
 const MAIN_JS_PATH = path.join(ROOT, 'js', 'main.js');
 const INDEX_HTML_PATH = path.join(ROOT, 'index.html');
-const MARKED_CDN_URL = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
+const SW_JS_PATH = path.join(ROOT, 'sw.js');
+// One-for-one pinned application URL: index.html and the sw.js deterministic
+// list must both load exactly this bundle. Any other marked runtime URL (or a
+// version drift between validator and application) fails H17/H17b/H17c/V1/V2.
+const MARKED_PIN_VERSION = '15.0.12';
+const MARKED_CDN_URL = `https://cdn.jsdelivr.net/npm/marked@${MARKED_PIN_VERSION}/marked.min.js`;
 const MARKED_CACHE_PATH = path.join(os.homedir(), '.mme-marked.js');
 const MARKED_CACHE_VERSION_PATH = `${MARKED_CACHE_PATH}.version`;
 
@@ -199,6 +207,7 @@ async function resolveMarkedRuntime() {
     return {
       marked: loadMarkedFromPath(fromEnv),
       source: `MME_MARKED_PATH=${fromEnv}`,
+      filePath: fromEnv,
       version: readCachedVersion(fromEnv),
     };
   }
@@ -207,6 +216,7 @@ async function resolveMarkedRuntime() {
     return {
       marked: loadMarkedFromPath(MARKED_CACHE_PATH),
       source: `cache ${MARKED_CACHE_PATH}`,
+      filePath: MARKED_CACHE_PATH,
       version: readCachedVersion(MARKED_CACHE_PATH),
     };
   }
@@ -218,6 +228,7 @@ async function resolveMarkedRuntime() {
   return {
     marked: loadMarkedFromPath(MARKED_CACHE_PATH),
     source: `${MARKED_CDN_URL} (cached)`,
+    filePath: MARKED_CACHE_PATH,
     version,
   };
 }
@@ -317,7 +328,22 @@ async function main() {
   check('H16', 'frontmatter + mme-task render-copy stripping still applied before parse', /stripMmeTaskMetadataForRender\(\s*stripLeadingFrontmatterForRender\(mdText\)\s*\)/.test(mainSrc));
 
   const indexSrc = fs.readFileSync(INDEX_HTML_PATH, 'utf8');
-  check('H17', 'index.html loads the same marked CDN build the validator resolves', indexSrc.includes(MARKED_CDN_URL));
+  const swSrc = fs.readFileSync(SW_JS_PATH, 'utf8');
+  check('H17', 'index.html loads the pinned marked CDN build the validator resolves', indexSrc.includes(MARKED_CDN_URL));
+  const indexMarkedUrls = indexSrc.match(/https:\/\/cdn\.jsdelivr\.net\/npm\/marked[^'"]*/g) || [];
+  const swMarkedUrls = swSrc.match(/https:\/\/cdn\.jsdelivr\.net\/npm\/marked[^'"]*/g) || [];
+  check(
+    'H17b',
+    'index.html and sw.js deterministic list pin the identical marked URL',
+    indexMarkedUrls.length === 1 && swMarkedUrls.length === 1 &&
+      indexMarkedUrls[0] === MARKED_CDN_URL && swMarkedUrls[0] === MARKED_CDN_URL,
+    `index=${indexMarkedUrls.join(',') || 'none'} sw=${swMarkedUrls.join(',') || 'none'}`
+  );
+  check(
+    'H17c',
+    'no unpinned marked runtime URL remains in index.html or sw.js',
+    !/cdn\.jsdelivr\.net\/npm\/marked\//.test(indexSrc) && !/cdn\.jsdelivr\.net\/npm\/marked\//.test(swSrc)
+  );
 
   group('B. real marked runtime');
 
@@ -344,6 +370,29 @@ async function main() {
 
   const runtimeLabel = `${runtime.source}${runtime.version ? ` version=${runtime.version}` : ''}`;
   console.log(`marked runtime: ${runtimeLabel}`);
+
+  const bundleSrc = fs.readFileSync(runtime.filePath, 'utf8');
+  const bundleBanner = (bundleSrc.match(/marked v(\d+\.\d+\.\d+)/) || [])[1] || '';
+  check(
+    'V1',
+    `validator runtime bundle banner declares marked v${MARKED_PIN_VERSION}`,
+    bundleBanner === MARKED_PIN_VERSION,
+    `banner=${bundleBanner || 'none'} file=${runtime.filePath}`
+  );
+  check(
+    'V2',
+    'version sidecar (pinned URL x-jsd-version) matches the pin when present',
+    !runtime.version || runtime.version === MARKED_PIN_VERSION,
+    `sidecar=${runtime.version || 'none'}`
+  );
+  check(
+    'V3',
+    'validator runtime corresponds to the pinned application URL in index.html and sw.js',
+    MARKED_CDN_URL.includes(`@${MARKED_PIN_VERSION}/`) &&
+      indexSrc.includes(MARKED_CDN_URL) &&
+      swSrc.includes(MARKED_CDN_URL),
+    MARKED_CDN_URL
+  );
 
   const buildRenderer = new Function(
     'marked',

@@ -66,10 +66,24 @@
 <section class="helpSection">
   <h2>Preview and Export</h2>
   <p>Toggle HTML Preview for cleaner reading. Use Export for Markdown, HTML Preview, or Mindmap SVG depending on mode.</p>
+  <ul>
+    <li>List items in HTML Preview render inline formatting: bold, italic, inline code, links, Wiki Links, and nested lists.</li>
+    <li>Task rows such as <code class="helpCode">- [ ] review this</code> keep their formatted text inside list items.</li>
+    <li>HTML Preview math rendering follows the currently documented Markmap-oriented behavior and is not part of this release.</li>
+  </ul>
+</section>
+<section class="helpSection">
+  <h2>Offline and updates</h2>
+  <ul>
+    <li>After a successful installation the core experience works offline: Editor, Markmap, HTML Preview with syntax highlighting, the Workspace, Wiki Links, Tasks, Help, and Release Notes.</li>
+    <li>Updates arrive through Update Ready: the card appears when a new version is ready and you choose when to reload.</li>
+    <li>While offline, update checks are skipped and resume automatically when you are online again.</li>
+    <li>Offline support covers the core application surfaces; external or optional functions may still require a connection.</li>
+  </ul>
 </section>
 <section class="helpSection">
   <h2>Mode selector</h2>
-  <p>Switch Editor / Journal / Slides from the toolbar at any time; each mode keeps its own unsaved state.</p>
+  <p>Switch Editor / Journal / Slides from the toolbar at any time; each mode keeps its own unsaved state for the current session.</p>
 </section>`,
     },
     {
@@ -147,8 +161,16 @@
   <p>Archive keeps managed workspace records; prefer archive over deleting them.</p>
 </section>
 <section class="helpSection">
+  <h2>Saving and Task lifecycle</h2>
+  <ul>
+    <li>A physical Save initializes lifecycle information for new Tasks it can safely recognize; draft autosave does not replace it.</li>
+    <li>Pasting several new Tasks at once is supported within a conservative limit; Tasks above that limit, duplicates, or ambiguous Tasks are left untouched instead of being changed incorrectly.</li>
+    <li>The current session holds separate Editor and Journal text while you switch modes.</li>
+  </ul>
+</section>
+<section class="helpSection">
   <h2>Mode selector</h2>
-  <p>Return to Editor or Slides from the toolbar.</p>
+  <p>Return to Editor or Slides from the toolbar; each mode keeps its own unsaved text for the current session.</p>
 </section>`,
     },
     {

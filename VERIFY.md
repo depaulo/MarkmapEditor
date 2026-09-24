@@ -516,3 +516,93 @@ Do not mark these PASS until executed on the deployed origin.
 7. Touch-resize `#splitEditor`; touch-resize `#splitHtml`.
 8. Enter and exit one local fullscreen.
 9. Reload offline; confirm Registry, presets, styles, and controls load.
+
+---
+
+## MarkmapEditor 0.6.1 foundation closure verification
+
+Release identity: `markmap-journal-pwa-0.6.1-foundation-closure`
+(product version `0.6.1`, owned by `js/release/release.js` and `sw.js`).
+
+Scope note: earlier `PENDING` blocks in this document are historical records for
+superseded pre-0.6.x packages (Draw.io MVP, Screen Layout v62). They are not
+acceptance criteria for 0.6.1 and do not describe the acceptance state of this
+release. The acceptance state of 0.6.1 is recorded only in this section.
+
+### F1. Offline foundation — 89 resources in six groups
+
+- [x] `sw.js` `APP_CACHE` precache parses to 89 unique deterministic URLs across
+  the six accepted groups (shell, Markmap/CodeMirror, Shiki renderer,
+  Release Notes/Help, application modules, styles/assets).
+- [x] `scripts/dependency-cache-validators.cjs` green: cache identity,
+  group counts, Shiki pinning, fetch-routing shape, activation-cleanup shape.
+- [x] Previously accepted browser evidence: offline startup works from a clean
+  install with Editor, Markmap, HTML Preview, and syntax highlighting.
+- [x] Previously accepted browser evidence: CodeMirror, Markmap, and Shiki
+  sources resolve from the app cache with no network dependency.
+- [x] Service worker identity changed to the 0.6.1 closure identity only;
+  no routing, deterministic-list, or precache-shape drift
+  (`scripts/release-parity.cjs` with `RELEASE_PARITY_STRICT_SW=1` green).
+
+### F2. ModeSession (cross-mode text restoration)
+
+- [x] `scripts/mode-session-validators.cjs` green (55 checks): single
+  restoration point, no cross-mode text bleed, restore-on-init ordering,
+  diagnostics ownership.
+- [x] Previously accepted browser evidence: Editor and Journal retain separate
+  unsaved text across mode switches within the session.
+- [x] Help copy states the session-scoped boundary (no permanent-persistence
+  promise) in `mode-editor` and `mode-journal` topics.
+
+### F3. Bulk Task reconciliation
+
+- [x] `scripts/task-reconcile-validators.cjs` green: conservative ceiling,
+  duplicate/ambiguous cases left untouched, physical Save initializes lifecycle
+  metadata, draft autosave never substitutes for Save.
+- [x] Previously accepted browser evidence: pasting three Tasks initializes
+  lifecycle metadata for all three on physical Save.
+- [x] Release Notes documents the boundary; Tasks above the limit, duplicates,
+  and ambiguous rows remain untouched.
+
+### F4. Update Ready workflow and dark mode
+
+- [x] `scripts/update-ready-validators.cjs` green: user-controlled reload,
+  dark-mode card styling, offline update checks deferred and resumed,
+  last-seen state keyed by product version.
+- [x] `js/ui/release-notes.js` derives the current version from
+  `MME_RELEASE.productVersion` — no hardcoded version, so What's New ownership
+  follows `js/release/release.js` automatically.
+- [x] Release identity `0.6.1` present in `js/release/release.js` and `sw.js`;
+  `scripts/release-parity.cjs` reports no owner mismatch.
+- [x] Previously accepted browser evidence: Update Ready card renders
+  correctly in dark mode and applies an update only when Reload is chosen.
+
+### F5. HTML Preview inline rendering
+
+- [x] `scripts/html-preview-render-validators.cjs` green (48/48): inline
+  Markdown inside list items — bold, italic, inline code, links, Wiki Links,
+  nested lists, and formatted Task rows.
+- [x] Previously accepted browser evidence: list items render inline formatting
+  in HTML Preview in the installed application.
+
+### Release close-out checks
+
+- [x] Version ownership: `js/release/release.js` `productVersion = 0.6.1`,
+  `cacheIdentity = markmap-journal-pwa-0.6.1-foundation-closure`; `sw.js`
+  `APP_VERSION` identical.
+- [x] Release Notes: 0.6.1 entry is newest, opened expanded; 0.6.0 entry
+  retained beneath it, collapsed; content covers offline foundation, updates,
+  mode/Task reliability, usage example, and technical boundaries.
+- [x] No temporary development identity (`test1`, `0.6.2-test`, `v7x-metadata`)
+  appears as the current public release.
+- [x] `node --check` clean on all touched JS; focused validator suite green;
+  `git diff --check` clean.
+- [x] In-environment headless Chromium (149) acceptance attempt executed and
+  recorded: `data:` URL navigation works, but every HTTP(S) navigation
+  (localhost and external, across `--no-proxy-server` and
+  `--single-process/--no-zygote` launch variants) issues
+  `Network.requestWillBeSent` and never receives a response, so this device's
+  coder environment cannot complete §I browser steps.
+- [ ] Post-bump browser smoke (owner device): reload online, confirm 0.6.1
+  activation and old `markmap-journal-pwa-0.6.0-help-release-foundation-*`
+  cache cleanup, three-Task Save smoke, genuine offline reload.

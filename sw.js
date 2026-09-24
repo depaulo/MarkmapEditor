@@ -11,12 +11,14 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 
 // APP_VERSION is the single authoritative release/version owner. It names the
 // installed cache identity (APP_CACHE / RUNTIME_CACHE) for this release
-// boundary: MarkmapEditor 0.6.0 — Help and Release Notes foundation
-// (permanent Help content, contextual Help, Release Notes viewer, What's New,
-// and the canonical release identity module). All changed assets are
+// boundary: MarkmapEditor 0.6.1 — Foundation closure (accepted offline
+// foundation with 89 deterministic dependencies in six groups, user-controlled
+// Update Ready workflow, safer ModeSession restoration, bulk Task
+// reconciliation, Update Ready dark mode, and inline Markdown inside HTML
+// Preview list items). All changed assets are
 // deterministic precache entries, so a new identity ensures installed clients
 // receive the complete accepted package.
-const APP_VERSION = 'markmap-journal-pwa-0.6.0-help-release-foundation';
+const APP_VERSION = 'markmap-journal-pwa-0.6.1-foundation-closure';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.
@@ -41,7 +43,7 @@ const LOCAL_APP_SHELL = [
   './css/overlays.css',
   './css/workspace.css',
   // Release Notes and contextual Help stylesheets (index.html <link> +
-  // script-loader.js appendStylesheet). Precached so the 0.6.0 offline shell
+  // script-loader.js appendStylesheet). Precached so the 0.6.1 offline shell
   // renders the complete Release Notes and contextual Help surfaces.
   './css/release-notes.css',
   './css/contextual-help.css',
@@ -58,7 +60,8 @@ const LOCAL_APP_SHELL = [
   './js/ui/welcome.js',
 
   './js/ui/help.js',
-  // Release foundation (0.6.0 Help and Release Notes). Loaded by
+  // Release foundation (Help, Release Notes, canonical release identity).
+  // Loaded by
   // script-loader.js in this same order (release identity first).
   './js/release/release.js',
   './js/ui/help-content.js',
@@ -140,7 +143,7 @@ const DETERMINISTIC_CDN_SHELL = [
   'https://cdn.jsdelivr.net/npm/d3@7',
   'https://cdn.jsdelivr.net/npm/markmap-lib',
   'https://cdn.jsdelivr.net/npm/markmap-view',
-  'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
+  'https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js',
   // markmap-lib 0.18.12 per-feature assets, resolved at runtime by
   // Transformer.getUsedAssets(features) through the default jsDelivr provider:
   //   hljs  → styles/default.min.css, preloadScripts/highlight.min.js

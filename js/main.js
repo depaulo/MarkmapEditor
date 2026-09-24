@@ -249,7 +249,7 @@ async function renderHtmlWithShiki(mdText) {
   };
 
   // R-LINK1: Transform wiki links in HTML Preview.
-  // marked 15's own Renderer.text contract is reproduced here so inline
+  // marked 15.0.12's own Renderer.text contract is reproduced here so inline
   // Markdown inside list items is not lost:
   //   tokens  -> delegate to the parser. TIGHT and LOOSE list items wrap their
   //              inline content in a text token that CARRIES child tokens;
