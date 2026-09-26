@@ -3,24 +3,39 @@
 ## 0. Notes Architecture Gate 0 (2026-09-25)
 
 - **Gate 0**: ACCEPTED with final sequencing amendments (source-proven architecture audit, `development` @ `a3537eb`).
-- **ACT 0**: COMPLETE — canonical plan adopted at `docs/architecture/MarkmapEditor_Notes_Knowledge_Workspace_1_0_PLAN.md`; the superseded `MarkmapEditor_Document_Scope_and_Optional_Workspace_PLAN.md` deletion was accepted; the upload artifact `MarkmapEditor_Notes_Knowledge_Workspace_1_0_PLAN_UPDATED.md` was removed.
-- **Next authorized boundary**: ACT 1A (strict read-only Workspace format detection) — AWAITING owner authorization. ACT 1A has not started.
-- **ACT 0 scope**: documentation only. No runtime, version, cache or Service Worker changes were made.
+- **ACT 0**: COMPLETE — canonical plan adopted at `docs/architecture/MarkmapEditor_Notes_Knowledge_Workspace_1_0_PLAN.md` (commit `4311a1b`); the superseded `MarkmapEditor_Document_Scope_and_Optional_Workspace_PLAN.md` deletion was accepted; the upload artifact `MarkmapEditor_Notes_Knowledge_Workspace_1_0_PLAN_UPDATED.md` was removed.
+- **ACT 0.1**: COMPLETE — Section 1 reconciled against the authoritative release owners (`js/release/release.js`, `sw.js`): productVersion `0.6.1`, cacheIdentity/APP_VERSION `markmap-journal-pwa-0.6.1-foundation-closure`. The Screen Layout (v62) and v58 narratives were retained and explicitly labelled **historical**; no historical checkpoint data was rewritten.
+- **Next authorized boundary**: ACT 1A (strict read-only Workspace format detection) — AUTHORIZED by the owner; implementation only, acceptance pending.
+- **Scope**: documentation only. No runtime, version, cache or Service Worker changes were made.
 
 ---
 
 ## 1. Current Release / Checkpoint
 - **Branch**: `development`
-- **Checkpoint Commits**: Screen Layout S1–S4B: `d241e9c` (S1), `677c2b7` (S2),
-  `7264be3` (S3), `c80dfc4` (S4A), `4e6237c` + `0c98d8c` (S4B, final `0c98d8c` = HEAD)
-- **APP_VERSION**: `markmap-journal-pwa-v62-screen-layout-closure-v1` (single owner: `sw.js`)
-- **Status**: Screen Layout phase complete. S1–S4B implemented and
-  device-validated; documentation closure and PWA reconciliation performed in
-  the Screen Layout closure package.
+- **Documentation HEAD**: `4311a1b` (Notes architecture — ACT 0 plan adoption)
+- **productVersion**: `0.6.1`
+- **cacheIdentity / APP_VERSION**: `markmap-journal-pwa-0.6.1-foundation-closure`
+  — single authoritative owner `sw.js`; mirrored by `js/release/release.js`;
+  parity enforced by `scripts/release-parity.cjs`.
+- **Status**: 0.6.1 Foundation closure accepted. Notes Architecture Gate 0
+  accepted; ACT 0 and ACT 0.1 documentation closed. The Screen Layout (v62) and
+  v58 checkpoints recorded below are **historical** and no longer describe the
+  current release.
 
 ---
 
-## 1a. Screen Layout State
+## 1a. Screen Layout State (historical — v62 checkpoint, superseded by 0.6.1)
+
+> **Retained for history only.** The identity, checkpoint commits and pending
+> browser procedures in this section belong to the superseded
+> `markmap-journal-pwa-v62-screen-layout-closure-v1` package. The current
+> release identity is `0.6.1 / markmap-journal-pwa-0.6.1-foundation-closure`
+> (see Section 1).
+>
+> - **Historical checkpoint commits (Screen Layout S1–S4B)**: `d241e9c` (S1),
+>   `677c2b7` (S2), `7264be3` (S3), `c80dfc4` (S4A), `4e6237c` + `0c98d8c`
+>   (S4B, final).
+> - **Historical APP_VERSION**: `markmap-journal-pwa-v62-screen-layout-closure-v1`.
 
 - **S1** (resize and overlay isolation): ✅ Complete.
 - **S2** (pane registry and edge restore): ✅ Complete.
@@ -32,11 +47,12 @@
   scrolls with a finger; presets and fullscreen functional.
 - **Documentation closure**: ✅ Complete (architecture document finalized from
   source truth; STATUS/TODO/VERIFY/VALIDATION_REPORT updated).
-- **PWA closure**: `css/view-layout.css` and `js/ui/view-layout.js` added to the
-  `sw.js` deterministic precache; cache identity bumped to
-  `markmap-journal-pwa-v62-screen-layout-closure-v1`. Clean-install, update,
-  and offline-reload browser acceptance: **PENDING** (manual procedures in
-  `VERIFY.md`); static/cache consistency checks passed.
+- **PWA closure (historical)**: `css/view-layout.css` and `js/ui/view-layout.js` added to the
+  `sw.js` deterministic precache; the cache identity at that time was
+  `markmap-journal-pwa-v62-screen-layout-closure-v1` (since superseded by
+  `markmap-journal-pwa-0.6.1-foundation-closure`). The clean-install, update and
+  offline-reload browser acceptance listed in `VERIFY.md`: **PENDING (historical
+  package)**; static/cache consistency checks passed.
 
 Architecture owner:
 `docs/architecture/MarkmapEditor_Screen_Layout_ARCHITECTURE.md`.
@@ -48,7 +64,7 @@ custom layouts, per-document layout persistence.
 
 ---
 
-## 1b. Legacy v58 Status (superseded narrative, retained for history)
+## 1b. Legacy v58 Status (historical — superseded narrative, retained for history)
 - **Checkpoint Commit**: `a78963f`
 - **APP_VERSION**: `markmap-journal-pwa-v58-editable-workspace-foundation-v1`
 - **Status**: Functional recovery successfully implemented and verified. All runtime edits complete.
