@@ -1,5 +1,14 @@
 # MarkMapJournal Release Status
 
+## 0. Notes Architecture Gate 0 (2026-09-25)
+
+- **Gate 0**: ACCEPTED with final sequencing amendments (source-proven architecture audit, `development` @ `a3537eb`).
+- **ACT 0**: COMPLETE — canonical plan adopted at `docs/architecture/MarkmapEditor_Notes_Knowledge_Workspace_1_0_PLAN.md`; the superseded `MarkmapEditor_Document_Scope_and_Optional_Workspace_PLAN.md` deletion was accepted; the upload artifact `MarkmapEditor_Notes_Knowledge_Workspace_1_0_PLAN_UPDATED.md` was removed.
+- **Next authorized boundary**: ACT 1A (strict read-only Workspace format detection) — AWAITING owner authorization. ACT 1A has not started.
+- **ACT 0 scope**: documentation only. No runtime, version, cache or Service Worker changes were made.
+
+---
+
 ## 1. Current Release / Checkpoint
 - **Branch**: `development`
 - **Checkpoint Commits**: Screen Layout S1–S4B: `d241e9c` (S1), `677c2b7` (S2),
