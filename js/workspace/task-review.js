@@ -68,12 +68,18 @@
     return globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
   }
 
+  // HTML escaping for every string interpolated into Task Review markup.
+  // Ampersand is escaped first so already-escaped output is never produced
+  // from a later step. The owner of Note text is the physical Markdown file, so
+  // its exact characters must survive as TEXT here: a Note title or Task text
+  // containing HTML-significant characters is rendered, never interpreted.
   function escapeHtml(str) {
-    return String(str || '')
-      .replace(/&/g, '&')
-      .replace(/</g, '<')
-      .replace(/>/g, '>')
-      .replace(/"/g, '"');
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   // ---- Shared priority grammar (single owner: MME_TASK_LIFECYCLE) ----
@@ -242,13 +248,12 @@
 
     const groups = Array.from(groupsMap.values());
 
-    // Sort: journals first, then by date descending, then by title ascending
+    // ACT 2B — 'notes' is the only Workspace kind, so the retired
+    // journals-first branch is removed. Order is now date descending, then
+    // title ascending. `date` is intentionally left empty: groupTasksByFile
+    // does not resolve it today, exactly as before, so the observable order is
+    // title ascending.
     groups.sort((a, b) => {
-      if (a.kind !== b.kind) {
-        if (a.kind === 'journals') return -1;
-        if (b.kind === 'journals') return 1;
-      }
-
       const dateA = String(a.date || '');
       const dateB = String(b.date || '');
 
@@ -508,7 +513,9 @@
 
     list.innerHTML = groups
       .map((group) => {
-        const icon = group.kind === 'journals' ? '📝' : group.kind === 'concepts' ? '🧠' : '📄';
+        // ACT 2B — every group is a Note, so one icon. The journals/concepts
+        // branches belonged to the retired kind split.
+        const icon = '📄';
         const groupTitle = escapeHtml(group.title || group.fileName || group.path);
         const groupPath = escapeHtml(group.path || '');
         const groupKind = escapeHtml(group.kind || '');
@@ -1367,7 +1374,7 @@
     const snapshot = JSON.stringify(enriched);
 
     // Add a P1 Todo so the negative case has a real P1-open fixture.
-    const p1Todo = enrichTask({ text: 'Prio #p1 todo', done: false, priority: 'p1', effectiveStatus: 'todo', filePath: 'j/a.md', fileKind: 'journals', fileName: 'a.md', line: 1, heading: '' });
+    const p1Todo = enrichTask({ text: 'Prio #p1 todo', done: false, priority: 'p1', effectiveStatus: 'todo', filePath: 'notes/a.md', fileKind: 'notes', fileName: 'a.md', line: 1, heading: '' });
     const fixtureAll = [enrichTask(backlogTask), p1Todo, enrichTask(ongoingTask), enrichTask(doneTask)];
 
     const openP1 = applyTaskFilters(fixtureAll, { status: 'open', priority: 'p1', query: '' });
@@ -1388,7 +1395,7 @@
     const displayP1 = fixtureAll.find((t) => t.text === 'Prio #p1 todo');
     check('R priority tokens absent from display text', displayP1 && displayP1.displayText === 'Prio todo');
 
-    const hashtag = enrichTask({ text: 'Discuss #project roadmap', done: false, effectiveStatus: 'todo', priority: null, filePath: 'j/a.md', fileKind: 'journals', fileName: 'a.md', line: 5, heading: '', tags: ['project'] });
+    const hashtag = enrichTask({ text: 'Discuss #project roadmap', done: false, effectiveStatus: 'todo', priority: null, filePath: 'notes/a.md', fileKind: 'notes', fileName: 'a.md', line: 5, heading: '', tags: ['project'] });
     check('S unrelated hashtags remain visible', hashtag.displayText.indexOf('#project') !== -1);
     const hashtagSearch = applyTaskFilters([hashtag], { status: 'all', priority: 'all', query: '#project' });
     check('S2 unrelated hashtags remain searchable', hashtagSearch.length === 1);

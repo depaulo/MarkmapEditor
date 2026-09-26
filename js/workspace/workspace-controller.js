@@ -3,8 +3,18 @@
 import { WORKSPACE_STATE, isWorkspaceReady } from './workspace-state.js';
 import { createWorkspaceActions } from './workspace-actions.js';
 import { clearSidebar, renderSidebarFiles, renderNavigationControls, updateNavigationControls } from './workspace-sidebar.js';
-import { openWorkspaceDirectory, ensureSubfolder } from './workspace-open.js';
-import { scanFolder } from './workspace-scanner.js';
+import {
+  openWorkspaceDirectory,
+  ensureSubfolder,
+  openWorkspaceCandidate,
+  detectWorkspaceFormat,
+  classifyWorkspaceEntries,
+  classifyWorkspaceReadError,
+  createNotesDirectory,
+  WORKSPACE_FORMAT,
+  NOTES_DIRECTORY_NAME,
+} from './workspace-open.js';
+import { scanFolder, scanNotesFolder } from './workspace-scanner.js';
 
 globalThis.WORKSPACE_STATE = WORKSPACE_STATE;
 window.WORKSPACE_STATE = WORKSPACE_STATE;
@@ -181,14 +191,408 @@ async function reopenLastActiveWorkspaceFileIfPossible() {
   }
 }
 
+// ACT 1A/1B — transient user-facing report per rejected or failed detection
+// outcome. No persistent state, no error surface for a user cancel. The
+// actionable ACT 1B statuses (empty, uninitialized, valid-notes) intentionally
+// have no entry here: they report through the initialization/activation
+// boundary below, which must never present a rejected-workspace error for a
+// folder the user is allowed to initialize.
+const WORKSPACE_DETECTION_REPORTS = {
+  [WORKSPACE_FORMAT.REJECTED_LEGACY]: {
+    type: 'error',
+    ms: 4200,
+    text: 'Legacy workspace rejected — no compatibility mode and nothing was changed.',
+  },
+  [WORKSPACE_FORMAT.REJECTED_MIXED]: {
+    type: 'error',
+    ms: 4200,
+    text: `Mixed workspace rejected (${NOTES_DIRECTORY_NAME}/ together with legacy folders) — nothing was changed.`,
+  },
+  [WORKSPACE_FORMAT.REJECTED_INVALID_NOTES_ENTRY]: {
+    type: 'error',
+    ms: 4200,
+    text: `Cannot open: "${NOTES_DIRECTORY_NAME}" exists but is a file, not a folder — nothing was changed.`,
+  },
+  [WORKSPACE_FORMAT.PERMISSION_FAILURE]: {
+    type: 'error',
+    ms: 4200,
+    text: 'Workspace unavailable — the current workspace is unchanged.',
+  },
+};
+
+function describeWorkspaceDetection(detection) {
+  const parts = [];
+
+  if (Array.isArray(detection?.legacyDirectories) && detection.legacyDirectories.length) {
+    parts.push(`found ${detection.legacyDirectories.map((name) => `${name}/`).join(' ')}`);
+  }
+
+  if (detection?.caseVariantNotesEntry) {
+    parts.push(
+      `entry "${detection.caseVariantNotesEntry}" is not the exact lowercase "${NOTES_DIRECTORY_NAME}"`
+    );
+  }
+
+  if (detection?.reason === 'picker' && detection?.error?.message) {
+    parts.push(detection.error.message);
+  } else if (detection?.error?.message) {
+    parts.push(`read ${detection.reason || 'failed'}: ${detection.error.message}`);
+  }
+
+  return parts.length ? ` (${parts.join('; ')})` : '';
+}
+
+function reportWorkspaceDetection(detection) {
+  const status = detection?.status || '';
+
+  if (status === WORKSPACE_FORMAT.CANCELED) {
+    globalThis.MME_APP?.log?.(
+      `Workspace: detection status=${WORKSPACE_FORMAT.CANCELED} (open cancelled by user; current workspace preserved)`
+    );
+    return;
+  }
+
+  const detail = describeWorkspaceDetection(detection);
+
+  globalThis.MME_APP?.log?.(`Workspace: detection status=${status}${detail}`);
+
+  const report = WORKSPACE_DETECTION_REPORTS[status];
+
+  // Actionable ACT 1B statuses (empty / uninitialized / valid-notes) are not
+  // rejections and carry no report entry: they continue into the
+  // confirmation/activation boundary instead of surfacing an error message.
+  if (!report) return;
+
+  globalThis.MME_APP?.showToast?.(`${report.text}${detail}`, report.type, report.ms);
+}
+
+// ============================================================
+// ACT 1B — explicit initialization + transactional storage activation
+// ============================================================
+//
+// A picked folder becomes storage-active in four steps, and no WORKSPACE_STATE
+// field is assigned before every fallible step has succeeded:
+//
+//   1. detection (ACT 1A, read-only) classifies the picked folder;
+//   2. `empty` / `uninitialized` require an explicit user confirmation, and
+//      only then is exactly one directory created: `notes/`;
+//   3. `notes/` is scanned into a local record array and the complete next-state
+//      snapshot is validated locally;
+//   4. the validated snapshot is applied at one controlled boundary, field by
+//      field, so existing consumers keep WORKSPACE_STATE's object identity.
+//
+// Every outcome that fails before step 4 (rejected format, declined
+// confirmation, permission failure, creation failure, scan failure) leaves the
+// currently active Workspace, the editor buffer, currentSaveHandle, navigation
+// history and the Sidebar untouched. ACT 1C appends one Index build AFTER the
+// activation boundary; neither ACT 1B nor ACT 1C clears navigation history or
+// reopens a last active Note (both are deferred to the consumer ACTs).
+
+// E1 — empty folder / E2 — folder with unrelated content. These are the
+// confirmation texts required by the ACT 1B contract, and the only place where
+// the user is asked to authorize a filesystem mutation.
+const WORKSPACE_INITIALIZATION_PROMPTS = {
+  [WORKSPACE_FORMAT.EMPTY]:
+    'Initialize a new MarkmapEditor Workspace here?\n\n' +
+    `A ${NOTES_DIRECTORY_NAME}/ folder will be created.\n` +
+    'No other folders will be created.',
+  [WORKSPACE_FORMAT.UNINITIALIZED]:
+    'This folder is not yet a MarkmapEditor Workspace.\n\n' +
+    `Initialize it by creating ${NOTES_DIRECTORY_NAME}/?\n\n` +
+    'Existing files and folders will remain untouched.',
+};
+
+// ACT 1B presents the storage as opened, never as fully ready: the Workspace
+// Index, the Sidebar and every consumer still belong to the next package.
+const WORKSPACE_STORAGE_ACTIVATED_MESSAGE =
+  `Workspace ${NOTES_DIRECTORY_NAME}/ storage opened. Index activation follows in the next package.`;
+
+// ACT 1C — reported only after the Index build completed successfully at the
+// activation boundary. Temporary neutral message (removal: ACT 2C, once the
+// existing consumers are adapted and a product-complete message exists).
+const WORKSPACE_INDEX_READY_MESSAGE =
+  'Workspace notes/ index ready. Existing feature adaptation continues in the next package.';
+
+const WORKSPACE_INITIALIZATION_DECLINED_MESSAGE =
+  'Initialization cancelled — nothing was changed.';
+
+const WORKSPACE_STORAGE_FAILURE_LABELS = {
+  permission: 'permission denied',
+  aborted: 'read aborted',
+  iteration: 'folder read failed',
+  'missing-root-handle': 'selected folder unavailable',
+  'missing-notes-handle': `${NOTES_DIRECTORY_NAME}/ folder unavailable`,
+  'invalid-notes-records': `${NOTES_DIRECTORY_NAME}/ listing invalid`,
+  'invalid-note-record': `${NOTES_DIRECTORY_NAME}/ entry invalid`,
+};
+
+function buildWorkspaceInitializationPrompt(detection) {
+  const base =
+    WORKSPACE_INITIALIZATION_PROMPTS[detection?.status] ||
+    WORKSPACE_INITIALIZATION_PROMPTS[WORKSPACE_FORMAT.EMPTY];
+
+  const caseVariant = String(detection?.caseVariantNotesEntry || '');
+
+  if (!caseVariant) return base;
+
+  return (
+    `${base}\n\nNote: "${caseVariant}" exists with different capitalisation; ` +
+    `MarkmapEditor uses exactly "${NOTES_DIRECTORY_NAME}".`
+  );
+}
+
+// Blocking user confirmation through the existing codebase convention (the
+// Archive action uses the same call). An unavailable or throwing confirmation
+// is treated as a decline, so no mutation can happen without an explicit yes.
+function confirmWorkspaceInitialization(detection) {
+  const ask = typeof globalThis.confirm === 'function' ? globalThis.confirm : null;
+
+  if (!ask) {
+    globalThis.MME_APP?.log?.(
+      'Workspace: initialization confirmation unavailable — nothing was created'
+    );
+    return false;
+  }
+
+  const message = buildWorkspaceInitializationPrompt(detection);
+
+  try {
+    return ask(message) === true;
+  } catch (error) {
+    globalThis.MME_APP?.log?.(
+      `Workspace: initialization confirmation failed: ${error?.message || error}`
+    );
+    return false;
+  }
+}
+
+
+// Local, fallible-free validation of the assembled snapshot. It runs before any
+// assignment, so an incomplete transaction can never become visible state.
+function validateNotesWorkspaceSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return 'missing-root-handle';
+
+  if (!snapshot.rootHandle || typeof snapshot.rootHandle !== 'object') {
+    return 'missing-root-handle';
+  }
+
+  if (!snapshot.notesHandle || typeof snapshot.notesHandle !== 'object') {
+    return 'missing-notes-handle';
+  }
+
+  if (!Array.isArray(snapshot.notesRecords)) return 'invalid-notes-records';
+
+  const invalid = snapshot.notesRecords.some(
+    (record) =>
+      !record ||
+      typeof record !== 'object' ||
+      record.kind !== 'notes' ||
+      typeof record.path !== 'string' ||
+      !record.handle
+  );
+
+  return invalid ? 'invalid-note-record' : '';
+}
+
+function buildNotesWorkspaceSnapshot({ rootHandle, notesHandle, notesRecords }) {
+  return {
+    rootHandle,
+    rootName: String(rootHandle?.name || '') || 'Workspace',
+    notesHandle,
+    notesRecords: Array.isArray(notesRecords) ? notesRecords.slice() : [],
+    activeFile: null,
+  };
+}
+
+// All fallible work: obtain (or create once) the notes/ handle, then scan it.
+// Returns a plain result object; WORKSPACE_STATE is never touched here.
+async function prepareNotesWorkspaceStorage(detection) {
+  const rootHandle = detection?.root || null;
+  let notesHandle = detection?.notesHandle || null;
+  let notesCreated = false;
+
+  if (!rootHandle || typeof rootHandle.getDirectoryHandle !== 'function') {
+    return { ok: false, reason: 'missing-root-handle', notesCreated, error: null };
+  }
+
+  try {
+    if (!notesHandle) {
+      // The only filesystem mutation authorized in ACT 1B, and it happens only
+      // for a confirmed empty/uninitialized folder. An existing notes/
+      // directory is reused from detection and never re-created.
+      notesHandle = await createNotesDirectory(rootHandle);
+      notesCreated = true;
+    }
+
+    const notesRecords = await scanNotesFolder(notesHandle);
+
+    const snapshot = buildNotesWorkspaceSnapshot({ rootHandle, notesHandle, notesRecords });
+    const invalid = validateNotesWorkspaceSnapshot(snapshot);
+
+    if (invalid) {
+      return { ok: false, reason: invalid, notesCreated, error: null };
+    }
+
+    return { ok: true, reason: '', notesCreated, snapshot, error: null };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: classifyWorkspaceReadError(error),
+      notesCreated,
+      error,
+    };
+  }
+}
+
+
+// The single controlled activation boundary. Runs only after the snapshot was
+// fully assembled and validated.
+function activateWorkspaceStorage(snapshot) {
+  WORKSPACE_STATE.rootHandle = snapshot.rootHandle;
+  WORKSPACE_STATE.rootName = snapshot.rootName;
+  WORKSPACE_STATE.folders.notes = snapshot.notesHandle;
+  WORKSPACE_STATE.files.notes = snapshot.notesRecords;
+  WORKSPACE_STATE.activeFile = snapshot.activeFile;
+
+  updateWorkspaceUiState();
+}
+
+function reportWorkspaceInitializationDeclined(detection) {
+  globalThis.MME_APP?.log?.(
+    `Workspace: initialization declined status=${detection?.status} — current workspace preserved`
+  );
+
+  globalThis.MME_APP?.showToast?.(WORKSPACE_INITIALIZATION_DECLINED_MESSAGE, 'warn', 2600);
+}
+
+function reportWorkspaceStorageFailure(result) {
+  const label = WORKSPACE_STORAGE_FAILURE_LABELS[result?.reason] || 'storage error';
+
+  const created = result?.notesCreated
+    ? ` Note: a ${NOTES_DIRECTORY_NAME}/ folder was created in the selected folder; no workspace state changed.`
+    : '';
+
+  globalThis.MME_APP?.showToast?.(
+    `Workspace ${NOTES_DIRECTORY_NAME}/ storage failed (${label}). The current workspace is unchanged.${created}`,
+    'error',
+    4600
+  );
+
+  globalThis.MME_APP?.log?.(
+    `Workspace: storage activation failed reason=${result?.reason} notesCreated=${Boolean(
+      result?.notesCreated
+    )} error=${result?.error?.message || '(none)'}`
+  );
+}
+
+function reportWorkspaceStorageActivated(snapshot, notesCreated, indexReady) {
+  // Honest report: the index-ready text is only shown when the Index build
+  // actually completed; otherwise the ACT 1B storage-only text stands and the
+  // failure detail goes to the log.
+  const message = indexReady ? WORKSPACE_INDEX_READY_MESSAGE : WORKSPACE_STORAGE_ACTIVATED_MESSAGE;
+
+  globalThis.MME_APP?.showToast?.(message, 'warn', 4200);
+
+  globalThis.MME_APP?.log?.(
+    `Workspace: ${NOTES_DIRECTORY_NAME}/ storage activated root=${snapshot.rootName} notes=${
+      snapshot.notesRecords.length
+    } created=${Boolean(notesCreated)} index=${indexReady ? 'ready' : 'deferred'}`
+  );
+}
+
+// ACT 1C — the narrowest safe wiring into the existing Index lifecycle: one
+// direct buildWorkspaceIndex() call, made only AFTER activateWorkspaceStorage()
+// has completed, so the builder always sees a fully assigned storage state.
+// A missing builder or a failing build is reported honestly and never blocks
+// or rolls back the already-completed storage activation.
+async function buildActivatedWorkspaceIndex() {
+  const build = globalThis.buildWorkspaceIndex;
+
+  if (typeof build !== 'function') {
+    globalThis.MME_APP?.log?.(
+      'Workspace: index build unavailable after storage activation (buildWorkspaceIndex not exposed)'
+    );
+    return false;
+  }
+
+  try {
+    await build();
+    return true;
+  } catch (error) {
+    globalThis.MME_APP?.log?.(
+      `Workspace: index build failed after storage activation: ${error?.message || error}`
+    );
+    return false;
+  }
+}
+
+
 async function openWorkspace() {
   if (globalThis.MME_NAVIGATION?.isNavigationInProgress?.()) {
     globalThis.MME_APP?.showToast?.('Navigation in progress. Try again shortly.', 'warn', 2000);
     return;
   }
 
-  const root = await openWorkspaceDirectory();
+  // ACT 1A — strict read-only Workspace format gate. Detection runs BEFORE any
+  // WORKSPACE_STATE replacement or filesystem mutation.
+  const detection = await openWorkspaceCandidate();
 
+  // `openWorkspaceCandidate()` always resolves to a detection result object.
+  const status = detection.status || '';
+
+  // Uniform outcome log. Rejected and failed formats surface their ACT 1A
+  // message and return here with the currently active Workspace (rootHandle,
+  // rootName, folders, files, activeFile), navigation history, editor buffer,
+  // currentSaveHandle and Sidebar untouched.
+  reportWorkspaceDetection(detection);
+
+  if (
+    status !== WORKSPACE_FORMAT.VALID_NOTES &&
+    status !== WORKSPACE_FORMAT.EMPTY &&
+    status !== WORKSPACE_FORMAT.UNINITIALIZED
+  ) {
+    return;
+  }
+
+  // ACT 1B — an empty or uninitialized folder may only be mutated after an
+  // explicit confirmation. Declining is a normalized cancel: zero writes, and
+  // the active Workspace, editor and save handle stay as they are.
+  if (status !== WORKSPACE_FORMAT.VALID_NOTES && !confirmWorkspaceInitialization(detection)) {
+    reportWorkspaceInitializationDeclined(detection);
+    return;
+  }
+
+  // Every fallible step (creating notes/, scanning notes/) happens before the
+  // activation boundary. A failure here leaves no partial state behind.
+  const storage = await prepareNotesWorkspaceStorage(detection);
+
+  if (!storage.ok) {
+    reportWorkspaceStorageFailure(storage);
+    return;
+  }
+
+  activateWorkspaceStorage(storage.snapshot);
+
+  // ACT 1C — storage state is complete; build the Workspace Index once at
+  // this boundary (existing lifecycle owner, direct call, no rescan), then
+  // report storage and Index readiness honestly. Navigation history and the
+  // last active Note are still deliberately untouched.
+  const indexReady = await buildActivatedWorkspaceIndex();
+
+  reportWorkspaceStorageActivated(storage.snapshot, storage.notesCreated, indexReady);
+}
+
+// DEAD LEGACY CODE — not called by any path since ACT 1A, and still not called
+// by ACT 1B. It creates the retired journals/ concepts/ assets/ archive/ and
+// system/ folders, scans the legacy Journals/Concepts lists, clears navigation
+// history and reopens a legacy lastActivePath — none of which the notes/
+// storage model allows. ACT 1B implements only the storage-state activation
+// portion of this sequence (prepareNotesWorkspaceStorage / activateWorkspaceStorage
+// above) and deliberately leaves this sequence uncalled.
+// Removal ACT: the legacy Workspace UI/Index cleanup (ACT 1C and the consumer
+// adaptation that follows it), where refreshWorkspaceSidebar(), scanFolder(),
+// ensureSubfolder() and the legacy Sidebar markup are removed together.
+async function activateWorkspaceAtExistingBoundary(root) {
   WORKSPACE_STATE.rootHandle = root;
   WORKSPACE_STATE.rootName = root.name || 'Workspace';
 
@@ -252,9 +656,14 @@ globalThis.persistActiveWorkspaceFile = persistActiveWorkspaceFile;
 globalThis.refreshWorkspaceSidebar = refreshWorkspaceSidebar;
 
 function normalizeWorkspaceKindForCompare(value) {
+  // ACT 2A — 'notes' is the canonical Workspace kind; shared by
+  // findWorkspaceFileByPath / openWorkspaceFile / search / tags / related.
   const kind = String(value || '')
     .trim()
     .toLowerCase();
+
+  if (kind === 'note') return 'notes';
+  if (kind === 'notes') return 'notes';
 
   if (kind === 'journal') return 'journals';
   if (kind === 'journals') return 'journals';
@@ -264,6 +673,10 @@ function normalizeWorkspaceKindForCompare(value) {
 
   return kind;
 }
+
+try {
+  globalThis.normalizeWorkspaceKindForCompare = normalizeWorkspaceKindForCompare;
+} catch {}
 
 function buildArchiveFileName(activeFile) {
   const name = String(activeFile?.name || 'archived.md').trim();
@@ -347,11 +760,23 @@ async function openToday() {
     return;
   }
 
-  if (!WORKSPACE_STATE.folders.journals) {
-    await openWorkspace();
+  // ACT 2C — the ACT 1B Today gate is removed: Today is a lifecycle/output
+  // consumer and is now fully adapted to `notes/`. It creates/opens exactly
+  // `notes/YYYY-MM-DD.md` and never duplicates or overwrites: getFileHandle()
+  // with create:true reuses an existing file, and the starter body is written
+  // only when the existing content is empty.
+  const notesFolder = WORKSPACE_STATE.folders?.notes;
+  if (!notesFolder) {
+    globalThis.MME_APP?.showToast?.(
+      `Today needs an open ${NOTES_DIRECTORY_NAME}/ storage.`,
+      'warn',
+      3000
+    );
+    globalThis.MME_APP?.log?.(
+      `Workspace: Today unavailable — no ${NOTES_DIRECTORY_NAME}/ directory handle`
+    );
+    return;
   }
-
-  if (!WORKSPACE_STATE.folders.journals) return;
 
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -359,7 +784,7 @@ async function openToday() {
   const dd = String(d.getDate()).padStart(2, '0');
   const fileName = `${yyyy}-${mm}-${dd}.md`;
 
-  const fileHandle = await WORKSPACE_STATE.folders.journals.getFileHandle(fileName, {
+  const fileHandle = await notesFolder.getFileHandle(fileName, {
     create: true,
   });
 
@@ -369,12 +794,9 @@ async function openToday() {
   const dateString = `${yyyy}-${mm}-${dd}`;
 
   if (!String(text || '').trim()) {
-    text = `---
-type: journal
-tags: []
----
-
-# ${dateString}
+    // ACT 2C — the legacy `type: journal` frontmatter key belonged to the
+    // retired kind split and is not written. No new metadata writer is added.
+    text = `# ${dateString}
 
 ## Notes
 
@@ -405,10 +827,12 @@ tags: []
   // ACT G2B: Clear Report identity at the safe target-activation boundary.
   globalThis.clearReportIdentityAfterTransition?.();
 
+  // ACT 2C — Today opens a real `notes/` Note: identity is the physical
+  // notes/YYYY-MM-DD.md path, and `notes` is the only canonical kind.
   WORKSPACE_STATE.activeFile = {
-    kind: 'journals',
+    kind: 'notes',
     name: fileName,
-    path: `journals/${fileName}`,
+    path: `${NOTES_DIRECTORY_NAME}/${fileName}`,
     handle: fileHandle,
   };
 
@@ -423,8 +847,8 @@ tags: []
   if (typeof globalThis.MME_NAVIGATION === 'object') {
     globalThis.MME_NAVIGATION.recordSuccessfulNavigation({
       type: 'workspace-file',
-      path: `journals/${fileName}`,
-      kind: 'journals',
+      path: `${NOTES_DIRECTORY_NAME}/${fileName}`,
+      kind: 'notes',
       name: fileName,
       source: 'workspace today',
     });
@@ -450,7 +874,9 @@ async function openWorkspaceFile(fileRecord) {
   });
 
   WORKSPACE_STATE.activeFile = {
-    kind: fileRecord.kind || 'journals',
+    // ACT 2C — 'notes' is the only canonical Workspace kind; the 'journals'
+    // fallback belonged to the retired kind split.
+    kind: fileRecord.kind || 'notes',
     name: fileRecord.name,
     path: fileRecord.path,
     handle: fileRecord.handle,
@@ -470,7 +896,12 @@ function handleSidebarClick(event) {
 
   const path = item.dataset.path || '';
   const kind = item.dataset.kind || '';
-  const allFiles = [...WORKSPACE_STATE.files.journals, ...WORKSPACE_STATE.files.concepts];
+  // Legacy Journals/Concepts lists. ACT 1B removed those state fields, so the
+  // read is optional-chained: a stale legacy sidebar item must not throw here.
+  const allFiles = [
+    ...(WORKSPACE_STATE.files?.journals || []),
+    ...(WORKSPACE_STATE.files?.concepts || []),
+  ];
 
   const fileRecord = allFiles.find((file) => file.path === path);
   if (!fileRecord) {
@@ -1265,6 +1696,15 @@ globalThis.WORKSPACE_API = {
   openWorkspaceDirectory,
   ensureSubfolder,
   scanFolder,
+  openWorkspaceCandidate,
+  detectWorkspaceFormat,
+  classifyWorkspaceEntries,
+  classifyWorkspaceReadError,
+  createNotesDirectory,
+  scanNotesFolder,
+  buildNotesWorkspaceSnapshot,
+  validateNotesWorkspaceSnapshot,
+  WORKSPACE_FORMAT,
   refreshWorkspaceSidebar,
   openWorkspace,
   openToday,

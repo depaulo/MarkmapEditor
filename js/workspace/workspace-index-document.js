@@ -188,13 +188,14 @@
   function buildSummarySection(index) {
     const openTasks = (index.tasks || []).filter((t) => !t.done).length;
     const doneTasks = (index.tasks || []).filter((t) => t.done).length;
-    const journals = (index.byKind?.journals || []).length;
-    const concepts = (index.byKind?.concepts || []).length;
+
+    // ACT 2B — 'notes' is the only bucket, so the retired Journals/Concepts
+    // metrics are replaced by a single Notes metric.
+    const notes = (index.byKind?.notes || []).length;
 
     const metrics = [
       { label: 'Files', value: (index.files || []).length },
-      { label: 'Journals', value: journals },
-      { label: 'Concepts', value: concepts },
+      { label: 'Notes', value: notes },
       { label: 'Projects', value: (index.projects || []).length },
       { label: 'Tags', value: index.tags?.size || 0 },
       { label: 'Tasks', value: (index.tasks || []).length },
@@ -229,7 +230,9 @@
     const name = escapeHtml(file.name || file.path || '');
     const title = escapeHtml(file.title || file.name || '');
     const date = escapeHtml(file.date || '');
-    const icon = kind === 'journals' ? '📝' : kind === 'concepts' ? '🧠' : '📄';
+
+    // ACT 2B — every indexed file is a Note, so one icon.
+    const icon = '📄';
 
     return `<button type="button" class="wsIndexFileAction" data-action="open-workspace-file" data-path="${path}" data-kind="${kind}">
       <span class="wsIndexFileIcon" aria-hidden="true">${icon}</span>
@@ -275,49 +278,29 @@
     >${escapeHtml(label)}</button>`;
   }
 
-  function buildJournalsSection(index) {
-    const journals = (index.byKind?.journals || []).slice().sort((a, b) => {
+  // ACT 2B — the retired Journals/Concepts sections are replaced by one Notes
+  // section over the single byKind.notes bucket. Ordering is deterministic:
+  // path descending (newest dated Notes first), matching the retired Journals
+  // section's ordering.
+  function buildNotesSection(index) {
+    const notes = (index.byKind?.notes || []).slice().sort((a, b) => {
       return String(b.path || '').localeCompare(String(a.path || ''));
     });
 
-    if (!journals.length) {
+    if (!notes.length) {
       return `
-        <section class="wsIndexSection" id="workspaceIndexJournalsSection" aria-label="Journals">
-          <h2 class="wsIndexSectionTitle">Journals</h2>
-          <div class="wsIndexEmpty">No journals indexed</div>
+        <section class="wsIndexSection" id="workspaceIndexNotesSection" aria-label="Notes">
+          <h2 class="wsIndexSectionTitle">Notes</h2>
+          <div class="wsIndexEmpty">No Notes indexed</div>
         </section>
       `;
     }
 
-    const items = journals.map(buildFileActionButton).join('');
+    const items = notes.map(buildFileActionButton).join('');
 
     return `
-      <section class="wsIndexSection" id="workspaceIndexJournalsSection" aria-label="Journals">
-        <h2 class="wsIndexSectionTitle">Journals (${journals.length})</h2>
-        <div class="wsIndexFileList">${items}</div>
-      </section>
-    `;
-  }
-
-  function buildConceptsSection(index) {
-    const concepts = (index.byKind?.concepts || []).slice().sort((a, b) => {
-      return String(a.name || '').localeCompare(String(b.name || ''));
-    });
-
-    if (!concepts.length) {
-      return `
-        <section class="wsIndexSection" id="workspaceIndexConceptsSection" aria-label="Concepts">
-          <h2 class="wsIndexSectionTitle">Concepts</h2>
-          <div class="wsIndexEmpty">No concepts indexed</div>
-        </section>
-      `;
-    }
-
-    const items = concepts.map(buildFileActionButton).join('');
-
-    return `
-      <section class="wsIndexSection" id="workspaceIndexConceptsSection" aria-label="Concepts">
-        <h2 class="wsIndexSectionTitle">Concepts (${concepts.length})</h2>
+      <section class="wsIndexSection" id="workspaceIndexNotesSection" aria-label="Notes">
+        <h2 class="wsIndexSectionTitle">Notes (${notes.length})</h2>
         <div class="wsIndexFileList">${items}</div>
       </section>
     `;
@@ -560,7 +543,9 @@
         const parsed = index.byPath?.get(filePath);
         const fileName = parsed?.name || filePath;
         const fileKind = parsed?.kind || '';
-        const icon = fileKind === 'journals' ? '📝' : fileKind === 'concepts' ? '🧠' : '📄';
+
+        // ACT 2B — every task source file is a Note, so one icon.
+        const icon = '📄';
 
         const parts = disclosureParts(kind, filePath, fileTasks, expanded);
         const listId = `wsIndexTaskList-${kind}-${String(filePath).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
@@ -696,8 +681,7 @@
   function buildNavigator() {
     const links = [
       { id: 'workspaceIndexSummarySection', label: 'Summary' },
-      { id: 'workspaceIndexJournalsSection', label: 'Journals' },
-      { id: 'workspaceIndexConceptsSection', label: 'Concepts' },
+      { id: 'workspaceIndexNotesSection', label: 'Notes' },
       { id: 'workspaceIndexProjectsSection', label: 'Projects' },
       { id: 'workspaceIndexTasksSection', label: 'Tasks' },
       { id: 'workspaceIndexTagsSection', label: 'Tags' },
@@ -731,7 +715,7 @@
   function buildEmptyWorkspaceHtml() {
     return `<div class="wsIndexEmptyWorkspace">
       <div class="wsIndexEmptyTitle">Workspace is empty</div>
-      <div class="wsIndexEmptyText">No journals or concepts found in the workspace.</div>
+      <div class="wsIndexEmptyText">No Notes found in the workspace.</div>
     </div>`;
   }
 
@@ -753,8 +737,7 @@
     const nav = buildNavigator();
     const sections = [
       buildSummarySection(index),
-      buildJournalsSection(index),
-      buildConceptsSection(index),
+      buildNotesSection(index),
       buildProjectsSection(index, filters),
       buildTasksSection(index, filter, expandedSet),
       buildTagsSection(index, expandedSet),

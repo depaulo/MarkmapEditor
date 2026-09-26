@@ -1576,25 +1576,25 @@
 
     // ---------- CARD PRESENTATION: SOURCE LABEL + PRIORITY BADGE (pure) ----------
     const cardByPath = new Map();
-    cardByPath.set('journals/a.md', { title: 'Alpha Journal', name: 'a.md', kind: 'journals' });
-    cardByPath.set('concepts/b.md', { title: '', name: 'b.md', kind: 'concepts' });
+    cardByPath.set('notes/a.md', { title: 'Alpha Note', name: 'a.md', kind: 'notes' });
+    cardByPath.set('notes/b.md', { title: '', name: 'b.md', kind: 'notes' });
 
     const srcTaskTitle = {
       text: 'Do #p1 things #project',
       done: false,
       priority: 'p1',
-      filePath: 'journals/a.md',
+      filePath: 'notes/a.md',
       fileName: 'a.md',
-      fileKind: 'journals',
+      fileKind: 'notes',
       line: 3,
     };
     const srcSnapshot = JSON.stringify(srcTaskTitle);
 
-    check('A parsed title wins', resolveSourceLabel(srcTaskTitle, cardByPath) === 'Alpha Journal');
+    check('A parsed title wins', resolveSourceLabel(srcTaskTitle, cardByPath) === 'Alpha Note');
 
     check(
       'B empty parsed title falls back to filename',
-      resolveSourceLabel({ text: 'x', filePath: 'concepts/b.md', fileName: 'b.md' }, cardByPath) === 'b.md'
+      resolveSourceLabel({ text: 'x', filePath: 'notes/b.md', fileName: 'b.md' }, cardByPath) === 'b.md'
     );
 
     check(
@@ -1634,8 +1634,8 @@
     check(
       'O source-navigation data attributes remain',
       renderedCard.indexOf('data-task-open="1"') !== -1 &&
-        renderedCard.indexOf('data-path="journals/a.md"') !== -1 &&
-        renderedCard.indexOf('data-kind="journals"') !== -1 &&
+        renderedCard.indexOf('data-path="notes/a.md"') !== -1 &&
+        renderedCard.indexOf('data-kind="notes"') !== -1 &&
         renderedCard.indexOf('data-line="3"') !== -1
     );
     check(
@@ -1643,8 +1643,8 @@
       renderedCard.indexOf('<span class="workspaceTaskPriorityBadge priority-p1">P1</span>') !== -1 &&
         renderedCard.indexOf('workspaceTaskPriorityBadge priority-p1"') !== -1
     );
-    check('P2 source label present on the card', renderedCard.indexOf('class="taskBoardCardSource" title="Alpha Journal"') !== -1);
-    check('P3 no badge for unprioritized card', cardHtml({ text: 'plain', priority: null, filePath: 'x.md', fileKind: 'concepts', fileName: 'x.md', line: 1 }, 'todo', new Map()).indexOf('workspaceTaskPriorityBadge') === -1);
+    check('P2 source label present on the card', renderedCard.indexOf('class="taskBoardCardSource" title="Alpha Note"') !== -1);
+    check('P3 no badge for unprioritized card', cardHtml({ text: 'plain', priority: null, filePath: 'x.md', fileKind: 'notes', fileName: 'x.md', line: 1 }, 'todo', new Map()).indexOf('workspaceTaskPriorityBadge') === -1);
 
     check('Q card input not mutated during render', JSON.stringify(srcTaskTitle) === srcSnapshot);
 
@@ -1727,9 +1727,9 @@
 
     // File comparator fixtures (mixed files, lines, names).
     const sortTasks = [
-      { id: 'c', filePath: 'journals/b/day.md', fileName: 'day.md', line: 3, text: 'Zebra', openedDate: '2026-08-01' },
-      { id: 'a', filePath: 'journals/a/week.md', fileName: 'week.md', line: 1, text: 'Alpha', openedDate: '2026-08-05' },
-      { id: 'b', filePath: 'journals/a/week.md', fileName: 'week.md', line: 2, text: 'Beta', openedDate: '2026-08-02' },
+      { id: 'c', filePath: 'notes/b/day.md', fileName: 'day.md', line: 3, text: 'Zebra', openedDate: '2026-08-01' },
+      { id: 'a', filePath: 'notes/a/week.md', fileName: 'week.md', line: 1, text: 'Alpha', openedDate: '2026-08-05' },
+      { id: 'b', filePath: 'notes/a/week.md', fileName: 'week.md', line: 2, text: 'Beta', openedDate: '2026-08-02' },
       { id: 'd', filePath: null, fileName: 'orphan.md', line: null, text: 'Delta', openedDate: '2026-08-03' },
     ];
     const sortSnapshot = JSON.stringify(sortTasks);
@@ -1772,7 +1772,7 @@
     check('AD persisted Sort normalizer never returns unsupported', ['file', 'opened-newest', 'opened-oldest', 'name'].indexOf(normalizeSortValue('bogus')) !== -1 && ['file', 'opened-newest', 'opened-oldest', 'name'].indexOf(normalizeSortValue('NAME')) !== -1);
 
     // AB: rendered cards retain source label and badge after sorting.
-    const sortedForRender = sortColumn([{ id: 'p1x', text: 'do #p1 things #project', priority: 'p1', filePath: 'journals/a.md', fileName: 'a.md', fileKind: 'journals', line: 3 }], 'name');
+    const sortedForRender = sortColumn([{ id: 'p1x', text: 'do #p1 things #project', priority: 'p1', filePath: 'notes/a.md', fileName: 'a.md', fileKind: 'notes', line: 3 }], 'name');
     const sortedCardHtml = cardHtml(sortedForRender[0], 'todo', cardByPath);
     check('AB source labels + priority badges survive sorting', sortedCardHtml.indexOf('taskBoardCardSource') !== -1 && sortedCardHtml.indexOf('workspaceTaskPriorityBadge priority-p1') !== -1);
 

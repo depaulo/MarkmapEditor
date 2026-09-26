@@ -4,11 +4,12 @@
 //
 // The helper functions referenced below that are NOT defined in this module
 // (normalizeParserText, parseMarkdownHeadings, parseMarkdownTasks,
-// parseConceptLinks, parseVisibleHeaderFields, getMarkdownTitle,
-// inferDateFromWorkspacePath, countWords, stripYamlFrontmatterForTags,
-// normalizeTagValue) continue to live in main.js as global functions and are
-// resolved at call time. This keeps the parser self-contained for the 6
-// extracted helpers without duplicating the broader parsing utilities.
+// parseConceptLinks, parseVisibleHeaderFields, getMarkdownTitle, countWords,
+// stripYamlFrontmatterForTags, normalizeTagValue) continue to live in main.js
+// as global functions and are resolved at call time. This keeps the parser
+// self-contained for the 6 extracted helpers without duplicating the broader
+// parsing utilities. (inferDateFromWorkspacePath was retired from this module
+// by the ACT 1C strict date contract: frontmatter date → dated filename → ''.)
 
 (function () {
   'use strict';
@@ -729,6 +730,45 @@
     };
   }
 
+  // ============================================================
+  // ACT 1C — saved Note metadata READ contract (read-only)
+  // ============================================================
+  //
+  // These three helpers read managed classification fields from already-parsed
+  // frontmatter. Nothing here writes, normalizes, adds or removes frontmatter,
+  // and a malformed frontmatter simply degrades to the safe defaults below:
+  //
+  //   date    a valid YYYY-MM-DD frontmatter value takes precedence;
+  //           otherwise only a filename that is exactly `YYYY-MM-DD.md`
+  //           (case-insensitive extension, matching the ACT 1B scanner)
+  //           contributes a date; otherwise '' (the existing parser
+  //           convention). Body content, Task/Project dates and file times
+  //           are never date sources.
+  //   knowledge / pinned / archived
+  //           true only for the supported frontmatter value `true`
+  //           (case-insensitive). Absent, false and unsupported values
+  //           resolve to false without rewriting the file.
+  const FRONTMATTER_DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+  const DATED_NOTE_FILENAME = /^(\d{4}-\d{2}-\d{2})\.md$/i;
+
+  function readFrontmatterDate(value) {
+    const raw = typeof value === 'string' ? value.trim() : '';
+
+    return FRONTMATTER_DATE_SHAPE.test(raw) ? raw : '';
+  }
+
+  function readFrontmatterFlag(value) {
+    if (typeof value !== 'string') return false;
+
+    return value.trim().toLowerCase() === 'true';
+  }
+
+  function inferDateFromDatedFilename(name) {
+    const match = String(name || '').match(DATED_NOTE_FILENAME);
+
+    return match ? match[1] : '';
+  }
+
   function parseWorkspaceDocument({ kind, name, path, text }) {
     const normalizedText = normalizeParserText(text);
     const parsedFrontmatter = parseSimpleYamlFrontmatter(normalizedText);
@@ -747,9 +787,22 @@
       lineOffset: offset,
     });
 
-    const title = getMarkdownTitle(normalizedText, String(name || '').replace(/\.md$/i, ''));
+    // ACT 1C title contract (parser-owned extraction, never editor text):
+    // saved first valid H1 in the frontmatter BODY → filename basename.
+    // The body is passed so frontmatter lines can never be title candidates;
+    // fenced-code exclusion is owned by getMarkdownTitle in main.js.
+    const title = getMarkdownTitle(
+      parsedFrontmatter.body,
+      String(name || '').replace(/\.md$/i, '')
+    );
 
-    const date = header.date || header.created || inferDateFromWorkspacePath(path, normalizedText);
+    // ACT 1C date contract: valid frontmatter date → exactly dated filename
+    // → '' (existing empty convention). The former body-visible and
+    // any-date-in-path/text inference is intentionally gone.
+    const date =
+      readFrontmatterDate(parsedFrontmatter.data?.date) ||
+      inferDateFromDatedFilename(name) ||
+      '';
 
     return {
       kind,
@@ -757,6 +810,9 @@
       path,
       title,
       date,
+      knowledge: readFrontmatterFlag(parsedFrontmatter.data?.knowledge),
+      pinned: readFrontmatterFlag(parsedFrontmatter.data?.pinned),
+      archived: readFrontmatterFlag(parsedFrontmatter.data?.archived),
       tags,
       headings,
       tasks,

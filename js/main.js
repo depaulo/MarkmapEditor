@@ -503,9 +503,11 @@ const WORKSPACE_INDEX_STATE = {
   lastBuiltAt: 0,
   files: [],
   byPath: new Map(),
+  // ACT 1C: one canonical bucket. Knowledge/Pinned/Archived are classification
+  // FIELDS on Note records (workspace-parser.js), never buckets here, and no
+  // journals/concepts/knowledge/pinned/archived bucket is authoritative.
   byKind: {
-    journals: [],
-    concepts: [],
+    notes: [],
   },
   tags: new Map(),
   tasks: [],
@@ -584,8 +586,38 @@ function parseMarkdownHeadings(text) {
   return headings;
 }
 
+// ACT 1C title contract: a heading inside a fenced code block is code, not a
+// title candidate. Only the title extractor is fence-aware; the existing
+// parseMarkdownHeadings contract (headings list, line numbers) is unchanged.
+function removeFencedCodeBlocks(text) {
+  const lines = normalizeParserText(text).split('\n');
+  const kept = [];
+  let openFence = null;
+
+  for (const line of lines) {
+    const fence = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+
+    if (openFence) {
+      if (fence && fence[1][0] === openFence[0] && fence[1].length >= openFence.length) {
+        openFence = null;
+      }
+
+      continue;
+    }
+
+    if (fence) {
+      openFence = fence[1];
+      continue;
+    }
+
+    kept.push(line);
+  }
+
+  return kept.join('\n');
+}
+
 function getMarkdownTitle(text, fallback = '') {
-  const headings = parseMarkdownHeadings(text);
+  const headings = parseMarkdownHeadings(removeFencedCodeBlocks(text));
   const h1 = headings.find((h) => h.level === 1);
 
   if (h1?.text) return h1.text;
@@ -997,11 +1029,11 @@ async function readWorkspaceFileText(file) {
 async function buildWorkspaceIndex() {
   if (!WORKSPACE_STATE?.rootHandle) {
     WORKSPACE_INDEX_STATE.ready = false;
+    WORKSPACE_INDEX_STATE.lastBuiltAt = 0;
     WORKSPACE_INDEX_STATE.files = [];
     WORKSPACE_INDEX_STATE.byPath = new Map();
     WORKSPACE_INDEX_STATE.byKind = {
-      journals: [],
-      concepts: [],
+      notes: [],
     };
     WORKSPACE_INDEX_STATE.tags = new Map();
     WORKSPACE_INDEX_STATE.tasks = [];
@@ -1012,11 +1044,16 @@ async function buildWorkspaceIndex() {
     return WORKSPACE_INDEX_STATE;
   }
 
-  const allFiles = [
-    ...(WORKSPACE_STATE.files?.journals || []),
-    ...(WORKSPACE_STATE.files?.concepts || []),
-  ];
+  // ACT 1C — the single source of the saved Workspace Index is
+  // WORKSPACE_STATE.files.notes (ACT 1B storage records). The array and its
+  // records are only read: never mutated, never re-scanned, never sorted.
+  const allFiles = [...(WORKSPACE_STATE.files?.notes || [])];
 
+  // Transactional build: every fallible read/parse runs against local
+  // structures only, so a failure mid-build can never corrupt the previously
+  // published Index snapshot. Documented per-file policy: an unreadable or
+  // malformed Note is skipped with its exact path logged, the remaining
+  // records still index, and the file itself is never written.
   const parsedFiles = [];
 
   for (const file of allFiles) {
@@ -1045,8 +1082,7 @@ async function buildWorkspaceIndex() {
 
   const byPath = new Map();
   const byKind = {
-    journals: [],
-    concepts: [],
+    notes: [],
   };
   const tags = new Map();
   const tasks = [];
@@ -1056,17 +1092,18 @@ async function buildWorkspaceIndex() {
   for (const parsed of parsedFiles) {
     byPath.set(parsed.path, parsed);
 
-    if (!byKind[parsed.kind]) {
-      byKind[parsed.kind] = [];
-    }
-
-    byKind[parsed.kind].push(parsed);
+    // One canonical bucket. The source array is notes/-only, so every parsed
+    // record is a Note; no journals/concepts (or any second) bucket is ever
+    // created by this builder.
+    byKind.notes.push(parsed);
 
     for (const tag of parsed.tags) {
       if (!tags.has(tag)) tags.set(tag, []);
       tags.get(tag).push(parsed.path);
     }
 
+    // Task ordering contract (source-proven, unchanged): tasks appear in
+    // record order × in-file line order, with no re-sorting here.
     for (const task of parsed.tasks) {
       tasks.push({
         ...task,
@@ -1123,8 +1160,11 @@ async function buildWorkspaceIndex() {
     return (a.sourceLine || 0) - (b.sourceLine || 0);
   });
 
-  WORKSPACE_INDEX_STATE.ready = true;
-  WORKSPACE_INDEX_STATE.lastBuiltAt = Date.now();
+  // Single controlled assignment boundary: the snapshot is fully built
+  // locally before any field becomes visible, `ready` flips only after every
+  // field is assigned, and index-ready dispatches only after the snapshot is
+  // complete — so a failed build leaves the previous Index untouched and a
+  // successful build is never observed half-applied.
   WORKSPACE_INDEX_STATE.files = parsedFiles;
   WORKSPACE_INDEX_STATE.byPath = byPath;
   WORKSPACE_INDEX_STATE.byKind = byKind;
@@ -1132,8 +1172,12 @@ async function buildWorkspaceIndex() {
   WORKSPACE_INDEX_STATE.tasks = tasks;
   WORKSPACE_INDEX_STATE.links = links;
   WORKSPACE_INDEX_STATE.projects = projects;
+  WORKSPACE_INDEX_STATE.lastBuiltAt = Date.now();
+  WORKSPACE_INDEX_STATE.ready = true;
 
-  // Dispatch workspace index ready event for late modules
+  // Dispatch workspace index ready event for late modules (existing event
+  // name and contract; exactly once per completed build, and only after the
+  // snapshot above — no listener can observe a partial Index).
   try {
     window.dispatchEvent(
       new CustomEvent('mme-workspace-index-ready', {
@@ -1157,9 +1201,9 @@ async function buildWorkspaceIndex() {
   const doneTasks = tasks.filter((task) => task.done).length;
 
   log?.(
-    `Workspace Index: built files=${parsedFiles.length} journals=${
-      byKind.journals.length
-    } concepts=${byKind.concepts.length} tags=${tags.size} tasks=${
+    `Workspace Index: built files=${parsedFiles.length} notes=${
+      byKind.notes.length
+    } tags=${tags.size} tasks=${
       tasks.length
     } openTasks=${openTasks} doneTasks=${doneTasks} links=${links.size} projects=${projects.length}`
   );
@@ -1198,10 +1242,13 @@ function logWorkspaceIndexSummary() {
   const openTasks = index.tasks.filter((task) => !task.done).length;
   const doneTasks = index.tasks.filter((task) => task.done).length;
 
+  // ACT 2A — the ACT 1C compatibility-view gate on this logger is removed:
+  // the journals/concepts fragments are retired with the buckets they
+  // described. This logger now reports the canonical notes-only shape.
   log?.(
-    `Workspace Index Summary: files=${index.files.length} journals=${
-      index.byKind.journals.length
-    } concepts=${index.byKind.concepts.length} tags=${index.tags.size} tasks=${
+    `Workspace Index Summary: files=${index.files.length} notes=${
+      (index.byKind?.notes || []).length
+    } tags=${index.tags.size} tasks=${
       index.tasks.length
     } openTasks=${openTasks} doneTasks=${doneTasks} links=${index.links.size} projects=${index.projects.length}`
   );
@@ -1361,6 +1408,10 @@ function getWorkspaceSearchIcon(kind) {
       ? normalizeWorkspaceKindForCompare(kind)
       : String(kind || '').trim();
 
+  // ACT 2A — unified Notes presentation. Legacy journal/concept branches are
+  // retained only as a harmless display fallback for stale records; they are
+  // not lookup groups and no authoritative journals/concepts array exists.
+  if (normalized === 'notes') return '📄';
   if (normalized === 'journals') return '📝';
   if (normalized === 'concepts') return '🧠';
 
@@ -1373,6 +1424,8 @@ function getWorkspaceSearchKindLabel(kind) {
       ? normalizeWorkspaceKindForCompare(kind)
       : String(kind || '').trim();
 
+  // ACT 2A — see getWorkspaceSearchIcon: 'Note' is the canonical label.
+  if (normalized === 'notes') return 'Note';
   if (normalized === 'journals') return 'Journal';
   if (normalized === 'concepts') return 'Concept';
 
@@ -1510,7 +1563,7 @@ function ensureWorkspaceSearchPanel() {
     <input
       id="workspaceSearchInput"
       type="search"
-      placeholder="Search journals and concepts..."
+      placeholder="Search notes..."
       autocomplete="off"
       spellcheck="false"
     />
@@ -1911,11 +1964,9 @@ function getGroupedOpenWorkspaceTasks() {
   const groups = Array.from(groupsMap.values());
 
   groups.sort((a, b) => {
-    if (a.kind !== b.kind) {
-      if (a.kind === 'journals') return -1;
-      if (b.kind === 'journals') return 1;
-    }
-
+    // ACT 2B — 'notes' is the only Workspace kind, so the retired
+    // journals-first branch is removed. The remaining order (date descending,
+    // then title ascending) is unchanged.
     const dateA = String(a.date || '');
     const dateB = String(b.date || '');
 
@@ -1989,7 +2040,8 @@ function renderWorkspaceTasksPanel() {
 
   list.innerHTML = groups
     .map((group) => {
-      const icon = group.kind === 'journals' ? '📝' : group.kind === 'concepts' ? '🧠' : '📄';
+      // ACT 2B — every group is a Note, so one icon.
+      const icon = '📄';
 
       const groupTitle = escapeHtml(group.title || group.fileName || group.path);
       const groupPath = escapeHtml(group.path || '');
@@ -2140,29 +2192,33 @@ function wireWorkspaceTasksPanel() {
 }
 
 function getActiveConceptName() {
+  // ACT 2A — Related/Backlinks eligibility no longer requires a concept.
+  // Any active Workspace Note with a resolvable indexed identity qualifies;
+  // knowledge === true is NOT required. The legacy function name is kept so
+  // existing call sites and the index-ready refresh lifecycle are unchanged.
   const active = WORKSPACE_STATE.activeFile;
 
   if (!active) return '';
 
-  const kind =
-    typeof normalizeWorkspaceKindForCompare === 'function'
-      ? normalizeWorkspaceKindForCompare(active.kind || '')
-      : String(active.kind || '').trim();
-
-  if (kind !== 'concepts') return '';
-
+  // Display identity: strip the notes/ prefix so the Related summary shows
+  // the bare note name; matching still goes through
+  // normalizeBacklinkConceptKey on both sides, so this is presentation only.
+  const raw = String(active.name || active.path || '');
+  const withoutPrefix = raw.replace(/^notes\//i, '');
   return normalizeConceptName
-    ? normalizeConceptName(active.name || active.path || '')
-    : String(active.name || active.path || '')
-        .replace(/^concepts\//i, '')
+    ? normalizeConceptName(withoutPrefix)
+    : String(withoutPrefix)
         .replace(/\.md$/i, '')
         .trim();
 }
 
 function normalizeBacklinkConceptKey(value) {
+  // ACT 2A — keys resolve against unified notes/ paths; the concepts/ strip stays as a
+  // harmless fallback for stale link spellings (migration-review cases, never rewritten).
   return String(value || '')
     .trim()
     .replace(/^\.?\//, '')
+    .replace(/^notes\//i, '')
     .replace(/^concepts\//i, '')
     .replace(/\.md$/i, '')
     .replace(/\|.*$/, '')
@@ -2187,19 +2243,21 @@ function findBacklinksForConcept(conceptName) {
     const hasLink = links.some((link) => normalizeBacklinkConceptKey(link) === targetKey);
     if (!hasLink) continue;
 
-    if (parsed.kind === 'concepts' && parsedConceptName === targetKey) {
-      continue;
+    // ACT 2A — no concepts-only self-exclusion: the active Note itself is
+    // excluded by identity (same resolved key AND same path), so two Notes
+    // sharing one H1 keep distinct backlink candidacies.
+    if (parsedConceptName === targetKey) {
+      const parsedPath = String(parsed.path || '');
+      const activePath = String(WORKSPACE_STATE?.activeFile?.path || '');
+      if (parsedPath && activePath && parsedPath === activePath) continue;
     }
 
     results.push(parsed);
   }
 
+  // ACT 2A — ordering preserved minus the legacy kind tier: date desc, then
+  // name asc. No kind comparison remains.
   results.sort((a, b) => {
-    if (a.kind !== b.kind) {
-      if (a.kind === 'journals') return -1;
-      if (b.kind === 'journals') return 1;
-    }
-
     const dateA = String(a.date || '');
     const dateB = String(b.date || '');
 
@@ -2228,19 +2286,20 @@ function renderWorkspaceRelatedPanel() {
     return;
   }
 
+  // ACT 2A — legacy name kept; value is now the active Note identity, not a concept.
   const activeConcept = getActiveConceptName();
 
   if (!activeConcept) {
     panel.hidden = true;
     badge.textContent = '0 related';
-    summary.textContent = 'No active concept';
+    summary.textContent = 'No active note';
     list.innerHTML = '';
     applyWorkspacePanelCollapsed(panel, 'related', isWorkspacePanelCollapsed('related'));
     return;
   }
 
   panel.hidden = false;
-  summary.textContent = `Current concept: ${activeConcept}`;
+  summary.textContent = `Current note: ${activeConcept}`;
 
   if (!WORKSPACE_INDEX_STATE?.ready) {
     badge.textContent = '0 related';
@@ -2260,13 +2319,17 @@ function renderWorkspaceRelatedPanel() {
 
   list.innerHTML = backlinks
     .map((file) => {
-      const kind = String(file.kind || '');
-      const icon = kind === 'journals' ? '📝' : kind === 'concepts' ? '🧠' : '📄';
-      const name = escapeHtml(file.name || file.title || file.path || '');
+      const kind = String(file.kind || 'notes');
+      // ACT 2A — unified Notes presentation: primary row label is the saved
+      // indexed H1 title with filename fallback; filename/path stay visible
+      // secondarily and navigation uses the exact path below.
+      const icon = getWorkspaceSearchIcon(kind);
+      const name = escapeHtml(file.title || file.name || file.path || '');
       const path = escapeHtml(file.path || '');
       const meta = escapeHtml(
         [
-          kind === 'journals' ? 'Journal' : kind === 'concepts' ? 'Concept' : 'File',
+          getWorkspaceSearchKindLabel(kind),
+          file.name || '',
           file.date || '',
         ]
           .filter(Boolean)
@@ -2324,10 +2387,8 @@ function wireWorkspaceRelatedPanel() {
       typeof findWorkspaceFileByPath === 'function' ? findWorkspaceFileByPath(path, kind) : null;
 
     if (!file) {
-      const known = [
-        ...(WORKSPACE_STATE.files?.journals || []),
-        ...(WORKSPACE_STATE.files?.concepts || []),
-      ]
+      // ACT 2A — diagnostic known-list follows the unified notes/ storage.
+      const known = [...(WORKSPACE_STATE.files?.notes || [])]
         .map((f) => `${f.kind || '?'}:${f.path || f.name || '?'}`)
         .join(', ');
 
@@ -2566,12 +2627,9 @@ function getWorkspaceTagFiles(tag) {
   return paths
     .map((path) => WORKSPACE_INDEX_STATE.byPath?.get(path))
     .filter(Boolean)
+    // ACT 2A — ordering preserved minus the legacy kind tier: date desc,
+    // then name asc. No kind comparison remains.
     .sort((a, b) => {
-      if (a.kind !== b.kind) {
-        if (a.kind === 'journals') return -1;
-        if (b.kind === 'journals') return 1;
-      }
-
       const dateA = String(a.date || '');
       const dateB = String(b.date || '');
 
@@ -2702,16 +2760,18 @@ function renderWorkspaceTagResults(tag) {
 
     ${files
       .map((file) => {
-        const kind = String(file.kind || '');
-        const icon = kind === 'journals' ? '📝' : kind === 'concepts' ? '🧠' : '📄';
+        const kind = String(file.kind || 'notes');
+        // ACT 2A — unified Notes presentation (see Related rows): H1 title
+        // primary, filename/path secondary, navigation by exact path.
+        const icon = getWorkspaceSearchIcon(kind);
 
-        const name = escapeHtml(file.name || file.title || file.path || '');
+        const name = escapeHtml(file.title || file.name || file.path || '');
         const path = escapeHtml(file.path || '');
         const meta = escapeHtml(
           [
-            kind === 'journals' ? 'Journal' : kind === 'concepts' ? 'Concept' : 'File',
+            getWorkspaceSearchKindLabel(kind),
+            file.name || '',
             file.date || '',
-            file.title || '',
           ]
             .filter(Boolean)
             .join(' · ')
@@ -3445,17 +3505,17 @@ function getWorkspaceActiveStats(parsed) {
   const openTasks = (parsed.tasks || []).filter((task) => !task.done).length;
   const doneTasks = (parsed.tasks || []).filter((task) => task.done).length;
 
+  // ACT 2A — Related applies to any active Workspace Note (concepts-only
+  // gate removed); knowledge === true is not required.
   let related = 0;
 
-  if (parsed.kind === 'concepts') {
-    const conceptName =
-      typeof normalizeConceptName === 'function'
-        ? normalizeConceptName(parsed.name || parsed.path || '')
-        : String(parsed.name || '').replace(/\.md$/i, '');
+  const conceptName =
+    typeof normalizeConceptName === 'function'
+      ? normalizeConceptName(parsed.name || parsed.path || '')
+      : String(parsed.name || '').replace(/\.md$/i, '');
 
-    if (typeof findBacklinksForConcept === 'function') {
-      related = findBacklinksForConcept(conceptName).length;
-    }
+  if (conceptName && typeof findBacklinksForConcept === 'function') {
+    related = findBacklinksForConcept(conceptName).length;
   }
 
   return {
@@ -3473,6 +3533,8 @@ function getWorkspaceKindLabel(kind) {
       ? normalizeWorkspaceKindForCompare(kind || '')
       : String(kind || '').trim();
 
+  // ACT 2A — 'Note' is canonical; legacy branches stay as display fallbacks.
+  if (normalized === 'notes') return 'Note';
   if (normalized === 'journals') return 'Journal';
   if (normalized === 'concepts') return 'Concept';
 
@@ -3485,6 +3547,8 @@ function getWorkspaceKindIcon(kind) {
       ? normalizeWorkspaceKindForCompare(kind || '')
       : String(kind || '').trim();
 
+  // ACT 2A — see getWorkspaceKindLabel.
+  if (normalized === 'notes') return '📄';
   if (normalized === 'journals') return '📝';
   if (normalized === 'concepts') return '🧠';
 
@@ -3559,20 +3623,16 @@ function renderWorkspaceActivePanel() {
     })
     .join('');
 
-  const statsRows =
-    parsed.kind === 'concepts'
-      ? [
-          ['Open', stats.openTasks],
-          ['Done', stats.doneTasks],
-          ['Related', stats.related],
-          ['Links out', stats.linksOut],
-        ]
-      : [
-          ['Open', stats.openTasks],
-          ['Done', stats.doneTasks],
-          ['Tags', stats.tags],
-          ['Links', stats.linksOut],
-        ];
+  // ACT 2A — one unified row set: Related is now meaningful for every Note,
+  // so the concepts-variant (with Related) becomes the single variant. The
+  // journals-variant Tags row is retired with the kind split; per-note tags
+  // remain visible as chips above (tagHtml).
+  const statsRows = [
+    ['Open', stats.openTasks],
+    ['Done', stats.doneTasks],
+    ['Related', stats.related],
+    ['Links out', stats.linksOut],
+  ];
 
   body.innerHTML = `
     <div class="workspaceActiveName">
@@ -3664,10 +3724,12 @@ function renderWorkspaceIndexSummary() {
     updated.textContent = updatedAt ? `Updated ${updatedAt}` : '';
   }
 
+  // ACT 2A — the Journals/Concepts metric rows belonged to the removed
+  // authoritative buckets and are retired here (removes the ACT 1C
+  // compatibility-view gate on this consumer). Only Notes metrics remain.
   const metrics = [
     { label: 'Files', value: index.files.length },
-    { label: 'Journals', value: (index.byKind.journals || []).length },
-    { label: 'Concepts', value: (index.byKind.concepts || []).length },
+    { label: 'Notes', value: (index.byKind.notes || []).length },
     { label: 'Tags', value: index.tags.size },
     { label: 'Tasks', value: index.tasks.length },
     { label: 'Open', value: openTasks },
@@ -3706,22 +3768,25 @@ function runWorkspaceSearch(query) {
     return;
   }
 
-  if (normalized === __workspaceSearchLastQuery) {
+  // ACT 2A — candidates come from the saved Workspace Index (one record per
+  // physical notes/ file). Matching stays filename/path substring, unchanged;
+  // the saved H1 title is PRESENTATION ONLY (never matched, H1 never the
+  // navigation key). Archived-note decision (fixture S13): archived Notes are
+  // INCLUDED — excluding them now would silently hide files while ACT 2A adds
+  // no Archive view; a later package may scope archived-note search there.
+  // Staleness guard: the query cache is keyed on the Index build id, so a
+  // rebuild invalidates a possibly stale rendered label set (fixture S12).
+  const __searchBuildId = Number(WORKSPACE_INDEX_STATE?.lastBuiltAt || 0);
+  if (normalized === __workspaceSearchLastQuery && input.dataset.searchBuildId === String(__searchBuildId)) {
     return;
   }
 
   __workspaceSearchLastQuery = normalized;
+  input.dataset.searchBuildId = String(__searchBuildId);
 
-  const state = globalThis.WORKSPACE_STATE || {
-    files: {
-      journals: [],
-      concepts: [],
-    },
-  };
+  const candidates = [...(WORKSPACE_INDEX_STATE?.byKind?.notes || [])];
 
-  const files = [...(state.files?.journals || []), ...(state.files?.concepts || [])];
-
-  const matches = files.filter((file) => {
+  const matches = candidates.filter((file) => {
     const name = String(file.name || '').toLowerCase();
     const path = String(file.path || '').toLowerCase();
     return name.includes(normalized) || path.includes(normalized);
@@ -3737,8 +3802,9 @@ function runWorkspaceSearch(query) {
     .slice(0, 20)
     .map((file) => {
       const path = String(file.path || '');
-      const kind = String(file.kind || '');
-      const name = String(file.name || '');
+      const kind = String(file.kind || 'notes');
+      const name = String(file.title || file.name || '');
+      const fileName = String(file.name || '');
       return `
         <button
           type="button"
@@ -3752,7 +3818,7 @@ function runWorkspaceSearch(query) {
             <span class="workspaceSearchResultName">${escapeHtml(name)}</span>
             <span class="workspaceSearchResultKind">${escapeHtml(getWorkspaceSearchKindLabel(kind))}</span>
           </span>
-          <span class="workspaceSearchResultPath">${escapeHtml(path)}</span>
+          <span class="workspaceSearchResultPath">${escapeHtml(fileName)} · ${escapeHtml(path)}</span>
         </button>
       `;
     })
@@ -3773,8 +3839,12 @@ function findWorkspaceFileByPath(path, preferredKind = '') {
   const target = normalizeWorkspaceSearchPath(path);
   if (!target) return null;
 
+  // ACT 2A — navigation resolves against the unified notes/ storage. The
+  // Index records carry no handles, so WORKSPACE_STATE.files.notes (which
+  // owns the physical handles) is the lookup source; consumers pass
+  // kind 'notes' and the exact target path.
   const state = globalThis.WORKSPACE_STATE || {};
-  const allFiles = [...(state.files?.journals || []), ...(state.files?.concepts || [])];
+  const allFiles = [...(state.files?.notes || [])];
   const kind = normalizeWorkspaceKindForCompare(preferredKind || '');
 
   if (kind) {
@@ -3811,7 +3881,8 @@ async function openWorkspaceSearchResultFile(path, preferredKind = '') {
   });
 
   WORKSPACE_STATE.activeFile = {
-    kind: fileRecord.kind || 'journals',
+    // ACT 2A — unified kind; the journals fallback belonged to the removed buckets.
+    kind: fileRecord.kind || 'notes',
     name: fileRecord.name,
     path: fileRecord.path,
     handle: fileRecord.handle,
@@ -3934,7 +4005,8 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
   });
 
   WORKSPACE_STATE.activeFile = {
-    kind: fileKind || 'journals',
+    // ACT 2A — unified kind; the journals fallback belonged to the removed buckets.
+    kind: fileKind || 'notes',
     name: fileName,
     path: filePath,
     handle: file.handle,
@@ -5118,6 +5190,13 @@ function getJournalMonthGroupLabel(dateIso) {
   return `${monthNames[month - 1] || 'Unknown'} ${year}`;
 }
 
+// ACT 2B — RETAINED LEGACY, not adapted. This is the Journal-mode Sidebar
+// timeline. It still reads the retired files.journals bucket, so it renders
+// "No journals" and is inert under the notes/ model. Adapting or removing it
+// would be a Sidebar redesign, which Section 8 of the canonical plan forbids
+// before the post-2C structural checkpoint, and decision 23 keeps Journal
+// available during the transition.
+// Removal ACT: the Sidebar cleanup after the ACT 2C checkpoint.
 function renderWorkspaceJournalTimeline() {
   const container = document.getElementById('workspaceJournalsList');
 
@@ -5228,6 +5307,11 @@ try {
   globalThis.renderWorkspaceJournalTimeline = renderWorkspaceJournalTimeline;
 } catch {}
 
+// ACT 2B — RETAINED LEGACY, not adapted. The Journals Sidebar title overlay is
+// keyed to data-kind="journals" buttons, which the retired Sidebar renderer no
+// longer produces, so it is inert. See renderWorkspaceJournalTimeline for the
+// reason this legacy surface is preserved through 2B.
+// Removal ACT: the Sidebar cleanup after the ACT 2C checkpoint.
 function updateWorkspaceJournalSidebarTitlesFromIndex() {
   try {
     if (!WORKSPACE_INDEX_STATE?.ready) return;
@@ -5269,6 +5353,12 @@ function updateWorkspaceJournalSidebarTitlesFromIndexSafe() {
   } catch {}
 }
 
+// ACT 2B — RETAINED LEGACY, not adapted. New Concept writes into the retired
+// folders.concepts handle, which no longer exists after ACT 1B, so this entry
+// point always stops at the guard above and cannot create a file. Rewriting it
+// as Note creation is creation UX, which the canonical plan defers past the
+// post-2C structural checkpoint (Section 10).
+// Removal ACT: the Sidebar/creation cleanup after the ACT 2C checkpoint.
 async function createNewConcept() {
   if (!WORKSPACE_STATE.rootHandle || !WORKSPACE_STATE.folders?.concepts) {
     showToast?.('Open a workspace first', 'error', 2600);
@@ -9811,6 +9901,23 @@ async function saveAsSmart(text, taskAmbiguous = 0) {
         lastModified: savedModified,
         reason: 'saveAs',
       });
+      // ACT 2C — Save As membership. showSaveFilePicker() returns a
+      // FileSystemFileHandle only: it carries no parent directory handle, so the
+      // destination can never be PROVEN to be inside `notes/`. Following the
+      // ACT 2C contract, the result is therefore treated as standalone/external
+      // and any previous Workspace identity is released rather than retained.
+      // Never inferred from filename, basename or H1 equality.
+      //
+      // The original Workspace Note is NOT touched here: it keeps its own
+      // physical file, storage record and Index entry. The shared Index is not
+      // patched, and no metadata writer is involved.
+      if (globalThis.WORKSPACE_STATE?.activeFile) {
+        globalThis.WORKSPACE_STATE.activeFile = null;
+        globalThis.persistActiveWorkspaceFile?.();
+        window.updateWorkspaceActiveFileHighlight?.();
+        renderWorkspaceActivePanel?.();
+        log('saveAsSmart(): released previous Workspace identity (destination not provable inside notes/)');
+      }
       captureTaskBaseline();
       if (taskAmbiguous > 0) {
         log(

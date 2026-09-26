@@ -1,4 +1,11 @@
 // @ts-check
+//
+// ACT 2B — RETAINED LEGACY. Both exports serve only the retired Journals/Concepts
+// Sidebar, whose renderer is only called from the dead legacy activation sequence
+// in workspace-controller.js. Nothing populates files.journals / files.concepts
+// after ACT 1B, so these are inert. Adapting them would be a Sidebar redesign,
+// which the canonical plan defers past the post-2C structural checkpoint.
+// Removal ACT: the Sidebar cleanup after the ACT 2C checkpoint.
 
 export function clearSidebar() {
   const journalsList = document.getElementById('workspaceJournalsList');
