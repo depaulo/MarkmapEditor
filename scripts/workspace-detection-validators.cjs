@@ -897,8 +897,13 @@ const INDEX_SOURCE = fs.readFileSync(INDEX_PATH, 'utf8');
     if (scenario.expectActivation) {
       // Only the existing Workspace status owner may touch the DOM on a
       // successful activation: no Sidebar list render, badge or timeline.
+      // ACT 4/5 keep the creation/status row (Today, New Note, Archive, title)
+      // in this same status owner; the Note lists themselves stay untouched here
+      // because the Notes/Knowledge projections are rendered from the published
+      // Index, not from this activation boundary.
       const statusDomCalls = [
         'getElementById(btnJournalToday)',
+        'getElementById(btnNewConcept)',
         'getElementById(btnArchiveActive)',
         'getElementById(workspaceTitle)',
       ];

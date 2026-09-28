@@ -138,10 +138,10 @@
       <span id="saveStatus"></span>
     </div>
     <div id="layout">
-      <aside id="workspaceSidebar" aria-label="Journal workspace">
+      <aside id="workspaceSidebar" aria-label="Notes workspace">
         <div class="workspaceHeader">
           <div class="workspaceHeaderTop">
-            <div id="workspaceTitle">Journal Workspace</div>
+            <div id="workspaceTitle">Notes Workspace</div>
             <button id="btnWorkspaceCollapse" type="button" title="Collapse sidebar">◀</button>
           </div>
 
@@ -158,18 +158,19 @@
           <button
             id="btnNewConcept"
             type="button"
-            title="Create new concept"
-            aria-label="Create new concept"
+            title="Create a new named note"
+            aria-label="Create a new named note"
           >
-            <span class="workspaceIcon">🧠</span>
-            <span class="workspaceLabel">New Concept</span>
+            <span class="workspaceIcon">📝</span>
+            <span class="workspaceLabel">New Note</span>
           </button>
 
           <button
             id="btnArchiveActive"
             type="button"
-            title="Archive active workspace file"
-            aria-label="Archive active workspace file"
+            title="Archive and restore controls arrive in a later package"
+            aria-label="Archive and restore controls arrive in a later package"
+            disabled
           >
             <span class="workspaceIcon">📦</span>
             <span class="workspaceLabel">Archive Active</span>
@@ -179,7 +180,7 @@
         <div id="workspaceEmptyState" class="workspaceEmptyState">
           <div class="workspaceEmptyTitle">No workspace opened</div>
           <div class="workspaceEmptyText">
-            Open a workspace folder to use Today, Journals and Concepts.
+            Open a workspace folder to use Today, Notes and Knowledge.
           </div>
         </div>
 
@@ -209,7 +210,7 @@
             >
               <span class="workspacePanelHeaderLeft">
                 <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-                <span class="workspaceJournalsTitle">Journals</span>
+                <span class="workspaceJournalsTitle">Notes</span>
               </span>
 
               <span id="workspaceJournalsBadge" class="workspacePanelBadge"> 0 </span>
@@ -231,7 +232,7 @@
             >
               <span class="workspacePanelHeaderLeft">
                 <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-                <span class="workspaceConceptsTitle">Concepts</span>
+                <span class="workspaceConceptsTitle">Knowledge</span>
               </span>
 
               <span id="workspaceConceptsBadge" class="workspacePanelBadge"> 0 </span>
@@ -240,6 +241,28 @@
 
           <div class="workspacePanelBody">
             <div id="workspaceConceptsList"></div>
+          </div>
+        </div>
+
+        <div id="workspaceArchivePanel" class="workspaceSection workspaceFilesSection">
+          <div class="workspaceArchiveHeader">
+            <button
+              type="button"
+              class="workspacePanelHeaderButton"
+              data-workspace-panel-toggle="archive"
+              aria-expanded="true"
+            >
+              <span class="workspacePanelHeaderLeft">
+                <span class="workspacePanelChevron" aria-hidden="true">▶</span>
+                <span class="workspaceArchiveTitle">Archive</span>
+              </span>
+
+              <span id="workspaceArchiveBadge" class="workspacePanelBadge"> 0 </span>
+            </button>
+          </div>
+
+          <div class="workspacePanelBody">
+            <div id="workspaceArchiveList"></div>
           </div>
         </div>
 
@@ -921,6 +944,63 @@ $$
     <script type="module" src="./js/editor/codemirror-bootstrap.js"></script>
 
     <script type="module" src="./js/workspace/workspace-controller.js"></script>
+
+    <!-- Named Note Modal (ACT 5) -->
+    <div
+      id="namedNoteModal"
+      class="namedNoteModalOverlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="namedNoteModalTitle"
+      style="display: none;"
+    >
+      <div class="namedNoteModal">
+        <div class="namedNoteModalHeader">
+          <span id="namedNoteModalTitle" class="namedNoteModalTitle">New Note</span>
+          <button
+            id="namedNoteClose"
+            type="button"
+            class="namedNoteModalClose"
+            aria-label="Close"
+          >×</button>
+        </div>
+
+        <div class="namedNoteModalBody">
+          <label class="namedNoteField" for="namedNoteName">
+            <span class="namedNoteFieldLabel">Name</span>
+            <input
+              id="namedNoteName"
+              class="namedNoteInput"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Note name"
+            />
+          </label>
+
+          <label class="namedNoteField" for="namedNoteDate">
+            <span class="namedNoteFieldLabel">Note date</span>
+            <input
+              id="namedNoteDate"
+              class="namedNoteInput"
+              type="date"
+            />
+          </label>
+
+          <label class="namedNoteCheckbox" for="namedNoteKnowledge">
+            <input id="namedNoteKnowledge" type="checkbox" />
+            <span>Knowledge</span>
+          </label>
+
+          <p id="namedNoteError" class="namedNoteError" role="alert"></p>
+        </div>
+
+        <div class="namedNoteModalFooter">
+          <button id="namedNoteCancel" type="button" class="namedNoteBtn">Cancel</button>
+          <button id="namedNoteCreate" type="button" class="namedNoteBtn primary">Create Note</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Template Editor Modal -->
 

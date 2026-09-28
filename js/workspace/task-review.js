@@ -526,7 +526,13 @@
               ? `<span class="workspaceTaskPriorityBadge priority-${task.priority}">${task.priority.toUpperCase()}</span>`
               : '';
             const doneClass = task.done ? ' workspaceTaskDone' : '';
-            const displayText = escapeHtml(task.displayText || task.text || '');
+            // ACT 6 — task.displayText was ALREADY escaped by enrichTask(), so it
+            // must not be escaped again here. Re-escaping turned an intended "<"
+            // into the literal "&lt;" in the UI. Fall back to the raw text only
+            // when the enriched field is absent, and escape exactly once.
+            const displayText = task.displayText != null
+              ? String(task.displayText)
+              : escapeHtml(task.text || '');
             const filePath = escapeHtml(task.filePath || '');
             const fileName = escapeHtml(task.fileName || task.filePath || '');
             const line = Number(task.line || 0);

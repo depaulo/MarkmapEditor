@@ -2321,6 +2321,175 @@ html[data-app-context='slides'] .contextSlidesOnly {
   white-space: nowrap;
 }
 
+/* ACT 4 — secondary physical identity on a Sidebar row (filename, or the full
+   path when several rows share one visible title). Compact and unobtrusive:
+   it only appears when the row needs disambiguation. */
+.workspaceNoteSecondary {
+  font-size: 11px;
+  opacity: 0.55;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ACT 5 — Named Note modal. A small form over the existing Sidebar creation
+   control; it introduces no second modal framework. */
+.namedNoteModalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.namedNoteModal {
+  width: min(420px, 92vw);
+  background: var(--menu-bg);
+  color: var(--text);
+  border: 1px solid var(--menu-border);
+  border-radius: 12px;
+  box-shadow: 0 16px 60px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.namedNoteModalHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--menu-border);
+}
+
+.namedNoteModalTitle {
+  font-size: 14px;
+  font-weight: 650;
+  flex: 1;
+}
+
+.namedNoteModalClose {
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.namedNoteModalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.namedNoteField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.namedNoteFieldLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.65;
+}
+
+.namedNoteInput {
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--menu-border);
+  background: var(--editor-bg);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+
+.namedNoteInput:focus {
+  border-color: var(--accent, #22c55e);
+}
+
+.namedNoteCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.namedNoteError {
+  margin: 0;
+  min-height: 16px;
+  font-size: 12px;
+  color: #ef4444;
+}
+
+.namedNoteModalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--menu-border);
+}
+
+.namedNoteBtn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--menu-border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.namedNoteBtn.primary {
+  border-color: transparent;
+  background: #22c55e;
+  color: #06240f;
+  font-weight: 650;
+}
+
+/* ACT 6 — Active Note action row and Archive panel. Both reuse the existing
+   Sidebar panel/row styling; only these few rules are new. */
+.workspaceActiveActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.workspaceActiveActionBtn {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--menu-border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.workspaceActiveActionBtn:hover {
+  background: var(--menu-hover);
+  border-color: var(--menu-border);
+}
+
+.workspaceArchiveHeader {
+  display: flex;
+  align-items: center;
+}
+
+.workspaceArchiveTitle {
+  font-weight: 650;
+}
+
 /* =========================== */
 /* Task Review (R-TASK2/3)     */
 /* =========================== */

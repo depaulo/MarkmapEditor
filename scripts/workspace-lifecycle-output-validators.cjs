@@ -1020,7 +1020,7 @@ function resetHarness() {
 
   const CROSS = [
     ['X50', 'ACT 2A validator remains green', () =>
-      /48 passed, 0 failed/.test(runNode('scripts/workspace-discovery-consumers-validators.cjs'))],
+      /52 passed, 0 failed/.test(runNode('scripts/workspace-discovery-consumers-validators.cjs'))],
     ['X51', 'ACT 2B validator remains green', () =>
       /62 passed, 0 failed/.test(runNode('scripts/workspace-task-consumers-validators.cjs'))],
     ['X52', 'Task Review escaping passes', () => {

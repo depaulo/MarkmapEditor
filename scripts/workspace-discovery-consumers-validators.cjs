@@ -564,19 +564,90 @@ function setActive(p) {
     renderWorkspaceRelatedPanel();
     return (IDX.files.length + ':' + IDX.byPath.size + ':' + IDX.tasks.length) === before;
   })(), 'index untouched');
-  check('X48', 'no ACT 2C behavior implemented', (() => {
-    // ACT 2B is now closed, so the tasks/projects/board consumers are expected
-    // to read the unified notes/ bucket. What must still be absent is ACT 2C:
-    // Sidebar panel sequence, the Virtual Journal Timeline, and the creation
-    // flows (+ New Note / Named Note / Promote / Archive metadata writers).
-    const probe = ['renderWorkspaceJournalTimeline(', 'createNewConcept(',
-      'activateWorkspaceAtExistingBoundary('];
-    return probe.every((m) => {
+  check('X48', 'ACT 4 Sidebar migration stays inside the Sidebar boundary', (() => {
+    // ACT 2A/2B originally froze the Sidebar timeline and the creation flows.
+    // ACT 4 is the authorized package that migrates the Sidebar, so the frozen
+    // probes change meaning:
+    //   - the retained renderWorkspaceJournalTimeline() name is now only a thin
+    //     delegating alias, so it must NOT itself read the notes/ collection;
+    //   - the real Notes/Knowledge projections live in renderWorkspaceNotesPanel
+    //     and renderWorkspaceKnowledgePanel, which are allowed to read notes/;
+    //   - the CREATION flow (New Concept / Named Note) and the legacy
+    //     activation sequence must still NOT read notes/ — that stays ACT 5+.
+    const alias = MAIN_SOURCE.indexOf('function renderWorkspaceJournalTimeline() {');
+    const aliasIsThinDelegation =
+      alias !== -1 &&
+      /return\s+renderWorkspaceNotesPanel\(\)|^\s*renderWorkspaceNotesPanel\(\);\s*$/m.test(
+        MAIN_SOURCE.slice(alias, alias + 400)
+      );
+
+    const creationProbes = ['createNewConcept(', 'activateWorkspaceAtExistingBoundary('];
+    const creationStillFrozen = creationProbes.every((m) => {
       const i = MAIN_SOURCE.indexOf(m);
       if (i === -1) return true;
       return !/files\.notes|byKind\?\.notes|byKind\.notes/.test(MAIN_SOURCE.slice(i, i + 400));
     });
-  })(), 'sidebar/timeline/creation flows still untouched');
+
+    const knowledgeIsDerived = /function renderWorkspaceKnowledgePanel\(\)/.test(MAIN_SOURCE);
+
+    return aliasIsThinDelegation && creationStillFrozen && knowledgeIsDerived;
+  })(), 'timeline adapted; creation still deferred');
+  group('Navigation History restore (X49-X52)');
+  // The Navigation History restore opener, the reopen-last-active owner and the
+  // Sidebar click owner all call the CONTROLLER's findWorkspaceFileByPath, not
+  // main.js's copy. Before these fixtures the controller copy was untested, so it
+  // silently kept searching only the retired files.journals / files.concepts
+  // buckets while the canonical collection is files.notes. Every Back/Forward
+  // restore of a Note then resolved to null and failed with
+  // "Workspace file not found". These fixtures execute the real controller
+  // source so that copy can never regress unnoticed again.
+  const controllerResolver = new Function(
+    'WORKSPACE_STATE',
+    `${extractBlockFrom(CONTROLLER_SOURCE, 'function findWorkspaceFileByPath(')}
+     return findWorkspaceFileByPath;`
+  )({
+    rootHandle: {},
+    files: {
+      notes: [
+        { path: 'notes/Deployment.md', kind: 'notes', handle: { name: 'Deployment.md' } },
+        { path: 'notes/Glossary.md', kind: 'notes', handle: { name: 'Glossary.md' } },
+      ],
+    },
+  });
+  const controllerRestoreOpenerCallsResolver = (() => {
+    const i = CONTROLLER_SOURCE.indexOf('globalThis.MME_NAVIGATION.setOpener(');
+    if (i === -1) return false;
+    const window = CONTROLLER_SOURCE.slice(i, i + 4000);
+    return /findWorkspaceFileByPath\(\s*location\.path/.test(window);
+  })();
+
+  check('X49', 'controller resolver finds a Note by notes/ path', (() => {
+    const found = controllerResolver('notes/Deployment.md', 'notes');
+    return Boolean(found && found.path === 'notes/Deployment.md' && found.handle);
+  })(), 'notes kind, canonical bucket');
+
+  check('X50', 'controller resolver finds a Note with no preferred kind', (() => {
+    const found = controllerResolver('notes/Glossary.md');
+    return Boolean(found && found.path === 'notes/Glossary.md');
+  })(), 'kind-agnostic path resolution');
+
+  check('X51', 'controller resolver never depends on the retired buckets', (() => {
+    const src = extractBlockFrom(CONTROLLER_SOURCE, 'function findWorkspaceFileByPath(');
+    // files.notes must be read, and files.journals/files.concepts may only appear
+    // as a defensive legacy fallback AFTER the notes lookup.
+    const notesIdx = src.indexOf('files?.notes');
+    const journalsIdx = src.indexOf('files?.journals');
+    return notesIdx !== -1 && (journalsIdx === -1 || journalsIdx > notesIdx);
+  })(), 'notes searched first');
+
+  check('X52', 'Navigation restore opener routes through the controller resolver', (() => {
+    // Guards the wiring, not just the function: if the opener stopped calling the
+    // resolver, these X49-X51 fixtures would keep passing while restore is broken.
+    return controllerRestoreOpenerCallsResolver &&
+      /location\.type !== 'workspace-file'/.test(CONTROLLER_SOURCE) &&
+      /status: 'failed'[\s\S]{0,400}Workspace file not found/.test(CONTROLLER_SOURCE);
+  })(), 'opener -> resolver -> fileRecord');
+
   const failed = results.filter((e) => !e.group && !e.ok);
   const passed = results.filter((e) => !e.group && e.ok);
   for (const e of results) {

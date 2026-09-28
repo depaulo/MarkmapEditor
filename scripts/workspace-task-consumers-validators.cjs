@@ -596,16 +596,25 @@ function resetTaskDom(status) {
     !/byKind\?\.journals|byKind\?\.concepts|files\?\.journals|files\?\.concepts/.test(projectsSource),
     'no retired bucket reads');
 
-  check('P28', 'Project empty state preserved', (() => {
+  check('P28', 'Project empty state renders exactly one message', (() => {
     const saved = IDX.projects;
     IDX.projects = [];
     dom.workspaceProjectsList.innerHTML = '';
     renderWorkspaceProjectsPanel();
-    const ok = dom.workspaceProjectsSummary.textContent === 'No Projects found' &&
-      dom.workspaceProjectsList.innerHTML.includes('workspaceProjectsEmpty');
+    // The summary carries only the count; the human-readable message appears
+    // once, in the list body. Asserting the ABSENCE of a duplicate is the
+    // point of this fixture.
+    const summary = dom.workspaceProjectsSummary.textContent;
+    const list = dom.workspaceProjectsList.innerHTML;
+    const occurrences =
+      (String(summary).match(/No Projects found/g) || []).length +
+      (String(list).match(/No Projects found/g) || []).length;
+    const ok = summary === '0 Projects' &&
+      list.includes('workspaceProjectsEmpty') &&
+      occurrences === 1;
     IDX.projects = saved;
     return ok;
-  })(), 'empty');
+  })(), 'empty, single message');
 
   check('P29', 'Project not-ready state preserved', (() => {
     const before = IDX.ready;
@@ -737,17 +746,29 @@ function resetTaskDom(status) {
       /projects:\s*false/.test(block);
   })(), 'legacy keys retained');
 
-  check('Y47', 'deferred surfaces are untouched by ACT 2B', (() => {
-    // Journal timeline, New Concept creation and the Sidebar are explicitly
-    // retained/deferred; they must not have been migrated to notes/ here.
-    const probes = ['function renderWorkspaceJournalTimeline(', 'function createNewConcept('];
-    return probes.every((m) => {
-      const i = MAIN_SOURCE.indexOf(m);
-      if (i === -1) return true;
-      const window = MAIN_SOURCE.slice(i, i + 600);
-      return !/files\?\.notes|byKind\?\.notes|byKind\.notes/.test(window);
-    });
-  })(), 'timeline/creation still legacy');
+  check('Y47', 'creation stays deferred while the Sidebar is adapted', (() => {
+    // ACT 2B froze the Journal timeline AND New Concept creation. ACT 4 is the
+    // authorized Sidebar migration, so only the CREATION side stays frozen:
+    //   - New Concept must not read the notes/ collection (Named Note is ACT 5);
+    //   - the retained renderWorkspaceJournalTimeline() name is now a thin
+    //     delegating alias, so the real notes/ read lives in
+    //     renderWorkspaceNotesPanel(), not in the legacy name.
+    const creation = MAIN_SOURCE.indexOf('function createNewConcept(');
+    const creationStillFrozen =
+      creation === -1 ||
+      !/files\?\.notes|byKind\?\.notes|byKind\.notes/.test(MAIN_SOURCE.slice(creation, creation + 600));
+
+    const alias = MAIN_SOURCE.indexOf('function renderWorkspaceJournalTimeline() {');
+    const aliasIsThinDelegation =
+      alias !== -1 &&
+      /^\s*renderWorkspaceNotesPanel\(\);\s*$/m.test(MAIN_SOURCE.slice(alias, alias + 400));
+
+    const notesProjectionOwnsIt =
+      /function renderWorkspaceNotesPanel\(\)/.test(MAIN_SOURCE) &&
+      /function buildWorkspaceNotesViewModel\(\)/.test(MAIN_SOURCE);
+
+    return creationStillFrozen && aliasIsThinDelegation && notesProjectionOwnsIt;
+  })(), 'sidebar adapted; creation still legacy');
 
   check('Y48', 'no version, cache or Service Worker change slipped into ACT 2B', (() => {
     // Guarded by the repository diff, asserted here as the runtime-facing half:

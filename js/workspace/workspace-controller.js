@@ -99,14 +99,30 @@ function updateWorkspaceUiState() {
 
   const btnArchiveActive = document.getElementById('btnArchiveActive');
   if (btnArchiveActive) {
-    btnArchiveActive.disabled = !hasWorkspace || !WORKSPACE_STATE.activeFile;
+    // ACT 4 — Archive/Restore is deferred to a later package. The control stays
+    // disabled unconditionally: the physical archive/ move workflow is not
+    // adapted here, and no file is ever moved or removed.
+    btnArchiveActive.disabled = true;
+    btnArchiveActive.title = 'Archive and restore controls arrive in a later package';
+  }
+
+  // ACT 5 — Named Note creation now exists, so the control is live and is the
+  // single Named Note entry point. It still shares the existing creation row
+  // with Today: no second creation system, no duplicate control.
+  const btnNewConcept = document.getElementById('btnNewConcept');
+  if (btnNewConcept) {
+    btnNewConcept.disabled = false;
+    btnNewConcept.title = 'Create a new named note';
   }
 
   const title = document.getElementById('workspaceTitle');
   if (title) {
+    // ACT 5/6 terminology: the workspace surface is the Notes surface. The
+    // "Journal Workspace" fallback was retired panel wording and is no longer
+    // correct user-facing copy.
     title.textContent = hasWorkspace
       ? WORKSPACE_STATE.rootName || 'Workspace'
-      : 'Journal Workspace';
+      : 'Notes Workspace';
   }
 }
 
@@ -121,23 +137,34 @@ function getLastActiveWorkspacePath() {
   return value;
 }
 
+// Resolve a Workspace file by its EXACT relative path.
+//
+// ACT 2C.1/4: the canonical physical collection is WORKSPACE_STATE.files.notes,
+// so it is searched first. This owner is the one used by the Navigation History
+// restore opener, by reopenLastActiveWorkspaceFileIfPossible() and by the Sidebar
+// click owner, so a restore that could not resolve notes/... left Back/Forward
+// unable to reopen any Note. The retired journals/concepts buckets remain only as
+// a defensive fallback for a stale legacy record.
 function findWorkspaceFileByPath(path, preferredKind = '') {
   const target = String(path || '').trim();
 
   if (!target) return null;
 
+  const notes = Array.isArray(WORKSPACE_STATE.files?.notes) ? WORKSPACE_STATE.files.notes : [];
   const journals = WORKSPACE_STATE.files?.journals || [];
   const concepts = WORKSPACE_STATE.files?.concepts || [];
 
   const kind = String(preferredKind || '').trim().toLowerCase();
 
   if (kind) {
-    const pool = kind === 'journals' ? journals : kind === 'concepts' ? concepts : [];
+    // Preferred-kind exact match, always over the canonical notes/ collection.
+    const pool = kind === 'notes' ? notes : kind === 'journals' ? journals : concepts;
     const match = pool.find((file) => file.path === target);
     if (match) return match;
   }
 
   return (
+    notes.find((file) => file.path === target) ||
     journals.find((file) => file.path === target) ||
     concepts.find((file) => file.path === target) ||
     null
@@ -457,6 +484,66 @@ function activateWorkspaceStorage(snapshot) {
   updateWorkspaceUiState();
 }
 
+// ACT 2C.1 — the notes/ storage refresh owner.
+//
+// Today creates a NEW physical file inside the already-open notes/ directory,
+// which the ACT 1B activation snapshot cannot know about: it was taken once, at
+// Workspace activation. Without a refresh, WORKSPACE_STATE.files.notes keeps the
+// stale record set, and because buildWorkspaceIndex() reads that list as its
+// only source, the Index rebuild scheduled right after Today necessarily reports
+// files=0 notes=0 until the Workspace is reopened and rescanned.
+//
+// This is deliberately the smallest possible correction:
+//   - it reuses the existing ACT 1B scanner (scanNotesFolder) rather than
+//     building a second discovery path or a parallel authoritative list;
+//   - every fallible step runs against local values, and the single assignment
+//     to WORKSPACE_STATE.files.notes happens only after the candidate records
+//     validated, so a failed refresh leaves the previous storage snapshot AND
+//     the previously published Index untouched;
+//   - it never re-opens or re-creates the Workspace root or notes/, never reads
+//     file content and never mutates a record it did not scan.
+async function refreshWorkspaceNotesStorage() {
+  const previousCount = Array.isArray(WORKSPACE_STATE.files?.notes)
+    ? WORKSPACE_STATE.files.notes.length
+    : 0;
+
+  const notesHandle = WORKSPACE_STATE.folders?.notes;
+
+  if (!notesHandle) {
+    return { ok: false, reason: 'missing-notes-handle', count: previousCount, error: null };
+  }
+
+  try {
+    const notesRecords = await scanNotesFolder(notesHandle);
+
+    // Reuse the ACT 1B activation validator so a refresh can never publish a
+    // record shape the activation boundary would have rejected.
+    const invalid = validateNotesWorkspaceSnapshot(
+      buildNotesWorkspaceSnapshot({
+        rootHandle: WORKSPACE_STATE.rootHandle,
+        notesHandle,
+        notesRecords,
+      })
+    );
+
+    if (invalid) {
+      return { ok: false, reason: invalid, count: previousCount, error: null };
+    }
+
+    // Single controlled assignment boundary — the transactional replace.
+    WORKSPACE_STATE.files.notes = notesRecords;
+
+    return { ok: true, reason: '', count: notesRecords.length, error: null };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: classifyWorkspaceReadError(error),
+      count: previousCount,
+      error,
+    };
+  }
+}
+
 function reportWorkspaceInitializationDeclined(detection) {
   globalThis.MME_APP?.log?.(
     `Workspace: initialization declined status=${detection?.status} — current workspace preserved`
@@ -739,6 +826,411 @@ function clearActiveWorkspaceFileAfterArchive() {
   window.updateWorkspaceActiveFileHighlight?.();
 }
 
+// ============================================================
+// ACT 5 — Unified Note creation
+// ============================================================
+//
+// There is ONE physical Markdown Note model. Today and Named Note both create
+// the same model inside notes/ and both publish it through the same ACT 2C.1
+// refresh owner (refreshWorkspaceNotesStorage), so neither can drift from the
+// canonical storage list or from the Index.
+//
+// Named Note creation is deliberately a MODAL over the existing Sidebar
+// creation area: there is no second creation system, no second modal framework
+// and no concepts/ folder anywhere in this path.
+
+// Filesystem-invalid characters that must never reach a filename, plus control
+// characters. Unicode letters, marks and spaces are NOT invalid: a human name
+// like "Café notes — 日本語" is preserved exactly.
+const NOTE_NAME_INVALID_CHARS = /[\\/:*?"<>|]/;
+const NOTE_NAME_CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+
+// Windows reserved device names, which are invalid filenames on some
+// platforms even with an .md suffix.
+const NOTE_NAME_RESERVED_BASENAMES =
+  /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+// The canonical Today filename. A Named Note must never take it, so Today keeps
+// exactly one physical file per day.
+const TODAY_NOTE_FILENAME_SHAPE = /^\d{4}-\d{2}-\d{2}\.md$/i;
+
+const NOTE_NAME_MAX_LENGTH = 120;
+
+/**
+ * Validate a human-entered Note name and derive its exact filename.
+ *
+ * Pure: no handle is requested, no file is touched, no state changes. The
+ * caller must not create anything until this returns ok === true.
+ *
+ * @returns {{ok: boolean, fileName: string, title: string, reason: string}}
+ */
+function buildNamedNoteFileName(rawName) {
+  const title = String(rawName ?? '').trim();
+
+  if (!title) {
+    return { ok: false, fileName: '', title: '', reason: 'empty-name' };
+  }
+
+  if (title.length > NOTE_NAME_MAX_LENGTH) {
+    return { ok: false, fileName: '', title, reason: 'name-too-long' };
+  }
+
+  if (NOTE_NAME_INVALID_CHARS.test(title) || NOTE_NAME_CONTROL_CHARS.test(title)) {
+    return { ok: false, fileName: '', title, reason: 'invalid-characters' };
+  }
+
+  // A leading/trailing dot is invisible in a file list and breaks round-tripping.
+  if (title.startsWith('.') || title.endsWith('.')) {
+    return { ok: false, fileName: '', title, reason: 'invalid-characters' };
+  }
+
+  const withExtension = /\.md$/i.test(title) ? title : `${title}.md`;
+
+  const basename = withExtension.replace(/\.md$/i, '');
+
+  if (NOTE_NAME_RESERVED_BASENAMES.test(basename)) {
+    return { ok: false, fileName: '', title, reason: 'reserved-name' };
+  }
+
+  if (TODAY_NOTE_FILENAME_SHAPE.test(withExtension)) {
+    // Reserved for Today. There is no automatic suffix: the user picks a
+    // different name rather than silently getting "2026-03-04-2.md".
+    return { ok: false, fileName: '', title, reason: 'reserved-today-name' };
+  }
+
+  return { ok: true, fileName: withExtension, title, reason: '' };
+}
+
+/**
+ * Build the starter Markdown for a Named Note.
+ *
+ * Minimal by contract: frontmatter carries the date ONLY when one was chosen
+ * (a cleared date means Undated) and `knowledge: true` ONLY when the checkbox
+ * was ticked. No `type: note` key is written, and no managed flag is written
+ * when it is false — absence is the "off" state.
+ */
+function buildNamedNoteStarterMarkdown({ title, date, knowledge }) {
+  const frontmatter = [];
+  const cleanDate = String(date || '').trim();
+
+  if (cleanDate) frontmatter.push(`date: ${cleanDate}`);
+  if (knowledge === true) frontmatter.push('knowledge: true');
+
+  const header = frontmatter.length ? `---\n${frontmatter.join('\n')}\n---\n\n` : '';
+
+  return `${header}# ${title}\n\n## Notes\n\n## Tasks\n\n## Projects\n`;
+}
+
+const NAMED_NOTE_ERROR_MESSAGES = {
+  'empty-name': 'Enter a name for the note.',
+  'name-too-long': 'That name is too long for a filename.',
+  'invalid-characters': 'That name contains characters a filename cannot use.',
+  'reserved-name': 'That name is reserved. Choose another name.',
+  'reserved-today-name': 'That name is reserved for Today. Choose another name.',
+  'name-exists': 'A note with that filename already exists.',
+  'no-workspace': 'Open a workspace first.',
+  'no-notes-storage': 'Today needs an open notes/ storage.',
+  'write-failed': 'The note could not be created. Nothing was changed.',
+};
+
+function getNamedNoteModalElement() {
+  return document.getElementById('namedNoteModal');
+}
+
+function getNamedNoteLocalDate() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * Open the Named Note modal.
+ *
+ * The modal is a thin form over the existing Sidebar creation control. Opening
+ * it creates no handle and changes no state.
+ */
+function openNamedNoteModal() {
+  if (!WORKSPACE_STATE.rootHandle) {
+    globalThis.MME_APP?.showToast?.('Open a workspace first', 'error', 2600);
+    return false;
+  }
+
+  if (!WORKSPACE_STATE.folders?.notes) {
+    globalThis.MME_APP?.showToast?.(
+      `Today needs an open ${NOTES_DIRECTORY_NAME}/ storage.`,
+      'warn',
+      3000
+    );
+    return false;
+  }
+
+  const modal = getNamedNoteModalElement();
+  if (!modal) {
+    globalThis.MME_APP?.log?.('Named Note: modal host missing');
+    return false;
+  }
+
+  const nameInput = document.getElementById('namedNoteName');
+  const dateInput = document.getElementById('namedNoteDate');
+  const knowledgeInput = document.getElementById('namedNoteKnowledge');
+  const errorEl = document.getElementById('namedNoteError');
+
+  if (nameInput) {
+    nameInput.value = '';
+    nameInput.focus();
+  }
+
+  // ACT 5 — the date defaults to the local today and stays editable; clearing it
+  // creates an Undated Note.
+  if (dateInput) dateInput.value = getNamedNoteLocalDate();
+  if (knowledgeInput) knowledgeInput.checked = false;
+  if (errorEl) errorEl.textContent = '';
+
+  // Remember the opener so focus can be restored on close.
+  globalThis.__namedNoteOpener = document.activeElement || null;
+  modal.style.display = 'block';
+
+  return true;
+}
+
+function closeNamedNoteModal() {
+  const modal = getNamedNoteModalElement();
+  if (modal) modal.style.display = 'none';
+
+  const opener = globalThis.__namedNoteOpener;
+  globalThis.__namedNoteOpener = null;
+
+  try {
+    if (opener && typeof opener.focus === 'function') opener.focus();
+  } catch {
+    // A detached opener is not an error worth surfacing.
+  }
+}
+
+function showNamedNoteError(reason) {
+  const errorEl = document.getElementById('namedNoteError');
+  const message = NAMED_NOTE_ERROR_MESSAGES[reason] || 'The note could not be created.';
+
+  if (errorEl) {
+    errorEl.textContent = message;
+  } else {
+    globalThis.MME_APP?.showToast?.(message, 'error', 3600);
+  }
+
+  globalThis.MME_APP?.log?.(`Named Note: creation rejected reason=${reason}`);
+}
+
+/**
+ * Create a Named Note.
+ *
+ * Transaction order, with no partial state on any failure:
+ *   validate (pure) -> collision check (no create) -> acquire exact handle ->
+ *   write starter exactly once -> publish through the ACT 2C.1 storage refresh
+ *   -> open the exact Note (which adopts the writable handle) -> assign the
+ *   active record -> one Index rebuild -> path-based navigation record.
+ *
+ * Cancel never reaches this function: the modal Cancel button only closes.
+ */
+async function createNamedNote() {
+  const nameInput = document.getElementById('namedNoteName');
+  const dateInput = document.getElementById('namedNoteDate');
+  const knowledgeInput = document.getElementById('namedNoteKnowledge');
+
+  const result = buildNamedNoteFileName(nameInput?.value ?? '');
+
+  if (!result.ok) {
+    showNamedNoteError(result.reason);
+    return { ok: false, reason: result.reason };
+  }
+
+  if (globalThis.MME_NAVIGATION?.isNavigationInProgress?.()) {
+    globalThis.MME_APP?.log?.('Named Note: creation blocked by active navigation');
+    return { ok: false, reason: 'navigation-in-progress' };
+  }
+
+  // The Report leave decision is the same one Today already uses.
+  if (typeof globalThis.guardUnsavedReportBeforeDocumentSwitch === 'function') {
+    const guard = await globalThis.guardUnsavedReportBeforeDocumentSwitch();
+    if (!guard || guard.ok !== true) {
+      globalThis.MME_APP?.log?.('Named Note: creation blocked by Report guard');
+      return { ok: false, reason: 'report-guard' };
+    }
+  }
+
+  if (!WORKSPACE_STATE.rootHandle) {
+    showNamedNoteError('no-workspace');
+    return { ok: false, reason: 'no-workspace' };
+  }
+
+  const notesFolder = WORKSPACE_STATE.folders?.notes;
+  if (!notesFolder) {
+    showNamedNoteError('no-notes-storage');
+    return { ok: false, reason: 'no-notes-storage' };
+  }
+
+  // Collision: ask WITHOUT create:true, so an existing note is detected and
+  // never opened for writing. No automatic numeric suffix is invented.
+  let alreadyExists = (WORKSPACE_STATE.files?.notes || []).some(
+    (record) => record?.name === result.fileName
+  );
+
+  if (!alreadyExists) {
+    try {
+      await notesFolder.getFileHandle(result.fileName);
+      alreadyExists = true;
+    } catch {
+      alreadyExists = false;
+    }
+  }
+
+  if (alreadyExists) {
+    showNamedNoteError('name-exists');
+    return { ok: false, reason: 'name-exists' };
+  }
+
+  const date = String(dateInput?.value ?? '').trim();
+  const knowledge = knowledgeInput?.checked === true;
+
+  const text = buildNamedNoteStarterMarkdown({
+    title: result.title,
+    date,
+    knowledge,
+  });
+
+  // The handle is requested only now, after every rejection path is closed.
+  const fileHandle = await notesFolder.getFileHandle(result.fileName, { create: true });
+
+  try {
+    const writable = await fileHandle.createWritable();
+    await writable.write(text);
+    await writable.close();
+  } catch (error) {
+    showNamedNoteError('write-failed');
+    globalThis.MME_APP?.log?.(
+      `Named Note: starter write failed for ${result.fileName}: ${error?.message || error}`
+    );
+    return { ok: false, reason: 'write-failed' };
+  }
+
+  // Publish through the SAME owner Today uses, then open the exact Note.
+  const refreshed = await refreshWorkspaceNotesStorage();
+
+  if (!refreshed.ok) {
+    globalThis.MME_APP?.showToast?.(
+      `Note created, but the ${NOTES_DIRECTORY_NAME}/ list could not be refreshed (${refreshed.reason}). Reopen the workspace to refresh.`,
+      'warn',
+      4600
+    );
+    globalThis.MME_APP?.log?.(
+      `Named Note: storage refresh failed reason=${refreshed.reason} notes=${refreshed.count}`
+    );
+  } else {
+    globalThis.MME_APP?.log?.(
+      `Named Note: storage refreshed notes=${refreshed.count} path=${NOTES_DIRECTORY_NAME}/${result.fileName}`
+    );
+  }
+
+  if (!globalThis.MME_APP?.confirmDiscardIfDirty?.()) {
+    return { ok: false, reason: 'discard-declined' };
+  }
+
+  const path = `${NOTES_DIRECTORY_NAME}/${result.fileName}`;
+
+  globalThis.MME_APP.openTextDocument({
+    text,
+    fileName: result.fileName,
+    fileHandle,
+    reason: 'workspace named note',
+  });
+
+  globalThis.clearReportIdentityAfterTransition?.();
+
+  WORKSPACE_STATE.activeFile = {
+    kind: 'notes',
+    name: result.fileName,
+    path,
+    handle: fileHandle,
+  };
+
+  persistActiveWorkspaceFile();
+  window.updateWorkspaceActiveFileHighlight?.();
+  renderWorkspaceActivePanel?.();
+  renderWorkspaceRelatedPanel?.();
+  renderWorkspaceTasksPanel?.();
+
+  // Exactly one Index rebuild, and only when the physical collection is current.
+  if (refreshed.ok) {
+    window.scheduleWorkspaceIndexRebuild?.('named note');
+  }
+
+  if (typeof globalThis.MME_NAVIGATION === 'object') {
+    globalThis.MME_NAVIGATION.recordSuccessfulNavigation({
+      type: 'workspace-file',
+      path,
+      kind: 'notes',
+      name: result.fileName,
+      source: 'workspace named note',
+    });
+  }
+
+  closeNamedNoteModal();
+
+  globalThis.MME_APP?.showToast?.(`Note created ✓ ${result.fileName}`, 'ok', 1800);
+  globalThis.MME_APP?.log?.(`Named Note created: ${path}`);
+
+  return { ok: true, path, fileName: result.fileName };
+}
+
+/**
+ * Wire the Named Note modal exactly once.
+ *
+ * Cancel is a pure close: it creates no handle and changes no state.
+ */
+function wireNamedNoteModal() {
+  if (globalThis.__namedNoteModalWired) return;
+  globalThis.__namedNoteModalWired = true;
+
+  const createBtn = document.getElementById('namedNoteCreate');
+  const cancelBtn = document.getElementById('namedNoteCancel');
+  const closeBtn = document.getElementById('namedNoteClose');
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeNamedNoteModal();
+    });
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeNamedNoteModal();
+    });
+  }
+
+  if (createBtn) {
+    createBtn.addEventListener('click', async (event) => {
+      event.preventDefault();
+      try {
+        await createNamedNote();
+      } catch (e) {
+        globalThis.MME_APP?.log?.(`Named Note: create failed: ${e?.message || e}`);
+        showNamedNoteError('write-failed');
+      }
+    });
+  }
+}
+
+try {
+  globalThis.openNamedNoteModal = openNamedNoteModal;
+  globalThis.closeNamedNoteModal = closeNamedNoteModal;
+  globalThis.createNamedNote = createNamedNote;
+  window.openNamedNoteModal = openNamedNoteModal;
+  window.closeNamedNoteModal = closeNamedNoteModal;
+} catch {}
+
 async function openToday() {
   if (globalThis.MME_NAVIGATION?.isNavigationInProgress?.()) {
     globalThis.MME_APP?.log?.('Workspace: Today blocked by active navigation');
@@ -793,6 +1285,21 @@ async function openToday() {
 
   const dateString = `${yyyy}-${mm}-${dd}`;
 
+  // ACT 2C.1 — did Today CREATE the file, or reuse an existing one?
+  // getFileHandle({create:true}) is silent about that. The honest signal is the
+  // canonical storage snapshot itself: it was produced by scanning THIS SAME
+  // notes/ directory handle (WORKSPACE_STATE.folders.notes), so a record for
+  // this exact name in it proves the file already existed. A missing record
+  // means Today just created it and the snapshot is now stale.
+  //
+  // This is a same-directory existence proof, not a name guess: a Note in
+  // another Workspace, another directory or a matching title/H1 can never
+  // produce a record here.
+  const existingRecord = (WORKSPACE_STATE.files?.notes || []).find(
+    (record) => record?.name === fileName
+  );
+  const createdNewFile = !existingRecord;
+
   if (!String(text || '').trim()) {
     // ACT 2C — the legacy `type: journal` frontmatter key belonged to the
     // retired kind split and is not written. No new metadata writer is added.
@@ -805,17 +1312,68 @@ async function openToday() {
 ## Projects
 `;
 
+    // ACT 2C.1 — the starter write is the only physical write in this path, and
+    // it happens exactly once per newly created file. If it fails, nothing is
+    // published: no storage record, no Index rebuild, no document switch.
+    let written = false;
 
-    const writable = await fileHandle.createWritable();
-    await writable.write(text);
-    await writable.close();
+    try {
+      const writable = await fileHandle.createWritable();
+      await writable.write(text);
+      await writable.close();
+      written = true;
+    } catch (error) {
+      globalThis.MME_APP?.showToast?.(
+        `Today could not be created (${fileName}). Nothing was changed.`,
+        'error',
+        4200
+      );
+      globalThis.MME_APP?.log?.(
+        `Workspace: Today starter write failed for ${fileName}: ${error?.message || error}`
+      );
+      return;
+    }
 
-    globalThis.MME_APP?.log?.(
-      `Workspace: initialized Today journal with Daily Capture starter ${fileName}`
-    );
+    if (written) {
+      globalThis.MME_APP?.log?.(
+        `Workspace: initialized Today journal with Daily Capture starter ${fileName}`
+      );
+    }
   }
 
   if (!globalThis.MME_APP?.confirmDiscardIfDirty?.()) return;
+
+  // ACT 2C.1 — refresh the canonical physical collection BEFORE the document
+  // switch and before the single Index rebuild below, so the Active panel, the
+  // saved Index snapshot and any future Sidebar projection all observe the new
+  // Note in the same turn. Exactly one rescan, exactly one assignment, one
+  // rebuild: the collection is never current-then-stale at any observed point.
+  // An existing Today file performs no scan at all.
+  let storageRefresh = { ok: true, reason: '', count: 0, error: null };
+
+  if (createdNewFile) {
+    storageRefresh = await refreshWorkspaceNotesStorage();
+
+    if (!storageRefresh.ok) {
+      // Honest, non-destructive failure: the previous storage snapshot and the
+      // previously published Index are both preserved, and no rebuild is
+      // scheduled against a list we could not refresh.
+      globalThis.MME_APP?.showToast?.(
+        `Today file created, but the ${NOTES_DIRECTORY_NAME}/ list could not be refreshed (${storageRefresh.reason}). Reopen the workspace to refresh.`,
+        'warn',
+        4600
+      );
+      globalThis.MME_APP?.log?.(
+        `Workspace: Today storage refresh failed reason=${storageRefresh.reason} notes=${storageRefresh.count} error=${
+          storageRefresh.error?.message || '(none)'
+        }`
+      );
+    } else {
+      globalThis.MME_APP?.log?.(
+        `Workspace: Today storage refreshed notes=${storageRefresh.count} path=${NOTES_DIRECTORY_NAME}/${fileName}`
+      );
+    }
+  }
 
   globalThis.MME_APP.openTextDocument({
     text,
@@ -842,7 +1400,12 @@ async function openToday() {
   renderWorkspaceActivePanel?.();
   renderWorkspaceRelatedPanel?.();
   renderWorkspaceTasksPanel?.();
-  window.scheduleWorkspaceIndexRebuild?.('today');
+  // ACT 2C.1 — exactly one Index rebuild for this Today, and only when the
+  // physical collection is current. A failed refresh leaves the previous Index
+  // snapshot published and untouched.
+  if (!createdNewFile || storageRefresh.ok) {
+    window.scheduleWorkspaceIndexRebuild?.('today');
+  }
   // Record successful navigation for Today.
   if (typeof globalThis.MME_NAVIGATION === 'object') {
     globalThis.MME_NAVIGATION.recordSuccessfulNavigation({
@@ -896,14 +1459,22 @@ function handleSidebarClick(event) {
 
   const path = item.dataset.path || '';
   const kind = item.dataset.kind || '';
-  // Legacy Journals/Concepts lists. ACT 1B removed those state fields, so the
-  // read is optional-chained: a stale legacy sidebar item must not throw here.
-  const allFiles = [
+  // ACT 4 — resolution is by EXACT relative path against the canonical notes/
+  // storage records (the ACT 1B collection that owns physical handles). The
+  // retired journals/concepts buckets are only a defensive fallback, so a stale
+  // legacy row can never throw here. H1 is never used to resolve a click.
+  const storageRecords = Array.isArray(WORKSPACE_STATE.files?.notes)
+    ? WORKSPACE_STATE.files.notes
+    : [];
+  const legacyRecords = [
     ...(WORKSPACE_STATE.files?.journals || []),
     ...(WORKSPACE_STATE.files?.concepts || []),
   ];
 
-  const fileRecord = allFiles.find((file) => file.path === path);
+  const fileRecord =
+    storageRecords.find((file) => file.path === path) ||
+    legacyRecords.find((file) => file.path === path);
+
   if (!fileRecord) {
     globalThis.MME_APP?.log?.(`Workspace file not found in state: ${path}`);
     return;
@@ -1321,7 +1892,7 @@ function initWorkspace() {
   createWorkspaceActions({
     onOpenWorkspace: openWorkspace,
     onToday: openToday,
-    onNewConcept: createNewConcept,
+    onNewConcept: openNamedNoteModal,
     onArchiveActive: archiveActiveWorkspaceFile,
   });
 
@@ -1331,12 +1902,18 @@ function initWorkspace() {
 
   bindArchiveActiveDirect();
 
+  // ACT 5 — wire the Named Note modal once, alongside the existing creation
+  // controls. It is the same modal the adapted "New Note" button opens.
+  wireNamedNoteModal();
+
   clearSidebar();
   ensureWorkspaceSearchPanel?.();
   wireWorkspaceSearch?.();
 
   document.getElementById('workspaceJournalsList')?.addEventListener('click', handleSidebarClick);
   document.getElementById('workspaceConceptsList')?.addEventListener('click', handleSidebarClick);
+  // ACT 6 — Archive rows navigate by the same exact-path click contract.
+  document.getElementById('workspaceArchiveList')?.addEventListener('click', handleSidebarClick);
 
   // Navigation History V1 — UI wiring.
   const controls = renderNavigationControls();
@@ -1704,12 +2281,25 @@ globalThis.WORKSPACE_API = {
   scanNotesFolder,
   buildNotesWorkspaceSnapshot,
   validateNotesWorkspaceSnapshot,
+  buildNamedNoteFileName,
+  buildNamedNoteStarterMarkdown,
+  openNamedNoteModal,
+  closeNamedNoteModal,
+  createNamedNote,
+  wireNamedNoteModal,
+  refreshWorkspaceNotesStorage,
   WORKSPACE_FORMAT,
   refreshWorkspaceSidebar,
   openWorkspace,
   openToday,
   initWorkspace,
 };
+
+// ACT 2C.1 — expose the notes/ storage refresh owner alongside the existing
+// globals. ACT 3 and future Sidebar packages read the canonical physical
+// collection through it; nothing else publishes WORKSPACE_STATE.files.notes.
+globalThis.refreshWorkspaceNotesStorage = refreshWorkspaceNotesStorage;
+window.refreshWorkspaceNotesStorage = refreshWorkspaceNotesStorage;
 
 // Dispatch API readiness event for late activation listeners.
 // WORKSPACE_API is now fully assigned and initializeJournal is available.

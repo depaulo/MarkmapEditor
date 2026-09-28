@@ -1196,6 +1196,12 @@ async function buildWorkspaceIndex() {
   renderWorkspaceTagsPanel?.();
   updateWorkspaceJournalSidebarTitlesFromIndex?.();
   renderWorkspaceJournalTimeline?.();
+  // ACT 4 — the Knowledge projection refreshes from the same completed build.
+  // Reached through globalThis so an extraction harness that does not declare
+  // the identifier cannot fail the build with a ReferenceError.
+  globalThis.renderWorkspaceKnowledgePanel?.();
+  // ACT 6 — Archive shares the same saved snapshot.
+  globalThis.renderWorkspaceArchivePanel?.();
 
   const openTasks = tasks.filter((task) => !task.done).length;
   const doneTasks = tasks.filter((task) => task.done).length;
@@ -1224,6 +1230,10 @@ function scheduleWorkspaceIndexRebuild(reason = 'scheduled') {
       renderWorkspaceRelatedPanel?.();
       renderWorkspaceTagsPanel?.();
       renderWorkspaceJournalTimeline?.();
+      // ACT 4 — Knowledge shares the same debounced refresh.
+      globalThis.renderWorkspaceKnowledgePanel?.();
+      // ACT 6 — Archive shares the same debounced refresh.
+      globalThis.renderWorkspaceArchivePanel?.();
       log?.(`Workspace Index: rebuild complete (${reason})`);
     } catch (e) {
       log?.(`Workspace Index: rebuild failed (${reason}): ${e?.message || e}`);
@@ -1253,6 +1263,241 @@ function logWorkspaceIndexSummary() {
     } openTasks=${openTasks} doneTasks=${doneTasks} links=${index.links.size} projects=${index.projects.length}`
   );
 }
+
+// ============================================================
+// ACT 3 — Current Document / Workspace SCOPE contract
+// ============================================================
+//
+// Markdown stays canonical, the simple Editor stays first-class, a standalone
+// file works without a Workspace, and Workspace is optional aggregation. This
+// block adds NO parser, NO second Index and NO second document store. It only
+// makes the two existing read sources explicit and separately named:
+//
+//   1. Current Document scope — ONE parse of the live editor buffer
+//      (md.value) through the existing shared parser (parseWorkspaceDocument,
+//      the same owner the saved Index uses). It is computed on request, is
+//      never persisted, and never mutates WORKSPACE_STATE or
+//      WORKSPACE_INDEX_STATE.
+//
+//   2. Workspace scope — a projection of the already-published
+//      WORKSPACE_INDEX_STATE, i.e. SAVED physical-file snapshots only.
+//
+// The two scopes deliberately share no ambiguous field name:
+// `sourceFreshness: 'live'` vs `'saved'` states which source a record came
+// from. Unsaved editor changes therefore live ONLY in the live scope; the
+// saved scope catches up exclusively through the existing physical-Save path,
+// which remains the only thing that rebuilds the Index.
+//
+// Membership is proven, never guessed. `belongsToWorkspace` is true only when
+// the current writable handle IS the handle of the active physical Workspace
+// record. It is never inferred from filename equality, basename equality, H1
+// equality, the mere presence of a Workspace root, or a previous activeFile
+// left over from before an external Save As.
+
+// Neutral identity for a document that has no physical file yet (a brand-new
+// unsaved document). It must never look like a Workspace path, or a scope
+// consumer could mistake a standalone document for a Workspace Note.
+const CURRENT_DOCUMENT_FALLBACK_NAME = 'untitled.md';
+const CURRENT_DOCUMENT_FALLBACK_PATH = '';
+
+// Parser context normalization. The shared parser takes {kind,name,path,text}.
+// Current Document passes kind 'notes' because that is the parser's existing
+// vocabulary, but membership is NEVER derived from it — belongsToWorkspace is
+// computed separately, from the physical handle proof below.
+function buildCurrentDocumentParserContext({ name, path, text }) {
+  return {
+    kind: 'notes',
+    name: String(name || CURRENT_DOCUMENT_FALLBACK_NAME),
+    path: String(path || ''),
+    text: String(text || ''),
+  };
+}
+
+// Handle-proofed Workspace membership for the currently active document.
+//
+//   workspaceAvailable — a valid Workspace root is open.
+//   belongsToWorkspace — the active document is PROVEN to be one of that
+//                        Workspace's physical files, by exact handle identity
+//                        against WORKSPACE_STATE.activeFile AND against a
+//                        current storage record in WORKSPACE_STATE.files.notes.
+//   workspacePath      — the exact proven `notes/...` path, or null.
+//
+// When membership cannot be proven (no active physical handle, an external
+// file, a rejected/absent Workspace) belongsToWorkspace is simply false, so a
+// consumer never needs a third "unknown" state to stay safe.
+function resolveCurrentDocumentWorkspaceMembership() {
+  const state = globalThis.WORKSPACE_STATE || null;
+
+  const workspaceAvailable = Boolean(state && state.rootHandle);
+  const active = state?.activeFile || null;
+  const currentHandle = typeof currentSaveHandle !== 'undefined' ? currentSaveHandle : null;
+
+  const none = (reason) => ({
+    workspaceAvailable,
+    belongsToWorkspace: false,
+    workspacePath: null,
+    membershipReason: reason,
+  });
+
+  if (!workspaceAvailable) return none('no-workspace');
+  if (!active || !active.handle) return none('no-active-workspace-record');
+  if (!currentHandle) return none('no-writable-handle');
+
+  // The proof: the document being edited is backed by the very same physical
+  // handle the active Workspace record points at. An external standalone file
+  // (including one with an identical basename or an identical H1) fails here.
+  if (active.handle !== currentHandle) return none('handle-not-active-workspace-record');
+
+  // Secondary confirmation against the canonical storage collection, so a
+  // released or replaced record can never keep a stale identity alive.
+  const records = Array.isArray(state.files?.notes) ? state.files.notes : [];
+  const record = records.find((entry) => entry?.handle === active.handle);
+
+  if (!record) return none('handle-not-in-storage-records');
+
+  const workspacePath = String(record.path || active.path || '');
+
+  if (!workspacePath) return none('no-proven-path');
+
+  return {
+    workspaceAvailable,
+    belongsToWorkspace: true,
+    workspacePath,
+    membershipReason: 'proven-handle-match',
+  };
+}
+
+// Report guards, read-only. ACT 3 must not change any Report lifecycle, so this
+// only REPORTS the existing identity; it never creates, saves or clears one.
+function describeCurrentDocumentReportState() {
+  const session = typeof __virtualReportSession !== 'undefined' ? __virtualReportSession : null;
+
+  const isReport = Boolean(session && session.kind === 'report');
+  const virtual = isReport && session.virtual === true && session.saved === false;
+  const saved = isReport && session.saved === true;
+
+  return {
+    isReport,
+    isVirtualReport: virtual,
+    isSavedReport: saved,
+    reportKind: isReport ? 'report' : '',
+    reportPath: isReport ? String(session.sourcePath || '') : '',
+  };
+}
+
+// ACT 3 — Current Document scope.
+//
+// Calls the shared parser exactly once per request, against the live editor
+// buffer. It never rebuilds the Index, never scans the Workspace, never reads a
+// physical file and never persists anything.
+function getCurrentDocumentScope() {
+  const text = String((md && typeof md.value !== 'undefined' ? md.value : '') || '');
+  const membership = resolveCurrentDocumentWorkspaceMembership();
+  const report = describeCurrentDocumentReportState();
+  const currentHandle = typeof currentSaveHandle !== 'undefined' ? currentSaveHandle : null;
+
+  // A proven Workspace Note keeps its real name and path; a standalone document
+  // keeps its own filename with a neutral (empty) Workspace path, so it can
+  // never be mistaken for a Workspace Note.
+  const physicalName = String((typeof currentFileName !== 'undefined' && currentFileName) || '') ||
+    CURRENT_DOCUMENT_FALLBACK_NAME;
+
+  const parserContext = buildCurrentDocumentParserContext({
+    name: physicalName,
+    path: membership.belongsToWorkspace ? membership.workspacePath : CURRENT_DOCUMENT_FALLBACK_PATH,
+    text,
+  });
+
+  let parsed = null;
+  let parseError = '';
+
+  try {
+    parsed = parseWorkspaceDocument(parserContext);
+  } catch (e) {
+    // A parse failure must never corrupt either scope: the live scope reports no
+    // record, and the saved scope is left completely untouched.
+    parseError = String(e?.message || e);
+    log?.(`Current Document: parse failed — ${parseError}`);
+  }
+
+  return {
+    scope: 'current-document',
+    sourceFreshness: 'live',
+
+    text,
+    parsed,
+    parseError,
+
+    dirty: Boolean(typeof dirty !== 'undefined' ? dirty : false),
+    hasWritableHandle: Boolean(currentHandle),
+    handle: currentHandle,
+
+    workspaceAvailable: membership.workspaceAvailable,
+    belongsToWorkspace: membership.belongsToWorkspace,
+    workspacePath: membership.workspacePath,
+    membershipReason: membership.membershipReason,
+
+    physicalName,
+
+    // Report identity is reported separately, so a future metadata action can
+    // exclude Reports from Note eligibility without merging the two states.
+    documentCategory: report.isReport ? 'report' : 'document',
+    isReport: report.isReport,
+    isVirtualReport: report.isVirtualReport,
+    isSavedReport: report.isSavedReport,
+    reportPath: report.reportPath,
+    // ACT 3 exposes this flag only; no metadata writer consumes it yet.
+    noteMetadataEligible: report.isReport === false,
+  };
+}
+
+// ACT 3 — Workspace scope. A pure projection of the published saved Index.
+function getWorkspaceScope() {
+  const index = WORKSPACE_INDEX_STATE;
+
+  return {
+    scope: 'workspace',
+    sourceFreshness: 'saved',
+
+    ready: Boolean(index.ready),
+    files: index.files,
+    tasks: index.tasks,
+    tags: index.tags,
+    links: index.links,
+    projects: index.projects,
+    byPath: index.byPath,
+    byKind: index.byKind,
+    lastBuiltAt: index.lastBuiltAt,
+  };
+}
+
+// Minimal diagnostic used for validation: both scopes side by side, so the
+// live/saved difference can be confirmed without opening any feature panel.
+function logDocumentScopes() {
+  const current = getCurrentDocumentScope();
+  const workspace = getWorkspaceScope();
+
+  log?.(
+    `Scopes: current(live) title="${current.parsed?.title || ''}" tasks=${
+      current.parsed?.tasks?.length || 0
+    } dirty=${current.dirty} handle=${current.hasWritableHandle} inWorkspace=${
+      current.belongsToWorkspace
+    } path=${current.workspacePath || '(none)'} | workspace(saved) ready=${workspace.ready} files=${
+      workspace.files.length
+    } tasks=${workspace.tasks.length}`
+  );
+
+  return { current, workspace };
+}
+
+try {
+  window.getCurrentDocumentScope = getCurrentDocumentScope;
+  window.getWorkspaceScope = getWorkspaceScope;
+  window.logDocumentScopes = logDocumentScopes;
+  globalThis.getCurrentDocumentScope = getCurrentDocumentScope;
+  globalThis.getWorkspaceScope = getWorkspaceScope;
+  globalThis.logDocumentScopes = logDocumentScopes;
+} catch {}
 
 try {
   window.buildWorkspaceIndex = buildWorkspaceIndex;
@@ -2920,7 +3165,7 @@ function ensureWorkspaceProjectsPanel() {
 
     <div class="workspacePanelBody">
       <div id="workspaceProjectsSummary" class="workspaceProjectsSummary">
-        No Projects found
+        0 Projects
       </div>
 
       <div id="workspaceProjectsList" class="workspaceProjectsList">
@@ -2984,7 +3229,10 @@ function renderWorkspaceProjectsPanel() {
   badge.textContent = String(count);
 
   if (!count) {
-    summary.textContent = 'No Projects found';
+    // The panel shows its state in exactly ONE place: the list body. The
+    // summary line carries the count only, matching the populated branch below,
+    // so an empty Projects panel never renders two identical messages.
+    summary.textContent = '0 Projects';
     list.innerHTML = '<div class="workspaceProjectsEmpty">No Projects found</div>';
     applyWorkspacePanelCollapsed(panel, 'projects', isWorkspacePanelCollapsed('projects'));
     return;
@@ -3396,6 +3644,14 @@ function finalizeWorkspaceSidebar() {
     renderWorkspaceRelatedPanel();
     renderWorkspaceTagsPanel?.();
     renderWorkspaceProjectsPanel();
+    // ACT 4 — the Notes and Knowledge Sidebar projections are part of the
+    // post-readiness render, so a completed Index build (physical Save, Today,
+    // Workspace activation) refreshes both. Rendering is idempotent, reads only
+    // the published Index, and never triggers a rebuild or a scan.
+    renderWorkspaceJournalTimeline?.();
+    globalThis.renderWorkspaceKnowledgePanel?.();
+    // ACT 6 — the Archive projection refreshes from the same completed build.
+    globalThis.renderWorkspaceArchivePanel?.();
 
     // ACT F: contextual Help buttons (idempotent helper; panels own only topic IDs).
     // Accepted visual reference:
@@ -3645,6 +3901,17 @@ function renderWorkspaceActivePanel() {
     </div>
 
     ${
+      // ACT 4 — physical identity stays visible next to the saved H1 title, so
+      // two Notes sharing an H1 remain distinguishable here too. The active
+      // document itself is untouched: no unsaved live H1 is used.
+      active.name || active.path
+        ? `<div class="workspaceActiveMeta">${escapeHtml(active.path || active.name)}</div>`
+        : ''
+    }
+
+    <div id="workspaceActiveActions" class="workspaceActiveActions" hidden></div>
+
+    ${
       tagHtml
         ? `<div class="workspaceActiveTags">${tagHtml}</div>`
         : '<div class="workspaceActiveMeta">No tags</div>'
@@ -3665,6 +3932,10 @@ function renderWorkspaceActivePanel() {
   `;
 
   log?.(`Workspace Active: rendered path=${active?.path || '(none)'}`);
+
+  // ACT 6 — the action row reflects the LIVE buffer flags, so a just-applied
+  // (still unsaved) action is reflected immediately without touching the Index.
+  renderWorkspaceActiveNoteActions();
 
   applyWorkspacePanelCollapsed(panel, 'active', isWorkspacePanelCollapsed('active'));
 }
@@ -5190,112 +5461,711 @@ function getJournalMonthGroupLabel(dateIso) {
   return `${monthNames[month - 1] || 'Unknown'} ${year}`;
 }
 
-// ACT 2B — RETAINED LEGACY, not adapted. This is the Journal-mode Sidebar
-// timeline. It still reads the retired files.journals bucket, so it renders
-// "No journals" and is inert under the notes/ model. Adapting or removing it
-// would be a Sidebar redesign, which Section 8 of the canonical plan forbids
-// before the post-2C structural checkpoint, and decision 23 keeps Journal
-// available during the transition.
-// Removal ACT: the Sidebar cleanup after the ACT 2C checkpoint.
-function renderWorkspaceJournalTimeline() {
-  const container = document.getElementById('workspaceJournalsList');
+// ============================================================
+// ACT 6 — Note metadata writer (the single managed writer)
+// ============================================================
+//
+// ONE pure, narrowly owned patcher. It is the only place in the application
+// that may change a managed frontmatter key, and it changes nothing else:
+// unknown keys, unrelated lines, comments, key order and the Markdown body
+// outside the frontmatter boundary are preserved byte-for-byte.
+//
+// Managed keys (classification only):
+//   knowledge, pinned, archived
+// Date is NOT managed here: date writing belongs to creation and to a future
+// date-editing action, so this writer can never silently re-date a Note.
+//
+// The patcher is pure — it takes text and returns text. It performs NO I/O and
+// has no knowledge of files, handles, the Workspace or the Index. The caller
+// decides what to do with the result, and the user still decides when to Save.
 
-  if (!container) {
-    log?.('Workspace Journals: timeline render skipped; container missing');
-    return;
+const NOTE_METADATA_MANAGED_KEYS = ['knowledge', 'pinned', 'archived'];
+
+const NOTE_FRONTMATTER_OPEN = /^\uFEFF?---[ \t]*\r?\n/;
+
+function isManagedNoteMetadataKey(key) {
+  return NOTE_METADATA_MANAGED_KEYS.includes(String(key || '').trim().toLowerCase());
+}
+
+// The closing delimiter is the first line after the opening one that is exactly
+// `---` (trailing whitespace tolerated). It is found by scanning lines rather
+// than by matching from the start of the remaining text, because the remaining
+// text begins with the frontmatter CONTENT, not with the delimiter.
+function findNoteFrontmatterClose(rest) {
+  const lines = rest.split('\n');
+
+  for (let i = 0; i < lines.length; i += 1) {
+    if (/^---[ \t]*\r?$/.test(lines[i])) {
+      return { index: i, lineEnd: i + 1 };
+    }
   }
 
-  const workspaceState = globalThis.WORKSPACE_STATE || window.WORKSPACE_STATE || null;
+  return null;
+}
 
-  if (!workspaceState) {
-    return;
+/**
+ * Patch managed Boolean frontmatter flags in a Markdown document.
+ *
+ * Contract:
+ *   true  -> the key is present with exactly `true`
+ *   false -> the managed key is REMOVED (absence is the "off" state, which is
+ *            also what the ACT 1C reader already treats as false)
+ *
+ * @param {string} text
+ * @param {Record<string, boolean>} flags - only managed keys are honoured
+ * @returns {{ok: boolean, text: string, reason: string, changed: boolean}}
+ */
+function patchNoteMetadata(text, flags) {
+  const source = String(text ?? '');
+
+  // Only managed keys may be requested; anything else is ignored rather than
+  // silently written, so no caller can smuggle in a new frontmatter key.
+  const requested = [];
+  const cleared = [];
+
+  for (const [rawKey, value] of Object.entries(flags || {})) {
+    if (!isManagedNoteMetadataKey(rawKey)) continue;
+    const key = rawKey.trim().toLowerCase();
+
+    if (value === true) {
+      if (!requested.includes(key)) requested.push(key);
+    } else if (value === false) {
+      if (!cleared.includes(key)) cleared.push(key);
+    }
   }
 
-  const journals = workspaceState?.files?.journals || [];
-
-  if (!journals.length) {
-    container.innerHTML = '<div class="workspaceEmpty">No journals</div>';
-    return;
+  if (!requested.length && !cleared.length) {
+    return { ok: true, text: source, reason: '', changed: false };
   }
 
-  const sorted = [...journals].sort((a, b) => {
-    const dateA = getJournalDisplayDate(a);
-    const dateB = getJournalDisplayDate(b);
+  const open = source.match(NOTE_FRONTMATTER_OPEN);
 
-    if (dateA !== dateB) {
-      return dateB.localeCompare(dateA);
+  // No frontmatter: only a positive request can create a block. Turning a flag
+  // OFF in a document that has none is already satisfied, so it is a no-op.
+  if (!open) {
+    if (!requested.length) {
+      return { ok: true, text: source, reason: '', changed: false };
     }
 
-    return String(b.name || '').localeCompare(String(a.name || ''));
+    const block = `---\n${requested.map((key) => `${key}: true`).join('\n')}\n---\n\n`;
+    return { ok: true, text: block + source, reason: '', changed: true };
+  }
+
+  const rest = source.slice(open[0].length);
+  const close = findNoteFrontmatterClose(rest);
+
+  // An unterminated block is a malformed document: abort rather than guess
+  // where the author's frontmatter was meant to end.
+  if (!close) {
+    return { ok: false, text: source, reason: 'malformed-frontmatter', changed: false };
+  }
+
+  const restLines = rest.split('\n');
+  const frontmatterBody = restLines.slice(0, close.index).join('\n');
+  const afterClose = restLines.slice(close.lineEnd).join('\n');
+
+  const lines = frontmatterBody.length ? frontmatterBody.split('\n') : [];
+  const wanted = new Set(requested);
+  const turningOff = new Set(cleared);
+  const out = [];
+  const seen = new Set();
+
+  for (const line of lines) {
+    const match = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+    const key = match ? match[1].trim().toLowerCase() : '';
+
+    if (match && wanted.has(key)) {
+      // First occurrence wins; later duplicates are dropped so exactly one
+      // managed line survives. This also makes a repeated patch idempotent.
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(`${match[1]}: true`);
+      continue;
+    }
+
+    // Turning a managed key OFF removes the line entirely: absence is the "off"
+    // state, and that is exactly what the ACT 1C reader already evaluates.
+    if (match && turningOff.has(key)) continue;
+
+    if (match && isManagedNoteMetadataKey(key)) {
+      // A managed key that was not requested is left untouched.
+      out.push(line);
+      continue;
+    }
+
+    out.push(line);
+  }
+
+  for (const key of requested) {
+    if (!seen.has(key)) out.push(`${key}: true`);
+  }
+
+  // Everything after the closing delimiter is copied through byte-for-byte.
+  const body = out.join('\n');
+  const rebuilt = `---\n${body}${body ? '\n' : ''}---\n${afterClose}`;
+
+  return { ok: true, text: rebuilt, reason: '', changed: rebuilt !== source };
+}
+
+/**
+ * Read the managed flags currently present in a document's frontmatter.
+ *
+ * Read-only counterpart, used by the action owner to decide which buttons are
+ * meaningful for the active Note. Unknown keys and malformed input never throw.
+ */
+function readNoteMetadataFlags(text) {
+  const flags = { knowledge: false, pinned: false, archived: false };
+
+  const source = String(text ?? '');
+  const open = source.match(NOTE_FRONTMATTER_OPEN);
+  if (!open) return flags;
+
+  const rest = source.slice(open[0].length);
+  const close = findNoteFrontmatterClose(rest);
+
+  // An unterminated block yields no flags rather than throwing.
+  if (!close) return flags;
+
+  const body = rest.split('\n').slice(0, close.index).join('\n');
+
+  for (const line of body.split('\n')) {
+    const match = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+    if (!match) continue;
+
+    const key = match[1].trim().toLowerCase();
+    if (!isManagedNoteMetadataKey(key)) continue;
+
+    flags[key] = match[2].trim().replace(/^['"]|['"]$/g, '').toLowerCase() === 'true';
+  }
+
+  return flags;
+}
+
+try {
+  globalThis.patchNoteMetadata = patchNoteMetadata;
+  globalThis.readNoteMetadataFlags = readNoteMetadataFlags;
+  globalThis.NOTE_METADATA_MANAGED_KEYS = NOTE_METADATA_MANAGED_KEYS;
+  window.patchNoteMetadata = patchNoteMetadata;
+  window.readNoteMetadataFlags = readNoteMetadataFlags;
+} catch {}
+
+// ACT 6 — Active-Note metadata actions.
+//
+// These actions exist ONLY for the active Workspace Note. They patch the LIVE
+// editor buffer and mark it dirty; they never call Save, never write an
+// inactive file, and never move, rename or remove anything. The physical Save
+// stays entirely user-controlled, and the Workspace Index stays the saved-state
+// authority: a metadata change is visible in the Sidebar only after that Save
+// and the Index rebuild it triggers.
+
+const NOTE_ACTION_UNAVAILABLE_MESSAGES = {
+  'no-active-note': 'Open a note first.',
+  'not-a-workspace-note': 'This action works on a note inside the workspace.',
+  'report-active': 'Reports cannot be classified. Open a note first.',
+};
+
+function describeNoteActionTarget() {
+  const active = globalThis.WORKSPACE_STATE?.activeFile || null;
+  const handle = typeof currentSaveHandle !== 'undefined' ? currentSaveHandle : null;
+  const session = typeof __virtualReportSession !== 'undefined' ? __virtualReportSession : null;
+
+  // Report guards first: a virtual or saved Report is never metadata-eligible.
+  if (session && session.kind === 'report') {
+    return { eligible: false, reason: 'report-active' };
+  }
+
+  if (!active || !active.path || !active.handle || !handle) {
+    return { eligible: false, reason: 'no-active-note' };
+  }
+
+  // Membership is proven by exact handle identity, never by name or H1.
+  if (active.handle !== handle) {
+    return { eligible: false, reason: 'not-a-workspace-note' };
+  }
+
+  return { eligible: true, reason: '', active };
+}
+
+/**
+ * Apply one managed flag to the active Note.
+ *
+ * @param {'knowledge'|'pinned'|'archived'} key
+ * @param {boolean} value
+ */
+function applyActiveNoteMetadata(key, value) {
+  const target = describeNoteActionTarget();
+
+  if (!target.eligible) {
+    globalThis.MME_APP?.showToast?.(
+      NOTE_ACTION_UNAVAILABLE_MESSAGES[target.reason] || 'This action is not available.',
+      'warn',
+      2800
+    );
+    log?.(`Note action blocked: ${target.reason}`);
+    return { ok: false, reason: target.reason };
+  }
+
+  if (!isManagedNoteMetadataKey(key)) {
+    log?.(`Note action refused: unmanaged key ${key}`);
+    return { ok: false, reason: 'unmanaged-key' };
+  }
+
+  const currentText = String((md && typeof md.value !== 'undefined' ? md.value : '') || '');
+  const result = patchNoteMetadata(currentText, { [key]: value === true });
+
+  if (!result.ok) {
+    globalThis.MME_APP?.showToast?.(
+      'The note has malformed frontmatter, so nothing was changed.',
+      'error',
+      3400
+    );
+    log?.(`Note action failed: ${result.reason}`);
+    return { ok: false, reason: result.reason };
+  }
+
+  if (!result.changed) {
+    log?.(`Note action no-op: ${key}=${value} already satisfied`);
+    return { ok: true, changed: false, path: target.active.path };
+  }
+
+  // The live buffer is patched through the existing programmatic-change owner so
+  // the editor, the mirror and the dirty flag all stay consistent. The writable
+  // handle is untouched, and Save is NOT called.
+  runProgrammaticTextChange(() => {
+    md.value = result.text;
+    if (typeof window.__cmSetText === 'function') window.__cmSetText(md.value);
   });
 
-  const recent = sorted.slice(0, 3);
+  dirty = true;
+  setStatus?.(modeLabel?.() || 'Journal');
+  updateDocumentTitle?.();
 
-  function renderJournalButton(file) {
-    const title = escapeHtml(getJournalDisplayTitle(file));
-    const date = escapeHtml(getJournalDisplayDate(file));
-    const path = escapeHtml(file.path || '');
-    const name = escapeHtml(file.name || '');
-    const kind = 'journals';
+  log?.(`Note action applied: ${key}=${value} path=${target.active.path} (unsaved)`);
 
-    return `
-      <button
-        type="button"
-        class="workspaceFileItem workspaceJournalItem"
-        data-workspace-file="1"
-        data-kind="${kind}"
-        data-path="${path}"
-        data-name="${name}"
-        title="${path}"
-      >
-        <span class="workspaceJournalIcon" aria-hidden="true">📝</span>
-        <span class="workspaceJournalBody">
-          <span class="workspaceJournalTitle">${title}</span>
-          <span class="workspaceJournalDate">${date || path}</span>
-        </span>
-      </button>
-    `;
+  return { ok: true, changed: true, path: target.active.path, text: result.text };
+}
+
+function pinActiveNote() {
+  return applyActiveNoteMetadata('pinned', true);
+}
+
+function unpinActiveNote() {
+  return applyActiveNoteMetadata('pinned', false);
+}
+
+function addActiveNoteToKnowledge() {
+  return applyActiveNoteMetadata('knowledge', true);
+}
+
+function removeActiveNoteFromKnowledge() {
+  return applyActiveNoteMetadata('knowledge', false);
+}
+
+function archiveActiveNote() {
+  return applyActiveNoteMetadata('archived', true);
+}
+
+function restoreActiveNote() {
+  return applyActiveNoteMetadata('archived', false);
+}
+
+try {
+  globalThis.describeNoteActionTarget = describeNoteActionTarget;
+  globalThis.applyActiveNoteMetadata = applyActiveNoteMetadata;
+  globalThis.pinActiveNote = pinActiveNote;
+  globalThis.unpinActiveNote = unpinActiveNote;
+  globalThis.addActiveNoteToKnowledge = addActiveNoteToKnowledge;
+  globalThis.removeActiveNoteFromKnowledge = removeActiveNoteFromKnowledge;
+  globalThis.archiveActiveNote = archiveActiveNote;
+  globalThis.restoreActiveNote = restoreActiveNote;
+} catch {}
+
+// ACT 6 — the Archive projection.
+//
+// Archive never makes a Note unreachable: archived Notes are excluded from
+// Notes, Pinned and Knowledge, and are listed here instead. There is NO
+// physical archive/ folder, no move, no copy and no removeEntry: an archived
+// Note is still the same file in notes/, and Restore removes the flag from the
+// live buffer like every other classification action.
+function renderWorkspaceArchivePanel() {
+  const container = document.getElementById('workspaceArchiveList');
+  const badge = document.getElementById('workspaceArchiveBadge');
+
+  if (!container) {
+    log?.('Workspace Archive: render skipped; container missing');
+    return;
   }
 
-  const monthGroups = new Map();
+  const view = buildWorkspaceNotesViewModel();
 
-  for (const file of sorted) {
-    const date = getJournalDisplayDate(file);
-    const groupLabel = getJournalMonthGroupLabel(date);
+  if (badge) badge.textContent = String(view.archivedNotes.length);
 
-    if (!monthGroups.has(groupLabel)) {
-      monthGroups.set(groupLabel, []);
-    }
-
-    monthGroups.get(groupLabel).push(file);
+  if (!view.archivedNotes.length) {
+    container.innerHTML = '<div class="workspaceEmpty">No archived notes</div>';
+    return;
   }
 
-  const monthGroupsHtml = Array.from(monthGroups.entries())
-    .map(([label, files]) => {
-      return `
-        <div class="workspaceJournalGroup">
-          <div class="workspaceJournalGroupTitle">${escapeHtml(label)}</div>
-          ${files.map(renderJournalButton).join('')}
-        </div>
-      `;
-    })
+  const rowOptions = getWorkspaceNoteRowOptions(view.archivedNotes);
+
+  container.innerHTML = view.archivedNotes
+    .map((note) => getWorkspaceNoteRowMarkup(note, { ...rowOptions(note), icon: '📦' }))
     .join('');
 
-  container.innerHTML = `
-    <div class="workspaceJournalTimeline">
-      <div class="workspaceJournalGroup">
-        <div class="workspaceJournalGroupTitle">Recent</div>
-        ${recent.map(renderJournalButton).join('')}
-      </div>
+  window.updateWorkspaceActiveFileHighlight?.();
 
-      ${monthGroupsHtml}
+  log?.(`Workspace Archive: rendered archived=${view.archivedNotes.length}`);
+}
+
+// ACT 6 — the Active Note action row. It offers exactly the lifecycle actions,
+// and only for a metadata-eligible active Workspace Note. Nothing here saves:
+// every action leaves the document dirty for the user to Save.
+function renderWorkspaceActiveNoteActions() {
+  const host = document.getElementById('workspaceActiveActions');
+  if (!host) return;
+
+  const target = describeNoteActionTarget();
+
+  if (!target.eligible) {
+    host.innerHTML = '';
+    host.hidden = true;
+    return;
+  }
+
+  host.hidden = false;
+
+  const flags = readNoteMetadataFlags(String(md?.value ?? ''));
+
+  const actions = [
+    flags.pinned ? ['Unpin', 'unpinActiveNote'] : ['Pin', 'pinActiveNote'],
+    flags.knowledge
+      ? ['Remove from Knowledge', 'removeActiveNoteFromKnowledge']
+      : ['Add to Knowledge', 'addActiveNoteToKnowledge'],
+    flags.archived ? ['Restore', 'restoreActiveNote'] : ['Archive', 'archiveActiveNote'],
+  ];
+
+  host.innerHTML = actions
+    .map(
+      ([label, handler]) =>
+        `<button type="button" class="workspaceActiveActionBtn" data-note-action="${handler}">${escapeHtml(
+          label
+        )}</button>`
+    )
+    .join('');
+
+  if (host.__noteActionsBound) return;
+  host.__noteActionsBound = true;
+
+  host.addEventListener('click', (event) => {
+    const btn = event.target?.closest?.('[data-note-action]');
+    if (!btn) return;
+
+    event.preventDefault();
+    const name = btn.dataset.noteAction;
+    const fn = globalThis[name];
+
+    if (typeof fn !== 'function') {
+      log?.(`Note action unavailable: ${name}`);
+      return;
+    }
+
+    fn();
+    renderWorkspaceActiveNoteActions();
+    renderWorkspaceActivePanel?.();
+  });
+}
+
+// ============================================================
+// ACT 4 — derived Notes / Knowledge Sidebar view model
+// ============================================================
+//
+// ONE pure derived projection, computed on demand from the SAVED Index
+// (WORKSPACE_INDEX_STATE). It is a local value, never stored: nothing is added
+// to WORKSPACE_INDEX_STATE, no new authoritative Notes/Knowledge array exists,
+// and the Note records themselves are never mutated.
+//
+// It reads only metadata the ACT 1C parser already produces (title, date,
+// knowledge, pinned, archived) and performs NO file access, NO write and NO
+// Workspace scan.
+
+// A Note date is the saved contract: valid YYYY-MM-DD frontmatter, otherwise an
+// exactly dated filename, otherwise ''. The Sidebar never invents a date.
+const WORKSPACE_NOTE_DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+const WORKSPACE_DATED_NOTE_FILENAME = /(\d{4}-\d{2}-\d{2})\.md$/i;
+
+function getWorkspaceNoteDate(record) {
+  const saved = String(record?.date || '').trim();
+  if (WORKSPACE_NOTE_DATE_SHAPE.test(saved)) return saved;
+
+  const fromName = String(record?.name || '').match(WORKSPACE_DATED_NOTE_FILENAME);
+  if (fromName) return fromName[1];
+
+  return '';
+}
+
+// Primary label: saved H1, else the filename basename. The basename fallback is
+// the ACT 1B storage name, so `note.MD` falls back consistently.
+function getWorkspaceNoteTitle(record) {
+  const h1 = String(record?.title || '').trim();
+  if (h1) return h1;
+
+  const name = String(record?.name || '').trim();
+  if (name) return name.replace(/\.md$/i, '');
+
+  return String(record?.path || '').split('/').pop() || 'Untitled';
+}
+
+// Deterministic secondary physical identity. `ambiguous` is true when several
+// rendered rows share one visible title, which is exactly when the path badge is
+// worth showing; otherwise the filename alone is enough.
+function getWorkspaceNoteSecondaryIdentity(record, ambiguous) {
+  const name = String(record?.name || '').trim();
+  const path = String(record?.path || '').trim();
+
+  return ambiguous ? path : name;
+}
+
+function compareWorkspaceNotesForList(a, b) {
+  const dateA = getWorkspaceNoteDate(a);
+  const dateB = getWorkspaceNoteDate(b);
+
+  if (dateA !== dateB) return dateB.localeCompare(dateA);
+
+  return String(a?.name || '').localeCompare(String(b?.name || ''));
+}
+
+// The single derived Sidebar view model.
+function buildWorkspaceNotesViewModel() {
+  const index = WORKSPACE_INDEX_STATE || {};
+
+  const source = Array.isArray(index.byKind?.notes) && index.byKind.notes.length
+    ? index.byKind.notes
+    : (Array.isArray(index.files) ? index.files.filter((f) => f?.kind === 'notes') : []);
+
+  const activeNotes = source.filter((note) => note?.archived !== true);
+  const archivedNotes = source.filter((note) => note?.archived === true);
+
+  // Pinned and Knowledge are INDEPENDENT derivations over the same records.
+  // Pinned is sorted with the same comparator, so its presentation order never
+  // depends on the incidental order of the source Index.
+  const pinnedNotes = activeNotes
+    .filter((note) => note?.pinned === true)
+    .sort(compareWorkspaceNotesForList);
+  const knowledgeNotes = activeNotes
+    .filter((note) => note?.knowledge === true)
+    .sort(compareWorkspaceNotesForList);
+
+  // A pinned Note is presented only inside the Pinned subsection, so it is
+  // removed from the chronological list (no duplicate row).
+  const chronologicalNotes = activeNotes
+    .filter((note) => note?.pinned !== true)
+    .sort(compareWorkspaceNotesForList);
+
+  // Dated Notes keep the existing descending chronological grouping. No
+  // monthly-calendar behaviour is introduced here.
+  const groups = new Map();
+
+  for (const note of chronologicalNotes) {
+    const date = getWorkspaceNoteDate(note);
+    if (!date) continue;
+
+    const label = getJournalMonthGroupLabel(date);
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(note);
+  }
+
+  // Newest month first, ordered on the group's newest date so the sequence is
+  // deterministic even when a group label repeats.
+  const datedGroups = Array.from(groups.entries())
+    .map(([label, notes]) => ({
+      label,
+      date: notes[0] ? getWorkspaceNoteDate(notes[0]) : '',
+      notes,
+    }))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+  const undatedNotes = chronologicalNotes.filter((note) => !getWorkspaceNoteDate(note));
+
+  return {
+    source,
+    activeNotes,
+    pinnedNotes,
+    knowledgeNotes,
+    archivedNotes,
+    chronologicalNotes,
+    datedGroups,
+    undatedNotes,
+  };
+}
+
+// Titles are derived at render time from the saved Index, so an unsaved editor
+// H1 can never change a Sidebar title: only a physical Save plus Index rebuild
+// produces a new saved record.
+function getWorkspaceNoteRowMarkup(note, options = {}) {
+  const kind = 'notes';
+  const path = String(note?.path || '');
+  const name = String(note?.name || '');
+  const title = getWorkspaceNoteTitle(note);
+  const date = getWorkspaceNoteDate(note);
+  const secondary = getWorkspaceNoteSecondaryIdentity(note, options.ambiguous);
+  const icon = String(options.icon || '📄');
+
+  const secondaryHtml = secondary
+    ? `<span class="workspaceNoteSecondary">${escapeHtml(secondary)}</span>`
+    : '';
+
+  return `
+    <button
+      type="button"
+      class="workspaceFileItem workspaceJournalItem"
+      data-workspace-file="1"
+      data-kind="${kind}"
+      data-path="${escapeHtml(path)}"
+      data-name="${escapeHtml(name)}"
+      data-secondary="${escapeHtml(secondary)}"
+      title="${escapeHtml(path)}"
+    >
+      <span class="workspaceJournalIcon" aria-hidden="true">${escapeHtml(icon)}</span>
+      <span class="workspaceJournalBody">
+        <span class="workspaceJournalTitle">${escapeHtml(title)}</span>
+        ${secondaryHtml}
+        <span class="workspaceJournalDate">${escapeHtml(date || '')}</span>
+      </span>
+    </button>
+  `;
+}
+
+// Ambiguity is decided per rendered set, so a duplicated H1 in Notes and the
+// same duplicated H1 in Knowledge each get their own path badge.
+function getWorkspaceNoteRowOptions(notes) {
+  const counts = new Map();
+
+  for (const note of notes) {
+    const title = getWorkspaceNoteTitle(note);
+    counts.set(title, (counts.get(title) || 0) + 1);
+  }
+
+  return (note) => ({ ambiguous: (counts.get(getWorkspaceNoteTitle(note)) || 0) > 1 });
+}
+
+// ACT 4 — the Notes projection. It reuses the EXISTING Journals panel host
+// (workspaceJournalsPanel / workspaceJournalsList), the existing row markup, the
+// existing month grouping and the existing collapse behaviour.
+function renderWorkspaceNotesPanel() {
+  const container = document.getElementById('workspaceJournalsList');
+  const badge = document.getElementById('workspaceJournalsBadge');
+
+  if (!container) {
+    log?.('Workspace Notes: render skipped; container missing');
+    return;
+  }
+
+  const view = buildWorkspaceNotesViewModel();
+
+  if (badge) badge.textContent = String(view.activeNotes.length);
+
+  if (!view.activeNotes.length) {
+    container.innerHTML = '<div class="workspaceEmpty">No notes</div>';
+    return;
+  }
+
+  const rowOptions = getWorkspaceNoteRowOptions(view.activeNotes);
+
+  const pinnedHtml = view.pinnedNotes.length
+    ? `
+      <div class="workspaceJournalGroup" data-notes-group="pinned">
+        <div class="workspaceJournalGroupTitle">Pinned</div>
+        ${view.pinnedNotes.map((note) => getWorkspaceNoteRowMarkup(note, rowOptions(note))).join('')}
+      </div>
+    `
+    : '';
+
+  const datedHtml = view.datedGroups
+    .map(
+      (group) => `
+        <div class="workspaceJournalGroup" data-notes-group="dated" data-notes-group-label="${escapeHtml(
+          group.label
+        )}">
+          <div class="workspaceJournalGroupTitle">${escapeHtml(group.label)}</div>
+          ${group.notes.map((note) => getWorkspaceNoteRowMarkup(note, rowOptions(note))).join('')}
+        </div>
+      `
+    )
+    .join('');
+
+  // Undated Notes stay visible, after the dated groups, and only when present.
+  const undatedHtml = view.undatedNotes.length
+    ? `
+      <div class="workspaceJournalGroup" data-notes-group="undated">
+        <div class="workspaceJournalGroupTitle">Undated</div>
+        ${view.undatedNotes.map((note) => getWorkspaceNoteRowMarkup(note, rowOptions(note))).join('')}
+      </div>
+    `
+    : '';
+
+  container.innerHTML = `
+    <div class="workspaceJournalTimeline" data-notes-view="notes">
+      ${pinnedHtml}
+      ${datedHtml}
+      ${undatedHtml}
     </div>
   `;
 
   window.updateWorkspaceActiveFileHighlight?.();
+
   log?.(
-    `Workspace Journals: timeline rendered journals=${sorted.length} groups=${monthGroups.size} indexReady=${WORKSPACE_INDEX_STATE?.ready}`
+    `Workspace Notes: rendered active=${view.activeNotes.length} pinned=${
+      view.pinnedNotes.length
+    } groups=${view.datedGroups.length} undated=${view.undatedNotes.length} archived=${
+      view.archivedNotes.length
+    } indexReady=${WORKSPACE_INDEX_STATE?.ready}`
   );
+}
+
+// ACT 4 — the Knowledge projection. It renders into the EXISTING Concepts panel
+// host, keeping that panel's location, collapse key ('concepts'), row wiring,
+// path data attributes, empty-state behaviour and scroll behaviour. Only the
+// SOURCE changes: from the retired physical concepts/ files to active Notes
+// with knowledge === true. Knowledge owns no file collection and no separate
+// store, and its rows navigate to exactly the same physical Notes as Notes.
+function renderWorkspaceKnowledgePanel() {
+  const container = document.getElementById('workspaceConceptsList');
+  const badge = document.getElementById('workspaceConceptsBadge');
+
+  if (!container) {
+    log?.('Workspace Knowledge: render skipped; container missing');
+    return;
+  }
+
+  const view = buildWorkspaceNotesViewModel();
+
+  if (badge) badge.textContent = String(view.knowledgeNotes.length);
+
+  if (!view.knowledgeNotes.length) {
+    container.innerHTML = '<div class="workspaceEmpty">No knowledge notes</div>';
+    return;
+  }
+
+  const rowOptions = getWorkspaceNoteRowOptions(view.knowledgeNotes);
+
+  container.innerHTML = view.knowledgeNotes
+    .map((note) => getWorkspaceNoteRowMarkup(note, { ...rowOptions(note), icon: '🧠' }))
+    .join('');
+
+  window.updateWorkspaceActiveFileHighlight?.();
+
+  log?.(
+    `Workspace Knowledge: rendered knowledge=${view.knowledgeNotes.length} from active=${
+      view.activeNotes.length
+    }`
+  );
+}
+
+// ACT 4 — RETAINED LEGACY NAME, now adapted. The Journal Timeline projection IS
+// the Notes projection; this entry point is kept so every existing caller (the
+// buildWorkspaceIndex() finalizer list, the controller, late modules and the
+// existing validator bindings) continues to work unchanged. It owns no logic.
+function renderWorkspaceJournalTimeline() {
+  renderWorkspaceNotesPanel();
 }
 
 // ================================
@@ -5305,13 +6175,24 @@ function renderWorkspaceJournalTimeline() {
 try {
   window.renderWorkspaceJournalTimeline = renderWorkspaceJournalTimeline;
   globalThis.renderWorkspaceJournalTimeline = renderWorkspaceJournalTimeline;
+  // ACT 4 — the Notes and Knowledge projections are exposed under their real
+  // names. renderWorkspaceJournalTimeline is kept as the retained alias.
+  window.renderWorkspaceNotesPanel = renderWorkspaceNotesPanel;
+  globalThis.renderWorkspaceNotesPanel = renderWorkspaceNotesPanel;
+  window.renderWorkspaceKnowledgePanel = renderWorkspaceKnowledgePanel;
+  globalThis.renderWorkspaceKnowledgePanel = renderWorkspaceKnowledgePanel;
+  window.renderWorkspaceArchivePanel = renderWorkspaceArchivePanel;
+  globalThis.renderWorkspaceArchivePanel = renderWorkspaceArchivePanel;
+  window.buildWorkspaceNotesViewModel = buildWorkspaceNotesViewModel;
+  globalThis.buildWorkspaceNotesViewModel = buildWorkspaceNotesViewModel;
 } catch {}
 
-// ACT 2B — RETAINED LEGACY, not adapted. The Journals Sidebar title overlay is
-// keyed to data-kind="journals" buttons, which the retired Sidebar renderer no
-// longer produces, so it is inert. See renderWorkspaceJournalTimeline for the
-// reason this legacy surface is preserved through 2B.
-// Removal ACT: the Sidebar cleanup after the ACT 2C checkpoint.
+// ACT 4 — RETAINED LEGACY, still inert. This overlay is keyed to
+// data-kind="journals" rows, which the ACT 4 Notes renderer no longer produces.
+// ACT 4 derives every Sidebar title directly from the saved Index at render
+// time, so this second pass is unnecessary; it is kept only so the existing
+// call site and validator bindings stay valid. It performs no I/O.
+// Removal ACT: the Sidebar cleanup package.
 function updateWorkspaceJournalSidebarTitlesFromIndex() {
   try {
     if (!WORKSPACE_INDEX_STATE?.ready) return;
