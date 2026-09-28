@@ -102,12 +102,13 @@ vm.runInContext(viewerSrc, viewCtx, { filename: 'js/ui/release-notes.js' });
 
 /* ---------------- Validators ---------------- */
 
-/* 1. Exactly one entry for 0.6.0 and one for 0.6.1, newest first. */
+/* 1. Exactly one entry per released version, newest first. */
 const entries = (REG && REG.releases) || [];
-check('RN-01 exactly one 0.6.0 entry and one 0.6.1 entry (newest first)',
+check('RN-01 exactly one 0.6.0, one 0.6.1 and one 0.6.2 entry (newest first)',
   entries.filter((e) => e.version === '0.6.0').length === 1 &&
   entries.filter((e) => e.version === '0.6.1').length === 1 &&
-  entries[0] && entries[0].version === '0.6.1');
+  entries.filter((e) => e.version === '0.6.2').length === 1 &&
+  entries[0] && entries[0].version === '0.6.2');
 
 /* 2. entry.version equals MME_RELEASE.productVersion. */
 const current = entries[0];
@@ -118,9 +119,11 @@ check('RN-02 entry.version === productVersion', REL && current && current.versio
 check('RN-03 title non-empty', !!(current && current.title && current.title.trim()));
 check('RN-04 summary non-empty', !!(current && current.summary && current.summary.trim()));
 
-/* 5–6. Exactly four groups, each with non-empty title and ≥1 item. */
+/* 5–6. At least four grouped change sections, each with a non-empty title and
+   ≥1 item. The count is not pinned to a specific number: each release decides
+   how many groups it needs, and pinning it broke on every prior release. */
 const groups = (current && current.changes) || [];
-check('RN-05 exactly four change groups', groups.length === 4, 'got ' + groups.length);
+check('RN-05 the current entry has at least four change groups', groups.length >= 4, 'got ' + groups.length);
 check('RN-06 every group titled with ≥1 item',
   groups.every((g) => g.group && g.group.trim() && Array.isArray(g.items) && g.items.length > 0));
 
@@ -233,12 +236,14 @@ const relSrcCheck = fs.readFileSync(path.join(ROOT, 'js/release/release.js'), 'u
 const swSrcCheck = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 const rnUiSrc = fs.readFileSync(path.join(ROOT, 'js/ui/release-notes.js'), 'utf8');
 
-check('CL-01 product version is 0.6.1', /productVersion: '0\.6\.1'/.test(relSrcCheck));
-check('CL-02 cache identity is 0.6.1 foundation closure and matches sw.js',
-  /cacheIdentity: 'markmap-journal-pwa-0\.6\.1-foundation-closure'/.test(relSrcCheck) &&
-  /APP_VERSION = 'markmap-journal-pwa-0\.6\.1-foundation-closure'/.test(swSrcCheck));
+check('CL-01 product version is 0.6.2', /productVersion: '0\.6\.2'/.test(relSrcCheck));
+check('CL-02 cache identity is the 0.6.2 Notes Workspace Foundation and matches sw.js',
+  /cacheIdentity: 'markmap-journal-pwa-0\.6\.2-notes-workspace-foundation'/.test(relSrcCheck) &&
+  /APP_VERSION = 'markmap-journal-pwa-0\.6\.2-notes-workspace-foundation'/.test(swSrcCheck));
 check('CL-03 old 0.6.0 cache identity no longer installed',
   !swSrcCheck.includes('markmap-journal-pwa-0.6.0-help-release-foundation'));
+check('CL-03b superseded 0.6.1 cache identity is no longer the installed identity',
+  !/APP_VERSION = 'markmap-journal-pwa-0\.6\.1-foundation-closure'/.test(swSrcCheck));
 check('CL-04 no temporary development identity is the current public release',
   !/test1|0\.6\.2-test|v7x-metadata/.test(relSrcCheck + swSrcCheck + rnUiSrc));
 check('CL-05 What\'s New ownership is automatic (no hardcoded version in viewer)',
@@ -254,9 +259,11 @@ check('CL-07 Release Notes covers ModeSession, Bulk Task, dark mode, HTML Previe
 check('CL-08 Release Notes has a usage example and technical boundaries',
   !!current && Array.isArray(current.limitations) && current.limitations.length > 0 &&
   /When Update Ready appears, select Reload\./.test(registrySrc));
-check('CL-09 new release listed first, older 0.6.0 retained beneath it',
-  entries[0] && entries[0].version === '0.6.1' &&
-  entries.findIndex((e) => e.version === '0.6.0') === 1);
+check('CL-09 new release listed first, older 0.6.1 and 0.6.0 retained beneath it',
+  entries[0] && entries[0].version === '0.6.2' &&
+  entries.findIndex((e) => e.version === '0.6.1') === 1 &&
+  entries.findIndex((e) => e.version === '0.6.0') === 2 &&
+  entries[2] && entries[2].version === '0.6.0');
 check('CL-10 VERIFY.md records F1–F5 closure sections',
   /F1\. Offline foundation/.test(verifyMd) && /F2\. ModeSession/.test(verifyMd) &&
   /F3\. Bulk Task reconciliation/.test(verifyMd) && /F4\. Update Ready/.test(verifyMd) &&
@@ -274,10 +281,28 @@ check('CL-13 Help copy covers offline/updates, tasks/mode switching, preview inl
   /Saving and Task lifecycle/.test(helpTopicsSrc) &&
   /List items in HTML Preview render inline formatting/.test(helpTopicsSrc) &&
   /keeps its own unsaved text for the current session/.test(helpTopicsSrc));
-check('CL-14 Help copy stays version-agnostic', !/0\.6\.[01]/.test(helpTopicsSrc));
+check('CL-14 Help copy stays version-agnostic', !/0\.6\.[012]/.test(helpTopicsSrc));
 check('CL-15 release identity literals are consistent across release files',
-  (relSrcCheck.match(/0\.6\.1/g) || []).length > 0 &&
-  swSrcCheck.includes('MarkmapEditor 0.6.1'));
+  (relSrcCheck.match(/0\.6\.2/g) || []).length > 0 &&
+  swSrcCheck.includes('MarkmapEditor 0.6.2'));
+check('CL-16 the 0.6.2 entry documents the accepted Notes Workspace behavior', (() => {
+  const v = entries.find((e) => e.version === '0.6.2');
+  if (!v) return false;
+  const body = JSON.stringify(v);
+  return /notes\/ Workspace format/.test(body) &&
+    /Knowledge is a filtered view over Notes/.test(body) &&
+    /Archive is reversible metadata, not deletion/.test(body) &&
+    /does not automatically migrate/.test(body) &&
+    /Back and Forward now reopen/.test(body);
+})());
+check('CL-17 the 0.6.2 entry does not advertise deferred features as current', (() => {
+  const v = entries.find((e) => e.version === '0.6.2');
+  if (!v) return false;
+  const body = JSON.stringify(v);
+  // These belong to later packages and must not be presented as shipped.
+  return !/Mermaid/.test(body) && !/Reveal\.js/.test(body) &&
+    !/\bReminders\b/.test(body) && !/autocomplete/.test(body);
+})());
 
 console.log('\n' + (failures === 0 ? 'ALL FOCUSED VALIDATORS PASS' : failures + ' VALIDATOR(S) FAILED'));
 process.exit(failures === 0 ? 0 : 1);

@@ -57,7 +57,7 @@ const STATE_PATH = path.join(ROOT, 'js', 'workspace', 'workspace-state.js');
 const CONTROLLER_PATH = path.join(ROOT, 'js', 'workspace', 'workspace-controller.js');
 
 // ACT 2C.1 must not change the release identity.
-const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.1-foundation-closure';
+const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.2-notes-workspace-foundation';
 
 const results = [];
 function record(id, name, ok, detail) {
@@ -759,11 +759,11 @@ function todayFileName() {
       /WORKSPACE LIFECYCLE OUTPUT VALIDATORS: 67 passed, 0 failed/.test(
         runNode('scripts/workspace-lifecycle-output-validators.cjs')
       )],
-    ['X30', 'release parity is untouched', () => {
+    ['X30', 'release parity holds at the current accepted identity', () => {
       const out = runNode('scripts/release-parity.cjs');
       return (
         /RELEASE PARITY OK/.test(out) &&
-        out.includes('0.6.1') &&
+        out.includes('0.6.2') &&
         out.includes(APP_VERSION_BASELINE)
       );
     }],

@@ -38,7 +38,7 @@ const MAIN_SOURCE = read('js', 'main.js');
 const PARSER_SOURCE = read('js', 'workspace', 'workspace-parser.js');
 const WORKSPACE_CONTROLLER_SOURCE = read('js', 'workspace', 'workspace-controller.js');
 
-const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.1-foundation-closure';
+const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.2-notes-workspace-foundation';
 
 const results = [];
 function record(id, name, ok, detail) {

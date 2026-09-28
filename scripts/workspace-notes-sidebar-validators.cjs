@@ -42,7 +42,7 @@ const SCANNER_SOURCE = read('js', 'workspace', 'workspace-scanner.js');
 const INDEX_HTML = read('index.html');
 const CSS_SOURCE = read('css', 'workspace.css');
 
-const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.1-foundation-closure';
+const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.2-notes-workspace-foundation';
 
 const results = [];
 function record(id, name, ok, detail) {
@@ -628,7 +628,254 @@ await check('A44', 'Active navigation remains path-based', () => {
     !/title/.test(clickOwner);
 }, () => 'resolved by exact path');
 
-group('Safety and non-touch (S45-S53)');
+group('Archive panel collapse (C54-C61)');
+
+  // The Archive panel header, toggle key, aria state, persisted key and
+  // delegated click wiring are all shared with the working Notes (journals) and
+  // Knowledge (concepts) panels. The bug was that the two collapse OWNERS were
+  // never extended to the new panel: toggleWorkspacePanel() had no 'archive'
+  // branch, so the click resolved to null and returned before touching state,
+  // and WORKSPACE_PANEL_DEFAULT_COLLAPSED had no 'archive' key, so no persisted
+  // state existed to restore. These fixtures execute the real shipped owners
+  // against a minimal DOM double, including repeated collapse/expand, an Index
+  // rebuild (a re-render) and a simulated reopen (state re-read from storage).
+  const COLLAPSE_SNIPPETS = [
+    extractBlockFrom(MAIN_SOURCE, 'const WORKSPACE_PANEL_COLLAPSE_STORAGE_KEY ='),
+    extractBlockFrom(MAIN_SOURCE, 'function getWorkspacePanelCollapsedState() {'),
+    extractBlockFrom(MAIN_SOURCE, 'function setWorkspacePanelCollapsedState(panelId, collapsed) {'),
+    extractBlockFrom(MAIN_SOURCE, 'function isWorkspacePanelCollapsed(panelId) {'),
+    extractBlockFrom(MAIN_SOURCE, 'function applyWorkspacePanelCollapsed(panelEl, panelId, collapsed) {'),
+    extractBlockFrom(MAIN_SOURCE, 'function toggleWorkspacePanel(panelId) {'),
+  ].join('\n\n');
+
+  function makeCollapseHarness() {
+    // Survives "reopen": storage is a plain object, so a fresh owner instance
+    // reading the same store reproduces the post-reopen state.
+    const store = {};
+    const makePanel = (id, toggleKey) => {
+      const btn = {
+        attrs: { 'aria-expanded': 'true' },
+        dataset: { workspacePanelToggle: toggleKey },
+        setAttribute(k, v) {
+          this.attrs[k] = v;
+        },
+      };
+      const panel = {
+        id,
+        classes: new Set(),
+        dataset: {},
+        btn,
+        classList: {
+          toggle(name, on) {
+            if (on) panel.classes.add(name);
+            else panel.classes.delete(name);
+          },
+          contains(name) {
+            return panel.classes.has(name);
+          },
+        },
+        querySelector(sel) {
+          return sel === '[data-workspace-panel-toggle]' ? btn : null;
+        },
+        // Real Element.contains() is a classList check here, matching how the
+        // shipped owner reads the collapsed state.
+        contains(name) {
+          return panel.classes.has(name);
+        },
+      };
+      return panel;
+    };
+
+    const panels = {
+      journals: makePanel('workspaceJournalsPanel', 'journals'),
+      concepts: makePanel('workspaceConceptsPanel', 'concepts'),
+      archive: makePanel('workspaceArchivePanel', 'archive'),
+    };
+
+    const documentDouble = {
+      getElementById(id) {
+        return Object.values(panels).find((p) => p.id === id) || null;
+      },
+    };
+    const localStorageDouble = {
+      getItem(k) {
+        return k in store ? store[k] : null;
+      },
+      setItem(k, v) {
+        store[k] = String(v);
+      },
+    };
+
+    const makeOwner = () =>
+      new Function(
+        'document',
+        'localStorage',
+        'log',
+        `${COLLAPSE_SNIPPETS}\n  return {
+          toggleWorkspacePanel,
+          applyWorkspacePanelCollapsed,
+          isWorkspacePanelCollapsed,
+        };`
+      )(documentDouble, localStorageDouble, () => {});
+
+    return { store, panels, makeOwner };
+  }
+
+  const harness = makeCollapseHarness();
+  const collapseOwner = harness.makeOwner();
+  const archivePanel = harness.panels.archive;
+
+  await check('C54', 'the Archive panel has the same header contract as Notes/Knowledge', () => {
+    const at = (id) => INDEX_HTML.slice(INDEX_HTML.indexOf(id), INDEX_HTML.indexOf(id) + 1200);
+    const archiveBlock = at('id="workspaceArchivePanel"');
+    const journalsBlock = at('id="workspaceJournalsPanel"');
+    return (
+      /data-workspace-panel-toggle="archive"/.test(archiveBlock) &&
+      /aria-expanded="true"/.test(archiveBlock) &&
+      /workspacePanelHeaderButton/.test(archiveBlock) &&
+      /workspacePanelChevron/.test(archiveBlock) &&
+      /workspacePanelBody/.test(archiveBlock) &&
+      /id="workspaceArchiveBadge"/.test(archiveBlock) &&
+      /data-workspace-panel-toggle="journals"/.test(journalsBlock)
+    );
+  }, () => 'header, chevron, badge, aria');
+
+  await check('C55', 'toggleWorkspacePanel resolves the Archive panel element', () => {
+    // The exact defect: this returned null before the fix, so the click was a
+    // silent no-op and the panel never collapsed at all.
+    collapseOwner.toggleWorkspacePanel('archive');
+    return (
+      archivePanel.classes.has('workspacePanelCollapsed') &&
+      archivePanel.dataset.collapsed === '1' &&
+      archivePanel.btn.attrs['aria-expanded'] === 'false'
+    );
+  }, () => 'null -> workspaceArchivePanel');
+
+  await check('C56', 'Archive expands again, repeatedly, without drift', () => {
+    for (let i = 0; i < 3; i += 1) {
+      collapseOwner.toggleWorkspacePanel('archive'); // expand
+      if (archivePanel.classes.has('workspacePanelCollapsed')) return false;
+      if (archivePanel.btn.attrs['aria-expanded'] !== 'true') return false;
+      collapseOwner.toggleWorkspacePanel('archive'); // collapse
+      if (!archivePanel.classes.has('workspacePanelCollapsed')) return false;
+      if (archivePanel.btn.attrs['aria-expanded'] !== 'false') return false;
+    }
+    return archivePanel.dataset.collapsed === '1';
+  }, () => '3 collapse/expand cycles');
+
+  await check('C57', 'Archive does not disturb the Notes or Knowledge panels', () => {
+    const journalsBefore = harness.panels.journals.contains('workspacePanelCollapsed');
+    const conceptsBefore = harness.panels.concepts.contains('workspacePanelCollapsed');
+    collapseOwner.toggleWorkspacePanel('archive');
+    collapseOwner.toggleWorkspacePanel('archive');
+    return (
+      harness.panels.journals.contains('workspacePanelCollapsed') === journalsBefore &&
+      harness.panels.concepts.contains('workspacePanelCollapsed') === conceptsBefore
+    );
+  }, () => 'panels are independent');
+
+  await check('C58', 'the collapsed state is persisted under the archive key', () => {
+    // Make the precondition explicit instead of assuming the shared harness
+    // state, so this fixture cannot silently depend on the toggle parity left
+    // behind by C56/C57.
+    if (!collapseOwner.isWorkspacePanelCollapsed('archive')) {
+      collapseOwner.toggleWorkspacePanel('archive'); // -> collapsed
+    }
+    if (!archivePanel.classes.has('workspacePanelCollapsed')) return false;
+    const raw = harness.store['markmap:workspace:panelCollapsed'];
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return parsed.archive === true && 'journals' in parsed && 'concepts' in parsed;
+  }, () => 'localStorage archive:true');
+
+  await check('C59', 'archive has a default collapsed key like the other panels', () => {
+    const defaults = extractBlockFrom(
+      MAIN_SOURCE,
+      'const WORKSPACE_PANEL_DEFAULT_COLLAPSED = {',
+      '};'
+    );
+    return (
+      /archive:\s*false/.test(defaults) &&
+      /journals:\s*false/.test(defaults) &&
+      /concepts:\s*false/.test(defaults)
+    );
+  }, () => 'default key present');
+
+  await check('C60', 'an Index rebuild re-applies the persisted Archive state', () => {
+    // A rebuild re-renders the panel, which previously left the class untouched.
+    archivePanel.classes.delete('workspacePanelCollapsed');
+    archivePanel.dataset.collapsed = '0';
+    archivePanel.btn.attrs['aria-expanded'] = 'true';
+    collapseOwner.applyWorkspacePanelCollapsed(
+      archivePanel,
+      'archive',
+      collapseOwner.isWorkspacePanelCollapsed('archive')
+    );
+    return (
+      archivePanel.classes.has('workspacePanelCollapsed') &&
+      archivePanel.btn.attrs['aria-expanded'] === 'false'
+    );
+  }, () => 'stays collapsed after rebuild');
+
+  await check('C61', 'a Workspace reopen restores the collapsed Archive', () => {
+    // Fresh owner + same storage = post-reopen state.
+    const reopened = harness.makeOwner();
+    const reopenedPanel = harness.panels.archive;
+    reopenedPanel.classes.delete('workspacePanelCollapsed');
+    reopenedPanel.btn.attrs['aria-expanded'] = 'true';
+    const collapsed = reopened.isWorkspacePanelCollapsed('archive');
+    reopened.applyWorkspacePanelCollapsed(reopenedPanel, 'archive', collapsed);
+    return (
+      collapsed === true &&
+      reopenedPanel.classes.has('workspacePanelCollapsed') &&
+      reopenedPanel.btn.attrs['aria-expanded'] === 'false'
+    );
+  }, () => 'reopen restores collapsed');
+
+  await check('C62', 'the Archive renderer restores persisted state on every render', () => {
+    // renderWorkspaceArchivePanel() must re-apply the state, otherwise the class
+    // set by a click is lost on the next Index rebuild.
+    const renderer = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceArchivePanel() {');
+    const applyIdx = renderer.indexOf('applyWorkspacePanelCollapsed(');
+    const badgeIdx = renderer.indexOf('view.archivedNotes.length');
+    const emptyIdx = renderer.indexOf('No archived notes');
+    return (
+      /isWorkspacePanelCollapsed\('archive'\)/.test(renderer) &&
+      applyIdx !== -1 &&
+      applyIdx < badgeIdx &&
+      applyIdx < emptyIdx
+    );
+  }, () => 'restore precedes every return');
+
+  await check('C63', 'hasWorkspacePanelMarkup recognizes the Archive panel', () => {
+    const owner = extractBlockFrom(MAIN_SOURCE, 'function hasWorkspacePanelMarkup(panelId) {');
+    return (
+      /panelId === 'archive'/.test(owner) &&
+      /workspaceArchivePanel/.test(owner) &&
+      /data-workspace-panel-toggle/.test(owner)
+    );
+  }, () => 'markup contract recognized');
+
+  await check('C64', 'the delegated click wiring reaches the Archive toggle', () => {
+    const handler = extractBlockFrom(
+      MAIN_SOURCE,
+      'function handleWorkspacePanelCollapseClick(event) {'
+    );
+    const wiring = extractBlockFrom(MAIN_SOURCE, 'function wireWorkspacePanelCollapses() {');
+    return (
+      /data-workspace-panel-toggle/.test(handler) &&
+      /toggleWorkspacePanel\(panelId\)/.test(handler) &&
+      /addEventListener\('click', handleWorkspacePanelCollapseClick\)/.test(wiring)
+    );
+  }, () => 'delegated click intact');
+
+  await check('C65', 'collapse styling is generic, so Archive needs no special CSS', () =>
+    /\.workspacePanelCollapsed \.workspacePanelBody/.test(CSS_SOURCE) &&
+    /\.workspacePanelCollapsed \.workspacePanelChevron/.test(CSS_SOURCE) &&
+    !/#workspaceArchivePanel\.workspacePanelCollapsed/.test(CSS_SOURCE),
+  () => 'shared rules cover Archive');
+
+  group('Safety and non-touch (S45-S53)');
 
 const ACT4_SOURCES = MAIN_SOURCE + CONTROLLER_SOURCE + INDEX_HTML + CSS_SOURCE;
 

@@ -12,6 +12,85 @@
 
   var TOPICS = [
     {
+      id: 'journal-notes',
+      title: 'Notes, Knowledge, Pinned and Archive',
+      subtitle: 'The Notes Workspace format, its classifications, and how the views relate.',
+      html: t`<section class="helpSection">
+  <h2>Opening a Workspace</h2>
+  <ul>
+    <li>Choose the workspace <strong>root</strong> — the folder that contains <code>notes/</code>.</li>
+    <li>Do not select the <code>notes/</code> folder itself. The app looks for <code>notes/</code> inside the folder you choose.</li>
+    <li>A workspace that still uses the older <code>journals/</code> and <code>concepts/</code> folders is rejected rather than converted.</li>
+    <li>Migration is a manual conversion. Keep an untouched backup, and try the conversion on a copy first.</li>
+  </ul>
+</section>
+<section class="helpSection">
+  <h2>Notes</h2>
+  <ul>
+    <li>Every Markdown file inside <code>notes/</code> is a Note.</li>
+    <li>Notes shows every active Note, newest dated Notes first, with Undated Notes listed after the dated groups.</li>
+    <li>The H1 heading is the primary visual title. A Note with no H1 is shown by its filename.</li>
+    <li>The filename and folder path remain the physical identity; the H1 is presentation only.</li>
+    <li>Two Notes may share the same H1. They stay separate Notes, distinguished by their paths.</li>
+  </ul>
+  <code class="helpCode">workspace-root/
+  notes/
+    2026-09-28.md
+    Customer-Reference.md</code>
+</section>
+<section class="helpSection">
+  <h2>Knowledge</h2>
+  <ul>
+    <li>Knowledge is a filtered view over Notes, not a separate collection.</li>
+    <li>Adding <code>knowledge: true</code> to a Note's frontmatter places it in Knowledge.</li>
+    <li>The Note remains visible in Notes. Nothing is moved or duplicated on disk.</li>
+  </ul>
+  <code class="helpCode">---
+knowledge: true
+---</code>
+</section>
+<section class="helpSection">
+  <h2>Pinned</h2>
+  <ul>
+    <li><code>pinned: true</code> places the Note in the Pinned subsection.</li>
+    <li>A Pinned Note is not repeated in the dated or Undated subsection.</li>
+    <li>Pin changes the document you are editing. Save to write it to the file.</li>
+  </ul>
+</section>
+<section class="helpSection">
+  <h2>Archive</h2>
+  <ul>
+    <li><code>archived: true</code> removes the Note from the active views: Notes, Pinned and Knowledge.</li>
+    <li>The physical file stays in <code>notes/</code>. Archive is not deletion.</li>
+    <li>The Note is listed in Archive. Restore removes the archived classification.</li>
+    <li>Save is required, exactly as it is for the other actions.</li>
+  </ul>
+  <code class="helpCode">---
+archived: true
+---</code>
+</section>
+<section class="helpSection">
+  <h2>Today and New Note</h2>
+  <ul>
+    <li><strong>Today</strong> opens or creates <code>notes/YYYY-MM-DD.md</code> for the current date.</li>
+    <li>Pressing Today again on the same day reuses the same file; it does not create a duplicate.</li>
+    <li><strong>New Note</strong> creates a Note with a name you choose.</li>
+    <li>The date can be left empty to create an Undated Note.</li>
+    <li>Knowledge can be selected during creation.</li>
+    <li>If the filename already exists, creation is rejected and reported. An existing Note is never overwritten, and no numbered alternative is created for you.</li>
+  </ul>
+</section>
+<section class="helpSection">
+  <h2>Current Document versus Workspace</h2>
+  <ul>
+    <li><strong>Current Document</strong> represents the live contents of the document you are editing now.</li>
+    <li><strong>Workspace</strong> projections represent saved files.</li>
+    <li>An unsaved change to a title or a classification may not appear in the Workspace views until you Save.</li>
+    <li>Saving rebuilds the Workspace Index, and the views refresh from it.</li>
+  </ul>
+</section>`,
+    },
+    {
       id: 'mode-editor',
       title: 'Markdown Editor Reference',
       subtitle: 'Markdown syntax, mindmap structure, preview, images, tasks, links, code, and tables.',
@@ -89,18 +168,15 @@
     {
       id: 'mode-journal',
       title: 'Journal Workspace Reference',
-      subtitle: 'Open a local workspace for journals, concepts, search, and daily workflow.',
+      subtitle: 'Open a local workspace of Notes, search, and daily workflow.',
       html: t`<section class="helpSection">
   <h2>Open a workspace</h2>
-  <p>Open Workspace grants the app access to a local folder the first time.</p>
+  <p>Open Workspace grants the app access to a local folder the first time. Choose the workspace root — the folder that contains <code>notes/</code>. See Notes, Knowledge, Pinned and Archive for the full format.</p>
+  <button type="button" class="helpTopicLink" data-help-topic="journal-notes">Notes, Knowledge, Pinned and Archive</button>
 </section>
 <section class="helpSection">
-  <h2>Today</h2>
-  <p>Opens (or creates) today's journal entry.</p>
-</section>
-<section class="helpSection">
-  <h2>Journals</h2>
-  <p>Date-based Markdown notes for daily use.</p>
+  <h2>Notes</h2>
+  <p>Every Markdown file in <code>notes/</code> is a Note. Notes lists all active Notes. A Note is titled by its H1 where present; the filename and path remain its physical identity, and duplicate H1 values are supported.</p>
   <code class="helpCode"># 2026-09-11
 
 ## Notes
@@ -113,12 +189,12 @@
 - [ ] Confirm the next meeting</code>
 </section>
 <section class="helpSection">
-  <h2>Concepts</h2>
-  <p>Persistent knowledge pages with links between notes.</p>
-  <code class="helpCode">## Related Pages
-
-- [[Customer Name]]
-- [[Project Name]]</code>
+  <h2>Knowledge and Pinned</h2>
+  <p><code>knowledge: true</code> adds a Note to Knowledge; the Note stays visible in Notes and no file is moved. <code>pinned: true</code> places a Note in Pinned and keeps it out of the dated and Undated parts of Notes.</p>
+</section>
+<section class="helpSection">
+  <h2>Archive</h2>
+  <p><code>archived: true</code> removes a Note from the active views. The file stays in <code>notes/</code> and the Note appears in Archive until you Restore it. Archive is not deletion.</p>
 </section>
 <section class="helpSection">
   <h2>Search</h2>
@@ -155,10 +231,6 @@
   <h2>Reports</h2>
   <p>Generate structured Reports from the workspace.</p>
   <button type="button" class="helpTopicLink" data-help-topic="journal-reports">Reports</button>
-</section>
-<section class="helpSection">
-  <h2>Archive</h2>
-  <p>Archive keeps managed workspace records; prefer archive over deleting them.</p>
 </section>
 <section class="helpSection">
   <h2>Saving and Task lifecycle</h2>

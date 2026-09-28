@@ -1687,6 +1687,11 @@ const WORKSPACE_PANEL_DEFAULT_COLLAPSED = {
   tags: true,
   journals: false,
   concepts: false,
+  // ACT 6: the Archive panel persists under its own key, exactly like every
+  // other collapsible Workspace panel. Without this entry the persisted payload
+  // for "archive" would be dropped on read and the panel could never restore a
+  // collapsed state across a reopen.
+  archive: false,
   projects: false,
 };
 
@@ -1768,6 +1773,20 @@ function hasWorkspacePanelMarkup(panelId) {
         .getElementById('workspaceConceptsPanel')
         ?.querySelector?.('#workspaceConceptsList') &&
       document.getElementById('workspaceConceptsPanel')?.querySelector?.('#workspaceConceptsBadge')
+    );
+  }
+
+  // ACT 6: the Archive panel uses the identical header/toggle/badge/list
+  // contract as the Notes (journals) and Knowledge (concepts) panels, so it
+  // must be recognized here exactly as they are.
+  if (panelId === 'archive') {
+    return !!(
+      document.getElementById('workspaceArchivePanel') &&
+      document.getElementById('workspaceArchivePanel')?.querySelector?.('#workspaceArchiveList') &&
+      document.getElementById('workspaceArchivePanel')?.querySelector?.('#workspaceArchiveBadge') &&
+      document
+        .getElementById('workspaceArchivePanel')
+        ?.querySelector?.('[data-workspace-panel-toggle]')
     );
   }
 
@@ -2011,11 +2030,16 @@ function toggleWorkspacePanel(panelId) {
                 ? document.getElementById('workspaceJournalsPanel')
                 : panelId === 'concepts'
                   ? document.getElementById('workspaceConceptsPanel')
-                  : panelId === 'projects'
-                    ? document.getElementById('workspaceProjectsPanel')
-                    : panelId === 'report'
-                      ? document.getElementById('workspaceReportPanel')
-                      : null;
+                  : // ACT 6: without this mapping, clicking the Archive header
+                    // resolved to null and toggleWorkspacePanel() returned before
+                    // touching any state, so the panel could never collapse.
+                    panelId === 'archive'
+                    ? document.getElementById('workspaceArchivePanel')
+                    : panelId === 'projects'
+                      ? document.getElementById('workspaceProjectsPanel')
+                      : panelId === 'report'
+                        ? document.getElementById('workspaceReportPanel')
+                        : null;
 
   if (!panelEl) return;
 
@@ -5794,6 +5818,17 @@ function renderWorkspaceArchivePanel() {
   if (!container) {
     log?.('Workspace Archive: render skipped; container missing');
     return;
+  }
+
+  // ACT 6: re-apply the persisted collapsed state on every render. This mirrors
+  // the Notes/Knowledge panels, whose owner applies isWorkspacePanelCollapsed()
+  // after each sidebar refresh. Without it the class set by a click would be
+  // lost on the next Index rebuild, and the panel would silently spring open.
+  // Every return path below runs after this, so the state is restored whether the
+  // Archive is empty or populated.
+  const archivePanel = document.getElementById('workspaceArchivePanel');
+  if (archivePanel) {
+    applyWorkspacePanelCollapsed(archivePanel, 'archive', isWorkspacePanelCollapsed('archive'));
   }
 
   const view = buildWorkspaceNotesViewModel();

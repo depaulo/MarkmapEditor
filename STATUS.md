@@ -1,5 +1,45 @@
 # MarkMapJournal Release Status
 
+## 0.1. Notes Workspace Foundation — Release 0.6.2
+
+- **Release**: `0.6.2` — Notes Workspace Foundation.
+- **productVersion**: `0.6.2`
+- **cacheIdentity / APP_VERSION**: `markmap-journal-pwa-0.6.2-notes-workspace-foundation`
+  — single authoritative owner `sw.js`; mirrored by `js/release/release.js`;
+  parity enforced by `scripts/release-parity.cjs`.
+- **Accepted architecture**: see `docs/architecture/MarkmapEditor_Notes_Knowledge_Workspace_1_0_PLAN.md`.
+- **Migration guidance**: `docs/WORKSPACE_FORMAT.md`.
+- **Status**: implementation accepted. Browser acceptance of the Archive
+  panel collapse correction is the only open item before this release is
+  published.
+
+### Accepted boundaries (intentional, not gaps)
+
+| Area | Boundary |
+| --- | --- |
+| Legacy migration | No automatic migration of `journals/` / `concepts/` Workspaces. Legacy Workspaces are rejected. |
+| Filename rename | No Rename File workflow. |
+| Wiki Links | No automatic link rewriting. |
+| Assets | No non-Markdown asset browser. |
+| Notes calendar | No monthly calendar. |
+| Reminders | Not implemented. |
+| Shared attributes | No shared `@` layer, no autocomplete. |
+| Diagrams | No Mermaid / Graph completion. |
+| Slides | No Reveal.js completion. |
+| Draw.io | No internal architecture redesign. |
+| Journal mode | Application context mode is still internally named `journal`; full removal deferred. |
+
+### Deferred next-cycle work
+
+Rename File and automatic Wiki Link rewriting, monthly calendar, extraction to
+Knowledge, non-Markdown assets browser, Reminders, referencable Highlights, the
+shared `@` attribute layer with autocomplete, Mermaid/Graph, Reveal.js
+completion, Draw.io internal redesign, major visual redesign, and a full
+people/assignment system. See `NEXT_CYCLE_PLAN.md` for the source-proven
+sequencing.
+
+---
+
 ## 0. Notes Architecture Gate 0 (2026-09-25)
 
 - **Gate 0**: ACCEPTED with final sequencing amendments (source-proven architecture audit, `development` @ `a3537eb`).
@@ -12,13 +52,14 @@
 
 ## 1. Current Release / Checkpoint
 - **Branch**: `development`
-- **Documentation HEAD**: `4311a1b` (Notes architecture — ACT 0 plan adoption)
-- **productVersion**: `0.6.1`
-- **cacheIdentity / APP_VERSION**: `markmap-journal-pwa-0.6.1-foundation-closure`
+- **productVersion**: `0.6.2`
+- **cacheIdentity / APP_VERSION**: `markmap-journal-pwa-0.6.2-notes-workspace-foundation`
   — single authoritative owner `sw.js`; mirrored by `js/release/release.js`;
   parity enforced by `scripts/release-parity.cjs`.
-- **Status**: 0.6.1 Foundation closure accepted. Notes Architecture Gate 0
-  accepted; ACT 0 and ACT 0.1 documentation closed. The Screen Layout (v62) and
+- **Status**: 0.6.2 Notes Workspace Foundation. The Notes architecture is
+  accepted. This is the first release whose cache identity changes to carry the
+  Notes implementation, so an installed 0.6.1 client follows the existing
+  user-controlled Update Ready workflow. The Screen Layout (v62) and
   v58 checkpoints recorded below are **historical** and no longer describe the
   current release.
 

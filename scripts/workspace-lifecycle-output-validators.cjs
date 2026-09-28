@@ -1054,9 +1054,13 @@ function resetHarness() {
       !/currentDocumentReport/.test(DICT_SOURCE + QUICK_SOURCE)],
     ['X59', 'no Project syntax change', () =>
       !/^## Project:/m.test(read('js', 'workspace', 'workspace-parser.js'))],
-    ['X60', 'no version/cache/SW change', () => {
+    // ACT 2B froze the version, but the 0.6.2 Notes Workspace Foundation
+    // release closure is an authorized, completed boundary. This now asserts
+    // parity HOLDS at the accepted current identity, rather than asserting the
+    // identity never changes.
+    ['X60', 'release parity holds at the current accepted identity', () => {
       const parity = runNode('scripts/release-parity.cjs');
-      return /RELEASE PARITY OK/.test(parity) && /0\.6\.1/.test(parity);
+      return /RELEASE PARITY OK/.test(parity) && /0\.6\.2/.test(parity);
     }],
   ];
 

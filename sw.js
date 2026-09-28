@@ -11,14 +11,13 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 
 // APP_VERSION is the single authoritative release/version owner. It names the
 // installed cache identity (APP_CACHE / RUNTIME_CACHE) for this release
-// boundary: MarkmapEditor 0.6.1 — Foundation closure (accepted offline
-// foundation with 89 deterministic dependencies in six groups, user-controlled
-// Update Ready workflow, safer ModeSession restoration, bulk Task
-// reconciliation, Update Ready dark mode, and inline Markdown inside HTML
-// Preview list items). All changed assets are
-// deterministic precache entries, so a new identity ensures installed clients
-// receive the complete accepted package.
-const APP_VERSION = 'markmap-journal-pwa-0.6.1-foundation-closure';
+// boundary: MarkmapEditor 0.6.2 — Notes Workspace Foundation. This is the first
+// release whose cache identity changes to carry the accepted Notes Workspace
+// implementation, so an installed 0.6.1 client will discover a new worker and
+// follow the existing user-controlled Update Ready contract. All changed assets
+// are deterministic precache entries, so a new identity ensures installed
+// clients receive the complete accepted package.
+const APP_VERSION = 'markmap-journal-pwa-0.6.2-notes-workspace-foundation';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.

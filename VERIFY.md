@@ -519,7 +519,135 @@ Do not mark these PASS until executed on the deployed origin.
 
 ---
 
-## MarkmapEditor 0.6.1 foundation closure verification
+## MarkmapEditor 0.6.2 Notes Workspace Foundation verification
+
+Release identity: `markmap-journal-pwa-0.6.2-notes-workspace-foundation`
+(product version `0.6.2`, owned by `js/release/release.js` and `sw.js`).
+
+Scope note: the `PENDING` blocks in the 0.6.1 section below are historical
+records for that superseded package. They are not acceptance criteria for 0.6.2.
+
+### N1. Version and Service Worker identity
+
+- [x] `js/release/release.js` `productVersion = 0.6.2`,
+  `cacheIdentity = markmap-journal-pwa-0.6.2-notes-workspace-foundation`.
+- [x] `sw.js` `APP_VERSION` is identical; the superseded
+  `markmap-journal-pwa-0.6.1-foundation-closure` is no longer the installed
+  identity.
+- [x] `scripts/release-parity.cjs` green: identity matches across both owners and
+  the cache identity embeds the product version.
+- [x] `scripts/dependency-cache-validators.cjs` and
+  `scripts/update-ready-validators.cjs` green at the new identity.
+- [x] The user-controlled Update Ready contract is preserved: no unconditional
+  forced reload, defer-update retained, `controllerchange` handling retained,
+  unsaved-work guard retained, Release Notes shown automatically once after
+  activation and permanently available from the existing button.
+- [x] No legacy Workspace folder, user file, or generated migration archive is
+  present in the precache.
+
+### N2. Notes Workspace static validation
+
+- [x] `scripts/workspace-detection-validators.cjs` 185/185 — strict format
+  detection; a legacy `journals/`+`concepts/` Workspace is still rejected.
+- [x] `scripts/workspace-storage-validators.cjs` 199/199.
+- [x] `scripts/workspace-index-notes-validators.cjs` 58/58.
+- [x] `scripts/workspace-discovery-consumers-validators.cjs` 52/52 — includes
+  X49–X52, the Navigation History controller fixtures proving Back/Forward
+  resolve `notes/` paths through the controller resolver.
+- [x] `scripts/workspace-task-consumers-validators.cjs` 62/62 — includes the
+  Task Review single-escape correction.
+- [x] `scripts/workspace-lifecycle-output-validators.cjs` 67/67.
+- [x] `scripts/workspace-today-index-validators.cjs` 31/31.
+- [x] `scripts/current-document-scope-validators.cjs` 41/41.
+- [x] `scripts/workspace-notes-sidebar-validators.cjs` 65/65 — includes C54–C65,
+  the Archive panel collapse regression fixtures.
+- [x] `scripts/workspace-note-creation-validators.cjs` 35/35.
+- [x] `scripts/workspace-note-metadata-validators.cjs` 42/42.
+- [x] `scripts/release-notes-validators.cjs` green — 0.6.2 entry is newest,
+  0.6.1 and 0.6.0 retained beneath it, activation example present, and the entry
+  does not advertise deferred features as shipped.
+
+### N3. Archive panel collapse correction (this release)
+
+The Archive header click was a silent no-op: `toggleWorkspacePanel()` had no
+`archive` branch, so the click resolved to `null` and returned before touching
+any state. The persisted-collapse default had no `archive` key, and the Archive
+renderer never re-applied the persisted state, so a rebuild would have discarded
+it. All three gaps are corrected against the existing Notes and Knowledge
+owners; no CSS change and no projection or metadata change was required.
+
+- [x] `scripts/workspace-notes-sidebar-validators.cjs` C54–C65 green, executed
+  against the real shipped owners.
+- [x] Mutation-tested: reverting the three corrections fails C55, C56, C58, C59,
+  C60, C61 and C62 (exit 1), so the fixtures are not vacuous.
+- [x] **Browser acceptance COMPLETE** (MarkmapEditor 0.6.2, localhost, real
+  browser). Observed:
+  - a valid `notes/` Workspace opened;
+  - Archive rendered one archived Note;
+  - a real Archive header click collapsed the panel;
+  - a second click expanded the panel;
+  - the runtime logged
+    `Workspace Panels: toggled archive collapsed=true` and then
+    `Workspace Panels: toggled archive collapsed=false`;
+  - Workspace counts remained stable throughout
+    (`files=3, notes=3, active=2, pinned=1, archived=1`);
+  - no Archive-collapse runtime error occurred.
+  The real click path is accepted.
+
+### N5. Post-publication published-laptop checks (retained, not commit blockers)
+
+These remain to be exercised on the published application. They do not block
+this commit: the real Archive click path is accepted (§N3) and C54–C65 execute
+both persistence contracts, so these are confirmation of published behaviour
+rather than unknown risk.
+
+- [ ] An existing 0.6.1 PWA detects 0.6.2.
+- [ ] Update Ready supports both Defer (stay on 0.6.1) and Accept.
+- [ ] `controllerchange` activates 0.6.2 and the application reloads.
+- [ ] 0.6.2 Release Notes appears exactly once after activation; the permanent
+      Release Notes button still works; a second normal reload does not reopen it.
+- [ ] Archive collapse persists after an Index rebuild.
+- [ ] Archive collapse persists after a Workspace reopen.
+- [ ] A legacy Workspace is rejected without modification, and a persisted legacy
+      last-active path (`concepts/CommScope.md`) is not reopened, moved or
+      modified, and `notes/` is not created inside it without explicit selection
+      and confirmation.
+- [ ] The migrated Workspace copy opens successfully.
+
+### N4. Release 0.6.2 browser acceptance (owner device)
+
+Static validation cannot substitute for device acceptance. The Archive collapse
+gate is satisfied (§N3). The following were additionally exercised during the
+same 0.6.2 validation pass; items still marked `[ ]` below are retained in §N5.
+
+- [x] A valid `notes/` Workspace opens with no runtime loading error; the
+  application reports version 0.6.2. (Observed during the §N3 acceptance pass;
+  the full clean/incognito load, legacy rejection, and the Notes / Knowledge /
+  Archive / Pinned render pass are retained in §N5.)
+- [ ] Existing 0.6.1 PWA discovers the new worker; Update Ready appears; Defer
+  keeps 0.6.1 active; Accept activates 0.6.2; the app reloads; 0.6.2 Release
+  Notes appears once; the permanent button still works; a second normal reload
+  does not reopen the same Release Notes. → §N5
+- [ ] Product smoke: Today, New Note, Save, Notes, Knowledge, Pin, Archive,
+  Restore, Back, Forward, Search, Wiki Links, Task Review, Task Board, Projects,
+  Quick Report, Draw.io entry. → §N5
+- [x] Archive collapses and expands on a real click, with stable Workspace
+  counts and no runtime error. → §N3
+- [ ] Migrated Workspace copy: 62 Notes indexed, 59 active, 41 Knowledge,
+  3 archived; Knowledge Notes also appear in Notes; archived Notes appear in
+  neither active Notes nor Knowledge; Back and Forward return `status=opened`;
+  no file moved, renamed or duplicated. → §N5
+- [ ] Legacy Workspace safety: a persisted `concepts/CommScope.md` last-active
+  path is not inferred to be a Note, reopened, moved or modified, and `notes/`
+  is not created inside that legacy Workspace without explicit selection and
+  confirmation. → §N5
+
+The counts above describe one tested migrated copy only and are not general
+application requirements.
+
+---
+
+## MarkmapEditor 0.6.1 foundation closure verification (historical)
 
 Release identity: `markmap-journal-pwa-0.6.1-foundation-closure`
 (product version `0.6.1`, owned by `js/release/release.js` and `sw.js`).

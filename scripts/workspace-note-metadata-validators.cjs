@@ -38,7 +38,7 @@ const CONTROLLER_SOURCE = read('js', 'workspace', 'workspace-controller.js');
 const TASK_REVIEW_SOURCE = read('js', 'workspace', 'task-review.js');
 const INDEX_HTML = read('index.html');
 
-const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.1-foundation-closure';
+const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.2-notes-workspace-foundation';
 
 const results = [];
 function record(id, name, ok, detail) {
@@ -589,7 +589,7 @@ const O = new Function([...OWNER_EXTRACTS, OWNER_API].join('\n\n'))();
       /WORKSPACE NOTE CREATION VALIDATORS: 35 passed, 0 failed/.test(
         runNode('scripts/workspace-note-creation-validators.cjs'))],
     ['X40', 'ACT 4 Sidebar remains green', () =>
-      /WORKSPACE NOTES SIDEBAR VALIDATORS: 53 passed, 0 failed/.test(
+      /WORKSPACE NOTES SIDEBAR VALIDATORS: 65 passed, 0 failed/.test(
         runNode('scripts/workspace-notes-sidebar-validators.cjs'))],
     ['X41', 'ACT 3 scope remains green', () =>
       /CURRENT DOCUMENT SCOPE VALIDATORS: 41 passed, 0 failed/.test(

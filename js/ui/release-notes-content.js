@@ -17,6 +17,96 @@
   //   limitations?, helpTopic? (links to a Help topic ID).
   const RELEASES = Object.freeze([
     {
+      version: '0.6.2',
+      title: 'MarkmapEditor 0.6.2: Notes Workspace Foundation',
+      summary: t`Version 0.6.2 introduces the new Workspace format. Every Markdown file
+inside a workspace's notes/ folder is a Note, and Notes, Knowledge, Pinned and
+Archive are views over those same files. Existing Tasks, Projects, Search, Tags,
+Wiki Links, Related, Reports and Draw.io continue to work.`,
+      expanded: true,
+      changes: [
+        {
+          group: 'The new Workspace format',
+          items: [
+            'Introduced the new notes/ Workspace format. Open the workspace root; the root contains notes/.',
+            'Unified Journals and Concepts as Markdown Notes in a single notes/ folder.',
+            'Added the Notes, Knowledge, Pinned and Archive views. These are views over your existing files, not copies of them.',
+            'A Note is titled by its H1 heading where present, while its filename and folder path remain its physical identity. Two Notes may share the same H1.',
+          ],
+        },
+        {
+          group: 'Creating and organizing Notes',
+          items: [
+            'Added Today, which opens or creates notes/YYYY-MM-DD.md. Pressing Today again on the same day reuses the same file instead of creating a second one.',
+            'Added New Note, which creates a named Note. Its date can be left empty for an Undated Note, and it can be created as a Knowledge Note.',
+            'If a chosen filename already exists, creation is rejected and reported; an existing Note is never overwritten.',
+            'Added the Pin, Unpin, Add to Knowledge, Remove from Knowledge, Archive and Restore actions for the active Note.',
+          ],
+        },
+        {
+          group: 'How the views relate',
+          items: [
+            'Knowledge is a filtered view over Notes. A Note with knowledge: true also appears in Knowledge and remains visible in Notes.',
+            'Pinned is an independent classification. A pinned Note is listed in Pinned and is not repeated in the dated or Undated part of Notes.',
+            'Archive is reversible metadata, not deletion. An archived Note leaves the active views, still exists as a file in notes/, and appears in Archive until you Restore it.',
+            'The Pin, Knowledge and Archive actions change the document you are editing. Save to write them to the file.',
+          ],
+        },
+        {
+          group: 'Corrected in this release',
+          items: [
+            'Corrected Note navigation: Back and Forward now reopen the Note you came from.',
+            'Corrected Task Review display escaping so Task text is shown exactly as written.',
+            'Corrected the Archive panel so it collapses and expands like the other Workspace panels, and remembers that choice.',
+          ],
+        },
+        {
+          group: 'Current Document and Workspace',
+          items: [
+            'Current Document shows the document you are editing right now. Workspace views show saved files.',
+            'An unsaved title or classification change may not appear in the Workspace views until you Save. Saving rebuilds the Workspace Index.',
+          ],
+        },
+        {
+          group: 'What stayed the same',
+          items: [
+            'Markdown remains the canonical source; Markmap, HTML Preview, Notes, Knowledge, Archive, Reports and Draw.io are derived from it.',
+            'Tasks, Projects, Search, Tags, Wiki Links, Related, Reports and Draw.io continue to work against the same Notes.',
+            'A physical Save remains the owner of every metadata and Task lifecycle change.',
+          ],
+        },
+      ],
+      tryIt: t`A small workspace looks like this:
+
+workspace-root/
+  notes/
+    2026-09-28.md
+    Customer-Reference.md
+
+A Knowledge Note:
+
+\`\`\`
+---
+knowledge: true
+---
+\`\`\`
+
+An archived Note:
+
+\`\`\`
+---
+archived: true
+---
+\`\`\``,
+      uiPath: 'Journal → Open Workspace → choose the workspace root → Notes',
+      limitations: [
+        'This version does not automatically migrate a workspace that still uses the older journals/ and concepts/ folders. A legacy workspace is rejected; migration is a manual conversion.',
+        'Test the conversion on a copy of your workspace before applying it to the original.',
+        'Archive hides a Note from the active views; it does not delete the file.',
+      ],
+      helpTopic: 'journal-notes',
+    },
+    {
       version: '0.6.1',
       title: 'MarkmapEditor 0.6.1: Foundation reliability and workflow polish',
       summary: t`Version 0.6.1 closes the 0.6.x foundation work. After a successful

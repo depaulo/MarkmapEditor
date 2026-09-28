@@ -53,7 +53,7 @@ const SW_SOURCE = fs.readFileSync(SW_PATH, 'utf8');
 const INDEX_SOURCE = fs.readFileSync(INDEX_PATH, 'utf8');
 
 // ACT 1B must not change the release identity or the offline shell.
-const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.1-foundation-closure';
+const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.2-notes-workspace-foundation';
 
 const results = [];
 function check(id, name, ok, detail) {
