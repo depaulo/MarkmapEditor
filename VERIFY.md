@@ -32,6 +32,55 @@ Workspace-Index-disclosure or pane-layout acceptance. None of those packages has
 
 ---
 
+## 0.0. ACT 2A / ACT 2A.1 Task Stabilization checkpoint (performed)
+
+ACT 2A is CLOSED. This section records the final real-device acceptance. It is
+**not** a Task Board priority-selector acceptance — no such UI was delivered.
+
+**Scope verified on S22/DeX (disposable Workspace Note):**
+
+1. exact source Task located for an explicit priority mutation;
+2. **P2 written successfully** to the intended occurrence;
+3. **Clear removed the priority successfully**;
+4. physical Save succeeded in both directions;
+5. Save baseline refreshed **only after** Save success;
+6. Workspace Index rebuilt;
+7. Task Review refreshed;
+8. Task Board remained operational;
+9. **both priority-only Saves reported `changed=false opened=0 completed=0 reopened=0 ambiguous=0`**;
+10. no physical data loss was observed.
+
+**Static proof at the committed HEAD:**
+
+- `scripts/workspace-task-contract-validators.cjs` — 99 fixtures, 0 failed,
+  including A01–A25 (priority/Save matching contract) and five mutation controls
+  A2A1-M1–M5.
+- `scripts/act2a-checkpoint-harness.cjs` — 56 fixtures, 0 failed.
+- Task Lifecycle built-in validator — 101/101, 0 failed.
+- Task Board built-in validator (with required DOM stubs) — 111/111, 0 failed.
+- `scripts/task-reconcile-validators.cjs` — 68/0.
+- `scripts/workspace-task-consumers-validators.cjs` — 62/0.
+- `scripts/current-document-scope-validators.cjs` — 41/0.
+- `scripts/workspace-lifecycle-output-validators.cjs` — 67/0.
+- `scripts/workspace-index-notes-validators.cjs` — 58/0.
+- `scripts/workspace-sidebar-visual-validators.cjs` (ACT V0) — 50/0.
+- `scripts/dependency-cache-validators.cjs` — 284/0.
+- `scripts/release-parity.cjs` — OK, normal **and** `RELEASE_PARITY_STRICT_SW=1`;
+  release identity remains `0.6.2`, unchanged by Package 2.
+
+**Recorded non-blocking observation:** an intermediate refresh briefly reported
+`tasks=0` and `tags=0` before the final Save rebuild restored `tasks=1` and
+`tags=3`. No persistent data loss and no incorrect final Index were observed.
+**No runtime change was made for this.** Any future correction requires a focused
+reproduction proving persistent or user-visible impact.
+
+**Not claimed here:** ACT 2B has not begun and is not authorized. No Task Board
+priority selector, Board redesign, automatic priority sorting, Active or
+Workspace Index cards, version/cache change, or `main` promotion is part of
+Package 2.
+
+---
+
 ## 1. Diagnostics & Runtime Checks
 
 ### A. Host Diagnostic Output
