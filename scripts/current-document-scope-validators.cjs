@@ -233,6 +233,11 @@ globalThis.WORKSPACE_INDEX_STATE = IDX;
     'function parseVisibleHeaderFields(text) {',
   ];
 
+  // ACT 3B — the shared Wiki Link grammar owner must exist before any function
+  // extracted from main.js runs, exactly as script-loader orders it. This is
+  // load-order fidelity, not a detection shortcut.
+  (0, eval)(fs.readFileSync(path.join(ROOT, 'js', 'links', 'wiki-link-grammar.js'), 'utf8'));
+
   (0, eval)(
     [
       extractBlockFrom(WORKSPACE_CONTROLLER_SOURCE, 'function normalizeWorkspaceKindForCompare('),

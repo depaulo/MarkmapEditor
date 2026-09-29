@@ -92,6 +92,14 @@ function appendStylesheet(href) {
   appendStylesheet('./css/release-notes.css');
   appendStylesheet('./css/contextual-help.css');
 
+  // ACT 3B — SHARED WIKI LINK GRAMMAR. This is the single authoritative
+  // extraction owner and MUST be appended before main.js: main.js carries
+  // parseConceptLinks and wikiExpand, wiki-links.js loads later still, and the
+  // CodeMirror bootstrap is a deferred module that evaluates last. Loading it
+  // here is what lets all four consumers share one grammar without any of them
+  // needing a duplicate regex fallback.
+  appendScript('./js/links/wiki-link-grammar.js');
+
   appendScript('./js/main.js', {
     onload: function () {
       // main entry notifies other modules that UI actions can be wired

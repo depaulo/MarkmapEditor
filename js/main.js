@@ -145,41 +145,37 @@ function stripLeadingFrontmatterForRender(markdown) {
 // Expands [[Wiki Link]] tokens inside one leaf text run for HTML Preview.
 // Extracted verbatim from the former inline text renderer body so the leaf path
 // stays a small testable helper. Syntax, span class, data attribute, title
-// attribute, alias handling and entity escaping are unchanged.
+// attribute and entity escaping are unchanged.
+//
+// ACT 3B: the link GRAMMAR is no longer local. It comes from the single shared
+// owner MME_WIKI_LINK_GRAMMAR, which script-loader appends before main.js
+// precisely so this call site can reach it. No fallback regex is kept: a second
+// grammar is what ACT 3B exists to remove.
 function wikiExpand(str) {
   const value = String(str ?? '');
-  const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
+  const grammar = globalThis.MME_WIKI_LINK_GRAMMAR;
+
+  // Explicit not-ready rather than a silent empty render: if the grammar owner
+  // is ever missing, the text is returned unchanged instead of pretending there
+  // are no links.
+  if (!grammar || typeof grammar.extractWikiLinks !== 'function') return value;
+
+  const links = grammar.extractWikiLinks(value);
+  if (!links.length) return escapeHtml(value) || value;
 
   let result = '';
   let lastIndex = 0;
-  let match;
 
-  while ((match = WIKI_RE.exec(value)) !== null) {
-    // Add text before this match
-    if (match.index > lastIndex) {
-      result += escapeHtml(value.slice(lastIndex, match.index));
+  for (const link of links) {
+    if (link.start > lastIndex) {
+      result += escapeHtml(value.slice(lastIndex, link.start));
     }
-
-    const inner = match[1];
-    const pipeIndex = inner.indexOf('|');
-    let target = pipeIndex !== -1 ? inner.slice(0, pipeIndex) : inner;
-    const label = pipeIndex !== -1 ? inner.slice(pipeIndex + 1) : target;
-
-    target = target.trim();
-    const displayLabel = label.trim();
-
-    if (target) {
-      // Escape attributes
-      const escapedTarget = escapeHtml(target);
-      const escapedLabel = escapeHtml(displayLabel);
-
-      result += `<span class="wikiLink" data-wiki-target="${escapedTarget}" title="Wiki link: ${escapedTarget}">${escapedLabel}</span>`;
-    }
-
-    lastIndex = match.index + match[0].length;
+    const escapedTarget = escapeHtml(link.target);
+    const displayLabel = escapeHtml(link.alias || link.target);
+    result += `<span class="wikiLink" data-wiki-target="${escapedTarget}" title="Wiki link: ${escapedTarget}">${displayLabel}</span>`;
+    lastIndex = link.end;
   }
 
-  // Add remaining text
   if (lastIndex < value.length) {
     result += escapeHtml(value.slice(lastIndex));
   }
@@ -975,20 +971,27 @@ function parseConceptLinks(text) {
   const source = normalizeParserText(text);
   const links = new Set();
 
-  const wikiRe = /\[\[([^\]]+)\]\]/g;
-  let match;
+  // ACT 3B — the ONE shared grammar owner. The former local regex here used a
+  // negated class that allowed ']' and newlines, so it also matched MULTI-LINE
+  // links and NESTED-LOOKING brackets; the other six extraction sites excluded
+  // them. The canonical behavior wins, so a link never spans a line break and a
+  // target may not contain brackets. The legacy bare `concepts/Path.md` form is
+  // retained below ONLY as a read-time alias for stale link spellings — it is
+  // never rewritten and it adds no second Wiki Link grammar.
+  const grammar = globalThis.MME_WIKI_LINK_GRAMMAR;
 
-  while ((match = wikiRe.exec(source))) {
-    const name = normalizeConceptName(match[1]);
-
-    if (name) links.add(name);
+  if (grammar && typeof grammar.extractWikiLinks === 'function') {
+    for (const link of grammar.extractWikiLinks(source)) {
+      const name = normalizeConceptName(link.target);
+      if (name) links.add(name);
+    }
   }
 
   const pathRe = /(?:^|\s)(?:\.\/)?concepts\/([^\s)\]]+?\.md)\b/g;
 
+  let match;
   while ((match = pathRe.exec(source))) {
     const name = normalizeConceptName(match[1]);
-
     if (name) links.add(name);
   }
 

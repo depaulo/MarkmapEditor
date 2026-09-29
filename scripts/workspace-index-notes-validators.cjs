@@ -37,11 +37,17 @@ const { pathToFileURL } = require('url');
 
 const ROOT = path.resolve(__dirname, '..');
 const MAIN_PATH = path.join(ROOT, 'js', 'main.js');
+// ACT 3B — the shared Wiki Link grammar owner must be evaluated before any
+// main.js helper, exactly as script-loader orders it.
+const GRAMMAR_PATH = path.join(ROOT, 'js', 'links', 'wiki-link-grammar.js');
 const PARSER_PATH = path.join(ROOT, 'js', 'workspace', 'workspace-parser.js');
 const SCANNER_PATH = path.join(ROOT, 'js', 'workspace', 'workspace-scanner.js');
 const CONTROLLER_PATH = path.join(ROOT, 'js', 'workspace', 'workspace-controller.js');
 
 const MAIN_SOURCE = fs.readFileSync(MAIN_PATH, 'utf8');
+const GRAMMAR_SOURCE = fs.readFileSync(GRAMMAR_PATH, 'utf8');
+// ACT 3B — grammar owner first, mirroring script-loader load order.
+(0, eval)(GRAMMAR_SOURCE);
 const PARSER_SOURCE = fs.readFileSync(PARSER_PATH, 'utf8');
 const CONTROLLER_SOURCE = fs.readFileSync(CONTROLLER_PATH, 'utf8');
 

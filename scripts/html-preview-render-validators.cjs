@@ -31,6 +31,15 @@ const https = require('https');
 
 const ROOT = path.resolve(__dirname, '..');
 const MAIN_JS_PATH = path.join(ROOT, 'js', 'main.js');
+// ACT 3B — the shared Wiki Link grammar owner must be evaluated before the
+// extracted main.js helpers (wikiExpand), exactly as script-loader orders it.
+const GRAMMAR_PATH = path.join(ROOT, 'js', 'links', 'wiki-link-grammar.js');
+// ACT 3B — evaluate the grammar owner into the real global scope BEFORE the
+// extracted main.js helpers run. The harness builds its renderer in a
+// global-scope `new Function`, so wikiExpand resolves the same global the app
+// does. Without this, extraction correctly yields no links (harness artifact).
+const GRAMMAR_SOURCE = fs.readFileSync(GRAMMAR_PATH, 'utf8');
+(0, eval)(GRAMMAR_SOURCE);
 const INDEX_HTML_PATH = path.join(ROOT, 'index.html');
 const SW_JS_PATH = path.join(ROOT, 'sw.js');
 // One-for-one pinned application URL: index.html and the sw.js deterministic

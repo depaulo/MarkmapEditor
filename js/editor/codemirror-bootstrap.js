@@ -496,28 +496,16 @@ function createWikiLinkDecorationExtension() {
   }
 
   function parseWikiLinksFromText(text) {
-    if (!text || typeof text !== 'string') return [];
-    const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
-    const results = [];
-    let match;
-    while ((match = WIKI_RE.exec(text)) !== null) {
-      const raw = match[0];
-      const inner = match[1];
-      const from = match.index;
-      const to = from + raw.length;
-      let target = inner;
-      let label = '';
-      const pipeIndex = inner.indexOf('|');
-      if (pipeIndex !== -1) {
-        target = inner.slice(0, pipeIndex);
-        label = inner.slice(pipeIndex + 1);
-      }
-      target = target.trim();
-      label = label.trim();
-      if (!target) continue;
-      results.push({ raw, target, label: label || target, from, to });
-    }
-    return results;
+    // ACT 3B — delegates to the single shared grammar owner.
+    const grammar = globalThis.MME_WIKI_LINK_GRAMMAR;
+    if (!grammar || typeof grammar.extractWikiLinks !== 'function') return [];
+    return grammar.extractWikiLinks(text).map((link) => ({
+      raw: link.raw,
+      target: link.target,
+      label: link.alias || link.target,
+      from: link.start,
+      to: link.end,
+    }));
   }
 
   function resolveTargetStatus(target) {
@@ -543,27 +531,22 @@ function createWikiLinkDecorationExtension() {
     const widgets = [];
     const docText = state.doc.toString();
 
-    // Occurrences come from the live buffer, so an unsaved link is decorated
-    // from the same canonical owner rather than from a stale Index key set.
-    const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
-    let match;
-    while ((match = WIKI_RE.exec(docText)) !== null) {
-      const inner = match[1];
-      const pipeIndex = inner.indexOf('|');
-      let target = pipeIndex !== -1 ? inner.slice(0, pipeIndex) : inner;
-      target = target.trim();
-      if (!target) continue;
+    // Occurrences come from the live buffer via the SHARED grammar owner, so an
+    // unsaved link is decorated by the same extractor every other consumer uses.
+    const grammar = globalThis.MME_WIKI_LINK_GRAMMAR;
+    if (!grammar || typeof grammar.extractWikiLinks !== 'function') {
+      return Decoration.none;
+    }
 
-      const from = match.index;
-      const to = from + match[0].length;
-      const status = resolveTargetStatus(target);
+    for (const link of grammar.extractWikiLinks(docText)) {
+      const status = resolveTargetStatus(link.target);
 
       let className = 'wikiLink';
       if (status === 'missing') className = 'wikiLink wikiLinkMissing';
       else if (status === 'ambiguous') className = 'wikiLink wikiLinkAmbiguous';
 
       widgets.push(
-        Decoration.mark({ attributes: { class: className } }).range(from, to)
+        Decoration.mark({ attributes: { class: className } }).range(link.start, link.end)
       );
     }
 
@@ -622,18 +605,14 @@ function createWikiLinkDecorationExtension() {
       const pos = wikiLinkView.posAtCoords(coords);
       if (pos === null) return false;
 
-      // Get current document text and find wiki links
+      // Get current document text and find wiki links via the SHARED grammar.
       const docText = wikiLinkView.state.doc.toString();
-      const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
-      let match;
-      while ((match = WIKI_RE.exec(docText)) !== null) {
-        const from = match.index;
-        const to = from + match[0].length;
-        if (pos >= from && pos < to) {
+      const grammar = globalThis.MME_WIKI_LINK_GRAMMAR;
+      if (!grammar || typeof grammar.extractWikiLinks !== 'function') return false;
+      for (const link of grammar.extractWikiLinks(docText)) {
+        if (pos >= link.start && pos < link.end) {
           // Found a wiki link at this position
-          const inner = match[1];
-          const pipeIndex = inner.indexOf('|');
-          const target = (pipeIndex !== -1 ? inner.slice(0, pipeIndex) : inner).trim();
+          const target = link.target;
           if (!target) break;
 
           event.preventDefault();

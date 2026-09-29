@@ -30,11 +30,16 @@ const ROOT = path.resolve(__dirname, '..');
 const MAIN_PATH = path.join(ROOT, 'js', 'main.js');
 const PARSER_PATH = path.join(ROOT, 'js', 'workspace', 'workspace-parser.js');
 const WIKI_PATH = path.join(ROOT, 'js', 'links', 'wiki-links.js');
+// ACT 3B — the shared grammar owner must be evaluated BEFORE main.js and
+// wiki-links.js, exactly as script-loader does. Without it every consumer
+// correctly returns no links, which would be a harness artifact.
+const GRAMMAR_PATH = path.join(ROOT, 'js', 'links', 'wiki-link-grammar.js');
 const CONTROLLER_PATH = path.join(ROOT, 'js', 'workspace', 'workspace-controller.js');
 
 const MAIN_SOURCE = fs.readFileSync(MAIN_PATH, 'utf8');
 const PARSER_SOURCE = fs.readFileSync(PARSER_PATH, 'utf8');
 const WIKI_SOURCE = fs.readFileSync(WIKI_PATH, 'utf8');
+const GRAMMAR_SOURCE = fs.readFileSync(GRAMMAR_PATH, 'utf8');
 const CONTROLLER_SOURCE = fs.readFileSync(CONTROLLER_PATH, 'utf8');
 
 const results = [];
@@ -268,6 +273,8 @@ const api = new Function(
   };`
 )();
 Object.assign(globalThis, api);
+// ACT 3B — grammar owner first, mirroring script-loader load order.
+(0, eval)(GRAMMAR_SOURCE);
 (0, eval)(WIKI_SOURCE);
 const WIKI = globalThis.MME_WIKI_LINKS;
 if (!WIKI || typeof WIKI.resolveTarget !== 'function') {

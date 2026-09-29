@@ -51,6 +51,12 @@ globalThis.document = { getElementById: () => null, addEventListener() {}, remov
   querySelector: () => null, querySelectorAll: () => [], createElement: el, dispatchEvent: () => true,
   documentElement: el(), body: el(), head: el() };
 
+// ACT 3B — the shared grammar owner is appended by script-loader BEFORE
+// main.js and wiki-links.js, so this harness must reproduce that order. Loading
+// a consumer without it would (correctly) yield zero links, which would be a
+// harness artifact rather than a product defect.
+const GRAMMAR_SOURCE = fs.readFileSync(path.join(ROOT, 'js', 'links', 'wiki-link-grammar.js'), 'utf8');
+(0, eval)(GRAMMAR_SOURCE);
 (0, eval)(WIKI_SOURCE);
 const W = globalThis.MME_WIKI_LINKS;
 if (!W) throw new Error('MME_WIKI_LINKS not exposed by the real owner');
@@ -258,7 +264,7 @@ const P = (t, i) => R(t, i).targetPath;
   await check('W64', 'CodeMirror derives status from the canonical owner per target', () => {
     const s = CM_SOURCE.slice(CM_SOURCE.indexOf('function computeDecorations'),
       CM_SOURCE.indexOf('const wikiLinkField'));
-    return /resolveTargetStatus\(target\)/.test(s) &&
+    return /resolveTargetStatus\(link\.target\)/.test(s) &&
       // the Index-keyed status map and its false-'missing' fallback are gone
       /linkStatusMap/.test(s) === false;
   });

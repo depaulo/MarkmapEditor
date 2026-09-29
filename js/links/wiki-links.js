@@ -14,7 +14,11 @@
   let wiredCursorHost = null;
 
   // ---- Private constants ----
-  const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
+  //
+  // ACT 3B: the Wiki Link regex that used to live here has been REMOVED. The
+  // single authoritative grammar is MME_WIKI_LINK_GRAMMAR in
+  // js/links/wiki-link-grammar.js. A second copy here is exactly what this ACT
+  // exists to eliminate, so none is kept — not even as a fallback.
 
   // ---- Private helpers ----
 
@@ -47,29 +51,28 @@
 
   // ---- Parser ----
 
+  // ACT 3B — the Wiki Link GRAMMAR is owned by MME_WIKI_LINK_GRAMMAR, appended
+  // by script-loader before main.js. This module keeps a compat parser that
+  // delegates to it so its two in-module call sites keep their existing shape.
+  function getGrammar() {
+    return (
+      globalThis.MME_WIKI_LINK_GRAMMAR ||
+      (typeof window !== 'undefined' ? window.MME_WIKI_LINK_GRAMMAR : null)
+    );
+  }
+
+  // Back-compat wrapper: same field names the previous local parser returned
+  // (raw/target/label/from/to), now sourced from the one shared owner.
   function parseWikiLinks(text) {
-    if (!text || typeof text !== 'string') return [];
-    const results = [];
-    let match;
-    WIKI_RE.lastIndex = 0;
-    while ((match = WIKI_RE.exec(text)) !== null) {
-      const raw = match[0];
-      const inner = match[1];
-      const from = match.index;
-      const to = from + raw.length;
-      let target = inner;
-      let label = '';
-      const pipeIndex = inner.indexOf('|');
-      if (pipeIndex !== -1) {
-        target = inner.slice(0, pipeIndex);
-        label = inner.slice(pipeIndex + 1);
-      }
-      target = target.trim();
-      label = label.trim();
-      if (!target) continue;
-      results.push({ raw, target, label: label || target, from, to });
-    }
-    return results;
+    const grammar = getGrammar();
+    if (!grammar || typeof grammar.extractWikiLinks !== 'function') return [];
+    return grammar.extractWikiLinks(text).map((link) => ({
+      raw: link.raw,
+      target: link.target,
+      label: link.alias || link.target,
+      from: link.start,
+      to: link.end,
+    }));
   }
 
   // ---- Normalization ----
@@ -229,6 +232,217 @@
 
   // ---- Compatibility wrapper ----
   //
+  // ==================================================================
+  // ACT 3B — RELATIONSHIP PROVIDERS (Links Out / Links In)
+  //
+  // Direction contract:
+  //   Links Out -> links DECLARED BY one source document
+  //   Links In  -> saved source Notes whose RESOLVED Links Out target is
+  //                exactly the requested physical targetPath
+  //
+  // Both are pure, deterministic, non-mutating and UI-neutral. Neither opens a
+  // file, scans the Workspace, mutates the Index, or writes Markdown.
+  // ==================================================================
+
+  // Occurrence numbering is per normalized target: two different targets both
+  // start at 1, while the second [[Alpha]] is occurrence 2. That makes "repeated
+  // links from one source" countable without merging two distinct targets.
+  function numberOccurrences(links) {
+    const counters = Object.create(null);
+    return links.map((link) => {
+      const key = String(link.target);
+      counters[key] = (counters[key] || 0) + 1;
+      return Object.assign({}, link, { occurrence: counters[key] });
+    });
+  }
+
+  // Links Out relationship record. Field names are chosen for the consumers that
+  // exist today — no speculative field is added.
+  //   targetPath : ONLY set when status === 'resolved'
+  //   candidates : populated only when status === 'ambiguous'
+  function buildRelationship(link, source, resolution) {
+    return {
+      sourcePath: String(source.path || ''),
+      sourceTitle: String(source.title || ''),
+      sourceLine: link.start, // 0-based offset into the supplied text
+      occurrence: link.occurrence,
+      rawTarget: link.target,
+      displayLabel: link.alias || link.target,
+      status: resolution.status,
+      targetPath: resolution.targetPath,
+      targetTitle: resolution.targetTitle,
+      resolutionKind: resolution.resolutionKind,
+      candidates: resolution.candidates,
+    };
+  }
+
+  /**
+   * Links Out for ONE source document.
+   * @param {object} opts
+   *   markdown       source text (Current Document: the live editor buffer)
+   *   sourcePath     exact physical source path
+   *   sourceTitle    saved visual title, display only
+   *   indexSnapshot  saved Workspace Index; when absent every relationship is
+   *                  'not-ready', never a fabricated 'missing'
+   * @returns {{available, sourcePath, relationships}}
+   */
+  function getLinksOut(opts) {
+    const o = opts || {};
+    const sourcePath = String(o.sourcePath || '');
+    const grammar = getGrammar();
+
+    if (!grammar || typeof grammar.extractWikiLinks !== 'function') {
+      return { available: false, sourcePath: sourcePath, relationships: [] };
+    }
+
+    const links = numberOccurrences(grammar.extractWikiLinks(o.markdown || ''));
+    const source = { path: sourcePath, title: o.sourceTitle || '' };
+
+    return {
+      available: true,
+      sourcePath: sourcePath,
+      relationships: links.map((link) =>
+        buildRelationship(link, source, resolveWikiTarget(link.target, o.indexSnapshot))
+      ),
+    };
+  }
+
+  // ACT3B_PROVIDERS_1_END
+
+  /**
+   * Links In for one physical target path.
+   *
+   * Derived ONLY from canonical resolved target identity — never from raw target
+   * text, H1 text, basename, or a first match. A source contributes only when
+   * its relationship RESOLVED and its targetPath equals the requested path
+   * exactly, so missing / ambiguous / not-ready can never become an inbound edge.
+   *
+   * @param {object} opts
+   *   targetPath     exact physical path of the note being asked about
+   *   indexSnapshot  saved Workspace Index (authoritative for Links In)
+   * @param {object} [deps] injectable saved-outgoing accessor, for testing
+   * @returns {{available, targetPath, rows, relationships}}
+   */
+  function getLinksIn(opts, deps) {
+    const o = opts || {};
+    const targetPath = String(o.targetPath || '');
+    const index = o.indexSnapshot === undefined ? getWorkspaceIndex() : o.indexSnapshot;
+
+    // Without a saved Index the honest answer is "unavailable", not "zero
+    // backlinks": reporting empty here would be a false negative.
+    if (!targetPath || !index || !index.ready || !Array.isArray(index.files)) {
+      return { available: false, targetPath: targetPath, rows: [], relationships: [] };
+    }
+
+    const getSavedTargets =
+      deps && typeof deps.savedTargetsFor === 'function'
+        ? deps.savedTargetsFor
+        : (file) => (Array.isArray(file && file.conceptLinks) ? file.conceptLinks : []);
+
+    const relationships = [];
+    const rowByPath = new Map();
+
+    for (const file of index.files) {
+      if (!file) continue;
+      const sourcePath = String(file.path || '');
+      if (!sourcePath) continue;
+
+      const savedTargets = getSavedTargets(file);
+      if (!savedTargets.length) continue;
+
+      let matched = 0;
+
+      for (const rawTarget of savedTargets) {
+        const resolution = resolveWikiTarget(rawTarget, index);
+        if (resolution.status !== 'resolved') continue;
+        if (resolution.targetPath !== targetPath) continue;
+
+        matched += 1;
+        relationships.push({
+          sourcePath: sourcePath,
+          sourceTitle: String(file.title || ''),
+          sourceName: String(file.name || ''),
+          sourceLine: null, // saved data is de-duplicated: no occurrence line
+          occurrence: matched,
+          rawTarget: String(rawTarget),
+          displayLabel: String(rawTarget),
+          status: resolution.status,
+          targetPath: resolution.targetPath,
+          targetTitle: resolution.targetTitle,
+          resolutionKind: resolution.resolutionKind,
+          candidates: [],
+        });
+      }
+
+      if (matched > 0) {
+        // ONE compact row per exact sourcePath: repeated links never duplicate
+        // the row, but the occurrence count is preserved on it.
+        if (!rowByPath.has(sourcePath)) {
+          rowByPath.set(sourcePath, {
+            sourcePath: sourcePath,
+            sourceTitle: String(file.title || ''),
+            sourceName: String(file.name || ''),
+            occurrenceCount: 0,
+          });
+        }
+        rowByPath.get(sourcePath).occurrenceCount += matched;
+      }
+    }
+
+    return {
+      available: true,
+      targetPath: targetPath,
+      rows: Array.from(rowByPath.values()),
+      relationships: relationships,
+    };
+  }
+
+  // Compact summaries. They never discard underlying records and never mutate
+  // the input.
+  function summarizeLinksIn(opts) {
+    const o = opts || {};
+    const relationships = Array.isArray(o.relationships) ? o.relationships : [];
+    const byPath = new Map();
+    for (const rel of relationships) {
+      const key = String(rel.sourcePath || '');
+      if (!key) continue;
+      if (!byPath.has(key)) byPath.set(key, Object.assign({}, rel, { occurrenceCount: 0 }));
+      byPath.get(key).occurrenceCount += 1;
+    }
+    return { rows: Array.from(byPath.values()) };
+  }
+
+  function summarizeLinksOut(opts) {
+    const o = opts || {};
+    const relationships = Array.isArray(o.relationships) ? o.relationships : [];
+    // State distinctions are preserved: only RESOLVED relationships dedupe by
+    // targetPath; missing dedupes by normalized raw target; ambiguous is NEVER
+    // collapsed, because two different candidate sets are different facts.
+    const resolved = new Map();
+    const missing = new Set();
+    const ambiguous = [];
+    const notReady = [];
+
+    for (const rel of relationships) {
+      if (rel.status === 'resolved') {
+        if (!resolved.has(rel.targetPath)) resolved.set(rel.targetPath, rel);
+      } else if (rel.status === 'missing') {
+        missing.add(normalizePhysicalKey(rel.rawTarget));
+      } else if (rel.status === 'ambiguous') {
+        ambiguous.push(rel);
+      } else {
+        notReady.push(rel);
+      }
+    }
+
+    return {
+      resolved: Array.from(resolved.values()),
+      missing: Array.from(missing.values()),
+      ambiguous: ambiguous,
+      notReady: notReady,
+    };
+  }
+
   // Existing consumers (CodeMirror status, openTarget, isMissingTarget,
   // isNotReady) already call resolveTarget(). It now delegates to the canonical
   // owner so they cannot drift from it. The legacy `file` / `matches` fields are
@@ -448,18 +662,12 @@
       if (typeof cursorOffset !== 'number') return null;
       const text = getTextFn();
       if (!text) return null;
-      const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
-      let match;
-      while ((match = WIKI_RE.exec(text)) !== null) {
-        const from = match.index;
-        const to = from + match[0].length;
-        if (cursorOffset >= from && cursorOffset < to) {
-          const inner = match[1];
-          const pipeIndex = inner.indexOf('|');
-          let target = pipeIndex !== -1 ? inner.slice(0, pipeIndex) : inner;
-          target = target.trim();
-          if (!target) continue;
-          return { target, raw: match[0], from, to };
+      // ACT 3B — shared grammar owner, not a local regex copy.
+      const grammar = getGrammar();
+      if (!grammar || typeof grammar.extractWikiLinks !== 'function') return null;
+      for (const link of grammar.extractWikiLinks(text)) {
+        if (cursorOffset >= link.start && cursorOffset < link.end) {
+          return { target: link.target, raw: link.raw, from: link.start, to: link.end };
         }
       }
     } catch {}
@@ -609,6 +817,12 @@
     normalizePhysicalKey: normalizePhysicalKey,
     normalizeVisualKey: normalizeVisualKey,
     WIKI_RESOLUTION_KINDS: WIKI_RESOLUTION_KINDS,
+    // ACT 3B — relationship providers. Internal names are linksIn/linksOut; the
+    // VISIBLE Related label is unchanged and is NOT renamed by this ACT.
+    getLinksOut: getLinksOut,
+    getLinksIn: getLinksIn,
+    summarizeLinksIn: summarizeLinksIn,
+    summarizeLinksOut: summarizeLinksOut,
     // Pre-ACT 3A pooled algorithm, exported ONLY so the focused suite can prove
     // the defect it replaced. No consumer calls it.
     resolveTargetLegacyPooled: resolveTargetLegacyPooled,
