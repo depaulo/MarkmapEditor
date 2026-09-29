@@ -331,7 +331,44 @@ All entries are **DEFERRED TO PACKAGE 3 INTEGRATED DEVICE CHECKPOINT**.
 | B-21 | shared grammar renders identically in editor and HTML Preview | DEFERRED |
 | B-22 | multi-line / nested-bracket link no longer extracted (retired behaviour) | DEFERRED |
 
-### ACT 3C — integrated Package 3 checkpoint
+### ACT 3C — deferred (device acceptance deferred)
+
+All entries are **DEFERRED TO PACKAGE 3 INTEGRATED DEVICE CHECKPOINT**.
+
+| # | Scenario | Status |
+|---|---|---|
+| C-01 | visible Links In panel | DEFERRED |
+| C-02 | filename-resolved inbound source | DEFERRED |
+| C-03 | H1-resolved inbound source (the case old Related missed) | DEFERRED |
+| C-04 | repeated links deduplicated to one row | DEFERRED |
+| C-05 | occurrence count shown | DEFERRED |
+| C-06 | Links In available zero | DEFERRED |
+| C-07 | Links In unavailable state (not zero) | DEFERRED |
+| C-08 | live Links Out from Current Document | DEFERRED |
+| C-09 | saved Workspace Links Out | DEFERRED |
+| C-10 | resolved / missing / ambiguous / not-ready previews | DEFERRED |
+| C-11 | exact source-path navigation | DEFERRED |
+| C-12 | Back / Forward after inbound navigation | DEFERRED |
+| C-13 | dirty-state cancellation | DEFERRED |
+| C-14 | no-Workspace behaviour | DEFERRED |
+| C-15 | saved versus unsaved relationship behaviour | DEFERRED |
+| C-16 | archived / Knowledge / Pinned behaviour | DEFERRED |
+| C-17 | Search / Tags / Tasks / Projects regression | DEFERRED |
+| C-18 | no physical file mutation from relationship discovery | DEFERRED |
+| C-19 | no stale name-keyed Related behaviour remains | DEFERRED |
+| C-20 | Help text reads Links In / Links Out | DEFERRED |
+
+**Integrated checkpoint Workspace:** generate the disposable fixture with
+
+    node scripts/package3-device-workspace.cjs <outputDir>
+
+It writes 20 generic Notes covering exact filename, filename+extension, saved
+H1, physical filename differing from H1, spaces, Unicode, duplicate H1, duplicate
+basename (nested folders), a missing target, an ambiguous target, repeated links
+from one source, Knowledge+Pinned overlap, an archived source, and a Note with no
+inbound links. No user content is written into the repository.
+
+### ACT 3D — integrated Package 3 checkpoint
 
 *(to be appended when ACT 3C is statically accepted: one disposable Workspace
 covering resolution, states, direction, navigation, scope, classification and

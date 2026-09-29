@@ -124,9 +124,31 @@
       65/0; full affected regression **1181 passed, 0 failed** across 14 suites;
       Task Lifecycle 101/101; Task Board 115/115; release parity OK in normal and
       strict modes at `0.6.2`.
-  - **ACT 3C**: NOT STARTED. Prepares the one integrated device-acceptance
-    Workspace and checklist, and owns the decision on whether Related is
-    migrated onto Links In or coexists with it.
+  - **ACT 3C — STATICALLY ACCEPTED. DEVICE ACCEPTANCE DEFERRED TO PACKAGE 3
+    CLOSURE.** No browser acceptance is claimed.
+    - The inbound panel now reads the CANONICAL `MME_WIKI_LINKS.getLinksIn`.
+      ACT 3B proved the name-keyed Related algorithm was not equivalent (it
+      missed H1-resolved inbound links), so it is RETIRED: `findBacklinksForConcept`
+      and `normalizeBacklinkConceptKey` are deleted, with no fallback kept.
+    - Visible inbound terminology is now **Links In**; the empty state is
+      `No Links In.`; the no-active-document state is `No active note`.
+      **Available zero (badge `0`) and unavailable (badge `—`) remain distinct.**
+    - Internal panel IDs and the `related` collapse-storage key are deliberately
+      PRESERVED so existing user collapse preferences are not reset.
+    - Navigation is unchanged and exact: `dataset.path` → `findWorkspaceFileByPath`
+      → `openWorkspaceFile`. H1 is display data only.
+    - `getActiveRelationshipSummary`, `getWorkspaceRelationshipSummary`,
+      `buildLinksInPreview` and `buildLinksOutPreview` provide UI-neutral data for
+      future Active / Workspace Index consumers. **No card UI is implemented here.**
+    - The Workspace Index inbound metric also uses canonical Links In.
+    - Static proof: `scripts/wiki-link-consumer-validators.cjs` (new) **75/0**
+      including 10 mutation controls C-M1..C-M10; relationship 68/0; resolution
+      65/0; ACT V0 visual 52/0 (B24 Tags clause RESTORED and independently
+      mutation-tested by B24a/B24b); discovery-consumers 52/0; full affected
+      regression **1258 passed, 0 failed** across 15 suites.
+    - Integrated checkpoint Workspace: `scripts/package3-device-workspace.cjs`
+      generates 20 generic Notes covering every case the closure checklist needs.
+  - **ACT 3D**: the integrated Package 3 device checkpoint, not yet performed.
   - **Package 3 cannot be finally closed, versioned or published until the
     integrated device checkpoint passes.** The planned release/cache boundary
     remains **0.6.3 (Tasks + Wiki Links)** at Package 3 closure; no version,
