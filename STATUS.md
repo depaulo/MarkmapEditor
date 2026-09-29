@@ -10,46 +10,65 @@
 - **Canonical 1.0 architecture synchronization**: COMPLETE (Gate 1 accepted).
   Canonical file:
   `docs/architecture/MarkmapEditor_1.0_PRODUCT_ARCHITECTURE_AND_IMPLEMENTATION_PROGRAM.md`
-- **Package 2 implementation**: ACT 2A **CLOSED and device-accepted**.
-  - ACT 2A static acceptance: normalized Task contract in the single Task
-    lifecycle owner; shared effective-status handling for Review and Board; pure
-    Workspace / Current Document projection; visible `#p1`/`#p2`/`#p3` as the
-    canonical write form; `mme-task: priority=` retained read-only as a legacy
-    fallback; no-priority expressed as the absence of any priority marker.
-  - ACT 2A.1 priority-neutral matching: `canonicalTaskText()` now ignores only
-    recognized `#p1`/`#p2`/`#p3` tokens for lifecycle matching identity, so a
-    priority-only mutation is lifecycle-neutral. Ordinary hashtags remain visible
-    Task content and remain part of matching identity. Proven cause of the
-    former false `ambiguous=1`: the matcher stripped the `mme-task` comment but
-    retained the visible `#pN` token, so the LCS produced a replacement region
-    instead of a match. A status transition never had this defect, because
-    status is written into the comment the matcher already removes.
-  - Real-device acceptance (owner S22/DeX, disposable Workspace Note): exact
-    source Task located; **P2 written successfully**; **Clear removed the
-    priority successfully**; physical Save succeeded; Save baseline refreshed
-    only after success; Workspace Index rebuilt; Task Review refreshed; Task
-    Board remained operational; **both priority-only Saves reported
-    `changed=false opened=0 completed=0 reopened=0 ambiguous=0`**. No physical
-    data loss observed.
-  - **Non-blocking observation (transient projection)**: an intermediate refresh
-    briefly reported `tasks=0` and `tags=0` before the final Save rebuild restored
-    `tasks=1` and `tags=3`. No persistent data loss and no incorrect final Index
-    were observed. **No runtime change was made for it.** Any future correction
-    requires a focused reproduction proving persistent or user-visible impact.
-  - **ACT 2B**: NEXT, NOT STARTED.
-  - **ACT 2C**: CONDITIONAL — the duplicate checkbox-toggle line grammar in
-    `js/workspace/task-review.js` (`([ xX])(`) remains tracked. Execute only if
-    Package 2 source evidence proves it necessary.
+- **Package 2 implementation**: **CLOSED**.
+  - **ACT 2A — CLOSED and device-accepted.** Normalized Task contract in the
+    single Task lifecycle owner; shared effective-status handling for Review and
+    Board; pure Workspace / Current Document projection; visible
+    `#p1`/`#p2`/`#p3` as the canonical write form; `mme-task: priority=` retained
+    read-only as a legacy fallback; no-priority expressed as the absence of any
+    priority marker.
+  - **ACT 2A.1 — priority-neutral matching (CLOSED).** `canonicalTaskText()` now
+    ignores only recognized `#p1`/`#p2`/`#p3` tokens for lifecycle matching
+    identity, so a priority-only mutation is lifecycle-neutral. Ordinary hashtags
+    remain visible Task content and remain part of matching identity. Proven cause
+    of the former false `ambiguous=1`: the matcher stripped the `mme-task` comment
+    but retained the visible `#pN` token, so the LCS produced a replacement region
+    instead of a match. A status transition never had this defect, because status
+    is written into the comment the matcher already removes.
+  - **ACT 2B — Task Board priority selector (CLOSED and device-accepted).** Each
+    Board card exposes a compact native `<select>` in the top-right of the card
+    context row, showing `--` / `P1` / `P2` / `P3`. It **replaces** the former
+    read-only priority badge rather than sitting beside it, so a card never shows
+    the same priority twice. The control is presentation only: it carries exact
+    `sourcePath` / `kind` / `line` and the requested canonical value, and delegates
+    to the **already-exported shared Task mutation adapter**
+    `MME_TASK_REVIEW.setTaskPriority`, which is the only caller of
+    `MME_TASK_LIFECYCLE.applyPriority`. Consequently Package 2 delivered **no
+    second priority writer, no second source-mutation lifecycle, no second line
+    patcher, no second priority store, and no direct Index mutation**. The Board
+    contains no priority grammar at all; the only `#p[123]` occurrences in it are
+    two pre-existing, lifecycle-guarded *display-read* fallbacks.
+  - **Device acceptance (owner S22/DeX):** Board priority selector visible;
+    `--` / `P1` / `P2` / `P3` visible; priority mutation operational; Board and
+    Review consistent; lifecycle-neutral Save contract preserved
+    (`changed=false opened=0 completed=0 reopened=0 ambiguous=0`); duplicate
+    occurrence protections preserved; no automatic priority ordering.
+  - **Non-blocking observation (transient projection, ACT 2A origin):** an
+    intermediate refresh briefly reported `tasks=0` and `tags=0` before the final
+    Save rebuild restored `tasks=1` and `tags=3`. No persistent data loss and no
+    incorrect final Index were observed. **No runtime change was made for it.**
+    Any future correction requires a focused reproduction proving persistent or
+    user-visible impact.
+  - **ACT 2C**: CONDITIONAL and **not currently required**. The duplicate
+    checkbox-toggle line grammar in `js/workspace/task-review.js` (`([ xX])(`)
+    remains tracked as a known divergence. Execute only if future Package 2
+    source evidence proves it necessary; Package 2 closed without it.
+  - **Known deployment note (not a defect in the feature):** the Service Worker
+    serves local assets cache-first with no revalidation, and its precache includes
+    `js/tasks/task-board.js` and `css/task-board.css`. Clearing site data
+    re-fetches from the same origin, so it cannot introduce an **uncommitted**
+    build. Serving the current working tree to the device is what makes a new
+    build observable. Changing that cache policy is out of Package 2 scope.
   - Planning handoff:
     `docs/architecture/MarkmapEditor_1.0_PACKAGE_2_TASK_STABILIZATION_PLAN.md`.
 
-**Not started, and not authorized by any document here:** ACT 2B, Task Board
-priority selection, Wiki Links changes, Standalone Notes, Projects, Reports,
-Active or Workspace Index disclosures, pane-layout changes.
+**Not started, and not authorized by any document here:** Package 3, ACT 2C,
+Wiki Links changes, Standalone Notes, Projects, Reports, Active or Workspace Index
+disclosures, pane-layout changes.
 
-**Explicitly NOT delivered by Package 2:** no Task Board priority selector, no
-Board redesign, no automatic priority sorting, no Active or Workspace Index
-cards, no version or cache change, no promotion to `main`.
+**Explicitly NOT delivered by Package 2:** no Board redesign, no automatic
+priority sorting, no Active or Workspace Index cards, no version or cache change,
+no Service Worker change, no promotion to `main`.
 
 ---
 

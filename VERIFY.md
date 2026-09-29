@@ -81,6 +81,64 @@ Package 2.
 
 ---
 
+## 0.0.1 ACT 2B Task Board priority selector (performed)
+
+ACT 2B is CLOSED. Package 2 (Task Stabilization) is therefore CLOSED.
+
+**Scope verified on S22/DeX:**
+
+1. Board priority selector **visible** on the card;
+2. `--` / `P1` / `P2` / `P3` visible as the current priority;
+3. priority mutation **operational** end to end;
+4. Board and Task Review **consistent** after every Save and Index rebuild;
+5. lifecycle-neutral Save contract preserved — priority-only Save reported
+   `changed=false opened=0 completed=0 reopened=0 ambiguous=0`;
+6. **duplicate occurrence protections preserved**;
+7. **no automatic priority ordering**;
+8. **no second writer** — the Board delegates to the already-exported shared
+   adapter `MME_TASK_REVIEW.setTaskPriority`, the only caller of
+   `MME_TASK_LIFECYCLE.applyPriority`;
+9. **no second priority store** and no direct Index mutation.
+
+**Static proof at the committed HEAD (`69bedd8`):**
+
+- `scripts/workspace-task-contract-validators.cjs` — **184 fixtures, 0 failed**,
+  including ACT 2A A01–A25, ACT 2B B01–B75, and 15 mutation controls
+  (A2A1-M1–M5 and B-M1–M10).
+- Task Board built-in validator — **115/115, 0 failed**. The five former badge
+  fixtures were re-pointed at the trigger that replaced the badge, preserving
+  their intent; four new fixtures cover the selected option, native-control
+  identity, the accessible name, and canonical-only option values.
+- Task Lifecycle built-in validator — **101/101, 0 failed**.
+- `scripts/act2a-checkpoint-harness.cjs` — 56/0.
+- Full affected regression chain — **996 passed, 0 failed** across eleven suites.
+- `scripts/release-parity.cjs` — OK, normal **and** `RELEASE_PARITY_STRICT_SW=1`;
+  release identity remains `0.6.2`, unchanged by Package 2.
+- `node --check` clean on every Package 2 touched JS/CJS file; `git diff --check`
+  clean.
+
+**Temporary instrumentation was removed before acceptance.** A `cardHtml` /
+`renderColumns` DOM probe and a build marker were used to diagnose a build/origin
+mismatch on the device. Both were deleted, and the full chain above was re-run
+green on the committed runtime.
+
+**Deployment note (not a feature defect):** the Service Worker serves local assets
+cache-first with no revalidation and precaches `js/tasks/task-board.js` and
+`css/task-board.css`. Clearing site data re-fetches from the same origin and
+therefore cannot surface an **uncommitted** build. The device must be served the
+current working tree for a new build to be observable.
+
+**ACT 2C:** CONDITIONAL and **not currently required**. The duplicate
+checkbox-toggle line grammar in `js/workspace/task-review.js` (`([ xX])(`) remains
+tracked; Package 2 closed without it.
+
+**Not claimed here:** Package 3 has not begun and is not authorized. No Board
+redesign, automatic priority sorting, Active or Workspace Index cards,
+version/cache change, Service Worker change, or `main` promotion is part of
+Package 2.
+
+---
+
 ## 1. Diagnostics & Runtime Checks
 
 ### A. Host Diagnostic Output
