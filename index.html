@@ -164,17 +164,12 @@
             <span class="workspaceIcon">📝</span>
             <span class="workspaceLabel">New Note</span>
           </button>
-
-          <button
-            id="btnArchiveActive"
-            type="button"
-            title="Archive and restore controls arrive in a later package"
-            aria-label="Archive and restore controls arrive in a later package"
-            disabled
-          >
-            <span class="workspaceIcon">📦</span>
-            <span class="workspaceLabel">Archive Active</span>
-          </button>
+          <!-- ACT V0 — the former global "Archive Active" control was removed
+               from this Workspace creation/action area. Archive and Restore are
+               owned exclusively by the Active panel action row
+               (renderWorkspaceActiveNoteActions() in js/main.js), which reuses
+               the single metadata writer. This global action area is now exactly
+               Open Workspace, Today and New Note. -->
         </div>
 
         <div id="workspaceEmptyState" class="workspaceEmptyState">

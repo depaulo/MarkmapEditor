@@ -337,15 +337,10 @@ html[data-app-context='journal'] #workspaceSidebar {
   min-height: 32px;
 }
 
-.workspaceActiveTitle {
-  font-size: 14px;
-  font-weight: 500;
-  opacity: 1;
-  text-transform: none;
-  letter-spacing: normal;
-  color: var(--text);
-}
-
+/* ACT V0 — the per-panel .workspaceActiveTitle declarations that used to live
+   here are removed: they were byte-identical to the single panel-title owner
+   further down (same specificity, earlier position) and therefore already dead.
+   The title is styled by exactly one rule now. */
 .workspaceActiveBadge {
   flex: 0 0 auto;
 
@@ -491,13 +486,11 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
   gap: 8px;
 }
 
-.workspaceRelatedTitle {
-  font-size: 12px;
-  font-weight: 700;
-  opacity: 0.72;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
+/* ACT V0 — the earlier .workspaceRelatedTitle rule (12px / 700 / uppercase /
+   0.08em) is removed. It had the SAME specificity as the single panel-title
+   owner further down the file and was already fully overridden by it, so the
+   Related title was not visually changed by this ACT: it now simply has exactly
+   one owner instead of a dead one shadowed by a live one. */
 
 .workspaceRelatedSummary {
   font-size: 12px;
@@ -1001,10 +994,30 @@ html.journal-sidebar-collapsed #workspaceTasksPanel {
   margin-bottom: 10px;
 }
 
-.workspaceIndexTitle,
+/* ACT V0 — the ONE panel-title typography owner.
+   Every Workspace Sidebar panel header renders its title inside the generic
+   .workspacePanelHeaderButton, and every one of those title spans is listed
+   here, so a panel title can no longer pick up its own weight.
+
+   Cause of the observed bold Projects/Archive titles: two panel-specific
+   rules — `.workspaceProjectsTitle { font-weight: 600 }` and
+   `.workspaceArchiveTitle { font-weight: 650 }` — which are removed below.
+   There is no !important override here: the panel-specific declarations were
+   the actual owners, and they are deleted rather than masked.
+
+   This rule only styles panel-header titles. It never touches active document
+   titles (.workspaceActiveNameText), selected records or emphasis inside
+   panel content. */
+.workspaceActiveTitle,
+.workspaceJournalsTitle,
+.workspaceConceptsTitle,
+.workspaceProjectsTitle,
 .workspaceRelatedTitle,
 .workspaceTasksTitle,
-.workspaceTagsTitle {
+.workspaceReportTitle,
+.workspaceTagsTitle,
+.workspaceIndexTitle,
+.workspaceArchiveTitle {
   font-size: 14px;
   font-weight: 500;
   opacity: 1;
@@ -1187,8 +1200,8 @@ html.workspace-empty .workspaceFilesSection {
    preferences, and Report configuration are untouched):
    While html.workspace-empty is active the Journal Sidebar shows only the
    Workspace header (title, collapse control, Open Workspace, and the
-   existing clearly disabled Today / New Concept / Archive Active actions)
-   plus the single no-Workspace empty-state message. Data-dependent panels,
+   existing clearly disabled Today / New Concept actions) plus the single
+   no-Workspace empty-state message. Data-dependent panels,
    their counters and empty list bodies, and the bottom file-navigation
    controls are hidden. Elements are stable or idempotently created DOM and
    reappear unchanged when html.workspace-ready becomes active.
@@ -1212,7 +1225,14 @@ html.workspace-empty #workspaceNavControls,
    panel roots removes header, badge/count, "No journals"/"No concepts"
    bodies, border-top, and their whitespace in one rule. */
 html.workspace-empty #workspaceJournalsPanel,
-html.workspace-empty #workspaceConceptsPanel {
+html.workspace-empty #workspaceConceptsPanel,
+/* ACT V0 — the Archive root now shares the ID-level
+   #workspaceJournalsPanel/#workspaceConceptsPanel { display:flex } rule (it is
+   the shared sibling separator/geometry owner). That ID specificity would
+   otherwise defeat the class-based html.workspace-empty .workspaceFilesSection
+   rule above and re-expose the Archive panel with no Workspace open, so the
+   same explicit no-Workspace projection is applied to it. */
+html.workspace-empty #workspaceArchivePanel {
   display: none !important;
 }
 
@@ -1226,34 +1246,11 @@ html.workspace-ready #btnJournalToday {
   cursor: pointer;
 }
 
-#btnArchiveActive {
-  font-weight: 600;
-  border-color: rgba(245, 158, 11, 0.45);
-}
-
-#btnArchiveActive.__disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-html.workspace-empty #btnArchiveActive {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-html.workspace-ready #btnArchiveActive {
-  opacity: 1;
-  cursor: pointer;
-}
-
-#btnArchiveActive.__disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-#btnArchiveActive:hover {
-  background: rgba(245, 158, 11, 0.12);
-}
+/* ACT V0 — every #btnArchiveActive rule is removed together with the control.
+   The global Workspace action area no longer contains an Archive/Restore entry,
+   so these declarations had no element to style. Archive/Restore now lives only
+   in the Active panel action row (.workspaceActiveActions), which already owns
+   the same grammar. */
 
 #btnNewConcept {
   font-weight: 600;
@@ -1502,14 +1499,8 @@ html.journal-sidebar-collapsed .workspaceIcon {
   gap: 8px;
 }
 
-.workspaceTagsTitle {
-  font-size: 14px;
-  font-weight: 500;
-  opacity: 1;
-  text-transform: none !important;
-  letter-spacing: normal !important;
-  color: var(--text);
-}
+/* ACT V0 — the duplicate .workspaceTagsTitle rule is removed: it repeated the
+   single panel-title owner verbatim. The Tags title is unchanged. */
 
 .workspaceTagsSummary {
   font-size: 12px;
@@ -1780,11 +1771,9 @@ html.journal-sidebar-collapsed #workspaceProjectsPanel {
   display: none;
 }
 
-.workspaceProjectsTitle {
-  font-weight: 600;
-  text-transform: none !important;
-}
-
+/* ACT V0 — the panel-specific Projects title weight (font-weight: 600) is
+   removed: the title is now owned by the single panel-title rule above, so it
+   renders with the same weight as every sibling panel title. */
 #workspaceProjectsBadge {
   font-size: 11px;
   opacity: 0.7;
@@ -2486,9 +2475,9 @@ html[data-app-context='slides'] .contextSlidesOnly {
   align-items: center;
 }
 
-.workspaceArchiveTitle {
-  font-weight: 650;
-}
+/* ACT V0 — the panel-specific Archive title weight (font-weight: 650) is
+   removed: the title is now owned by the single panel-title rule above, so it
+   renders with the same weight as every sibling panel title. */
 
 /* =========================== */
 /* Task Review (R-TASK2/3)     */
@@ -2711,9 +2700,10 @@ html.journal-suspended #htmlOverlayControls {
   pointer-events: none !important;
 }
 
-/* ---- Workspace Index active (command blocking) ---- */
-html.workspace-index-active #btnSave,
-html.workspace-index-active #btnArchiveActive {
+/* ---- Workspace Index active (command blocking) ----
+   ACT V0: #btnArchiveActive is dropped from this list along with the control
+   it named. Only the global Save command is blocked here now. */
+html.workspace-index-active #btnSave {
   pointer-events: none;
   opacity: 0.5;
 }
@@ -3294,8 +3284,17 @@ html.dark .wsIndexDisclosure:hover {
 /* ---- Journals / Concepts panel layout ----
    Shared top-level separator contract: use border-top like the other
    top-level collapsible panels instead of the previous border-bottom. */
+/* ACT V0 — the Archive panel joins the shared top-level separator contract of
+   the other sibling Workspace panels. Before this rule the Archive root had no
+   ID-level rule at all, so it inherited only .workspaceSection padding while
+   the Notes/Knowledge boundary carried border-top: it was the one sibling
+   boundary with no separator. The separator comes from the generic panel owner
+   (same 1px --menu-border top border as every other sibling boundary), so it
+   matches in light and dark mode, collapsed and expanded, and adds no second
+   decorative element: the Archive panel still owns no border-bottom. */
 #workspaceJournalsPanel,
-#workspaceConceptsPanel {
+#workspaceConceptsPanel,
+#workspaceArchivePanel {
   padding: 10px;
   border-top: 1px solid var(--menu-border);
   display: flex;

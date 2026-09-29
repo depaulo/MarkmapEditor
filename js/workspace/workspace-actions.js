@@ -4,12 +4,17 @@ export function createWorkspaceActions({
   onOpenWorkspace,
   onToday,
   onNewConcept,
-  onArchiveActive,
 }) {
   const btnOpenWorkspace = document.getElementById('btnOpenWorkspace');
   const btnJournalToday = document.getElementById('btnJournalToday');
   const btnNewConcept = document.getElementById('btnNewConcept');
-  const btnArchiveActive = document.getElementById('btnArchiveActive');
+
+  // ACT V0 — this global Workspace action area is now exactly Open Workspace,
+  // Today and New Note. The former "Archive Active" entry is not re-bound here:
+  // Archive/Restore is owned solely by the Active panel action row
+  // (renderWorkspaceActiveNoteActions in js/main.js), which reuses the single
+  // metadata writer. No second Archive/Restore control or click lifecycle is
+  // created by this module.
 
   function bindOnce(btn, name, handler) {
     if (!btn) {
@@ -53,6 +58,5 @@ export function createWorkspaceActions({
   bindOnce(btnOpenWorkspace, 'Open Workspace', onOpenWorkspace);
   bindOnce(btnJournalToday, 'Today', onToday);
   bindOnce(btnNewConcept, 'New Concept', onNewConcept);
-  bindOnce(btnArchiveActive, 'Archive Active', onArchiveActive);
 }
 

@@ -2083,7 +2083,7 @@ function ensureWorkspaceRelatedPanel() {
       </button>
       <span class="workspacePanelHeaderControls">
         <span id="workspaceRelatedBadge" class="workspacePanelBadge">
-          0 related
+          0
         </span>
       </span>
     </div>
@@ -2558,9 +2558,12 @@ function renderWorkspaceRelatedPanel() {
   // ACT 2A — legacy name kept; value is now the active Note identity, not a concept.
   const activeConcept = getActiveConceptName();
 
+  // ACT V0 — the Related badge carries the numeric backlink count only. The
+  // panel title already says "Related", so the previous "0 related" /
+  // "<n> related" text repeated the title. The count value itself is unchanged.
   if (!activeConcept) {
     panel.hidden = true;
-    badge.textContent = '0 related';
+    badge.textContent = '0';
     summary.textContent = 'No active note';
     list.innerHTML = '';
     applyWorkspacePanelCollapsed(panel, 'related', isWorkspacePanelCollapsed('related'));
@@ -2571,14 +2574,14 @@ function renderWorkspaceRelatedPanel() {
   summary.textContent = `Current note: ${activeConcept}`;
 
   if (!WORKSPACE_INDEX_STATE?.ready) {
-    badge.textContent = '0 related';
+    badge.textContent = '0';
     list.innerHTML = '<div class="workspaceRelatedEmpty">Index not ready</div>';
     applyWorkspacePanelCollapsed(panel, 'related', isWorkspacePanelCollapsed('related'));
     return;
   }
 
   const backlinks = findBacklinksForConcept(activeConcept);
-  badge.textContent = `${backlinks.length} related`;
+  badge.textContent = `${backlinks.length}`;
 
   if (!backlinks.length) {
     list.innerHTML = '<div class="workspaceRelatedEmpty">No backlinks yet</div>';
@@ -2825,7 +2828,7 @@ function ensureWorkspaceTagsPanel() {
         </span>
 
         <span id="workspaceTagsBadge" class="workspacePanelBadge">
-          0 tags
+          0
         </span>
       </button>
     </div>
@@ -2928,9 +2931,12 @@ function renderWorkspaceTagsPanel() {
     return;
   }
 
+  // ACT V0 — the Tags badge carries the numeric tag count only. The panel title
+  // already says "Tags", so the previous "0 tags" / "<n> tags" text repeated the
+  // title. The underlying tag count, tag rows and tag filter are unchanged.
   if (!WORKSPACE_STATE?.rootHandle) {
     panel.hidden = true;
-    badge.textContent = '0 tags';
+    badge.textContent = '0';
     summary.textContent = 'Open a workspace first';
     list.innerHTML = '';
     results.hidden = true;
@@ -2941,7 +2947,7 @@ function renderWorkspaceTagsPanel() {
   panel.hidden = false;
 
   if (!WORKSPACE_INDEX_STATE?.ready) {
-    badge.textContent = '0 tags';
+    badge.textContent = '0';
     summary.textContent = 'Index not ready';
     list.innerHTML = '<div class="workspaceTagsEmpty">Index not ready</div>';
     results.hidden = true;
@@ -2954,7 +2960,7 @@ function renderWorkspaceTagsPanel() {
 
   const tags = getWorkspaceTagsSummary();
 
-  badge.textContent = `${tags.length} tags`;
+  badge.textContent = `${tags.length}`;
 
   const totalTaggedFiles = new Set(tags.flatMap((row) => row.paths || [])).size;
 
@@ -5854,6 +5860,19 @@ function renderWorkspaceArchivePanel() {
 // ACT 6 — the Active Note action row. It offers exactly the lifecycle actions,
 // and only for a metadata-eligible active Workspace Note. Nothing here saves:
 // every action leaves the document dirty for the user to Save.
+//
+// ACT V0 — this row is now the ONE AND ONLY Archive/Restore owner. The former
+// global "Archive Active" control and its two owners (the physical
+// archive/ copy+remove workflow and the capture-phase direct binder in
+// js/workspace/workspace-controller.js) are removed, so Archive/Restore appears
+// exactly once in the Sidebar. The contextual label comes from the LIVE buffer:
+//   active non-archived eligible Note -> "Archive"  (archiveActiveNote)
+//   active archived eligible Note    -> "Restore" (restoreActiveNote)
+//   no eligible active Note          -> the row is emptied and hidden, the
+//                                        same convention Pin/Knowledge already use.
+// Both labels route to applyActiveNoteMetadata(), the single metadata writer:
+// it patches the live buffer only, leaves the writable handle and currentSaveHandle
+// untouched, and never calls Save.
 function renderWorkspaceActiveNoteActions() {
   const host = document.getElementById('workspaceActiveActions');
   if (!host) return;

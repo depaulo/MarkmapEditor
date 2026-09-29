@@ -97,14 +97,14 @@ function updateWorkspaceUiState() {
     btnToday.title = hasWorkspace ? 'Open today journal' : 'Open a workspace first';
   }
 
-  const btnArchiveActive = document.getElementById('btnArchiveActive');
-  if (btnArchiveActive) {
-    // ACT 4 — Archive/Restore is deferred to a later package. The control stays
-    // disabled unconditionally: the physical archive/ move workflow is not
-    // adapted here, and no file is ever moved or removed.
-    btnArchiveActive.disabled = true;
-    btnArchiveActive.title = 'Archive and restore controls arrive in a later package';
-  }
+  // ACT V0 — the global "Archive Active" control no longer exists in this
+  // action area, so there is nothing to keep disabled or retitled here. Archive
+  // and Restore are owned exclusively by the Active panel action row
+  // (renderWorkspaceActiveNoteActions in js/main.js): it reads the live buffer
+  // flags, labels the action Archive/Restore, and routes through the single
+  // metadata writer applyActiveNoteMetadata(). No second Archive/Restore control,
+  // click lifecycle, metadata writer, automatic Save or physical archive/
+  // move/copy/delete operation is introduced or re-exposed by this ACT.
 
   // ACT 5 — Named Note creation now exists, so the control is live and is the
   // single Named Note entry point. It still shares the existing creation row
@@ -1597,216 +1597,21 @@ function setJournalSidebarCollapsed(next) {
 
 globalThis.setJournalSidebarCollapsed = setJournalSidebarCollapsed;
 
-async function archiveActiveWorkspaceFile() {
-  // Capability guard — block when the active workspace cannot archive.
-  if (!globalThis.MME_WORKSPACE_CAPABILITIES?.canActive?.('archive')) {
-    const activeId = globalThis.MME_WORKSPACE_CAPABILITIES?.getActiveId?.() || 'current workspace';
-    globalThis.MME_APP?.showToast?.(`Archive is not available in ${activeId}`, 'warn', 2000);
-    return;
-  }
-
-  globalThis.MME_APP?.log?.('Workspace: archiveActiveWorkspaceFile() begin');
-
-  if (!WORKSPACE_STATE.rootHandle) {
-    globalThis.MME_APP?.showToast?.('Open a workspace first', 'error', 2600);
-    globalThis.MME_APP?.log?.('Workspace: Archive blocked because rootHandle is missing');
-    return;
-  }
-
-  if (!WORKSPACE_STATE.folders?.archive) {
-    globalThis.MME_APP?.showToast?.('Archive folder is not ready', 'error', 2600);
-    globalThis.MME_APP?.log?.('Workspace: Archive blocked because archive folder is missing');
-    return;
-  }
-
-  const active = WORKSPACE_STATE.activeFile;
-
-  globalThis.MME_APP?.log?.(
-    `Workspace: archive active candidate kind=${active?.kind || '(none)'} path=${
-      active?.path || '(none)'
-    } name=${active?.name || '(none)'} hasHandle=${Boolean(active?.handle)}`
-  );
-
-  if (!active || !active.handle || !active.kind || !active.name) {
-    globalThis.MME_APP?.showToast?.('No active workspace file to archive', 'error', 2600);
-    globalThis.MME_APP?.log?.('Workspace: Archive blocked because no active workspace file exists');
-    return;
-  }
-
-  const activeKind = normalizeWorkspaceKindForCompare
-    ? normalizeWorkspaceKindForCompare(active.kind)
-    : String(active.kind || '').trim();
-
-  const sourceFolder = WORKSPACE_STATE.folders?.[activeKind];
-
-  globalThis.MME_APP?.log?.(
-    `Workspace: archive sourceFolder kind=${activeKind} exists=${Boolean(sourceFolder)} removeEntry=${typeof sourceFolder?.removeEntry}`
-  );
-
-  const activePath = active.path || `${activeKind}/${active.name}`;
-
-  const ok = confirm(`Archive ${activePath}?`);
-
-  if (!ok) {
-    globalThis.MME_APP?.log?.(`Workspace: archive cancelled for ${activePath}`);
-    return;
-  }
-
-  const file = await active.handle.getFile();
-  const text = await file.text();
-
-  const archiveFileName = buildArchiveFileName({
-    ...active,
-    kind: activeKind,
-  });
-
-  globalThis.MME_APP?.log?.(`Workspace: archive target archive/${archiveFileName}`);
-
-  const archiveHandle = await WORKSPACE_STATE.folders.archive.getFileHandle(archiveFileName, {
-    create: true,
-  });
-
-  const writable = await archiveHandle.createWritable();
-  await writable.write(text);
-  await writable.close();
-
-  globalThis.MME_APP?.log?.(`Workspace: archive copy written archive/${archiveFileName}`);
-
-  let removedOriginal = false;
-
-  try {
-    if (sourceFolder && typeof sourceFolder.removeEntry === 'function') {
-      await sourceFolder.removeEntry(active.name);
-      removedOriginal = true;
-      globalThis.MME_APP?.log?.(`Workspace: archive original removed ${activePath}`);
-    } else {
-      globalThis.MME_APP?.log?.('Workspace: removeEntry unavailable; original kept');
-    }
-  } catch (e) {
-    globalThis.MME_APP?.log?.(
-      `Workspace: original remove failed after archive copy: ${e?.message || e}`
-    );
-    removedOriginal = false;
-  }
-
-  WORKSPACE_STATE.activeFile = null;
-
-  if (typeof currentSaveHandle !== 'undefined') {
-    currentSaveHandle = null;
-  }
-
-  if (
-    typeof removeLocalStorageValue === 'function' &&
-    typeof WORKSPACE_UI_STORAGE_KEYS !== 'undefined'
-  ) {
-    removeLocalStorageValue(WORKSPACE_UI_STORAGE_KEYS.lastActivePath);
-  }
-
-  if (typeof refreshWorkspaceSidebar === 'function') {
-    await refreshWorkspaceSidebar();
-  }
-
-  window.updateWorkspaceActiveFileHighlight?.();
-  renderWorkspaceActivePanel?.();
-  renderWorkspaceRelatedPanel?.();
-  renderWorkspaceTasksPanel?.();
-  window.scheduleWorkspaceIndexRebuild?.('archive active');
-
-  globalThis.MME_APP.openTextDocument({
-    text: `# Archived\n\nArchived: ${activePath}\n\nArchive copy: archive/${archiveFileName}\n`,
-    fileName: 'archived.md',
-    fileHandle: null,
-    reason: 'workspace archive active file',
-  });
-
-  const archivedMessage = removedOriginal
-    ? `Archived ${active.name}`
-    : `Archive copy created: ${archiveFileName}`;
-
-  globalThis.MME_APP?.showToast?.(archivedMessage, removedOriginal ? 'ok' : 'download', 2600);
-
-  globalThis.MME_APP?.log?.(
-    removedOriginal
-      ? `Workspace: archived and removed original ${activePath} -> archive/${archiveFileName}`
-      : `Workspace: archive copy created but original kept ${activePath} -> archive/${archiveFileName}`
-  );
-
-  globalThis.MME_APP?.log?.('Workspace: archiveActiveWorkspaceFile() end');
-}
-
-let __archiveActiveInProgress = false;
-
-function bindArchiveActiveDirect() {
-  const btn = document.getElementById('btnArchiveActive');
-
-  if (!btn) {
-    globalThis.MME_APP?.log?.('Workspace: Archive Active direct button not found');
-    return;
-  }
-
-  if (btn.__archiveDirectBound) {
-    return;
-  }
-
-  let __archiveActiveLastEvent = 0;
-  const archiveActiveHandler = async (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const now = performance.now();
-    if (now - __archiveActiveLastEvent < 120) {
-      globalThis.MME_APP?.log?.(
-        `Workspace: Archive Active direct duplicate event ignored (${event.type})`
-      );
-      return;
-    }
-    __archiveActiveLastEvent = now;
-
-    globalThis.MME_APP?.log?.(
-      `Workspace: Archive Active direct ${event.type} clicked disabled=${Boolean(
-        btn.disabled
-      )} active=${WORKSPACE_STATE.activeFile?.path || '(none)'}`
-    );
-
-    if (__archiveActiveInProgress) {
-      globalThis.MME_APP?.log?.(
-        'Workspace: Archive Active ignored because archive is already in progress'
-      );
-      return;
-    }
-
-    try {
-      __archiveActiveInProgress = true;
-
-      if (btn.disabled) {
-        globalThis.MME_APP?.log?.('Workspace: Archive Active direct forced disabled=false');
-        btn.disabled = false;
-      }
-
-      if (typeof archiveActiveWorkspaceFile !== 'function') {
-        throw new Error('archiveActiveWorkspaceFile missing');
-      }
-
-      await archiveActiveWorkspaceFile();
-    } catch (e) {
-      const msg = e?.message || String(e);
-      globalThis.MME_APP?.log?.(`Workspace: Archive Active direct failed: ${msg}`);
-      globalThis.MME_APP?.showToast?.(`Archive failed: ${msg}`, 'error', 3500);
-    } finally {
-      __archiveActiveInProgress = false;
-    }
-  };
-
-  ['click', 'pointerup'].forEach((evt) => {
-    btn.addEventListener(evt, archiveActiveHandler, {
-      capture: true,
-      passive: false,
-    });
-  });
-
-  btn.__archiveDirectBound = true;
-  globalThis.MME_APP?.log?.('Workspace: Archive Active direct bound');
-}
+// ACT V0 — the global Archive/Restore control is gone from the Workspace action
+// area, so its two owners are removed here rather than left dormant:
+//   1. archiveActiveWorkspaceFile() — the legacy PHYSICAL archive workflow.
+//      It wrote a copy into an archive/ folder, removed the original with
+//      removeEntry(), nulled currentSaveHandle, dropped the last-active-path
+//      key and opened a synthetic archived.md document. None of that is part of
+//      the Archive contract, which is a frontmatter flag patched into the live
+//      buffer: no move, no copy, no delete, no rename, no automatic Save.
+//   2. bindArchiveActiveDirect() — a second capture-phase click/pointerup
+//      lifecycle on the same control, which force-enabled a control that was
+//      deliberately kept disabled.
+// Archive and Restore now have exactly ONE owner: the Active panel action row
+// in js/main.js (renderWorkspaceActiveNoteActions), which reads the live buffer
+// flags, labels the action Archive/Restore, and writes through the single
+// metadata writer applyActiveNoteMetadata(). Nothing here is re-introduced.
 
 let journalInitializationState = 'not-started';
 let journalInitializationCount = 0;
@@ -1893,14 +1698,17 @@ function initWorkspace() {
     onOpenWorkspace: openWorkspace,
     onToday: openToday,
     onNewConcept: openNamedNoteModal,
-    onArchiveActive: archiveActiveWorkspaceFile,
   });
 
   globalThis.MME_APP?.log?.(
-    `Workspace: archive handler registered = ${typeof archiveActiveWorkspaceFile === 'function'}`
+    'Workspace: global action area bound (Open Workspace, Today, New Note)'
   );
 
-  bindArchiveActiveDirect();
+  // ACT V0 — bindArchiveActiveDirect() is removed. It existed only to attach a
+  // second, capture-phase click lifecycle to the global "Archive Active"
+  // control, and it force-enabled a control that was deliberately disabled.
+  // With the control gone, the Active panel action row in js/main.js is the one
+  // and only Archive/Restore owner.
 
   // ACT 5 — wire the Named Note modal once, alongside the existing creation
   // controls. It is the same modal the adapted "New Note" button opens.
