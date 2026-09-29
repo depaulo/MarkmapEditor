@@ -104,11 +104,12 @@ vm.runInContext(viewerSrc, viewCtx, { filename: 'js/ui/release-notes.js' });
 
 /* 1. Exactly one entry per released version, newest first. */
 const entries = (REG && REG.releases) || [];
-check('RN-01 exactly one 0.6.0, one 0.6.1 and one 0.6.2 entry (newest first)',
+check('RN-01 exactly one 0.6.0, one 0.6.1, one 0.6.2 and one 0.6.3 entry (newest first)',
   entries.filter((e) => e.version === '0.6.0').length === 1 &&
   entries.filter((e) => e.version === '0.6.1').length === 1 &&
   entries.filter((e) => e.version === '0.6.2').length === 1 &&
-  entries[0] && entries[0].version === '0.6.2');
+  entries.filter((e) => e.version === '0.6.3').length === 1 &&
+  entries[0] && entries[0].version === '0.6.3');
 
 /* 2. entry.version equals MME_RELEASE.productVersion. */
 const current = entries[0];
@@ -236,10 +237,10 @@ const relSrcCheck = fs.readFileSync(path.join(ROOT, 'js/release/release.js'), 'u
 const swSrcCheck = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 const rnUiSrc = fs.readFileSync(path.join(ROOT, 'js/ui/release-notes.js'), 'utf8');
 
-check('CL-01 product version is 0.6.2', /productVersion: '0\.6\.2'/.test(relSrcCheck));
-check('CL-02 cache identity is the 0.6.2 Notes Workspace Foundation and matches sw.js',
-  /cacheIdentity: 'markmap-journal-pwa-0\.6\.2-notes-workspace-foundation'/.test(relSrcCheck) &&
-  /APP_VERSION = 'markmap-journal-pwa-0\.6\.2-notes-workspace-foundation'/.test(swSrcCheck));
+check('CL-01 product version is 0.6.3', /productVersion: '0\.6\.3'/.test(relSrcCheck));
+check('CL-02 cache identity is the 0.6.3 Tasks and Wiki Links Foundation and matches sw.js',
+  /cacheIdentity: 'markmap-journal-pwa-0\.6\.3-tasks-wiki-links-foundation'/.test(relSrcCheck) &&
+  /APP_VERSION = 'markmap-journal-pwa-0\.6\.3-tasks-wiki-links-foundation'/.test(swSrcCheck));
 check('CL-03 old 0.6.0 cache identity no longer installed',
   !swSrcCheck.includes('markmap-journal-pwa-0.6.0-help-release-foundation'));
 check('CL-03b superseded 0.6.1 cache identity is no longer the installed identity',
@@ -259,11 +260,12 @@ check('CL-07 Release Notes covers ModeSession, Bulk Task, dark mode, HTML Previe
 check('CL-08 Release Notes has a usage example and technical boundaries',
   !!current && Array.isArray(current.limitations) && current.limitations.length > 0 &&
   /When Update Ready appears, select Reload\./.test(registrySrc));
-check('CL-09 new release listed first, older 0.6.1 and 0.6.0 retained beneath it',
-  entries[0] && entries[0].version === '0.6.2' &&
-  entries.findIndex((e) => e.version === '0.6.1') === 1 &&
-  entries.findIndex((e) => e.version === '0.6.0') === 2 &&
-  entries[2] && entries[2].version === '0.6.0');
+check('CL-09 new release listed first, older 0.6.2, 0.6.1 and 0.6.0 retained beneath it',
+  entries[0] && entries[0].version === '0.6.3' &&
+  entries.findIndex((e) => e.version === '0.6.2') === 1 &&
+  entries.findIndex((e) => e.version === '0.6.1') === 2 &&
+  entries.findIndex((e) => e.version === '0.6.0') === 3 &&
+  entries[3] && entries[3].version === '0.6.0');
 check('CL-10 VERIFY.md records F1–F5 closure sections',
   /F1\. Offline foundation/.test(verifyMd) && /F2\. ModeSession/.test(verifyMd) &&
   /F3\. Bulk Task reconciliation/.test(verifyMd) && /F4\. Update Ready/.test(verifyMd) &&
@@ -283,8 +285,8 @@ check('CL-13 Help copy covers offline/updates, tasks/mode switching, preview inl
   /keeps its own unsaved text for the current session/.test(helpTopicsSrc));
 check('CL-14 Help copy stays version-agnostic', !/0\.6\.[012]/.test(helpTopicsSrc));
 check('CL-15 release identity literals are consistent across release files',
-  (relSrcCheck.match(/0\.6\.2/g) || []).length > 0 &&
-  swSrcCheck.includes('MarkmapEditor 0.6.2'));
+  (relSrcCheck.match(/0\.6\.3/g) || []).length > 0 &&
+  swSrcCheck.includes('MarkmapEditor 0.6.3'));
 check('CL-16 the 0.6.2 entry documents the accepted Notes Workspace behavior', (() => {
   const v = entries.find((e) => e.version === '0.6.2');
   if (!v) return false;

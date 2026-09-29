@@ -11,13 +11,13 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 
 // APP_VERSION is the single authoritative release/version owner. It names the
 // installed cache identity (APP_CACHE / RUNTIME_CACHE) for this release
-// boundary: MarkmapEditor 0.6.2 — Notes Workspace Foundation. This is the first
-// release whose cache identity changes to carry the accepted Notes Workspace
-// implementation, so an installed 0.6.1 client will discover a new worker and
+// boundary: MarkmapEditor 0.6.3 — Tasks and Wiki Links Foundation. This boundary
+// carries the accepted Package 2 (Tasks) and Package 3 (Wiki Links) static
+// implementation, so an installed 0.6.2 client will discover a new worker and
 // follow the existing user-controlled Update Ready contract. All changed assets
 // are deterministic precache entries, so a new identity ensures installed
 // clients receive the complete accepted package.
-const APP_VERSION = 'markmap-journal-pwa-0.6.2-notes-workspace-foundation';
+const APP_VERSION = 'markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.
@@ -71,6 +71,7 @@ const LOCAL_APP_SHELL = [
   './js/templates/templates-menu.js',
   './js/templates/metadata-templates.js',
   './js/editor/frontmatter-visibility.js',
+  './js/links/wiki-link-grammar.js',
   './js/links/wiki-links.js',
   './js/export/pandoc-layout-engine.js',
   './js/editor/codemirror-bootstrap.js',
@@ -103,6 +104,7 @@ const LOCAL_APP_SHELL = [
   './js/render/render-controller.js',
   './js/editor/editor-visibility.js',
   './js/editor/frontmatter-visibility.js',
+  './js/links/wiki-link-grammar.js',
   './js/links/wiki-links.js',
   './js/workspace/task-review.js',
   './js/templates/metadata-templates.js',

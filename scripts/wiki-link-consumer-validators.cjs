@@ -316,9 +316,14 @@ const relWire = extractBlock(MAIN_SOURCE, 'function wireWorkspaceRelatedPanel() 
     /applyPriority|replaceLine/.test(providerSrc) === false);
   await check('C64', 'no Graph or Mermaid implementation', () =>
     /graphView|mermaidView/.test(WIKI_SOURCE) === false);
-  await check('C65', 'no version/cache change', () =>
-    /0\.6\.3/.test(RELEASE_SOURCE) === false && /0\.6\.3/.test(SW_SOURCE) === false &&
-    /0\.6\.2/.test(RELEASE_SOURCE) && /0\.6\.2/.test(SW_SOURCE));
+  // ACT 3C's scope fence ("no version change during an intermediate ACT") is
+  // satisfied by the PACKAGE 3 CLOSURE boundary itself: the accepted release is
+  // now 0.6.3, in BOTH owners, with no intermediate identity left behind.
+  await check('C65', 'the release boundary is 0.6.3 in both owners', () =>
+    /productVersion: '0\.6\.3'/.test(RELEASE_SOURCE) &&
+    /markmap-journal-pwa-0\.6\.3-tasks-wiki-links-foundation/.test(SW_SOURCE) &&
+    /markmap-journal-pwa-0\.6\.3-tasks-wiki-links-foundation/.test(RELEASE_SOURCE) &&
+    /0\.6\.2-notes-workspace-foundation/.test(RELEASE_SOURCE) === false);
 
   group('F. ACT 3C mutation controls (C-M1..C-M10)');
 

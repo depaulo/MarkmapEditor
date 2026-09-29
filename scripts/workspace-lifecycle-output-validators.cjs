@@ -1060,7 +1060,7 @@ function resetHarness() {
     // identity never changes.
     ['X60', 'release parity holds at the current accepted identity', () => {
       const parity = runNode('scripts/release-parity.cjs');
-      return /RELEASE PARITY OK/.test(parity) && /0\.6\.2/.test(parity);
+      return /RELEASE PARITY OK/.test(parity) && /0\.6\.3/.test(parity);
     }],
   ];
 

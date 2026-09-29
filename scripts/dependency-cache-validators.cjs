@@ -184,16 +184,16 @@ check('11 update-ready assets remain in LOCAL_APP_SHELL exactly once', (() => {
     shell.split("'./js/pwa/update-ready.js'").length - 1 === 1;
 })());
 
-check('12 semantic 0.6.2 identity is the installed cache identity',
-  /APP_VERSION = 'markmap-journal-pwa-0\.6\.2-notes-workspace-foundation'/.test(swSrc) &&
-  !/0\.6\.0-help-release-foundation|0\.6\.2-test|0\.6\.1-foundation-closure/.test(swSrc));
+check('12 semantic 0.6.3 identity is the installed cache identity',
+  /APP_VERSION = 'markmap-journal-pwa-0\.6\.3-tasks-wiki-links-foundation'/.test(swSrc) &&
+  !/0\.6\.0-help-release-foundation|0\.6\.3-test|0\.6\.1-foundation-closure/.test(swSrc));
 
 check('13 no temporary worker identity introduced',
   !/test1|0\.6\.2-test|v7\d-metadata/.test(swSrc));
 
-check('14 release copy matches the accepted 0.6.2 identity and Help stays version-agnostic',
-  read('js/release/release.js').includes('0.6.2') &&
-  read('js/ui/release-notes-content.js').includes('0.6.2') &&
+check('14 release copy matches the accepted 0.6.3 identity and Help stays version-agnostic',
+  read('js/release/release.js').includes('0.6.3') &&
+  read('js/ui/release-notes-content.js').includes('0.6.3') &&
   !read('js/release/release.js').includes('0.6.0-help-release-foundation') &&
   !read('js/ui/help-content.js').includes('0.6.2') &&
   !read('js/ui/help-content.js').includes('0.6.1') &&
@@ -454,8 +454,8 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 
 function newEnv(fetchImpl) {
   const env = {
-    appCacheName: 'markmap-journal-pwa-0.6.2-notes-workspace-foundation-app',
-    runtimeCacheName: 'markmap-journal-pwa-0.6.2-notes-workspace-foundation-runtime',
+    appCacheName: 'markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation-app',
+    runtimeCacheName: 'markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation-runtime',
     fetchImpl: fetchImpl || (() => Promise.reject(new Error('offline'))),
   };
   env.sandbox = runServiceWorker(env);

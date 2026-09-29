@@ -52,7 +52,7 @@ check('47 clients.claim remains present', swSrc.includes('sw.clients.claim();'))
 check('48 prefix cleanup remains present', /CACHE_PREFIX/.test(swSrc) && /caches\.delete/.test(swSrc));
 check('49 fetch handler remains present', swSrc.includes("addEventListener('fetch'"));
 check('50 sw.js APP_VERSION is the accepted 0.6.1 closure identity',
-  swSrc.includes("APP_VERSION = 'markmap-journal-pwa-0.6.2-notes-workspace-foundation'") &&
+  swSrc.includes("APP_VERSION = 'markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation'") &&
   !swSrc.includes("APP_VERSION = 'markmap-journal-pwa-0.6.0-help-release-foundation'"));
 check('68 update-ready assets in LOCAL_APP_SHELL exactly once',
   countInShell('css/update-ready.css') === 1 && countInShell('js/pwa/update-ready.js') === 1,
@@ -169,9 +169,9 @@ check('61 no lastSeenKey write in update module', !/lastSeen/.test(urSrc));
 check('63 Release Notes content includes the accepted 0.6.1 entry',
   rncSrc.includes('0.6.1') && !/test1|0\.6\.2-test|v7x-metadata/.test(rncSrc));
 check('64 productVersion is 0.6.2',
-  relSrc.includes("productVersion: '0.6.2'") && !relSrc.includes("productVersion: '0.6.1'"));
+  relSrc.includes("productVersion: '0.6.3'") && !relSrc.includes("productVersion: '0.6.1'"));
 check('65 release cache identity is the accepted 0.6.2 Notes Workspace Foundation identity',
-  relSrc.includes("cacheIdentity: 'markmap-journal-pwa-0.6.2-notes-workspace-foundation'"));
+  relSrc.includes("cacheIdentity: 'markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation'"));
 check('66 release identity agrees with sw.js APP_VERSION', (() => {
   const m = swSrc.match(/APP_VERSION = '([^']+)'/);
   return !!m && relSrc.includes("cacheIdentity: '" + m[1] + "'");

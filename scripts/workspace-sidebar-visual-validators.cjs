@@ -841,8 +841,11 @@ function buildTagsSandbox() {
     return v0.every((t) => !/\bpane\b|PaneRegistry/i.test(t));
   });
 
-  await check('Y44', 'no version, cache, Service Worker, Help or Release Notes change', () => {
-    return /markmap-journal-pwa-0\.6\.2-notes-workspace-foundation/.test(SW_SOURCE) &&
+  // The accepted release boundary advanced to 0.6.3 (Package 3 closure). The
+  // ACT V0 fences that still hold are the ones about internal scaffolding never
+  // leaking into shipped product files.
+  await check('Y44', 'no internal scaffolding leaks into shipped product files', () => {
+    return /markmap-journal-pwa-0\.6\.3-tasks-wiki-links-foundation/.test(SW_SOURCE) &&
       !/ACT V0/.test(SW_SOURCE) &&
       !/ACT V0/.test(read('js', 'ui', 'help-content.js')) &&
       !/ACT V0/.test(read('js', 'ui', 'release-notes-content.js')) &&

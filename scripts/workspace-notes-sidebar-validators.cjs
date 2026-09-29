@@ -42,7 +42,7 @@ const SCANNER_SOURCE = read('js', 'workspace', 'workspace-scanner.js');
 const INDEX_HTML = read('index.html');
 const CSS_SOURCE = read('css', 'workspace.css');
 
-const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.2-notes-workspace-foundation';
+const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation';
 
 const results = [];
 function record(id, name, ok, detail) {

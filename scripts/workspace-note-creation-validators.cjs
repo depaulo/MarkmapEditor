@@ -40,7 +40,7 @@ const SCANNER_PATH = path.join(ROOT, 'js', 'workspace', 'workspace-scanner.js');
 const STATE_PATH = path.join(ROOT, 'js', 'workspace', 'workspace-state.js');
 const CONTROLLER_PATH = path.join(ROOT, 'js', 'workspace', 'workspace-controller.js');
 
-const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.2-notes-workspace-foundation';
+const APP_VERSION_BASELINE = 'markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation';
 
 const results = [];
 function record(id, name, ok, detail) {
