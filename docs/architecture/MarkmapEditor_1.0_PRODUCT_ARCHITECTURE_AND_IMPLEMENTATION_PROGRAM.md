@@ -1,9 +1,11 @@
 # MarkmapEditor 1.0 Product Architecture and Implementation Program
 
+**Canonical path:** `docs/architecture/MarkmapEditor_1.0_PRODUCT_ARCHITECTURE_AND_IMPLEMENTATION_PROGRAM.md`
 **Status:** Canonical planning document for the post-0.6.2 program
 **Baseline:** MarkmapEditor 0.6.2, Notes Workspace Foundation
 **Authority:** PLAN first. Each implementation package requires its own source-proven PLAN, explicit ACT authorization, static validation, browser acceptance, and release closure.
 **Runtime implementation authorized by this document:** No
+**Synchronization:** Gate 1 — architecture synchronization, source reconciliation and implementation handoffs. This document was synchronized from the closed product decisions of Gate 1. No runtime file was changed by that Gate.
 
 ---
 
@@ -35,12 +37,26 @@ The program is based on the current repository owners and accepted documentation
 - `VERIFY.md`;
 - `docs/WORKSPACE_FORMAT.md`;
 - `docs/AI_DEVELOPMENT_WORKFLOW.md`;
-- `docs/architecture/MarkmapEditor_Notes_Knowledge_Workspace_1_0_PLAN.md`;
-- `docs/architecture/MarkmapEditor_Task_Lifecycle_Architecture.md` or its current equivalent;
-- `docs/architecture/MarkmapEditor_Projects_Discovery_MVP_Architecture.md` or its current equivalent;
-- `docs/architecture/MarkmapEditor_Quick_Report_and_task_Metadata_MVP_PLAN.md`;
-- the current Draw.io Report architecture documents;
+- `docs/architecture/MarkmapEditor_Notes_Knowledge_Workspace_1_0_PLAN.md` — current Notes/Knowledge Workspace architecture;
+- `docs/architecture/MarkmapEditor_Task_Lifecycle_ARCHITECTURE.md` — current Task Lifecycle architecture;
+- `docs/architecture/MarkmapEditor_Projects_Discovery_MVP_PLAN.md` — current Projects Discovery architecture;
+- `docs/architecture/MarkmapEditor_Quick_Report_and_task_Metadata_MVP_PLAN.md` — current Quick Report and Task Metadata architecture;
+- `docs/architecture/MarkmapEditor_Drawio_Report_MVP_ARCHITECTURE.md` — current Draw.io Report architecture;
+- `docs/architecture/MarkmapEditor_Screen_Layout_ARCHITECTURE.md` — current Screen Layout architecture;
+- `docs/architecture/MarkmpaEditorX3_Navigation_History_V1_PLAN.md` — current Navigation History architecture;
 - the current source owners in `js/workspace/`, `js/tasks/`, `js/links/`, `js/report/`, `js/core/`, `js/main.js`, and `sw.js`.
+
+> **Naming note (corrected during Gate 1).** Earlier revisions of this section cited
+> `MarkmapEditor_Task_Lifecycle_Architecture.md` and
+> `MarkmapEditor_Projects_Discovery_MVP_Architecture.md`. Neither path exists. The real
+> files are the `*_ARCHITECTURE.md` and `*_MVP_PLAN.md` names listed above. Always
+> verify a path against the checkout before citing it as an owner.
+
+**Historical status of the other architecture documents.** Every file listed above
+other than this one is a **historical subsystem record**. It remains valid evidence
+for its own subsystem and must not be rewritten as though it were the current
+execution document. Where this document and a subsystem record differ on a
+cross-feature question, this document governs.
 
 Repository facts that constrain this program:
 
@@ -135,7 +151,44 @@ Unsaved changes belong to Current Document scope. Workspace projections represen
 
 ### 4.5 Freeze rule
 
-The accepted Notes architecture must not be redesigned during the 1.0 program. Changes are limited to defects found through real laptop use and narrowly scoped usability improvements assigned to an approved package.
+The accepted Notes architecture must not be redesigned during the 1.0 program. Changes are limited to defects found through real use and narrowly scoped usability improvements assigned to an approved package.
+
+### 4.6 ACT V0 — accepted pre-package visual correction
+
+ACT V0 was a source-proven visual correction performed before Package 2. It is part
+of the **accepted 1.0 baseline**, not a pending change:
+
+- the global Workspace action area is exactly **Open Workspace · Today · New Note**;
+- **Archive and Restore belong to the Active panel action row**, using the existing
+  single metadata writer (`applyActiveNoteMetadata`). The former global
+  "Archive Active" control, its physical archive/ copy-and-remove workflow and its
+  second click lifecycle were removed, so Archive/Restore has exactly one owner;
+- Sidebar panel badges no longer repeat their panel title (`0 related` → `0`,
+  `<n> tags` → `<n>`); compound badges that carry a real state or a second metric
+  (Active `Note`, Report `Config`, Workspace Index `62 files · 195 open`) were kept;
+- panel title weight is owned by a single rule, and the Archive panel now uses the
+  same generic sibling separator as every other Workspace panel.
+
+ACT V0 changed presentation only. It did not change the parser, the metadata writer,
+YAML format, Archive semantics, Notes storage, navigation, Task parsing, Wiki Links,
+Projects data, Report behaviour or pane layout, and it did not change the version or
+cache identity. Its proof suite is `scripts/workspace-sidebar-visual-validators.cjs`
+(50 fixtures, including five mutation controls).
+
+---
+
+## 4A. Scope Composition Rule
+
+Every consumer in the program must be assessed **individually** and classified as one of:
+
+- **Current Document** — the live editor buffer;
+- **Workspace** — saved physical Notes through `WORKSPACE_INDEX_STATE`;
+- **Both** — meaningful in each scope, potentially with different content;
+- **Workspace-only** — meaningless or misleading without aggregation.
+
+Both scopes must reuse the same parser. A **second parser, second Workspace Index, or
+second document store is not allowed.** A consumer that is "Both" reuses the same
+owner in both scopes with different inputs; it does not acquire a second owner.
 
 ---
 
@@ -202,6 +255,121 @@ Virtual views must preserve dirty-state protection, writable handle, Current Doc
 
 ---
 
+## 5A. Shared Interaction Grammar
+
+**Product principle: learn one interaction → recognize and use the equivalent interaction elsewhere.**
+
+The following surfaces must converge visually and behaviorally wherever they represent
+equivalent information:
+
+- Active;
+- Workspace Index;
+- Tags Sidebar;
+- future document-local summaries;
+- future Highlights and Reminders.
+
+Sharing a grammar does **not** create another persistent store. Two surfaces may look
+identical and still read different scopes.
+
+### 5A.1 Shared summary-card contract
+
+Target card contract:
+
+- compact title;
+- numeric count;
+- small disclosure chevron;
+- `aria-expanded` state;
+- concise preview list;
+- clickable navigation entries;
+- optional **View All** action;
+- consistent empty state;
+- mouse, touch and keyboard support;
+- **no domain editing inside the summary card.**
+
+Scope difference:
+
+- **Active** → the active Current Document and relationships involving that document;
+- **Workspace Index** → saved Workspace aggregation.
+
+### 5A.2 Active summary cards
+
+Planned Active cards:
+
+- **Open**;
+- **Done**;
+- **Links In**;
+- **Links Out**;
+- **Projects**.
+
+Possible future post-1.0 cards: **Highlights**, **Reminders**.
+
+Active remains a **compact summary and navigation surface**. It does not replace Task
+Review, Task Board, Projects Expanded View, the Wiki Links owner, the Tags Sidebar or
+the Workspace Index.
+
+Initial expanded lists should normally show **no more than three to five items**.
+**View All delegates to the specialized owner** and never duplicates it.
+
+> **Status: planned, not implemented.** No expandable Active card exists in the
+> current source. `renderWorkspaceActivePanel()` in `js/main.js` renders a flat
+> `workspaceActiveStats` grid only. No ACT has begun this work.
+
+### 5A.3 Workspace Index parity
+
+The Workspace Index may use the same disclosure and navigation grammar for Open Tasks,
+Done Tasks, Links In, Links Out, Projects and Tags.
+
+- Workspace Index uses **Workspace** scope.
+- Active uses **Current Document** scope.
+
+Identical list sizes or complete layouts are **not** required. Equivalent interaction
+semantics are required.
+
+> **Status: planned, not implemented.** The current Workspace Index uses static
+> metric tiles and sections, not disclosure cards.
+
+### 5A.4 Tags
+
+Tags must use the same chip appearance and selection behavior in Active, the Tags
+Sidebar and the Workspace Index.
+
+Workspace behavior:
+
+- an Active tag delegates to the existing Workspace Tags filtering owner;
+- a Sidebar tag uses that same filter owner;
+- a Workspace Index tag uses that same filter owner.
+
+Standalone behavior:
+
+- an Active tag operates only inside the Current Document;
+- no cross-file result is implied without a Workspace.
+
+> **Status: planned, not implemented.** ACT V0 established count-only Tags badges but
+> did not add clickable Active tags or cross-surface parity.
+
+### 5A.5 Relationship terminology
+
+Adopt the symmetric convention:
+
+- **Links In**;
+- **Links Out**.
+
+**Links In** replaces `Related` wherever Related currently means Notes linking *into*
+the active Note. **Links Out** means Wiki Links *declared by* the current source.
+
+**The rename is planned, not implemented.** Package 3 must first prove that the
+current Related data is truly the backlink / Links In projection before any visible
+label changes.
+
+> **Source-reconciliation note (Gate 1).** Both projections currently derive from the
+> same `parsed.conceptLinks` array: `findBacklinksForConcept()`
+> (`js/main.js:2498`) selects *other* Notes whose `conceptLinks` include the active
+> one, while the Active stat `linksOut` (`js/main.js:3811`) counts the active
+> document's *own* `conceptLinks`. This is consistent with Links In / Links Out, but
+> it is a reading, not a proof. Package 3 owns that proof.
+
+---
+
 ## 6. Tasks Architecture for 1.0
 
 ### 6.1 Existing foundation
@@ -232,19 +400,94 @@ The Task package must stabilize:
 - lifecycle dates consumed by Reports;
 - local Current Document feasibility without adding a second lifecycle model.
 
-### 6.3 Explicit exclusions
+### 6.3 Required Package 2 sequence
+
+```text
+ACT 2A
+→ normalized Task contract
+→ Review/Board consistency
+→ lifecycle-date stabilization
+→ Current Document / Workspace pure projection
+→ canonical priority-source reconciliation
+
+ACT 2B
+→ Task Board priority selection
+
+ACT 2C
+→ only if ACT 2A or ACT 2B proves a remaining focused Task correction
+```
+
+### 6.4 Task Board priority selection
+
+**Accepted 1.0 requirement, subject to ACT 2A proving the canonical physical
+representation.**
+
+Each Task Board card may receive a compact **top-right priority selector**:
+
+```text
+--      no priority
+P1
+P2
+P3
+```
+
+Requirements:
+
+- current priority visible without opening anything;
+- touch-safe;
+- keyboard-accessible;
+- **no status change**;
+- **no automatic priority ordering**;
+- **no direct Index mutation**;
+- exact Task source patched conservatively;
+- checkbox and lifecycle metadata preserved;
+- Save and the Index rebuild remain authoritative;
+- Board, Review and the priority filter agree **after Save**.
+
+**ACT 2A must decide the single canonical write representation** — visible `#pN`
+syntax, priority inside `mme-task`, or another source-proven representation. There
+must be **one** canonical write representation. Do not specify two simultaneous
+sources of truth.
+
+> **Source-reconciliation note (Gate 1).** A read-side priority grammar **already
+> exists**: `priorityOf()` in `js/tasks/task-lifecycle.js` (around line 305) resolves
+> priority as **visible token first, `mme-task: priority=` as fallback**, and that
+> file states it owns "the ONE priority-recognition grammar". Separately,
+> `js/tasks/task-board.js` has a read-only priority *filter* and explicitly
+> disclaims owning priority grammar, and `js/workspace/workspace-parser.js` has no
+> `priority` vocabulary at all. So a **reader** for two candidate sources already
+> exists while no **writer** does. Assigning that decision to ACT 2A, not ACT 2B, is
+> deliberate.
+
+### 6.5 Active and Workspace Index Task dependency
+
+Future Active summary cards (§5A.2) depend on Package 2's normalized Task projection:
+
+```text
+Active Open / Done              → Current Document Tasks
+Workspace Index Open / Done     → saved Workspace Tasks
+```
+
+The summary cards **navigate only**. Task status and priority management remain in the
+document, Task Review or Task Board.
+
+### 6.6 Explicit exclusions
 
 Do not add before 1.0 unless a later accepted package proves the need:
 
 - stable Task UUIDs;
 - person assignment system;
-- priority editing from the Board;
-- automatic priority ordering;
+- **automatic priority ordering**;
 - file grouping mode;
 - history column;
 - complex dependencies;
 - subtasks;
 - configurable workflow columns.
+
+> **Correction applied during Gate 1.** An earlier revision of this section listed
+> "priority editing from the Board" as an exclusion. That directly contradicted the
+> accepted 1.0 requirement. It has been removed: **ACT 2B owns Task Board priority
+> selection.** Only *automatic priority ordering* remains excluded.
 
 ---
 
@@ -264,6 +507,39 @@ The stabilization package must cover:
 - preservation of links during all 1.0 packages.
 
 Rename File and automatic Wiki Link rewriting remain deferred. The 1.0 work may document requirements needed by a future rename workflow but must not implement it.
+
+### 7.1 Mandatory pre-rename proof
+
+Package 3 must **explicitly prove** that:
+
+```text
+Related  ==  Links In (backlinks)
+```
+
+before any visible terminology changes. The label rename is gated on that proof, not
+scheduled beside it.
+
+### 7.2 Target future behavior
+
+Active:
+
+```text
+Links In   → source Notes linking to the active Note
+Links Out  → links declared in the active document
+```
+
+Workspace Index:
+
+```text
+Links In   → aggregated inbound relationships
+Links Out  → aggregated outbound relationships
+```
+
+Resolved, missing and ambiguous states remain controlled by the **Wiki Links owner**
+(`js/links/wiki-links.js`, `resolveTarget`). Do not re-implement resolution, ambiguity
+reporting or missing-target handling in a consumer.
+
+**Do not implement Rename File. Do not implement automatic Wiki Link rewriting.**
 
 ---
 
@@ -481,42 +757,85 @@ Do not make Draw.io canonical. Do not add an embedded Draw.io editor, template l
 
 ---
 
-## 10. Final Visual Consistency ACT
+## 9A. Pane-Divider Visual Requirement
 
-Reserve one final visual ACT after Standalone Notes, Tasks, Projects, and Reports are functionally accepted.
+The number of **visible, functional** dividers must follow the visible panes:
 
-The exact visual scope is intentionally defined later from the completed experiences, but the ACT is constrained to consistency and usability. It is not an open redesign.
+| Visible panes | Visible dividers |
+| --- | --- |
+| Editor + Markmap + HTML | two |
+| Editor + HTML | one |
+| Editor + Markmap | one |
+| Markmap + HTML | one |
+| one visible pane | none |
 
-Candidate review areas:
+**Hiding the middle Markmap pane must not leave two adjacent splitters or a visually
+doubled line.** The two splitters must be re-associated with the panes that actually
+remain visible, and the surviving divider must sit exactly where the boundary between
+those two panes is.
 
-- initial choice between Open Standalone Note and Open Workspace;
-- Sidebar composition by scope;
-- panel hierarchy and density;
-- modal and dropdown consistency;
-- labels, badges, and empty states;
-- H1 title and path presentation;
+The correction belongs to the **existing pane/layout owner**
+(`js/ui/view-layout.js` plus the splitter markup in `index.html` and
+`css/view-layout.css`). It must not be solved by adding a decorative element, and it
+must not introduce a second layout owner.
+
+**Routing:**
+
+- if later source inspection proves the defect is a small local correction in the
+  existing owner, it may be handled **before** the final visual package;
+- otherwise it belongs to **Package 10**.
+
+**Not implemented in this Gate.** This is a recorded, accepted requirement.
+
+> **Source-reconciliation note (Gate 1).** The current markup contains exactly two
+> splitters — `#splitEditor` (`index.html:750`) and `#splitHtml` (`index.html:776`).
+> Whether hiding Markmap currently produces a doubled or orphaned divider has **not**
+> been reproduced in a browser in this Gate. The requirement is recorded as accepted
+> behavior to be proven or corrected in the owning package, not as a diagnosed defect.
+
+---
+
+## 10. Final Visual Consistency Package
+
+Package 10 remains **one constrained final visual ACT, or a small group of tightly
+related ACTs.** It runs after Standalone Notes, Tasks, Projects and Reports are
+functionally accepted. It is a consistency and usability pass, **not an open redesign.**
+
+It may align:
+
+- the Open Standalone Note / Open Workspace entry;
+- Active disclosures;
+- Workspace Index disclosures;
+- shared tag behavior;
+- Links In / Links Out labels;
+- the Projects card;
+- chevrons and preview lists;
+- panel hierarchy;
+- empty states;
+- dropdown consistency;
+- modal consistency;
 - touch targets;
-- keyboard focus and Escape behavior;
-- mobile, DeX, and laptop layouts;
-- virtual-view headers and Return controls;
-- Projects and Reports visual alignment;
-- contextual help entry points;
-- dark mode consistency.
+- keyboard focus;
+- virtual-view Return controls;
+- mobile / DeX / laptop layout;
+- dark mode;
+- dynamic pane dividers (§9A).
 
-The visual ACT must not change data contracts, parser semantics, lifecycle ownership, or Save boundaries.
+It **must not** alter:
+
+- parser contracts;
+- lifecycle ownership;
+- Project metadata semantics;
+- the Report pipeline;
+- Save ownership;
+- Workspace storage;
+- Navigation History.
 
 ---
 
 ## 11. Implementation Packages and Order
 
-### Package 0: Published 0.6.2 acceptance
-
-Purpose:
-
-- run `VERIFY.md` published-laptop checks;
-- validate Update Ready from 0.6.1 to 0.6.2;
-- validate migrated Workspace use;
-- record real defects.
+### Package 0: Published 0.6.2 acceptance — COMPLETE
 
 Exit:
 
@@ -525,13 +844,25 @@ RELEASE 0.6.2 FULLY ACCEPTED
 NOTES ARCHITECTURE FROZEN
 ```
 
-### Package 1: Post-release defect stabilization
+### Pre-Package ACT V0: Sidebar visual correction — IMPLEMENTED
 
-Only defects reproduced during real use. No speculative redesign.
+Scope: Sidebar hierarchy, badge consistency and Archive action ownership. Presentation
+only. See §4.6. Part of the accepted 1.0 baseline. Mobile checkpoint accepted.
 
-### Package 2: Task Review stabilization
+### Package 1: Post-release defect stabilization — CONDITIONAL
 
-Stabilize lifecycle, reconciliation, Review, Board, source navigation, and Report-ready dates.
+Only when **reproduced** defects exist during real use. No speculative redesign.
+
+**Current state: no blocking defect package is required.** Package 1 stays dormant
+unless a defect report satisfies the intake format in `NEXT_CYCLE_PLAN.md` §3.
+
+### Package 2: Task Review and Task Board stabilization
+
+- **ACT 2A** — normalized contract and priority-source reconciliation;
+- **ACT 2B** — Task Board priority selection;
+- **ACT 2C** — optional, only if source evidence requires it.
+
+This is the **first new functional package of 1.0**. See §6.3–§6.5.
 
 ### Package 3: Wiki Links stabilization
 
@@ -667,6 +998,24 @@ expected owner marker present
 
 Avoid brittle cross-package assertions that pin exact sibling-suite pass counts unless the exact count protects against silent fixture removal.
 
+### 14.1 Mobile-first development policy
+
+This is the current execution constraint of the program:
+
+- **primary development and static validation occur on the cellphone**;
+- after each ACT, use validators, mutation tests and source inspection;
+- browser checkpoints should be performed on **S22/DeX** when the interaction is
+  available there;
+- laptop testing is requested **only at meaningful checkpoints** that require:
+  - desktop-only keyboard behavior;
+  - wide layout;
+  - PWA publication / update behavior;
+  - productive Workspace acceptance;
+  - an interaction not reproducible on mobile.
+
+Do not require laptop testing after every static package. **Do not reduce static
+validation quality because development occurs on mobile.**
+
 ---
 
 ## 15. Definition of MarkmapEditor 1.0
@@ -750,6 +1099,33 @@ Do not reopen without blocking source evidence:
 - A final visual consistency ACT is reserved before 1.0 closure.
 - Highlights, Reminders, `@`, autocomplete, Mermaid, Graph, Reveal.js, and Rename remain post-1.0.
 
+### 17.1 Decisions closed during Gate 1
+
+- Every consumer is classified individually as Current Document, Workspace, Both or
+  Workspace-only (§4A). One parser, one Workspace Index, one document store.
+- The entry direction is **Open Standalone Note → document tools only** and
+  **Open Workspace → document tools plus aggregation**. Never two applications,
+  never two independently maintained Sidebars.
+- Surfaces representing equivalent information share one interaction grammar
+  (§5A): compact title, count, chevron, `aria-expanded`, preview list, View All
+  delegation, consistent empty state, mouse/touch/keyboard, no domain editing in
+  the card.
+- Active stays a compact summary and navigation surface. It does not replace Task
+  Review, Task Board, Projects Expanded View, the Wiki Links owner, the Tags
+  Sidebar or the Workspace Index.
+- Initial expanded lists show at most about three to five items; View All
+  delegates.
+- Tags converge on one chip appearance and one selection behavior; in Workspace
+  scope all three surfaces delegate to the same Tags filter owner.
+- The symmetric relationship convention is **Links In / Links Out**. The rename is
+  **gated on a Package 3 proof** that Related is the backlinks projection.
+- **Task Board priority selection is an accepted 1.0 requirement owned by ACT 2B**;
+  ACT 2A owns the single canonical priority write representation.
+- Visible divider count follows visible pane count; hiding Markmap must not leave
+  two adjacent splitters or a doubled line (§9A).
+- Primary development and static validation occur on the cellphone; laptop testing
+  is checkpoint-driven, not per-package (§14.1).
+
 ---
 
 ## 18. Decisions Required During Package PLANs
@@ -787,37 +1163,35 @@ These are not blockers for this architecture document. They must be closed in th
 
 ---
 
-## 19. First Official Handoff
+## 19. Next Official Handoff
 
-After 0.6.2 published-laptop acceptance, begin only with the next authorized package.
+Package 1 is dormant (§11) because no reproduced blocking defect exists. The next
+authorized package is therefore **Package 2**.
 
 ```text
 MARKMAPEDITOR 1.0 PROGRAM
-PACKAGE 1: POST-RELEASE DEFECT INTAKE
+PACKAGE 2: TASK REVIEW AND TASK BOARD STABILIZATION
 MODE: PLAN ONLY
 
 Read:
 - MarkmapEditor_1.0_PRODUCT_ARCHITECTURE_AND_IMPLEMENTATION_PROGRAM.md
+- docs/architecture/MarkmapEditor_1.0_PACKAGE_2_TASK_STABILIZATION_PLAN.md
 - NEXT_CYCLE_PLAN.md
 - VERIFY.md
 - STATUS.md
-- docs/WORKSPACE_FORMAT.md
-- docs/AI_DEVELOPMENT_WORKFLOW.md
+- docs/architecture/MarkmapEditor_Task_Lifecycle_ARCHITECTURE.md
 
-Inspect the current repository and real-use defect evidence.
+Inspect the current repository source owners listed in the Package 2 PLAN.
 
 Do not implement speculative improvements.
 Do not redesign Notes.
-Do not begin Task Review, Wiki Links, Standalone, Projects, or Reports unless
-no blocking post-release defect exists and the owner explicitly advances to
-the next package.
+Do not begin ACT 2A automatically: the owner advances to it explicitly.
 
 Return:
 - starting state;
-- published-laptop acceptance results;
-- reproduced defects only;
+- ACT 2A source reconciliation;
+- canonical priority write representation and its evidence;
 - exact owners;
-- proposed focused ACTs;
 - non-touch list;
 - validators;
 - browser checkpoints;
@@ -825,6 +1199,9 @@ Return:
 
 STOP after PLAN.
 ```
+
+**Do not create detailed handoffs for Packages 3–11 in advance.** Each is created only
+when that package becomes current.
 
 ---
 
@@ -834,14 +1211,17 @@ STOP after PLAN.
 0.6.2 release
 → closed and published
 
-Published-laptop acceptance
-→ required before architecture freeze is fully confirmed
+ACT V0 (Sidebar visual correction)
+→ implemented, mobile checkpoint accepted, part of the accepted baseline
+
+Published acceptance
+→ completed for 0.6.2
 
 1.0 architecture
-→ defined by this document
+→ defined and synchronized by this document
 
 1.0 runtime implementation
-→ not started by this document
+→ not started (Package 2 is next, PLAN only)
 
 Next authorization
 → one package PLAN at a time

@@ -4,6 +4,34 @@ This document outlines short, repeatable verification procedures suitable for De
 
 ---
 
+## 0. ACT V0 mobile checkpoint (performed)
+
+ACT V0 was a Sidebar **visual correction** executed before Package 2. It is part of
+the accepted 1.0 baseline, not a pending item.
+
+**Scope verified on S22/DeX:**
+
+1. separator visible between Workspace Index and Archive, with no double or thick border;
+2. Projects panel title uses normal panel-title weight;
+3. Archive panel title uses normal panel-title weight;
+4. Related badge shows only `0` (or its numeric count);
+5. Tags badge shows only the numeric count;
+6. Workspace Index retains its `files · open` compound summary;
+7. Archive Active is absent from the global Workspace actions;
+8. Archive / Restore appears exactly once, in the Active panel action row;
+9. Archive marks the document dirty before Save, and Save persists it;
+10. a Note opened from Archive shows Restore in Active, and Restore + Save works;
+11. Active and Archive collapse and expand repeatedly.
+
+**Static proof:** `scripts/workspace-sidebar-visual-validators.cjs` — 50 fixtures,
+0 failed, including five mutation controls that revert each correction and prove the
+corresponding contract breaks.
+
+**Not claimed here:** no Task, Wiki Links, Standalone, Projects, Reports, Active-card,
+Workspace-Index-disclosure or pane-layout acceptance. None of those packages has begun.
+
+---
+
 ## 1. Diagnostics & Runtime Checks
 
 ### A. Host Diagnostic Output

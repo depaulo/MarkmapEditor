@@ -1,5 +1,25 @@
 # MarkMapJournal Release Status
 
+## Program Position (Gate 1)
+
+- **Release `0.6.2` — Notes Workspace Foundation**: ACCEPTED and published.
+- **ACT V0 — Sidebar hierarchy, badge consistency, Archive action ownership**:
+  IMPLEMENTED and mobile-accepted. Presentation only. Part of the accepted 1.0
+  baseline. Proof suite: `scripts/workspace-sidebar-visual-validators.cjs`
+  (50 fixtures, 0 failed).
+- **Canonical 1.0 architecture synchronization**: IN PROGRESS / this Gate.
+  Canonical file:
+  `docs/architecture/MarkmapEditor_1.0_PRODUCT_ARCHITECTURE_AND_IMPLEMENTATION_PROGRAM.md`
+- **Package 2 implementation**: NOT STARTED. ACT 2A has not begun and requires
+  explicit owner authorization. Planning handoff:
+  `docs/architecture/MarkmapEditor_1.0_PACKAGE_2_TASK_STABILIZATION_PLAN.md`.
+
+**Not started, and not authorized by any document here:** Task Review changes, Task
+Board priority selection, Wiki Links changes, Standalone Notes, Projects, Reports,
+Active or Workspace Index disclosures, pane-layout changes.
+
+---
+
 ## 0.1. Notes Workspace Foundation — Release 0.6.2
 
 - **Release**: `0.6.2` — Notes Workspace Foundation.
@@ -8,10 +28,24 @@
   — single authoritative owner `sw.js`; mirrored by `js/release/release.js`;
   parity enforced by `scripts/release-parity.cjs`.
 - **Accepted architecture**: see `docs/architecture/MarkmapEditor_Notes_Knowledge_Workspace_1_0_PLAN.md`.
+- **1.0 program architecture**: see
+  `docs/architecture/MarkmapEditor_1.0_PRODUCT_ARCHITECTURE_AND_IMPLEMENTATION_PROGRAM.md`.
 - **Migration guidance**: `docs/WORKSPACE_FORMAT.md`.
-- **Status**: implementation accepted. Browser acceptance of the Archive
-  panel collapse correction is the only open item before this release is
-  published.
+- **Status**: implementation accepted and published.
+
+### ACT V0 result (accepted baseline)
+
+- Global Workspace actions are exactly **Open Workspace · Today · New Note**.
+- **Archive / Restore belongs to the Active panel action row** and uses the single
+  metadata writer. The former global "Archive Active" control, its physical
+  `archive/` copy-and-remove workflow, and its second click lifecycle were removed.
+- Sidebar badges no longer repeat their panel title (`0 related` -> `0`,
+  `<n> tags` -> `<n>`). Compound badges carrying a real state or a second metric
+  (Active `Note`, Report `Config`, Workspace Index `62 files - 195 open`) were kept.
+- Panel title weight has a single owner; the Archive panel uses the same generic
+  sibling separator as every other Workspace panel.
+- No parser, metadata-writer, YAML, Archive-semantics, Notes-storage, navigation,
+  Task, Wiki Links, Projects, Report, pane-layout, version or cache change.
 
 ### Accepted boundaries (intentional, not gaps)
 
