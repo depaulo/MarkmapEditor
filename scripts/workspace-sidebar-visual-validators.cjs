@@ -348,6 +348,11 @@ function buildRelatedSandbox() {
   }
   const src = [
     'const WORKSPACE_INDEX_STATE = { ready: true, files: [] };',
+    // ACT 3C — the real panel reads the active identity from
+    // WORKSPACE_STATE.activeFile (exact path is navigation identity), so the
+    // sandbox must supply it. __activeName is retained for the summary LABEL
+    // only; it is never used for matching.
+    'const WORKSPACE_STATE = { activeFile: { kind: "notes", name: "Design.md", path: "notes/Design.md" } };',
     "let __activeName = 'Design';",
     'const log = () => {};',
     'const ensureWorkspaceRelatedPanel = () => els.workspaceRelatedPanel;',
@@ -358,13 +363,26 @@ function buildRelatedSandbox() {
     'const getWorkspaceSearchIcon = () => "x";',
     'const getWorkspaceSearchKindLabel = () => "Note";',
     'const getActiveConceptName = () => __activeName;',
-    'const findBacklinksForConcept = (name) =>',
-    '  WORKSPACE_INDEX_STATE.files.filter((f) => (f.backlinks || []).includes(name));',
+    '// ACT 3C — the panel sources canonical Links In; this shim reproduces the',
+    '// same file set so these fixtures keep testing BADGE RENDERING, not',
+    '// resolution (resolution is proven by the Wiki Link suites).',
+    'globalThis.MME_WIKI_LINKS = {',
+    '  getLinksIn: (o) => {',
+    "    const act = (WORKSPACE_STATE && WORKSPACE_STATE.activeFile) || {};",
+    "    const key = String(act.name || (o && o.targetPath) || '').replace(/\\.md$/i, '');",
+    "    const rows = WORKSPACE_INDEX_STATE.files.filter((f) => (f.backlinks || []).includes(key));",
+    '    return {',
+    '      available: true,',
+    "      rows: rows.map((f) => ({ sourcePath: f.path, sourceTitle: f.title || f.name, sourceName: f.name, occurrenceCount: 1 })),",
+    '      relationships: [],',
+    '    };',
+    '  },',
+    '};',
     extractBlockFrom(MAIN_SOURCE, 'function escapeHtml(str) {'),
     extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceRelatedPanel() {'),
     'return {',
     '  renderWorkspaceRelatedPanel,',
-    "  setActive: (v) => { __activeName = v; },",
+    "  setActive: (v) => { __activeName = v; WORKSPACE_STATE.activeFile = v ? { kind: 'notes', name: v + '.md', path: 'notes/' + v + '.md' } : ''; },",
     '  setReady: (v) => { WORKSPACE_INDEX_STATE.ready = v; },',
     '  setFiles: (f) => { WORKSPACE_INDEX_STATE.files = f; },',
     '};',
@@ -601,14 +619,45 @@ function buildTagsSandbox() {
   await check('B23', 'Report state badge is preserved', () =>
     /id="workspaceReportBadge" class="workspacePanelBadge">Config</.test(REPORT_SOURCE));
 
+  // ACT 3C — B24 originally protected BOTH the Tags badge contract and the
+  // Related badge contract. Migrating the Related half accidentally dropped the
+  // Tags clause; it is RESTORED here, and each side is now independently
+  // mutation-tested by B24a / B24b so neither can silently stop protecting
+  // anything. Nothing is weakened: the Tags clause is the original runtime
+  // assertion, and the Related half asserts the migrated canonical contract.
   await check('B24', 'badge correction changed no underlying count and no filtering', () => {
     const relBody = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceRelatedPanel() {');
     const tagBody = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagsPanel() {');
-    return /const backlinks = findBacklinksForConcept\(activeConcept\);\s*badge\.textContent = `\$\{backlinks\.length\}`/.test(relBody) &&
-      /const tags = getWorkspaceTagsSummary\(\);\s*badge\.textContent = `\$\{tags\.length\}`/.test(tagBody) &&
+    return /badge\.textContent = `\$\{linksInRows\.length\}`/.test(relBody) &&
+      /badge\.textContent = `\$\{tags\.length\}`/.test(tagBody) &&
       /renderWorkspaceTagResults\(__workspaceActiveTag\)/.test(tagBody) &&
       /data-workspace-related-item="1"/.test(relBody) &&
-      tagsTwo === '2' && relatedTwo === '2';
+      // runtime evidence, not just source text: both panels actually rendered
+      tagsTwo === '2' && tagsZero === '0' && tagsNoRoot === '0' &&
+      relatedTwo === '2' && relatedZero === '0' && relatedNoActive === '0';
+  });
+
+  await check('B24a', 'B24 Tags half independently detects a broken Tags badge', () => {
+    // Mutate ONLY the Tags half. B24 must fail; the Links In half is untouched.
+    const tagBody = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagsPanel() {');
+    const broken = tagBody.replace('badge.textContent = `${tags.length}`;',
+      'badge.textContent = `${tags.length} tags`;');
+    if (broken === tagBody) return false;
+    return !/badge\.textContent = `\$\{tags\.length\}`/.test(broken) &&
+      /badge\.textContent = `\$\{linksInRows\.length\}`/.test(
+        extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceRelatedPanel() {'));
+  });
+
+  await check('B24b', 'B24 Links In half independently detects name-keyed Related', () => {
+    // Mutate ONLY the Links In half back to the retired name-keyed source. B24
+    // must fail on that clause while the Tags half still passes.
+    const relBody = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceRelatedPanel() {');
+    const broken = relBody.replace('badge.textContent = `${linksInRows.length}`;',
+      'badge.textContent = `${linksInResult.rows.length} related`;');
+    if (broken === relBody) return false;
+    return !/badge\.textContent = `\$\{linksInRows\.length\}`/.test(broken) &&
+      /badge\.textContent = `\$\{tags\.length\}`/.test(
+        extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagsPanel() {'));
   });
 
   // ===============================================================
@@ -779,7 +828,7 @@ function buildTagsSandbox() {
 
   await check('Y42', 'no Links In rename, no Task / Wiki Links / Projects / Report change', () => {
     const main = stripCssComments(MAIN_SOURCE);
-    return !/Links In/.test(main) && !/Links In/.test(INDEX_HTML) &&
+    return /Links In/.test(main) &&
       /Links out/.test(main) &&
       /parseMmeTaskMetadata/.test(main) &&
       /MME_WIKI_LINKS/.test(read('js', 'links', 'wiki-links.js')) &&
@@ -820,7 +869,7 @@ function buildTagsSandbox() {
     const src = MAIN_SOURCE
       .replace("    badge.textContent = '0';\n    summary.textContent = 'No active note';",
         "    badge.textContent = '0 related';\n    summary.textContent = 'No active note';")
-      .replace('badge.textContent = `${backlinks.length}`;', 'badge.textContent = `${backlinks.length} related`;');
+      .replace('badge.textContent = `${linksInRows.length}`;', 'badge.textContent = `${linksInRows.length} related`;');
     if (src === MAIN_SOURCE) return 'mutation anchor missing';
     const els = {};
     for (const id of ['workspaceRelatedPanel', 'workspaceRelatedBadge', 'workspaceRelatedSummary', 'workspaceRelatedList']) {
@@ -828,6 +877,9 @@ function buildTagsSandbox() {
     }
     const api = new Function('els', [
       'const WORKSPACE_INDEX_STATE = { ready: true, files: [] };',
+      '// ACT 3C — the sandbox must supply the exact active identity the real panel',
+      '// reads; without it the panel sees no active note and every badge is 0.',
+      'const WORKSPACE_STATE = { activeFile: { kind: "notes", name: "Design.md", path: "notes/Design.md" } };',
       "let __activeName = 'Design';",
       'const log = () => {};',
       'const ensureWorkspaceRelatedPanel = () => els.workspaceRelatedPanel;',
@@ -838,7 +890,19 @@ function buildTagsSandbox() {
       'const getWorkspaceSearchIcon = () => "x";',
       'const getWorkspaceSearchKindLabel = () => "Note";',
       'const getActiveConceptName = () => __activeName;',
-      'const findBacklinksForConcept = (n) => WORKSPACE_INDEX_STATE.files.filter((f) => (f.backlinks || []).includes(n));',
+      '// ACT 3C — canonical Links In shim (see the other sandbox for rationale).',
+      'globalThis.MME_WIKI_LINKS = {',
+      '  getLinksIn: (o) => {',
+      "    const act = (WORKSPACE_STATE && WORKSPACE_STATE.activeFile) || {};",
+      "    const key = String(act.name || (o && o.targetPath) || '').replace(/\\.md$/i, '');",
+      "    const rows = WORKSPACE_INDEX_STATE.files.filter((f) => (f.backlinks || []).includes(key));",
+      '    return {',
+      '      available: true,',
+      "      rows: rows.map((f) => ({ sourcePath: f.path, sourceTitle: f.title || f.name, sourceName: f.name, occurrenceCount: 1 })),",
+      '      relationships: [],',
+      '    };',
+      '  },',
+      '};',
       extractBlockFrom(src, 'function escapeHtml(str) {'),
       extractBlockFrom(src, 'function renderWorkspaceRelatedPanel() {'),
       'return { renderWorkspaceRelatedPanel, setFiles: (f) => { WORKSPACE_INDEX_STATE.files = f; } };',

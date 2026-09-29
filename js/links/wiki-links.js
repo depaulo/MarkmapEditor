@@ -230,6 +230,199 @@
     return terminal('missing', [], '', 'no-candidate');
   }
 
+  // ==================================================================
+  // ACT 3C — UI-NEUTRAL RELATIONSHIP SUMMARIES AND COMPACT PREVIEWS
+  //
+  // DATA contracts only. No markup, no card UI, no Active card and no Workspace
+  // Index card is implemented here; those belong to a later package. Nothing
+  // below mutates the Index, the parsed records, or any UI state.
+  // ==================================================================
+
+  // Compact preview builders. The preview LIMIT is always supplied by the
+  // consumer — no UI constant is hard-coded here. A truncated result reports how
+  // many rows were hidden so a future "View All" affordance can stay honest.
+  function buildLinksInPreview(opts) {
+    const o = opts || {};
+    const relationships = Array.isArray(o.relationships) ? o.relationships : [];
+    const limit = Number.isFinite(o.limit) && o.limit >= 0 ? Math.floor(o.limit) : null;
+
+    const byPath = new Map();
+    for (const rel of relationships) {
+      const key = String(rel.sourcePath || '');
+      if (!key) continue;
+      if (!byPath.has(key)) {
+        byPath.set(key, {
+          sourcePath: key,
+          sourceTitle: String(rel.sourceTitle || ''),
+          occurrenceCount: 0,
+          // Navigation is available only because the row already resolved to an
+          // exact physical path; there is no title or raw-text fallback.
+          canNavigate: true,
+        });
+      }
+      byPath.get(key).occurrenceCount += 1;
+    }
+
+    const all = Array.from(byPath.values());
+    const shown = limit === null ? all : all.slice(0, limit);
+    return { rows: shown, total: all.length, hidden: all.length - shown.length };
+  }
+
+  function buildLinksOutPreview(opts) {
+    const o = opts || {};
+    const relationships = Array.isArray(o.relationships) ? o.relationships : [];
+    const limit = Number.isFinite(o.limit) && o.limit >= 0 ? Math.floor(o.limit) : null;
+
+    // One row per distinct relationship. Resolved rows may collapse onto a
+    // targetPath; a missing/ambiguous/not-ready row is never collapsed away,
+    // because each carries a different fact about the document.
+    const seen = new Set();
+    const all = [];
+    for (const rel of relationships) {
+      const key = rel.status === 'resolved'
+        ? 'r:' + rel.targetPath
+        : rel.status + ':' + String(rel.rawTarget);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      all.push({
+        rawTarget: String(rel.rawTarget || ''),
+        displayLabel: String(rel.displayLabel || rel.rawTarget || ''),
+        status: rel.status,
+        targetPath: rel.status === 'resolved' ? rel.targetPath : '',
+        targetTitle: rel.status === 'resolved' ? rel.targetTitle : '',
+        candidateCount: rel.status === 'ambiguous' ? (rel.candidates || []).length : 0,
+        // Only a resolved row may navigate. Ambiguous needs a future candidate
+        // picker; missing and not-ready must never open anything.
+        canNavigate: rel.status === 'resolved' && Boolean(rel.targetPath),
+      });
+    }
+
+    const shown = limit === null ? all : all.slice(0, limit);
+    return { rows: shown, total: all.length, hidden: all.length - shown.length };
+  }
+
+  // ACT3C_SUMMARIES_1_END
+
+  /**
+   * Active-document relationship summary (UI-neutral).
+   * @param {object} opts
+   *   sourcePath    exact physical path of the ACTIVE note
+   *   markdown      live Current Document text (Links Out source of truth)
+   *   indexSnapshot saved Workspace Index
+   *   inLimit / outLimit  optional consumer-supplied preview limits
+   */
+  function getActiveRelationshipSummary(opts) {
+    const o = opts || {};
+    const sourcePath = String(o.sourcePath || '');
+    const index = o.indexSnapshot === undefined ? getWorkspaceIndex() : o.indexSnapshot;
+    const hasIndex = Boolean(index && index.ready && Array.isArray(index.files));
+
+    const out = getLinksOut({
+      markdown: o.markdown,
+      sourcePath: sourcePath,
+      sourceTitle: o.sourceTitle,
+      indexSnapshot: index,
+    });
+
+    const inResult = getLinksIn({ targetPath: sourcePath, indexSnapshot: index });
+    const outRows = out.relationships;
+
+    const counts = { resolved: 0, missing: 0, ambiguous: 0, notReady: 0 };
+    for (const rel of outRows) {
+      if (rel.status === 'resolved') counts.resolved += 1;
+      else if (rel.status === 'missing') counts.missing += 1;
+      else if (rel.status === 'ambiguous') counts.ambiguous += 1;
+      else counts.notReady += 1;
+    }
+
+    return {
+      sourcePath: sourcePath,
+      linksIn: {
+        // Without a saved Index this is UNAVAILABLE, never a confirmed zero.
+        available: inResult.available,
+        count: inResult.available ? inResult.rows.length : null,
+        preview: buildLinksInPreview({ relationships: inResult.relationships, limit: o.inLimit }),
+      },
+      linksOut: {
+        // Extraction works even with no Workspace; only cross-file resolution
+        // degrades to not-ready.
+        available: out.available,
+        count: outRows.length,
+        resolvedCount: counts.resolved,
+        missingCount: counts.missing,
+        ambiguousCount: counts.ambiguous,
+        notReadyCount: counts.notReady,
+        preview: buildLinksOutPreview({ relationships: outRows, limit: o.outLimit }),
+      },
+    };
+  }
+
+  /**
+   * Workspace-wide relationship summary (UI-neutral, saved data only).
+   * Deterministic regardless of Index ordering; never persists a second graph.
+   */
+  function getWorkspaceRelationshipSummary(opts) {
+    const o = opts || {};
+    const index = o.indexSnapshot === undefined ? getWorkspaceIndex() : o.indexSnapshot;
+
+    if (!index || !index.ready || !Array.isArray(index.files)) {
+      return {
+        available: false, sourceCount: 0, resolvedRelationshipCount: 0,
+        missingTargetCount: 0, ambiguousTargetCount: 0, notReadyRelationshipCount: 0,
+        linksInByPath: {}, linksOutByPath: {},
+      };
+    }
+
+    // Sorted for determinism: Index insertion order must never change a result.
+    const files = index.files.slice().sort((a, b) =>
+      String((a && a.path) || '').localeCompare(String((b && b.path) || ''))
+    );
+
+    const linksInByPath = {};
+    const linksOutByPath = {};
+    let resolvedCount = 0, missingCount = 0, ambiguousCount = 0, notReadyCount = 0;
+
+    for (const f of files) {
+      const sourcePath = String((f && f.path) || '');
+      if (!sourcePath) continue;
+
+      const savedTargets = Array.isArray(f.conceptLinks) ? f.conceptLinks : [];
+      if (!savedTargets.length) continue;
+
+      const outRows = [];
+      for (const rawTarget of savedTargets) {
+        const resolution = resolveWikiTarget(rawTarget, index);
+        if (resolution.status === 'resolved') {
+          resolvedCount += 1;
+          // Only a resolved edge is an inbound relationship. Missing, ambiguous
+          // and not-ready NEVER become linksInByPath entries.
+          if (resolution.targetPath !== sourcePath) {
+            if (!linksInByPath[resolution.targetPath]) linksInByPath[resolution.targetPath] = [];
+            if (!linksInByPath[resolution.targetPath].includes(sourcePath)) {
+              linksInByPath[resolution.targetPath].push(sourcePath);
+            }
+          }
+        } else if (resolution.status === 'missing') missingCount += 1;
+        else if (resolution.status === 'ambiguous') ambiguousCount += 1;
+        else notReadyCount += 1;
+
+        outRows.push({ rawTarget: rawTarget, status: resolution.status, targetPath: resolution.targetPath });
+      }
+
+      linksOutByPath[sourcePath] = outRows;
+    }
+
+    return {
+      available: true,
+      sourceCount: files.length,
+      resolvedRelationshipCount: resolvedCount,
+      missingTargetCount: missingCount,
+      ambiguousTargetCount: ambiguousCount,
+      notReadyRelationshipCount: notReadyCount,
+      linksInByPath: linksInByPath,
+      linksOutByPath: linksOutByPath,
+    };
+  }
   // ---- Compatibility wrapper ----
   //
   // ==================================================================
@@ -823,6 +1016,11 @@
     getLinksIn: getLinksIn,
     summarizeLinksIn: summarizeLinksIn,
     summarizeLinksOut: summarizeLinksOut,
+    // ACT 3C — UI-neutral summaries and compact previews. Data only: no card UI.
+    getActiveRelationshipSummary: getActiveRelationshipSummary,
+    getWorkspaceRelationshipSummary: getWorkspaceRelationshipSummary,
+    buildLinksInPreview: buildLinksInPreview,
+    buildLinksOutPreview: buildLinksOutPreview,
     // Pre-ACT 3A pooled algorithm, exported ONLY so the focused suite can prove
     // the defect it replaced. No consumer calls it.
     resolveTargetLegacyPooled: resolveTargetLegacyPooled,

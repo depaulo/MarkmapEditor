@@ -2081,7 +2081,7 @@ function ensureWorkspaceRelatedPanel() {
       >
         <span class="workspacePanelHeaderLeft">
           <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-          <span class="workspaceRelatedTitle">Related</span>
+          <span class="workspaceRelatedTitle">Links In</span>
         </span>
       </button>
       <span class="workspacePanelHeaderControls">
@@ -2093,7 +2093,7 @@ function ensureWorkspaceRelatedPanel() {
 
     <div class="workspacePanelBody">
       <div id="workspaceRelatedSummary" class="workspaceRelatedSummary">
-        No active concept
+        No active note
       </div>
 
       <div id="workspaceRelatedList" class="workspaceRelatedList"></div>
@@ -2463,18 +2463,24 @@ function wireWorkspaceTasksPanel() {
   log?.('Workspace Tasks: panel wired');
 }
 
+// ACT 3C — the legacy name-keyed Related algorithm (findBacklinksForConcept and
+// its normalizeBacklinkConceptKey key) has been REMOVED. Source search proved
+// exactly two active callers (the panel render and getWorkspaceActiveStats);
+// both now use the canonical Links In provider, and no fallback is kept. Keeping
+// it would have left two competing inbound-relationship algorithms alive.
+//
+// getActiveConceptName SURVIVES: it is a display helper (the summary label), not
+// an inbound algorithm, and it never resolves a target.
+
 function getActiveConceptName() {
-  // ACT 2A — Related/Backlinks eligibility no longer requires a concept.
-  // Any active Workspace Note with a resolvable indexed identity qualifies;
-  // knowledge === true is NOT required. The legacy function name is kept so
-  // existing call sites and the index-ready refresh lifecycle are unchanged.
+  // ACT 3C — display helper only: the summary label for the active Note. It does
+  // NOT resolve anything and is not an inbound-relationship algorithm.
   const active = WORKSPACE_STATE.activeFile;
 
   if (!active) return '';
 
-  // Display identity: strip the notes/ prefix so the Related summary shows
-  // the bare note name; matching still goes through
-  // normalizeBacklinkConceptKey on both sides, so this is presentation only.
+  // Display identity: strip the notes/ prefix so the Links In summary shows the
+  // bare note name. Presentation only — matching never goes through this.
   const raw = String(active.name || active.path || '');
   const withoutPrefix = raw.replace(/^notes\//i, '');
   return normalizeConceptName
@@ -2484,64 +2490,12 @@ function getActiveConceptName() {
         .trim();
 }
 
-function normalizeBacklinkConceptKey(value) {
-  // ACT 2A — keys resolve against unified notes/ paths; the concepts/ strip stays as a
-  // harmless fallback for stale link spellings (migration-review cases, never rewritten).
-  return String(value || '')
-    .trim()
-    .replace(/^\.?\//, '')
-    .replace(/^notes\//i, '')
-    .replace(/^concepts\//i, '')
-    .replace(/\.md$/i, '')
-    .replace(/\|.*$/, '')
-    .trim()
-    .toLowerCase();
-}
-
-function findBacklinksForConcept(conceptName) {
-  if (!WORKSPACE_INDEX_STATE?.ready) {
-    return [];
-  }
-
-  const targetKey = normalizeBacklinkConceptKey(conceptName);
-  if (!targetKey) return [];
-
-  const results = [];
-
-  for (const parsed of WORKSPACE_INDEX_STATE.files || []) {
-    const parsedConceptName = normalizeBacklinkConceptKey(parsed.name || parsed.path || '');
-    const links = parsed.conceptLinks || [];
-
-    const hasLink = links.some((link) => normalizeBacklinkConceptKey(link) === targetKey);
-    if (!hasLink) continue;
-
-    // ACT 2A — no concepts-only self-exclusion: the active Note itself is
-    // excluded by identity (same resolved key AND same path), so two Notes
-    // sharing one H1 keep distinct backlink candidacies.
-    if (parsedConceptName === targetKey) {
-      const parsedPath = String(parsed.path || '');
-      const activePath = String(WORKSPACE_STATE?.activeFile?.path || '');
-      if (parsedPath && activePath && parsedPath === activePath) continue;
-    }
-
-    results.push(parsed);
-  }
-
-  // ACT 2A — ordering preserved minus the legacy kind tier: date desc, then
-  // name asc. No kind comparison remains.
-  results.sort((a, b) => {
-    const dateA = String(a.date || '');
-    const dateB = String(b.date || '');
-
-    if (dateA !== dateB) {
-      return dateB.localeCompare(dateA);
-    }
-
-    return String(a.name || '').localeCompare(String(b.name || ''));
-  });
-
-  return results;
-}
+// ACT 3C — RETIRED AND REMOVED: normalizeBacklinkConceptKey and
+// findBacklinksForConcept formed the legacy name-keyed Related algorithm, which
+// ACT 3B proved is NOT canonical Links In (it misses H1-resolved inbound links).
+// Both former call sites now use the canonical Links In provider, no fallback is
+// kept, and the concepts/ path assumption is gone from the active Notes-based
+// relationship path. (Marker only; the functions themselves are deleted.)
 
 function renderWorkspaceRelatedPanel() {
   const panel = ensureWorkspaceRelatedPanel();
@@ -2558,13 +2512,17 @@ function renderWorkspaceRelatedPanel() {
     return;
   }
 
-  // ACT 2A — legacy name kept; value is now the active Note identity, not a concept.
-  const activeConcept = getActiveConceptName();
+  // ACT 3C — the panel is now LINKS IN, sourced from the canonical Links In
+  // provider. The legacy name-keyed Related algorithm is retired from this path.
+  //
+  // Internal IDs and the 'related' collapse-storage key are deliberately KEPT so
+  // existing user collapse preferences are not reset (§4). Only the VISIBLE
+  // terminology and the data source change.
+  const activePath = String(WORKSPACE_STATE?.activeFile?.path || '');
+  const activeLabel = getActiveConceptName();
 
-  // ACT V0 — the Related badge carries the numeric backlink count only. The
-  // panel title already says "Related", so the previous "0 related" /
-  // "<n> related" text repeated the title. The count value itself is unchanged.
-  if (!activeConcept) {
+  // ACT V0 — the badge carries the numeric count only.
+  if (!activePath) {
     panel.hidden = true;
     badge.textContent = '0';
     summary.textContent = 'No active note';
@@ -2574,30 +2532,51 @@ function renderWorkspaceRelatedPanel() {
   }
 
   panel.hidden = false;
-  summary.textContent = `Current note: ${activeConcept}`;
+  summary.textContent = `Current note: ${activeLabel || activePath}`;
 
-  if (!WORKSPACE_INDEX_STATE?.ready) {
-    badge.textContent = '0';
-    list.innerHTML = '<div class="workspaceRelatedEmpty">Index not ready</div>';
+  // ACT 3C — canonical Links In. `available` is false when the saved Workspace
+  // Index cannot answer, which is DIFFERENT from a confirmed zero: an
+  // unavailable panel must never be shown as "no inbound links".
+  const linksInResult =
+    typeof globalThis.MME_WIKI_LINKS?.getLinksIn === 'function'
+      ? globalThis.MME_WIKI_LINKS.getLinksIn({
+          targetPath: activePath,
+          indexSnapshot: WORKSPACE_INDEX_STATE,
+        })
+      : { available: false, rows: [], relationships: [] };
+
+  if (!linksInResult.available) {
+    badge.textContent = '—';
+    list.innerHTML =
+      '<div class="workspaceRelatedEmpty">Links In unavailable — workspace index not ready</div>';
     applyWorkspacePanelCollapsed(panel, 'related', isWorkspacePanelCollapsed('related'));
     return;
   }
 
-  const backlinks = findBacklinksForConcept(activeConcept);
-  badge.textContent = `${backlinks.length}`;
+  const linksInRows = linksInResult.rows;
+  badge.textContent = `${linksInRows.length}`;
 
-  if (!backlinks.length) {
-    list.innerHTML = '<div class="workspaceRelatedEmpty">No backlinks yet</div>';
+  if (!linksInRows.length) {
+    list.innerHTML = '<div class="workspaceRelatedEmpty">No Links In.</div>';
     applyWorkspacePanelCollapsed(panel, 'related', isWorkspacePanelCollapsed('related'));
     return;
   }
 
-  list.innerHTML = backlinks
-    .map((file) => {
+  list.innerHTML = linksInRows
+    .map((row) => {
+      // ACT 3C — normalize the canonical Links In row to the shape the existing
+      // row template already consumes. `path` is the EXACT source path used for
+      // navigation; `title` is display only. The occurrence count appears in the
+      // meta line so repeated links from one source stay visible WITHOUT
+      // duplicating the row.
+      const file = {
+        path: row.sourcePath || '',
+        name: row.sourceName || '',
+        title: row.sourceTitle || row.sourceName || row.sourcePath || '',
+        kind: row.kind || 'notes',
+        occurrenceCount: Number(row.occurrenceCount || 0),
+      };
       const kind = String(file.kind || 'notes');
-      // ACT 2A — unified Notes presentation: primary row label is the saved
-      // indexed H1 title with filename fallback; filename/path stay visible
-      // secondarily and navigation uses the exact path below.
       const icon = getWorkspaceSearchIcon(kind);
       const name = escapeHtml(file.title || file.name || file.path || '');
       const path = escapeHtml(file.path || '');
@@ -2605,7 +2584,7 @@ function renderWorkspaceRelatedPanel() {
         [
           getWorkspaceSearchKindLabel(kind),
           file.name || '',
-          file.date || '',
+          file.occurrenceCount > 1 ? `${file.occurrenceCount} links` : '',
         ]
           .filter(Boolean)
           .join(' · ')
@@ -3794,17 +3773,20 @@ function getWorkspaceActiveStats(parsed) {
   const openTasks = (parsed.tasks || []).filter((task) => !task.done).length;
   const doneTasks = (parsed.tasks || []).filter((task) => task.done).length;
 
-  // ACT 2A — Related applies to any active Workspace Note (concepts-only
-  // gate removed); knowledge === true is not required.
+  // ACT 3C — the inbound count now comes from the CANONICAL Links In provider
+  // (exact resolved targetPath), replacing the retired name-keyed Related
+  // algorithm. Unavailable is reported as 0 here because this is a numeric
+  // metric, but the PANEL distinguishes available-zero from unavailable.
   let related = 0;
 
-  const conceptName =
-    typeof normalizeConceptName === 'function'
-      ? normalizeConceptName(parsed.name || parsed.path || '')
-      : String(parsed.name || '').replace(/\.md$/i, '');
+  const activePath = String(parsed.path || '');
 
-  if (conceptName && typeof findBacklinksForConcept === 'function') {
-    related = findBacklinksForConcept(conceptName).length;
+  if (activePath && typeof globalThis.MME_WIKI_LINKS?.getLinksIn === 'function') {
+    const linksIn = globalThis.MME_WIKI_LINKS.getLinksIn({
+      targetPath: activePath,
+      indexSnapshot: WORKSPACE_INDEX_STATE,
+    });
+    if (linksIn.available) related = linksIn.rows.length;
   }
 
   return {

@@ -166,10 +166,11 @@ export const APP_CONTEXTS = {
 - [ ] Create or update a related concept.
 - [ ] Review open follow-ups.
 
-## Related Notes
-- Link related journals with [[2026-07-07]].
-- Link concepts with [[CustomerDiscovery]].
-- Use the Related panel to move between connected notes.
+## Links In and Links Out
+- Link Notes with [[2026-07-07]].
+- Link Notes with [[CustomerDiscovery]].
+- Use the Links In panel to move from a Note to the Notes pointing at it.
+- Your own outgoing links are the Note's Links Out.
 `,
   },
 

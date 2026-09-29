@@ -8,7 +8,7 @@
  * helpers are extracted verbatim and evaluated, nothing re-implemented):
  *   - js/main.js (WORKSPACE_INDEX_STATE, buildWorkspaceIndex,
  *     runWorkspaceSearch, getWorkspaceTagsSummary, getWorkspaceTagFiles,
- *     findBacklinksForConcept, getActiveConceptName, findWorkspaceFileByPath,
+ *     getActiveConceptName, findWorkspaceFileByPath,
  *     openWorkspaceFile boundary, index-ready wiring);
  *   - js/workspace/workspace-parser.js (saved Note parser; main.js text
  *     helpers extracted verbatim, same set as the ACT 1C suite);
@@ -229,8 +229,9 @@ const SHIPPED_SNIPPETS = [
   extractBlockFrom(MAIN_SOURCE, 'function getWorkspaceTagsSummary('),
   extractBlockFrom(MAIN_SOURCE, 'function getWorkspaceTagFiles('),
   extractBlockFrom(MAIN_SOURCE, 'function getActiveConceptName('),
-  extractBlockFrom(MAIN_SOURCE, 'function normalizeBacklinkConceptKey('),
-  extractBlockFrom(MAIN_SOURCE, 'function findBacklinksForConcept('),
+  // ACT 3C — the legacy name-keyed Related algorithm is REMOVED from main.js, so
+  // it is no longer extracted. The panel now sources canonical Links In from the
+  // real MME_WIKI_LINKS provider, which this harness already evaluates.
   extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceRelatedPanel('),
   extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagsPanel('),
   extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagResults('),
@@ -258,8 +259,6 @@ const api = new Function(
     getWorkspaceTagsSummary,
     getWorkspaceTagFiles,
     getActiveConceptName,
-    normalizeBacklinkConceptKey,
-    findBacklinksForConcept,
     renderWorkspaceRelatedPanel,
     renderWorkspaceTagsPanel,
     renderWorkspaceTagResults,
@@ -277,6 +276,14 @@ Object.assign(globalThis, api);
 (0, eval)(GRAMMAR_SOURCE);
 (0, eval)(WIKI_SOURCE);
 const WIKI = globalThis.MME_WIKI_LINKS;
+// ACT 3C — the legacy name-keyed Related algorithm is removed from main.js.
+// Inbound rows now come from the CANONICAL Links In provider (exact
+// resolved targetPath), which this harness already evaluates.
+function canonicalLinksInRows() {
+  const activePath = String(WORKSPACE_STATE?.activeFile?.path || '');
+  const r = WIKI.getLinksIn({ targetPath: activePath, indexSnapshot: WORKSPACE_INDEX_STATE });
+  return r.available ? r.rows : [];
+}
 if (!WIKI || typeof WIKI.resolveTarget !== 'function') {
   throw new Error('MME_WIKI_LINKS resolver not exposed');
 }
@@ -487,25 +494,31 @@ function setActive(p) {
     !WIKI_SOURCE.includes('files.concepts') && !WIKI_SOURCE.includes('files.notes'),
     'single index.files snapshot');
   group('Related (R30-R40)');
+  // ACT 3C — inbound rows now come from the canonical Links In provider, whose
+  // row shape is sourcePath/sourceTitle/sourceName rather than the legacy
+  // file-record shape. Field names are updated; the EXPECTED RELATIONSHIPS are
+  // unchanged, and canonical is a strict superset (it also finds H1-resolved
+  // inbound links the legacy name-keyed algorithm missed).
   check('R30', 'active normal Note can receive backlinks', (() => {
     setActive('notes/Architecture.md');
-    const names = findBacklinksForConcept(getActiveConceptName()).map((f) => f.path).sort();
-    return names.includes('notes/Deployment.md') && names.includes('notes/Glossary.md') && names.includes('notes/Old.md');
+    const names = canonicalLinksInRows().map((r) => r.sourcePath).sort();
+    return names.includes('notes/Deployment.md') && names.includes('notes/Glossary.md') &&
+      names.includes('notes/Old.md');
   })(), 'Architecture backlinks');
   check('R31', 'active Knowledge Note can receive backlinks', (() => {
     setActive('notes/Glossary.md');
-    const names = findBacklinksForConcept(getActiveConceptName()).map((f) => f.path);
+    const names = canonicalLinksInRows().map((r) => r.sourcePath);
     return names.includes('notes/Architecture.md');
   })(), 'Glossary backlinks');
   check('R32', 'Knowledge is not required', (() => {
     const rec = WORKSPACE_INDEX_STATE.byPath.get('notes/Architecture.md');
     return rec && rec.knowledge === false && getActiveConceptName() !== '';
   })(), 'normal note eligible');
-  check('R33', 'backlink source path preserved', (() => {
+  check('R33', 'backlink source path preserved exactly', (() => {
     setActive('notes/Architecture.md');
-    return findBacklinksForConcept(getActiveConceptName())
-      .every((f) => typeof f.path === 'string' && f.path.startsWith('notes/') && f.kind === 'notes');
-  })(), 'paths + kind');
+    return canonicalLinksInRows()
+      .every((r) => typeof r.sourcePath === 'string' && r.sourcePath.startsWith('notes/'));
+  })(), 'exact source paths');
   check('R34', 'clicking source opens correct Note', await (async () => {
     const found = findWorkspaceFileByPath('notes/Glossary.md', 'notes');
     const opened = await openWorkspaceFile(found, 'notes', 'act2a-related-click');
@@ -515,15 +528,17 @@ function setActive(p) {
     const src = extractBlock('function getActiveConceptName(');
     return !src.includes("!== 'concepts'");
   })(), 'no kind gate');
-  check('R36', 'current result ordering preserved (date desc, name asc, no kind tier)', (() => {
-    const src = extractBlock('function findBacklinksForConcept(');
-    return src.includes('dateB.localeCompare(dateA)') && !src.includes("a.kind === 'journals'") &&
-      !src.includes('a.kind !== b.kind');
-  })(), 'ordering intact');
-  check('R37', 'no semantic relationship inference', (() => {
-    const src = extractBlock('function findBacklinksForConcept(');
-    return src.includes('parsed.conceptLinks') && !/semantic|similar/i.test(src);
-  })(), 'explicit backlinks only');
+  check('R36', 'ACT 3C: inbound rows are deterministic and one-per-sourcePath', (() => {
+    setActive('notes/Architecture.md');
+    const a = canonicalLinksInRows().map((r) => r.sourcePath);
+    const b = canonicalLinksInRows().map((r) => r.sourcePath);
+    const paths = canonicalLinksInRows().map((r) => r.sourcePath);
+    return a.join(',') === b.join(',') && new Set(paths).size === paths.length;
+  })(), 'stable, deduplicated');
+  check('R37', 'ACT 3C: no semantic relationship inference', () => {
+    const src = extractBlock('function renderWorkspaceRelatedPanel(');
+    return /getLinksIn/.test(src) && !/semantic|similar|fuzz|levenshtein/i.test(src);
+  }, 'explicit resolved links only');
 
   check('R38', 'index-ready refresh is idempotent', (() => {
     renderWorkspaceRelatedPanel();
@@ -547,7 +562,7 @@ function setActive(p) {
     const sPaths = new Set(resultButtons().map((r) => r.path));
     const tPaths = new Set(getWorkspaceTagFiles('beta').map((f) => f.path));
     setActive('notes/Architecture.md');
-    const bPaths = new Set(findBacklinksForConcept(getActiveConceptName()).map((f) => f.path));
+    const bPaths = new Set(canonicalLinksInRows().map((f) => f.path));
     // Wiki Links now resolve deterministically to the exact physical path
     // (ACT 3A); the join key across consumers is the path, not a title.
     const wikiPath = WIKI.resolveTarget('Architecture').file.path;
@@ -566,13 +581,13 @@ function setActive(p) {
   check('X44', 'no file write', harness.writes.length === 0, 'reads only');
   check('X45', 'no metadata write',
     !/createWritable|setFrontmatter|writeFrontmatter/i.test(extractBlock('function runWorkspaceSearch(')) &&
-    !/createWritable|setFrontmatter|writeFrontmatter/i.test(extractBlock('function findBacklinksForConcept(')),
+    !/createWritable|setFrontmatter|writeFrontmatter/i.test(extractBlock('function renderWorkspaceRelatedPanel(')),
     'read-only');
   check('X46', 'no WORKSPACE_STATE mutation', (() => {
     const before = JSON.stringify(WORKSPACE_STATE.files.notes.map((r) => r.path));
     const { input } = searchDom(); input.value = 'arch'; runWorkspaceSearch(input.value);
     getWorkspaceTagFiles('beta');
-    findBacklinksForConcept(getActiveConceptName());
+    canonicalLinksInRows();
     return JSON.stringify(WORKSPACE_STATE.files.notes.map((r) => r.path)) === before;
   })(), 'storage untouched');
   check('X47', 'no Workspace Index mutation by consumers', (() => {

@@ -319,12 +319,19 @@ const idx = (files) => ({ ready: true, files: files });
   });
   await check('R46', 'the exact difference is recorded, not silently replaced', () =>
     canonicalRows.filter((r) => !relatedRows.includes(r)).join(',') === 'notes/note2.md');
-  await check('R47', 'Related is PRESERVED, not migrated, in this ACT', () =>
-    /function findBacklinksForConcept\(conceptName\)/.test(MAIN_SOURCE) &&
-    /normalizeBacklinkConceptKey/.test(MAIN_SOURCE) &&
-    /getLinksIn\(/.test(MAIN_SOURCE) === false);
-  await check('R48', 'Related panel label is NOT renamed in this ACT', () =>
-    /workspaceRelatedTitle">Related</.test(MAIN_SOURCE) && /workspaceRelatedPanel/.test(MAIN_SOURCE));
+  // ACT 3B recorded the divergence. ACT 3C is now AUTHORIZED to retire the
+  // name-keyed Related semantics, so these fixtures are inverted: the legacy
+  // algorithm must be GONE, and the panel must now read canonical Links In.
+  await check('R47', 'ACT 3C: the legacy name-keyed Related algorithm is RETIRED', () =>
+    /function findBacklinksForConcept\(/.test(MAIN_SOURCE) === false &&
+    /function normalizeBacklinkConceptKey\(/.test(MAIN_SOURCE) === false);
+  await check('R48', 'ACT 3C: the panel is migrated to canonical Links In', () => {
+    const rel = MAIN_SOURCE.slice(MAIN_SOURCE.indexOf('function renderWorkspaceRelatedPanel('),
+      MAIN_SOURCE.indexOf('function wireWorkspaceRelatedPanel('));
+    return /MME_WIKI_LINKS\?\.getLinksIn/.test(rel) &&
+      // it must NOT fall back to the retired algorithm
+      /findBacklinksForConcept/.test(rel) === false;
+  });
   await check('R49', 'no legacy concepts/ physical path in the new provider', () => {
     const s = WIKI_SOURCE.slice(WIKI_SOURCE.indexOf('function getLinksIn('),
       WIKI_SOURCE.indexOf('function summarizeLinksIn'));
@@ -335,9 +342,9 @@ const idx = (files) => ({ ready: true, files: files });
       WIKI_SOURCE.indexOf('function summarizeLinksOut'));
     return /\[0\]|\.find\(/.test(s) === false;
   });
-  await check('R51', 'the live Related consumer still resolves no target (known gap)', () =>
-    /function findBacklinksForConcept\(conceptName\)[\s\S]{0,2500}resolveWikiTarget/.test(MAIN_SOURCE)
-      === false);
+  await check('R51', 'ACT 3C: visible inbound terminology is Links In', () =>
+    /workspaceRelatedTitle">Links In</.test(MAIN_SOURCE) &&
+    />Related</.test(MAIN_SOURCE) === false);
 
   // ACT3B_SUITE_5_END
 
@@ -405,8 +412,12 @@ const idx = (files) => ({ ready: true, files: files });
     return /globalThis\.openWorkspaceFile/.test(s) &&
       /showDirectoryPicker|getFileHandle/.test(s) === false;
   });
-  await check('M10', 'renaming Related without proof would fail R48', () =>
-    /workspaceRelatedTitle">Related</.test(MAIN_SOURCE) === true);
+  await check('M10', 'reverting the panel to the legacy source must fail R47', () =>
+    // The retired algorithm is gone, so re-introducing it is exactly what a
+    // regression looks like. The fixture proves the guard checks the ABSENCE of
+    // a live second owner while the canonical one is present.
+    /function findBacklinksForConcept\(/.test(MAIN_SOURCE) === false &&
+    /MME_WIKI_LINKS\?\.getLinksIn/.test(MAIN_SOURCE) === true);
 
   // ACT3B_SUITE_6_END
 
