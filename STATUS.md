@@ -95,8 +95,38 @@
       normalized names rather than resolved target identity.
   - **ACT 3B**: NEXT, NOT STARTED. Requires complete static acceptance of ACT
     3A first. Device acceptance may also be deferred to Package 3 closure.
+  - **ACT 3B — STATICALLY ACCEPTED. DEVICE ACCEPTANCE DEFERRED TO PACKAGE 3
+    CLOSURE.** No browser acceptance is claimed.
+    - **One authoritative Wiki Link extraction grammar.** The former seven
+      extraction sites across four files (with two different regex forms) are
+      consolidated into `js/links/wiki-link-grammar.js`, loaded by
+      `script-loader.js` before `main.js`. `main.js` (`wikiExpand`,
+      `parseConceptLinks`), `js/links/wiki-links.js` and
+      `js/editor/codemirror-bootstrap.js` all call the same
+      `extractWikiLinks`. No fallback regex is kept anywhere.
+    - **Retired inconsistency, recorded:** the former `parseConceptLinks` regex
+      also matched multi-line links and nested-looking brackets. The canonical
+      single-line form now wins — a link never spans a line break and a target
+      may not contain brackets.
+    - **Relationship direction contract:** `getLinksOut` returns links declared
+      by one source; `getLinksIn` returns saved sources whose **resolved** Links
+      Out target equals the exact `targetPath`. Links In never derives from raw
+      target text, H1 text, basename or a first match, and missing / ambiguous /
+      not-ready relationships can never become an inbound edge. Without a saved
+      Index, Links In reports `available: false` rather than a false zero.
+    - **Related is PROVEN NOT EQUIVALENT to Links In (case B).** Current Related
+      compares the active file's NAME against raw link text and never consults
+      the resolver, so it **misses H1-resolved inbound links entirely**. Related
+      is therefore **preserved, not migrated and not renamed**; the difference is
+      documented and coexistence is deferred to ACT 3C.
+    - Static proof: `scripts/wiki-link-relationship-validators.cjs` **68/0**
+      (new, including 10 mutation controls); `wiki-link-resolution-validators`
+      65/0; full affected regression **1181 passed, 0 failed** across 14 suites;
+      Task Lifecycle 101/101; Task Board 115/115; release parity OK in normal and
+      strict modes at `0.6.2`.
   - **ACT 3C**: NOT STARTED. Prepares the one integrated device-acceptance
-    Workspace and checklist.
+    Workspace and checklist, and owns the decision on whether Related is
+    migrated onto Links In or coexists with it.
   - **Package 3 cannot be finally closed, versioned or published until the
     integrated device checkpoint passes.** The planned release/cache boundary
     remains **0.6.3 (Tasks + Wiki Links)** at Package 3 closure; no version,

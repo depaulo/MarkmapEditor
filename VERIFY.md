@@ -210,6 +210,71 @@ normalized names rather than resolved target identity.
 
 ---
 
+## 0.0.3 ACT 3B Wiki Link relationships + shared grammar (STATICALLY ACCEPTED)
+
+**ACT 3B — STATICALLY ACCEPTED. DEVICE ACCEPTANCE DEFERRED TO PACKAGE 3
+CLOSURE.** No browser acceptance is claimed.
+
+**1. One authoritative extraction grammar (was seven sites, four files, two
+regex forms).** `js/links/wiki-link-grammar.js` is now the single owner, loaded
+by `script-loader.js` BEFORE `main.js`. The load order is proven from source:
+`main.js` carries `parseConceptLinks` and `wikiExpand`, `wiki-links.js` loads
+later, and the CodeMirror bootstrap is a deferred `type="module"` that always
+evaluates last — so the grammar cannot live in `wiki-links.js` without a second
+fallback regex, which this ACT exists to remove. All four consumers now call
+`MME_WIKI_LINK_GRAMMAR.extractWikiLinks`.
+
+**Retired inconsistency, recorded:** `parseConceptLinks` previously used a
+negated class that allowed `]` and newlines, so it matched MULTI-LINE links and
+NESTED-LOOKING brackets. The canonical single-line form now wins: a link never
+spans a line break and a target may not contain brackets. Fixtures G11/G12
+record the retired behaviour explicitly.
+
+**2. Relationship direction contract.** `getLinksOut` returns the links DECLARED
+by one source document; `getLinksIn` returns saved sources whose RESOLVED Links
+Out target is exactly the requested `targetPath`. Both are pure, deterministic,
+non-mutating and UI-neutral. Links In is derived ONLY from canonical resolved
+target identity — never from raw target text, H1 text, basename or a first
+match. Missing, ambiguous and not-ready relationships can never become an
+inbound edge. Without a saved Index, Links In returns `available: false` rather
+than a false zero.
+
+**3. Related semantic proof — RELATED IS NOT EQUIVALENT TO LINKS IN (case B).**
+Proven by execution against the shipped algorithm and the canonical provider on
+the same Index, for active note `notes/Alpha.md`:
+
+| Consumer | Result |
+|---|---|
+| Canonical Links In | `note1` (filename-resolved) **and** `note2` (H1-resolved) |
+| Current Related (name-keyed) | `note1` only — **misses `note2`** |
+| Current Related (title-keyed) | `note2` only — **misses `note1`** |
+
+Current Related compares the active file's **NAME** against raw saved link
+target text and never consults the resolver, so an H1-resolved inbound link is
+never reported. Per ACT 3B §9 case B, Related is therefore **preserved, not
+migrated and not renamed**; the difference is documented and the decision on
+coexistence is deferred to ACT 3C. Fixtures R45–R51 record the proof, the
+preservation, and the known gap.
+
+**Static proof at committed HEAD (`9584b17`):**
+
+- `scripts/wiki-link-relationship-validators.cjs` (new) — **68 fixtures, 0
+  failed**, including 10 mutation controls (M1–M10).
+- `scripts/wiki-link-resolution-validators.cjs` — 65/0 (ACT 3A contract intact).
+- Full affected regression — **1181 passed, 0 failed** across 14 suites,
+  including the Package 2 Task contract (184/0), the ACT 2A checkpoint harness
+  (56/0) and ACT V0 visual (50/0).
+- Task Lifecycle built-in 101/101; Task Board built-in 115/115.
+- Release parity OK, normal **and** strict, at `0.6.2`.
+- `node --check` clean on all 11 touched files; `git diff --check` clean.
+
+**Harness note.** Five existing suites evaluate their sources in isolation and
+were updated to reproduce the real load order (grammar owner first). Without it
+they would correctly extract zero links, which is a harness artifact rather than
+a product defect.
+
+---
+
 ## 0.1 Package 3 deferred-test register (ACCUMULATES — do not replace)
 
 Manual S22/DeX scenarios deferred to the integrated Package 3 closure
@@ -237,9 +302,34 @@ later ACTs append, they do not overwrite.
 | A-15 | Related regression — still renders, not renamed | DEFERRED |
 | A-16 | Search, Tags, Tasks and Projects regression | DEFERRED |
 
-### ACT 3B — deferred
+### ACT 3B — deferred (device acceptance deferred)
 
-*(to be appended when ACT 3B is statically accepted)*
+All entries are **DEFERRED TO PACKAGE 3 INTEGRATED DEVICE CHECKPOINT**.
+
+| # | Scenario | Status |
+|---|---|---|
+| B-01 | live Current Document Links Out | DEFERRED |
+| B-02 | saved Workspace Links Out | DEFERRED |
+| B-03 | one Links In source | DEFERRED |
+| B-04 | multiple Links In sources | DEFERRED |
+| B-05 | repeated links from one source deduplicated | DEFERRED |
+| B-06 | exact source-path navigation | DEFERRED |
+| B-07 | occurrence navigation | DEFERRED |
+| B-08 | Related equivalence (or the recorded difference) on device | DEFERRED |
+| B-09 | Related row deduplication | DEFERRED |
+| B-10 | filename-resolved inbound relationship | DEFERRED |
+| B-11 | H1-resolved inbound relationship | DEFERRED |
+| B-12 | missing excluded from Links In | DEFERRED |
+| B-13 | ambiguous excluded from Links In | DEFERRED |
+| B-14 | not-ready excluded from Links In | DEFERRED |
+| B-15 | alias behaviour | DEFERRED |
+| B-16 | dirty-state cancellation | DEFERRED |
+| B-17 | Back / Forward | DEFERRED |
+| B-18 | no-Workspace Current Document behaviour | DEFERRED |
+| B-19 | saved versus unsaved relationship behaviour | DEFERRED |
+| B-20 | Search / Tags / Tasks / Projects regression | DEFERRED |
+| B-21 | shared grammar renders identically in editor and HTML Preview | DEFERRED |
+| B-22 | multi-line / nested-bracket link no longer extracted (retired behaviour) | DEFERRED |
 
 ### ACT 3C — integrated Package 3 checkpoint
 
