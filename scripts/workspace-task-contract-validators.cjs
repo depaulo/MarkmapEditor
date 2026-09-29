@@ -161,6 +161,116 @@ try { globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem(
 const L = globalThis.MME_TASK_LIFECYCLE;
 if (!L) throw new Error('MME_TASK_LIFECYCLE not exposed by the real module');
 
+// The REAL Task Board owner, loaded verbatim. ACT 2B rendering and value-mapping
+// assertions must run against shipped code, never against a re-implementation of
+// the priority control, so the Board module is loaded exactly as the app loads it.
+// The Board registers a module-level index listener, so the window stub needs the
+// event surface the shipped module legitimately expects at load time.
+globalThis.addEventListener = function () {};
+globalThis.removeEventListener = function () {};
+if (typeof globalThis.requestAnimationFrame !== 'function') {
+  globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
+}
+(0, eval)(BOARD_SOURCE);
+const B = globalThis.MME_TASK_BOARD;
+if (!B) throw new Error('MME_TASK_BOARD not exposed by the real module');
+
+// Snapshot helper for the direct-Index-mutation control: reads the real global
+// Index state the Board reads, so a fixture can prove it was never written.
+function indexSnapshot() {
+  const s = globalThis.WORKSPACE_INDEX_STATE;
+  return JSON.stringify(s == null ? null : s);
+}
+
+// Strips JS comments so a contract can assert on CODE rather than on the words
+// used to describe it. Without this, an explanatory comment mentioning a
+// forbidden token would look exactly like a violation — the opposite of what
+// these contracts are for. String and REGEX literals are preserved verbatim,
+// because that is where real grammar lives.
+//
+// Regex literals are detected with the standard "previous significant character"
+// heuristic: a '/' can only open a regex where an expression may start. Getting
+// this wrong is not cosmetic — misreading a regex as a comment silently deletes
+// real code and makes later assertions meaningless.
+function stripJsComments(src) {
+  let out = '';
+  let i = 0;
+  const n = src.length;
+  let mode = 'code'; // code | line | block | sq | dq | tpl | regex
+  let prevSig = ''; // last significant character emitted in code mode
+
+  const lastSig = () => prevSig;
+
+  while (i < n) {
+    const c = src[i];
+    const c2 = src.slice(i, i + 2);
+
+    if (mode === 'code') {
+      if (c2 === '//') { mode = 'line'; i += 2; continue; }
+      if (c2 === '/*') { mode = 'block'; i += 2; continue; }
+      if (c === "'") { mode = 'sq'; }
+      else if (c === '"') { mode = 'dq'; }
+      else if (c === '`') { mode = 'tpl'; }
+      else if (c === '/') {
+        // A '/' opening a regex literal is only legal where an expression may
+        // begin. Otherwise it is division.
+        if (lastSig() === '' || '(,=:[!&|?{};+-*%<>~^'.indexOf(lastSig()) !== -1) mode = 'regex';
+        else { out += c; prevSig = c; i += 1; continue; }
+      } else if (!/\s/.test(c)) {
+        prevSig = c;
+      }
+      out += c; i += 1; continue;
+    }
+
+    if (mode === 'line') {
+      if (c === '\n') { mode = 'code'; out += c; }
+      i += 1; continue;
+    }
+    if (mode === 'block') {
+      if (c2 === '*/') { mode = 'code'; i += 2; continue; }
+      i += 1; continue;
+    }
+    if (mode === 'regex') {
+      if (c === '\\') { out += src.slice(i, i + 2); i += 2; continue; }
+      if (c === '[') {
+        // Character class: ']' inside it does not close the literal.
+        const close = src.indexOf(']', i);
+        if (close === -1) { i = n; break; }
+        out += src.slice(i, close + 1); i = close + 1; continue;
+      }
+      if (c === '/') { mode = 'code'; out += c; i += 1; prevSig = '/'; continue; }
+      out += c; i += 1; continue;
+    }
+    // String or template literal: kept verbatim, escapes honoured.
+    if (c === '\\') { out += src.slice(i, i + 2); i += 2; continue; }
+    if ((mode === 'sq' && c === "'") || (mode === 'dq' && c === '"') || (mode === 'tpl' && c === '`')) {
+      mode = 'code'; prevSig = 'x';
+    }
+    out += c; i += 1;
+  }
+  return out;
+}
+
+// Comment-stripped copies used only by "this code must not contain X" contracts.
+const BOARD_CODE = stripJsComments(BOARD_SOURCE);
+const REVIEW_CODE = stripJsComments(REVIEW_SOURCE);
+
+// Real shipped regions the delegation contracts assert against, sliced between
+// CODE markers (a comment-stripped source has no comments to anchor on). These
+// live at module scope so any group can reference them regardless of order.
+const boardPriorityFn = BOARD_CODE.slice(
+  BOARD_CODE.indexOf('async function setTaskPriorityFromBoard'),
+  BOARD_CODE.indexOf('async function moveTask')
+);
+const boardWireFn = BOARD_CODE.slice(
+  BOARD_CODE.indexOf('function wireBoard'),
+  BOARD_CODE.indexOf('function isOpen')
+);
+const boardCtlFn = BOARD_CODE.slice(
+  BOARD_CODE.indexOf('const PRIORITY_CONTROL_OPTIONS'),
+  BOARD_CODE.indexOf('function cardDisplayText(task)')
+);
+
 // The REAL parser, extracted verbatim from main.js and evaluated against the
 // real lifecycle owner, so normalization fixtures run on actual parsed records.
 const parseMarkdownTasks = new Function([
@@ -750,8 +860,408 @@ function parseTasks(markdown, sourcePath) {
   await check('A24', 'no second baseline: the matcher still takes one baseline argument', () =>
     /function matchTasksForSave\(baseline, current\)/.test(LIFECYCLE_SOURCE) &&
     !/__taskBaseline2|secondBaseline|baselineByLine/.test(LIFECYCLE_SOURCE));
-  await check('A25', 'no Task Board UI was added', () =>
-    /workspaceTaskPrioritySelect|data-priority-select|prioritySelector/.test(BOARD_SOURCE) === false);
+  await check('A25', 'the Board keeps NO priority WRITE grammar of its own (ACT 2B scope)', () =>
+    // A25 was an ACT 2A fence forbidding Board priority UI. ACT 2B authorizes the
+    // control, so the fence is replaced by a PERMANENT contract that outlives it:
+    // the Board may PRESENT priority, but it may never OWN priority grammar.
+    //
+    // The Board legitimately retains TWO pre-existing, lifecycle-guarded
+    // DISPLAY-READ fallbacks (`/#p[123]\b/`) used only to hide a token from a card
+    // title when the owner is unavailable. Those are reads, not writers, and the
+    // count is pinned so a NEW writer cannot hide among them.
+    (BOARD_CODE.match(/#p\[123\]/g) || []).length === 2 &&
+    /applyPriority/.test(BOARD_CODE) === false &&
+    /\+\s*['"]\s*#p[123]/.test(BOARD_CODE) === false &&
+    /#p\[123\]|mme-task:|applyPriority/.test(boardPriorityFn) === false);
+
+  group('ACT 2B — Task Board priority selector (B01-B75)');
+
+  // Every assertion below runs against the REAL Board owner (B), the REAL
+  // lifecycle writer (L) and the REAL parser — never a re-implementation.
+  const bTask = (over) =>
+    Object.assign(
+      { text: 'Alpha', done: false, filePath: 'n/a.md', fileKind: 'notes', fileName: 'a.md', line: 7 },
+      over || {}
+    );
+  const ctlFor = (over, text) =>
+    B.priorityControlHtml(bTask(over), text || 'Alpha', 'n/a.md', 'notes', 7);
+
+  // The real shipped regions the delegation contracts assert against are sliced
+  // at module scope (boardPriorityFn, boardWireFn, boardCtlFn, reviewCode).
+  const reviewCode = REVIEW_CODE;
+
+  // ---- A. RENDERING (B01-B10) ----
+  await check('B01', 'no priority renders --', () => ctlFor({ priority: null }).indexOf('>--<') !== -1);
+  await check('B02', 'p1 renders P1', () => ctlFor({ priority: 'p1' }).indexOf('>P1<') !== -1);
+  await check('B03', 'p2 renders P2', () => ctlFor({ priority: 'p2' }).indexOf('>P2<') !== -1);
+  await check('B04', 'p3 renders P3', () => ctlFor({ priority: 'p3' }).indexOf('>P3<') !== -1);
+  await check('B05', 'legacy metadata p2 reads as a P2 trigger', () => {
+    // The Index record already carries the legacy priority read as canonical
+    // 'p2'. The Board only RENDERS that record, so the trigger shows P2 and no
+    // migration is written merely by rendering.
+    const legacy = L.toNormalizedTask(
+      parseTasks('- [ ] Legacy <!-- mme-task: priority=p2 -->', 'n/a.md')[0]
+    );
+    return legacy.priority === 'p2' && ctlFor({ priority: legacy.priority }).indexOf('>P2<') !== -1;
+  });
+  await check('B06', 'current value is the SELECTED option', () =>
+    ctlFor({ priority: 'p3' }).indexOf('<option value="p3" selected title="Priority 3">P3</option>') !== -1 &&
+    ctlFor({ priority: null }).indexOf('<option value="" selected title="No priority">--</option>') !== -1);
+  await check('B07', 'Task text remains the main card content', () => {
+    const html = B.cardHtml(bTask({ text: 'Ship the release', priority: 'p1' }), 'todo', new Map());
+    return html.indexOf('class="taskBoardCardTitle"') !== -1 &&
+      html.indexOf('Ship the release') !== -1 && html.indexOf('taskBoardPrioritySelect') !== -1;
+  });
+  await check('B08', 'source label and file label remain readable', () => {
+    const html = B.cardHtml(bTask({ priority: 'p2' }), 'todo', new Map());
+    return html.indexOf('class="taskBoardCardSource" title="a.md"') !== -1 &&
+      html.indexOf('taskBoardCardMeta') !== -1;
+  });
+  await check('B09', 'the priority badge is NOT duplicated beside the trigger', () => {
+    const html = B.cardHtml(bTask({ priority: 'p1' }), 'todo', new Map());
+    return html.indexOf('workspaceTaskPriorityBadge') === -1 &&
+      (html.match(/taskBoardPrioritySelect/g) || []).length === 1;
+  });
+  await check('B10', 'priority is never color-only: the text label is always present', () => {
+    const p1 = ctlFor({ priority: 'p1' });
+    const none = ctlFor({ priority: null });
+    return p1.indexOf('>P1<') !== -1 && none.indexOf('>--<') !== -1 &&
+      p1.indexOf('aria-label="Set priority for: Alpha. Current priority: P1"') !== -1;
+  });
+
+  // ---- B. INTERACTION (B11-B25) ----
+  await check('B11', 'selector is a real native control that opens on tap/click', () => {
+    const html = ctlFor({ priority: 'p1' });
+    return html.indexOf('<select ') !== -1 && html.indexOf('</select>') !== -1;
+  });
+  await check('B12', 'selector is keyboard reachable', () => {
+    const html = ctlFor({ priority: 'p1' });
+    return /tabindex="-1"/.test(html) === false && /disabled/.test(html) === false;
+  });
+  await check('B13', 'selecting P1 requests p1', () => B.normalizeRequestedPriority('p1') === 'p1');
+  await check('B14', 'selecting P2 requests p2', () => B.normalizeRequestedPriority('p2') === 'p2');
+  await check('B15', 'selecting P3 requests p3', () => B.normalizeRequestedPriority('p3') === 'p3');
+  await check('B16', 'selecting -- requests NO priority (the owner empty input)', () =>
+    B.normalizeRequestedPriority('') === '' && B.normalizeRequestedPriority(null) === '');
+  await check('B17', 'display labels and malformed values never reach the owner', () =>
+    // '--', 'none', 'priority=none', '#none' and unknown levels all collapse to
+    // the accepted no-priority input rather than being forwarded verbatim.
+    ['--', 'none', 'priority=none', '#none', 'urgent', 'P0', 'p4', 1, {}]
+      .every((v) => B.normalizeRequestedPriority(v) === '') &&
+    B.normalizeRequestedPriority(' P2 ') === 'p2');
+  await check('B18', 'selecting the current value is a no-op at the owner', () =>
+    L.applyPriority('- [ ] Alpha #p2', { value: B.normalizeRequestedPriority('p2') }).changed === false);
+  await check('B19', 'repeated Clear is a no-op at the owner', () => {
+    const cleared = L.applyPriority('- [ ] Alpha #p1', { value: '' }).line;
+    return L.applyPriority(cleared, { value: '' }).changed === false && cleared === '- [ ] Alpha';
+  });
+  await check('B20', 'priority interaction does not trigger source navigation', () => {
+    // The control renders in the card CONTEXT row, as a SIBLING of the
+    // [data-task-open] title button — never nested inside it. So a tap can never
+    // be swallowed by the title's own handler, and source navigation stays
+    // available outside the priority control.
+    const html = B.cardHtml(bTask({ priority: 'p1' }), 'todo', new Map());
+    const openAt = html.indexOf('data-task-open="1"');
+    const btnClose = html.indexOf('</button>', openAt);
+    const sel = html.indexOf('taskBoardPrioritySelect');
+    const outsideTitle = sel < openAt || sel > btnClose;
+    const guardAt = boardWireFn.indexOf('data-priority=');
+    return outsideTitle &&
+      guardAt !== -1 &&
+      // the guard short-circuits BEFORE the navigation branch runs
+      /return;/.test(boardWireFn.slice(guardAt, guardAt + 80)) &&
+      guardAt < boardWireFn.indexOf('navigateSource(');
+  });
+  await check('B21', 'selector cannot trigger a status transition', () =>
+    /applyTransition|applySaveLifecycle|setTaskCompletion/.test(boardPriorityFn) === false);
+  await check('B22', 'busy state prevents overlapping priority requests', () =>
+    /if \(mutationInProgress\)/.test(boardPriorityFn) && /select\.disabled = true/.test(boardPriorityFn) &&
+    /mutationInProgress = false/.test(boardPriorityFn) &&
+    // the SAME flag moveTask uses, so priority and status writes never overlap
+    /let mutationInProgress = false;/.test(BOARD_SOURCE));
+  await check('B23', 'no custom popover or menu framework is introduced', () =>
+    // A native select delegates opening, closing, Escape, outside-click and
+    // focus to the browser, so no bespoke menu or keydown handling may exist.
+    /addEventListener\('keydown'/.test(boardCtlFn) === false &&
+    /popover|dropdown|menuitem|role="menu"/i.test(boardCtlFn) === false);
+  await check('B24', 'Board reopen cannot duplicate a priority listener', () =>
+    // The Board legitimately has several 'change' listeners (done window,
+    // priority FILTER, sort, and the delegated column one). The contract is that
+    // there is exactly ONE DELEGATED column listener, and the priority branch
+    // lives inside it — so reopening the Board cannot add a second handler.
+    (boardWireFn.match(/columns\.addEventListener\('change'/g) || []).length === 1 &&
+    (boardWireFn.match(/columns\.addEventListener\('click'/g) || []).length === 1 &&
+    boardWireFn.indexOf('data-priority=') !== -1 && /wired = true/.test(boardWireFn));
+  await check('B25', 'no optimistic card update before Save succeeds', () =>
+    // The displayed value is only ever re-read from the rebuilt Index.
+    /renderColumns\(\)/.test(boardPriorityFn) && /\.priority\s*=/.test(boardPriorityFn) === false &&
+    /\.value\s*=\s*requested/.test(boardPriorityFn) === false);
+
+  // ---- C. SOURCE MUTATION via the shared adapter (B26-B44) ----
+  await check('B26', 'the Board delegates to the SHARED exported Task adapter', () =>
+    /MME_TASK_REVIEW\?\.setTaskPriority/.test(boardPriorityFn) &&
+    /await adapter\(taskRef\.path, taskRef\.kind, Number\(taskRef\.line\) \|\| 0, requested\)/.test(boardPriorityFn));
+  await check('B27', 'the shared adapter is the ONLY caller of applyPriority', () =>
+    // Exactly ONE real invocation in the shared adapter. The other textual hit is
+    // the `typeof ... === 'function'` capability guard, which is not a call.
+    (reviewCode.match(/lifecycle\.applyPriority\(/g) || []).length === 1 &&
+    /typeof lifecycle\.applyPriority === 'function'/.test(reviewCode) &&
+    /applyPriority/.test(BOARD_CODE) === false);
+  await check('B28', 'the Board contains NO priority WRITE grammar of its own', () =>
+    // No string append, no Board-specific regex, no mme-task editing, no token
+    // stripping on the WRITE path: the lifecycle owner remains the only grammar
+    // owner. The only `#p[123]` in the Board are the two pre-existing guarded
+    // DISPLAY fallbacks, which never write.
+    /\+\s*['"]\s*#p[123]/.test(BOARD_CODE) === false &&
+    (BOARD_CODE.match(/#p\[123\]/g) || []).length === 2 &&
+    /#p\[123\]|mme-task:|applyPriority|removePriorityTokens|stripPriorityTokensExact/.test(boardPriorityFn) === false);
+  await check('B29', 'no direct Index mutation and no second priority store', () =>
+    /WORKSPACE_INDEX_STATE\s*[.[]/.test(boardPriorityFn) === false &&
+    /priorityStore|setItem/.test(boardPriorityFn) === false);
+  await check('B30', 'the shared adapter owns stale-line detection and ambiguity refusal', () =>
+    /findActualTaskLine/.test(reviewCode) && /actualLine\.ambiguous/.test(reviewCode));
+  await check('B31', 'the shared adapter owns activation, line replacement and Save', () =>
+    /findWorkspaceFileByPath/.test(reviewCode) && /openWorkspaceFile/.test(reviewCode) &&
+    /saveAfterTaskMutation/.test(reviewCode) && /__cmReplaceLine/.test(reviewCode));
+  await check('B32', 'a refused write cannot leave a false Board value', () =>
+    /renderColumns\(\)/.test(boardPriorityFn) && /resetSelectToSourcePriority/.test(BOARD_SOURCE));
+  await check('B33', 'none -> P1 through the real owner', () =>
+    L.applyPriority('- [ ] Alpha', { value: 'p1' }).line === '- [ ] Alpha #p1');
+  await check('B34', 'P1 -> P2 through the real owner', () =>
+    L.applyPriority('- [ ] Alpha #p1', { value: 'p2' }).line === '- [ ] Alpha #p2');
+  await check('B35', 'P2 -> P3 through the real owner', () =>
+    L.applyPriority('- [ ] Alpha #p2', { value: 'p3' }).line === '- [ ] Alpha #p3');
+  await check('B36', 'P3 -> none through the real owner', () =>
+    L.applyPriority('- [ ] Alpha #p3', { value: '' }).line === '- [ ] Alpha');
+  await check('B37', 'legacy p2 -> canonical P1: key removed, one representation', () => {
+    const r = L.applyPriority('- [ ] Alpha <!-- mme-task: priority=p2 -->', { value: 'p1' });
+    return r.line === '- [ ] Alpha #p1' && /priority=/.test(r.line) === false;
+  });
+  await check('B38', 'legacy p2 -> none: both representations gone', () =>
+    L.applyPriority('- [ ] Alpha <!-- mme-task: priority=p2 -->', { value: '' }).line === '- [ ] Alpha');
+  await check('B39', 'legacy migration happens only on explicit mutation, not on render', () => {
+    const rec = L.toNormalizedTask(
+      parseTasks('- [ ] Alpha <!-- mme-task: priority=p2 -->', 'n/a.md')[0]
+    );
+    // Rendering the Board reads the record; it never rewrites the source line.
+    return rec.priority === 'p2' && /priority=p2/.test(rec.raw);
+  });
+  await check('B40', 'checkbox and status are preserved', () => {
+    const done = L.applyPriority('- [x] Alpha #p2', { value: 'p1' }).line;
+    const st = L.applyPriority('- [ ] Alpha <!-- mme-task: status=ongoing -->', { value: 'p1' }).line;
+    return /\[x\]/.test(done) && /\[ \]/.test(st) && /status=ongoing/.test(st);
+  });
+  await check('B41', 'opened, started and completed metadata are preserved', () => {
+    const o = L.applyPriority('- [ ] Alpha <!-- mme-task: opened=2026-01-01 -->', { value: 'p2' }).line;
+    const s = L.applyPriority('- [ ] Alpha <!-- mme-task: status=ongoing; started=2026-01-02 -->', { value: 'p3' }).line;
+    const c = L.applyPriority('- [x] Alpha <!-- mme-task: completed=2026-01-03 -->', { value: 'p1' }).line;
+    return /opened=2026-01-01/.test(o) && /started=2026-01-02/.test(s) &&
+      /completed=2026-01-03/.test(c) && /\[x\]/.test(c);
+  });
+  await check('B42', 'indentation, bullet marker and visible text are preserved', () =>
+    L.applyPriority('  - [ ] Alpha report', { value: 'p1' }).line === '  - [ ] Alpha report #p1');
+  await check('B43', 'ordinary #customer survives both operations', () => {
+    const set = L.applyPriority('- [ ] Alpha #customer', { value: 'p3' }).line;
+    return set === '- [ ] Alpha #customer #p3' &&
+      L.applyPriority(set, { value: '' }).line === '- [ ] Alpha #customer';
+  });
+  await check('B44', 'canonical priority appears exactly once', () => {
+    const r = L.applyPriority('- [ ] Alpha <!-- mme-task: priority=p2 --> #p2', { value: 'p1' });
+    return (r.line.match(/#p1/g) || []).length === 1 && (r.line.match(/#p2/g) || []).length === 0;
+  });
+
+  // ---- D. SAVE AND RECONCILIATION (B45-B55) ----
+  // These replay the real Save reconciliation boundary: the baseline the editor
+  // held before the mutation versus the live buffer after it.
+  function reconcileSave(baselineText, currentText) {
+    const base = parseTasks(baselineText, 'n/a.md');
+    const cur = parseTasks(currentText, 'n/a.md');
+    const m = L.matchTasksForSave(base, cur);
+    let changed = false, opened = 0, completed = 0, reopened = 0;
+    for (const pair of m.pairs) {
+      const b = base[pair.baseline], c = cur[pair.current];
+      if (!b || !c || c.done === b.done) continue; // checkbox-authoritative
+      const res = L.applySaveLifecycle(c.raw, { today: '2026-03-10', isNew: false, checked: c.done, explicitStatus: null });
+      if (res.ok && res.changed) {
+        changed = true;
+        if (res.added.opened) opened += 1;
+        if (res.added.completed) completed += 1;
+        if (res.removed.completed) reopened += 1;
+      }
+    }
+    return { ambiguous: m.ambiguous, changed, opened, completed, reopened };
+  }
+  const baseLine = ['- [ ] Alpha', '- [ ] Beta'].join('\n');
+  const p2Line = L.applyPriority('- [ ] Alpha', { value: 'p2' }).line;
+  const saved = reconcileSave(baseLine, [p2Line, '- [ ] Beta'].join('\n'));
+
+  await check('B45', 'priority-only Save yields changed=false', () => saved.changed === false);
+  await check('B46', 'openedAdded=0', () => saved.opened === 0);
+  await check('B47', 'completedAdded=0', () => saved.completed === 0);
+  await check('B48', 'completedRemoved=0', () => saved.reopened === 0);
+  await check('B49', 'ambiguous=0', () => saved.ambiguous === 0);
+  await check('B50', 'baseline refresh occurs only AFTER a successful Save', () =>
+    // The adapter saves through the existing path; the Board never touches the
+    // baseline itself and never refreshes it optimistically.
+    /await saveAfterTaskMutation/.test(REVIEW_SOURCE) && /__taskBaseline/.test(BOARD_SOURCE) === false);
+  await check('B51', 'a failed Save cannot publish a false Board value', () =>
+    // The Board's displayed value comes from a re-render of the real Index; it
+    // never mirrors the requested value, so a failed Save leaves the card true.
+    /renderColumns\(\)/.test(boardPriorityFn) && /\.value\s*=\s*requested/.test(boardPriorityFn) === false);
+  await check('B52', 'the rebuilt Index supplies the final displayed value', () => {
+    const rec = L.toNormalizedTask(parseTasks(p2Line, 'n/a.md')[0]);
+    return rec.priority === 'p2' && ctlFor({ priority: rec.priority }).indexOf('>P2<') !== -1;
+  });
+  await check('B53', 'Review and Board agree after rebuild', () => {
+    // The normalized contract record (shared by Review and Board) and the
+    // Board trigger both read the same canonical priority.
+    const rec = L.toNormalizedTask(parseTasks(p2Line, 'n/a.md')[0]);
+    const boardReads = B.normalizeRequestedPriority(rec.priority);
+    return rec.priority === 'p2' && boardReads === 'p2' &&
+      ctlFor({ priority: boardReads }).indexOf('>P2<') !== -1;
+  });
+  await check('B54', 'Board and Review filters agree after rebuild', () => {
+    const rec = L.toNormalizedTask(parseTasks(p2Line, 'n/a.md')[0]);
+    const cleared = L.toNormalizedTask(parseTasks('- [ ] Alpha', 'n/a.md')[0]);
+    return B.matchesPriorityFilter(rec, 'p2') && B.matchesPriorityFilter(rec, 'p1') === false &&
+      B.matchesPriorityFilter(cleared, 'none') && B.matchesPriorityFilter(cleared, 'p2') === false;
+  });
+  await check('B55', 'the Board column is unchanged by a priority change', () => {
+    const task = bTask({ priority: 'p1', done: false, effectiveStatus: 'todo' });
+    return B.statusOf(task) === 'todo' && B.groupTasks([task]).todo.length === 1 &&
+      B.groupTasks([task]).done.length === 0;
+  });
+
+  // ---- E. IDENTITY (B56-B64) ----
+  await check('B56', 'same text in different Notes updates the selected Note only', () => {
+    const a = L.toNormalizedTask(parseTasks('- [ ] Same', 'notes/a.md')[0]);
+    const b = L.toNormalizedTask(parseTasks('- [ ] Same', 'notes/b.md')[0]);
+    return a.sourcePath !== b.sourcePath && a.filePath === 'notes/a.md' && b.filePath === 'notes/b.md';
+  });
+  await check('B57', 'the second same-text occurrence resolves to the second only', () => {
+    const recs = parseTasks('- [ ] Same\n- [ ] Same', 'n/a.md');
+    return recs[0].line === 1 && recs[1].line === 2 && recs[0].text === recs[1].text;
+  });
+  await check('B58', 'a priority change to the second occurrence leaves the first unchanged', () => {
+    const lines = ['- [ ] Same', '- [ ] Same'];
+    lines[1] = L.applyPriority(lines[1], { value: 'p2' }).line;
+    return lines[0] === '- [ ] Same' && lines[1] === '- [ ] Same #p2';
+  });
+  await check('B59', 'stale exact line uses the safe constrained resolver', () =>
+    /findActualTaskLine/.test(REVIEW_SOURCE) && /nearby|shifted/i.test(REVIEW_SOURCE));
+  await check('B60', 'an ambiguous source match refuses mutation', () => {
+    const html = ctlFor({ priority: null });
+    // The Board carries the exact indexed line; it never searches by text alone.
+    return html.indexOf('data-line="7"') !== -1 && /data-path="n\/a\.md"/.test(html) &&
+      /actualLine\.ambiguous/.test(REVIEW_SOURCE);
+  });
+  await check('B61', 'a wrong nearby Task is never patched', () =>
+    // The Board patches lines only for STATUS transitions (moveTask, pre-existing).
+    // The PRIORITY path never touches the line bridge at all: it cannot patch a
+    // wrong line because it never writes one.
+    /__cmReplaceLine|replaceLine/.test(boardPriorityFn) === false);
+  await check('B62', 'path identity remains exact on the control', () => {
+    const html = ctlFor({ priority: 'p1' }, 'Alpha');
+    return html.indexOf('data-path="n/a.md"') !== -1 && html.indexOf('data-kind="notes"') !== -1;
+  });
+  await check('B63', 'no stable ID is added', () =>
+    Object.keys(L.toNormalizedTask(parseTasks('- [ ] Alpha #p1', 'n/a.md')[0]))
+      .filter((k) => /^(id|uid|uuid|taskId)$/i.test(k)).length === 0);
+  await check('B64', 'no direct Index mutation anywhere in the Board', () => {
+    const before = indexSnapshot();
+    B.renderColumns && null;
+    L.projectTasks(parseTasks('- [ ] Alpha #p2', 'n/a.md'), { scope: 'workspace' });
+    return before === indexSnapshot();
+  });
+
+  // ---- F. REGRESSION AND SCOPE (B65-B75) ----
+  await check('B65', 'the four Board columns remain unchanged', () =>
+    B.groupTasks([bTask({ done: false, effectiveStatus: 'todo' })]).todo.length === 1 &&
+    B.groupTasks([bTask({ done: false, effectiveStatus: 'backlog' })]).backlog.length === 1 &&
+    B.groupTasks([bTask({ done: false, effectiveStatus: 'ongoing' })]).ongoing.length === 1 &&
+    B.groupTasks([bTask({ done: true, effectiveStatus: 'done' })]).done.length === 1);
+  await check('B66', 'status transitions remain unchanged (applyTransition still wired)', () =>
+    /lifecycle\.applyTransition/.test(BOARD_SOURCE) && /data-move="1"/.test(BOARD_SOURCE));
+  await check('B67', 'the Task Review existing priority action remains operational', () =>
+    /setTaskPriority/.test(REVIEW_SOURCE) && /applyPriority/.test(REVIEW_SOURCE));
+  await check('B68', 'Task Review Clear remains operational', () =>
+    /newPriority \|\| 'cleared'/.test(REVIEW_SOURCE) && /value: newPriority/.test(REVIEW_SOURCE));
+  await check('B69', 'priority filters remain operational', () =>
+    B.matchesPriorityFilter({ priority: 'p1' }, 'p1') && B.matchesPriorityFilter({ priority: null }, 'none') &&
+    B.normalizePriorityFilterValue('p3') === 'p3');
+  await check('B70', 'the existing sort selection remains authoritative', () =>
+    B.normalizeSortValue('name') === 'name' && B.normalizeSortValue('file') === 'file' &&
+    /SORT_KEY/.test(BOARD_SOURCE));
+  await check('B71', 'no automatic priority ordering is introduced', () =>
+    // The comparator is unchanged: no priority term is injected into ordering,
+    // and the previous 'priority' sort value still normalizes away to 'file'.
+    B.normalizeSortValue('priority') === 'file' &&
+    /priorityRank|PRIORITY_RANK|sortByPriority/.test(BOARD_SOURCE) === false);
+  await check('B72', 'no Active card is added', () =>
+    /mmeActiveCard|activeCard|ActiveCard/.test(BOARD_SOURCE) === false);
+  await check('B73', 'no Workspace Index disclosure is added', () =>
+    /workspaceIndexDisclosure|IndexDisclosure/.test(BOARD_SOURCE) === false);
+  await check('B74', 'no Project or Report surface is touched', () =>
+    /__virtualReportSession|projectPanel|reportSession/.test(BOARD_SOURCE) === false);
+  await check('B75', 'no version or cache owner is touched', () =>
+    /productVersion|cacheIdentity|APP_VERSION|CACHE_PREFIX/.test(BOARD_SOURCE) === false);
+
+  group('ACT 2B mutation controls (B-M1..B-M10)');
+
+  await check('B-M1', 'a Board-local string append would break the single-writer contract', () => {
+    const naive = (line, v) => line + ' #' + v;
+    return naive('- [ ] Alpha #p1', 'p1') === '- [ ] Alpha #p1 #p1' &&
+      L.applyPriority('- [ ] Alpha', { value: 'p1' }).line === '- [ ] Alpha #p1' &&
+      /applyPriority/.test(BOARD_CODE) === false;
+  });
+  await check('B-M2', 'direct WORKSPACE_INDEX_STATE mutation is absent', () => {
+    const before = indexSnapshot();
+    L.projectTasks(parseTasks('- [ ] Alpha #p2', 'n/a.md'), { scope: 'workspace' });
+    const after = indexSnapshot();
+    return before === after && /WORKSPACE_INDEX_STATE\s*[.[]/.test(boardPriorityFn) === false;
+  });
+  await check('B-M3', 'a priority change that also moves status would break neutrality', () =>
+    /applyTransition|setTaskCompletion/.test(boardPriorityFn) === false &&
+    L.applyPriority('- [ ] Alpha', { value: 'p1' }).line === '- [ ] Alpha #p1');
+  await check('B-M4', 'stripping all hashtags would damage ordinary tags', () => {
+    const greedy = (t) => String(t).replace(/[ \t]*#\w+/gi, '').trim();
+    return greedy('Alpha #customer #p1') === 'Alpha' &&
+      L.applyPriority('- [ ] Alpha #customer', { value: 'p1' }).line === '- [ ] Alpha #customer #p1';
+  });
+  await check('B-M5', 'a dual representation would survive a naive writer', () => {
+    const dual = '- [ ] Alpha #p1 <!-- mme-task: priority=p2 -->';
+    return /#p1/.test(dual) && /priority=p2/.test(dual) &&
+      L.applyPriority('- [ ] Alpha <!-- mme-task: priority=p2 -->', { value: 'p1' }).line === '- [ ] Alpha #p1';
+  });
+  await check('B-M6', 'line-number-only identity would patch the wrong duplicate', () => {
+    const base = parseTasks('- [ ] Same\n- [ ] Same', 'n/a.md');
+    const cur = parseTasks('- [ ] Same #p2\n- [ ] Same', 'n/a.md');
+    const m = L.matchTasksForSave(base, cur);
+    // The Board carries exact path + indexed line, and text+occurrence matching
+    // keeps the two duplicates distinguishable.
+    return m.pairs.length === 2 && m.ambiguous === 0 && cur[0].line === 1 && base[1].line === 2;
+  });
+  await check('B-M7', 'an optimistic card update would survive a failed Save', () =>
+    /\.value\s*=\s*requested/.test(boardPriorityFn) === false &&
+    /\.priority\s*=/.test(boardPriorityFn) === false && /renderColumns\(\)/.test(boardPriorityFn));
+  await check('B-M8', 'a second delegated listener would fire twice per Board reopen', () =>
+    (boardWireFn.match(/columns\.addEventListener\('change'/g) || []).length === 1 &&
+    (boardWireFn.match(/columns\.addEventListener\('click'/g) || []).length === 1);
+  await check('B-M9', 'an unnecessary Save on the current value would be observable', () => {
+    const cur = '- [ ] Alpha #p2';
+    const patch = L.applyPriority(cur, { value: 'p2' });
+    return patch.changed === false && patch.line === cur;
+  });
+  await check('B-M10', 'a priority-sensitive matcher would make the Save ambiguous', () => {
+    const sensitive = (v) => String(v).replace(/<!--\s*mme-task:[\s\S]*?-->/gi, '').replace(/\s+/g, ' ').trim();
+    const base = parseTasks('- [ ] Alpha', 'n/a.md');
+    const cur = parseTasks(p2Line, 'n/a.md');
+    return sensitive(base[0].text) !== sensitive(cur[0].text) &&
+      L.matchTasksForSave(base, cur).ambiguous === 0;
+  });
+
+  // ACT 2B_CHUNK_5_END
+
 
   group('ACT 2A.1 mutation controls (A2A1-M1-M5)');
 

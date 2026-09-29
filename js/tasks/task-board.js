@@ -541,12 +541,87 @@
     return 'Unknown source';
   }
 
-  // Builds the priority badge span for a canonical priority ('p1' | 'p2' | 'p3').
-  // Any other value (null/unrecognized) produces no badge. Non-interactive span.
-  function priorityBadgeHtml(priority) {
-    if (priority !== 'p1' && priority !== 'p2' && priority !== 'p3') return '';
-    const up = priority.toUpperCase();
-    return `<span class="workspaceTaskPriorityBadge priority-${priority}">${up}</span>`;
+  // ---- ACT 2B: compact priority TRIGGER (replaces the read-only badge) ----
+  //
+  // This control REPLACES the priority badge rather than sitting beside it, so a
+  // card never renders the same priority twice (§4).
+  //
+  // It is a NATIVE <select> because the Board already establishes exactly this
+  // compact control for status (`.taskBoardMove` + `.taskBoardMoveSelect`).
+  // Reusing that established owner satisfies §5 preference 1 without inventing a
+  // second interaction: correct S22/DeX touch behavior, DeX keyboard behavior,
+  // selected-option identification, focus, Escape and outside-click closing are
+  // all the browser's own, so NO custom popover, menu framework, or duplicate
+  // keydown handling is introduced in this ACT.
+  //
+  // The control is PRESENTATION ONLY. It carries the exact source identity
+  // (path / kind / line) and the requested canonical value, and the delegated
+  // owner hands both to the shared Task mutation adapter. It never patches
+  // Markdown, holds no priority grammar, and keeps no priority store.
+  //
+  // Option VALUES are canonical owner inputs, never display labels: '--' is the
+  // LABEL for the empty value. '--', 'none' and 'priority=none' must never
+  // reach MME_TASK_LIFECYCLE.applyPriority.
+  const PRIORITY_CONTROL_OPTIONS = Object.freeze([
+    { value: '', label: '--', title: 'No priority' },
+    { value: 'p1', label: 'P1', title: 'Priority 1' },
+    { value: 'p2', label: 'P2', title: 'Priority 2' },
+    { value: 'p3', label: 'P3', title: 'Priority 3' },
+  ]);
+
+  // Maps ANY control/DOM value to the canonical owner input, or '' for "no
+  // priority". An unrecognized value becomes the no-priority request rather
+  // than being forwarded verbatim, so no malformed value can reach the owner.
+  function normalizeRequestedPriority(value) {
+    const v = String(value == null ? '' : value)
+      .trim()
+      .toLowerCase();
+    return v === 'p1' || v === 'p2' || v === 'p3' ? v : '';
+  }
+
+  // Human label for the accessible name / log. Never sent to the owner.
+  function priorityLabel(priority) {
+    const p = normalizeRequestedPriority(priority);
+    return p ? p.toUpperCase() : '--';
+  }
+
+  function priorityControlHtml(task, accessibleText, path, kind, line) {
+    const current = normalizeRequestedPriority(task?.priority);
+
+    const options = PRIORITY_CONTROL_OPTIONS.map((opt) => {
+      const selected = opt.value === current ? ' selected' : '';
+      return (
+        `<option value="${opt.value}"${selected} title="${opt.title}">` +
+        `${opt.label}</option>`
+      );
+    }).join('');
+
+    // The accessible name carries BOTH Task context AND the current priority, so
+    // the control stays meaningful when read out of visual context, and so
+    // priority is never conveyed by color alone.
+    const aria =
+      `Set priority for: ${accessibleText}. Current priority: ${priorityLabel(current)}`;
+
+    // The current level rides on the control as a class so the trigger keeps the
+    // established P1/P2/P3 badge visual language, with the TEXT label (P1/P2/P3
+    // or --) carrying the meaning independently of color.
+    const levelClass = current ? ` priority-${current}` : '';
+
+    return (
+      `<label class="taskBoardPriority">` +
+      `<span class="taskBoardPriorityLabel">Priority</span>` +
+      `<select ` +
+      `class="taskBoardPrioritySelect${levelClass}" ` +
+      `data-priority="1" ` +
+      `data-path="${path}" ` +
+      `data-kind="${kind}" ` +
+      `data-line="${line}" ` +
+      `data-priority-current="${current}" ` +
+      `aria-label="${aria}">` +
+      options +
+      `</select>` +
+      `</label>`
+    );
   }
 
   // Card display text. Uses the shared priority-token cleaner (guarded) so a
@@ -570,7 +645,6 @@
     const text = escapeHtml(cardDisplayText(task) || '(untitled task)');
 
     const sourceLabel = escapeHtml(resolveSourceLabel(task, byPath));
-    const badge = priorityBadgeHtml(task?.priority);
 
     const kindLabel = escapeHtml(task?.fileKind || 'task');
 
@@ -606,11 +680,16 @@
 
     const accessibleSource = sourceLabel && sourceLabel !== 'Unknown source' ? `, ${sourceLabel}` : '';
 
+    // ACT 2B: the priority trigger replaces the former read-only badge, so the
+    // card shows the priority exactly once, in the top-right area of the
+    // context row. Task text stays the main card content and is never covered.
+    const priorityControl = priorityControlHtml(task, text, path, kind, line);
+
     return (
       `<div class="taskBoardCard" data-card-status="${status}">` +
       `<div class="taskBoardCardContext">` +
       `<span class="taskBoardCardSource" title="${sourceLabel}">${sourceLabel}</span>` +
-      `${badge}` +
+      `${priorityControl}` +
       `</div>` +
       `<button ` +
       `type="button" ` +
@@ -896,6 +975,12 @@
 
     if (columns) {
       columns.addEventListener('click', (event) => {
+        // ACT 2B: a priority interaction must never open the source Note. The
+        // control lives OUTSIDE the [data-task-open] title button, so this early
+        // return is all that is required, and it deliberately does NOT call
+        // preventDefault() so the native select still opens its menu normally.
+        if (event.target?.closest?.('[data-priority="1"]')) return;
+
         const title = event.target?.closest?.('[data-task-open="1"]');
 
         if (!title) return;
@@ -911,6 +996,24 @@
       });
 
       columns.addEventListener('change', (event) => {
+        // ACT 2B: priority requests are handled on the SAME already-wired
+        // listener as status moves. No new listener is registered, so reopening
+        // the Board can never duplicate a priority handler.
+        const prioritySelect = event.target?.closest?.('[data-priority="1"]');
+
+        if (prioritySelect) {
+          setTaskPriorityFromBoard(
+            {
+              path: prioritySelect.dataset.path || '',
+              kind: prioritySelect.dataset.kind || '',
+              line: Number(prioritySelect.dataset.line || 0),
+            },
+            prioritySelect.value,
+            prioritySelect
+          );
+          return;
+        }
+
         const select = event.target?.closest?.('[data-move="1"]');
 
         if (!select) return;
@@ -1049,6 +1152,87 @@
       });
     } catch {
       // The select may have been detached by a refresh.
+    }
+  }
+
+  // Restores a priority select to the priority recorded on the CARD at render
+  // time. Used only when a request is refused before any source mutation, so a
+  // rejected request never leaves the control showing a value the source never
+  // accepted. It is NOT the post-mutation source of truth; see
+  // setTaskPriorityFromBoard, which always re-reads the rebuilt Index.
+  function resetSelectToSourcePriority(select) {
+    if (!select) return;
+
+    try {
+      const current = normalizeRequestedPriority(select.dataset.priorityCurrent);
+      if (select.value !== current) select.value = current;
+      select.disabled = false;
+    } catch {
+      // The select may have been detached by a refresh.
+    }
+  }
+
+  // ---- ACT 2B: priority mutation, delegated to the SHARED Task adapter ----
+  //
+  // This function deliberately contains NO priority grammar. It does not append
+  // ' #p1', does not run a Board-specific regex, does not touch an mme-task
+  // comment, and does not strip hashtag tokens. The single priority writer
+  // remains MME_TASK_LIFECYCLE.applyPriority, and the single source-mutation
+  // lifecycle remains the exported Task Review adapter, which already owns:
+  // exact sourcePath, exact occurrence resolution via findActualTaskLine,
+  // stale-line detection, ambiguous-match refusal, writable-handle activation,
+  // exact line replacement, Save, and Index rebuild.
+  //
+  // ACT 2B therefore adds PRESENTATION and DELEGATION only. Extracting a second
+  // adapter or copying Review's mutation internals would be the duplication this
+  // ACT is required to avoid, and source proves it is unnecessary: the adapter is
+  // already an external, exported owner.
+  async function setTaskPriorityFromBoard(taskRef, value, select) {
+    // Busy guard is SHARED with moveTask, so a priority write and a status write
+    // can never overlap on the same Board, and rapid repeat taps cannot stack
+    // two writes for one card.
+    if (mutationInProgress) {
+      safeLog('TaskBoard: mutation already in progress, skipping priority change');
+      resetSelectToSourcePriority(select);
+      return;
+    }
+
+    if (!taskRef?.path) {
+      resetSelectToSourcePriority(select);
+      return;
+    }
+
+    // The ONLY value shape that reaches the owner. '--' is a display label and
+    // is normalized to the owner's accepted no-priority input (empty).
+    const requested = normalizeRequestedPriority(value);
+
+    if (select) select.disabled = true;
+    mutationInProgress = true;
+
+    try {
+      const adapter = globalThis.MME_TASK_REVIEW?.setTaskPriority;
+
+      if (typeof adapter !== 'function') {
+        safeLog('TaskBoard: shared Task priority adapter unavailable');
+        showToast('Priority editing unavailable.', 'error', 2200);
+        return;
+      }
+
+      safeLog(`TaskBoard: requesting priority=${requested || 'none'} for ${taskRef.path}`);
+
+      await adapter(taskRef.path, taskRef.kind, Number(taskRef.line) || 0, requested);
+    } catch (error) {
+      safeLog(`TaskBoard: priority change failed ${error?.message || error}`);
+      showToast('Priority change failed.', 'error', 2400);
+    } finally {
+      mutationInProgress = false;
+      if (select) select.disabled = false;
+
+      // The displayed priority is ALWAYS re-read from the rebuilt Index by
+      // re-rendering, never carried over from the requested value. A refused,
+      // no-op, or failed Save therefore cannot leave a false priority on the
+      // card, and a Save that failed leaves the physical source authoritative.
+      renderColumns();
     }
   }
 
@@ -1628,15 +1812,63 @@
     resolveSourceLabel(srcTaskTitle, cardByPath);
     check('F resolver does not mutate Task or Index', JSON.stringify(srcTaskTitle) === srcSnapshot);
 
-    check('G P1 badge text', priorityBadgeHtml('p1').indexOf('>P1<') !== -1);
-    check('H P2 badge text', priorityBadgeHtml('p2').indexOf('>P2<') !== -1);
-    check('I P3 badge text', priorityBadgeHtml('p3').indexOf('>P3<') !== -1);
-    check('J null priority -> no badge', priorityBadgeHtml(null) === '');
-    check('K invalid priority -> no badge', priorityBadgeHtml('urgent') === '' && priorityBadgeHtml(undefined) === '' && priorityBadgeHtml(1) === '');
+    // ---- ACT 2B: the priority trigger replaces the read-only priority badge.
+    // The former badge fixtures (G-L) are preserved in INTENT and re-pointed at
+    // the control that now occupies that role, so the established P1/P2/P3 visual
+    // language and the "no badge for an unknown level" rule stay proven.
+
+    const ctlNone = priorityControlHtml({ priority: null }, 'Task A', 'n/a.md', 'note', 1);
+    const ctlP1 = priorityControlHtml({ priority: 'p1' }, 'Task A', 'n/a.md', 'note', 1);
+    const ctlP2 = priorityControlHtml({ priority: 'p2' }, 'Task A', 'n/a.md', 'note', 1);
+    const ctlP3 = priorityControlHtml({ priority: 'p3' }, 'Task A', 'n/a.md', 'note', 1);
+
+    check('G P1 trigger text', ctlP1.indexOf('>P1<') !== -1);
+    check('H P2 trigger text', ctlP2.indexOf('>P2<') !== -1);
+    check('I P3 trigger text', ctlP3.indexOf('>P3<') !== -1);
+    check('J null priority renders --', priorityLabel(null) === '--' && ctlNone.indexOf('>--<') !== -1);
     check(
-      'L badge class driven only by canonical priority',
-      priorityBadgeHtml('p2').indexOf('priority-p2') !== -1 && priorityBadgeHtml('p2').indexOf('priority-p1') === -1 &&
-        priorityBadgeHtml('p2').indexOf('priority-p3') === -1
+      'K invalid priority falls back to -- and requests no priority',
+      priorityLabel('urgent') === '--' &&
+        normalizeRequestedPriority('urgent') === '' &&
+        normalizeRequestedPriority(undefined) === '' &&
+        normalizeRequestedPriority(1) === ''
+    );
+    check(
+      'L trigger level class driven only by canonical priority',
+      ctlP2.indexOf('priority-p2') !== -1 && ctlP2.indexOf('priority-p1') === -1 &&
+        ctlP3.indexOf('priority-p3') !== -1 && ctlNone.indexOf('priority-p') === -1
+    );
+
+    // The current value must be SELECTED (not merely present) so the closed
+    // control shows the Task's real priority.
+    check(
+      'L2 current priority is the selected option',
+      ctlP2.indexOf('<option value="p2" selected title="Priority 2">P2</option>') !== -1 &&
+        ctlNone.indexOf('<option value="" selected title="No priority">--</option>') !== -1
+    );
+
+    // The trigger is a native <select>, so touch, keyboard, Escape, outside-click
+    // closing and focus are the browser's own. No custom menu is introduced.
+    check(
+      'L3 trigger is a native select carrying exact source identity',
+      ctlP2.indexOf('<select ') !== -1 && ctlP2.indexOf('data-priority="1"') !== -1 &&
+        ctlP2.indexOf('data-path="n/a.md"') !== -1 && ctlP2.indexOf('data-line="1"') !== -1
+    );
+
+    // Priority must never be conveyed by color alone, and the accessible name
+    // must carry BOTH Task context and current priority.
+    check(
+      'L4 accessible name carries Task context and current priority',
+      ctlP2.indexOf('aria-label="Set priority for: Task A. Current priority: P2"') !== -1 &&
+        ctlNone.indexOf('Current priority: --') !== -1
+    );
+
+    // Option VALUES are canonical owner inputs; display labels must never be
+    // forwarded. '--' and 'none' must not exist as a value anywhere.
+    check(
+      'L5 only canonical owner values are offered as option values',
+      PRIORITY_CONTROL_OPTIONS.map((o) => o.value).join(',') === ',p1,p2,p3' &&
+        /value="(--|none)"/.test(ctlP2) === false
     );
 
     const cleanTitleText = cardDisplayText(srcTaskTitle);
@@ -1654,13 +1886,22 @@
         renderedCard.indexOf('data-kind="notes"') !== -1 &&
         renderedCard.indexOf('data-line="3"') !== -1
     );
+    // ACT 2B: the read-only badge span is replaced by the priority TRIGGER. The
+    // card now carries exactly one priority affordance, and it is a native
+    // <select> with P1 selected — so the card shows P1 while closed, is
+    // keyboard reachable, and is NOT a dead non-interactive span.
     check(
-      'P priority badge is a non-interactive span',
-      renderedCard.indexOf('<span class="workspaceTaskPriorityBadge priority-p1">P1</span>') !== -1 &&
-        renderedCard.indexOf('workspaceTaskPriorityBadge priority-p1"') !== -1
+      'P priority trigger replaces the badge and shows P1',
+      renderedCard.indexOf('taskBoardPrioritySelect priority-p1') !== -1 &&
+        renderedCard.indexOf('<option value="p1" selected title="Priority 1">P1</option>') !== -1 &&
+        renderedCard.indexOf('workspaceTaskPriorityBadge') === -1
     );
     check('P2 source label present on the card', renderedCard.indexOf('class="taskBoardCardSource" title="Alpha Note"') !== -1);
-    check('P3 no badge for unprioritized card', cardHtml({ text: 'plain', priority: null, filePath: 'x.md', fileKind: 'notes', fileName: 'x.md', line: 1 }, 'todo', new Map()).indexOf('workspaceTaskPriorityBadge') === -1);
+    check(
+      'P3 trigger renders -- for an unprioritized card',
+      cardHtml({ text: 'plain', priority: null, filePath: 'x.md', fileKind: 'notes', fileName: 'x.md', line: 1 }, 'todo', new Map())
+        .indexOf('data-priority-current=""') !== -1
+    );
 
     check('Q card input not mutated during render', JSON.stringify(srcTaskTitle) === srcSnapshot);
 
@@ -1728,7 +1969,11 @@
     // W: rendering remains correct after filtering (badge + source label intact).
     const filteredRendered = orderCheck.columns.backlog[0];
     const cardBacklog = cardHtml(filteredRendered, 'backlog', cardByPath);
-    check('W badge rendering correct after filter', cardBacklog.indexOf('workspaceTaskPriorityBadge priority-p1') !== -1);
+    check(
+      'W priority trigger rendering correct after filter',
+      cardBacklog.indexOf('taskBoardPrioritySelect priority-p1') !== -1 &&
+        cardBacklog.indexOf('data-priority-current="p1"') !== -1
+    );
     check('W2 source label rendering correct after filter', cardBacklog.indexOf('taskBoardCardSource') !== -1);
 
     check('Z persistence normalizer never returns unsupported', ['all', 'p1', 'p2', 'p3', 'none'].indexOf(normalizePriorityFilterValue('bogus')) !== -1 && ['all', 'p1', 'p2', 'p3', 'none'].indexOf(normalizePriorityFilterValue('P2')) !== -1);
@@ -1790,7 +2035,11 @@
     // AB: rendered cards retain source label and badge after sorting.
     const sortedForRender = sortColumn([{ id: 'p1x', text: 'do #p1 things #project', priority: 'p1', filePath: 'notes/a.md', fileName: 'a.md', fileKind: 'notes', line: 3 }], 'name');
     const sortedCardHtml = cardHtml(sortedForRender[0], 'todo', cardByPath);
-    check('AB source labels + priority badges survive sorting', sortedCardHtml.indexOf('taskBoardCardSource') !== -1 && sortedCardHtml.indexOf('workspaceTaskPriorityBadge priority-p1') !== -1);
+    check(
+      'AB source labels + priority trigger survive sorting',
+      sortedCardHtml.indexOf('taskBoardCardSource') !== -1 &&
+        sortedCardHtml.indexOf('taskBoardPrioritySelect priority-p1') !== -1
+    );
 
     return {
       ok: failed === 0,
@@ -1818,9 +2067,17 @@
     isValidDoneWindow,
     doneWindowDefault,
     resolveSourceLabel,
-    priorityBadgeHtml,
     cardDisplayText,
     cardHtml,
+    // ACT 2B: the priority trigger is a pure renderer over the canonical task
+    // record, and the request normalizer is the single gate that keeps display
+    // labels ('--') and malformed values out of the lifecycle owner. Both are
+    // exposed so the contract suite can prove the rendering and the value
+    // mapping without booting the Board overlay.
+    priorityControlHtml,
+    priorityLabel,
+    normalizeRequestedPriority,
+    PRIORITY_CONTROL_OPTIONS,
     normalizePriorityFilterValue,
     matchesPriorityFilter,
     normalizeSortValue,
