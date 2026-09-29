@@ -1,0 +1,848 @@
+# MarkmapEditor 1.0 Product Architecture and Implementation Program
+
+**Status:** Canonical planning document for the post-0.6.2 program
+**Baseline:** MarkmapEditor 0.6.2, Notes Workspace Foundation
+**Authority:** PLAN first. Each implementation package requires its own source-proven PLAN, explicit ACT authorization, static validation, browser acceptance, and release closure.
+**Runtime implementation authorized by this document:** No
+
+---
+
+## 1. Purpose
+
+This document defines the coordinated path from the accepted 0.6.2 foundation to MarkmapEditor 1.0.
+
+It does not replace subsystem-specific architecture documents. It establishes the cross-feature product contract, package order, dependencies, boundaries, and acceptance model for:
+
+- Notes and Workspace;
+- Standalone Notes;
+- Tasks;
+- Wiki Links;
+- Projects;
+- Reports;
+- final visual consistency;
+- 1.0 release closure.
+
+The implementation must remain incremental. Tasks, Projects, Reports, and Standalone Notes must not be implemented as one large ACT.
+
+---
+
+## 2. Source-Proven Baseline
+
+The program is based on the current repository owners and accepted documentation, including:
+
+- `NEXT_CYCLE_PLAN.md`;
+- `STATUS.md`;
+- `VERIFY.md`;
+- `docs/WORKSPACE_FORMAT.md`;
+- `docs/AI_DEVELOPMENT_WORKFLOW.md`;
+- `docs/architecture/MarkmapEditor_Notes_Knowledge_Workspace_1_0_PLAN.md`;
+- `docs/architecture/MarkmapEditor_Task_Lifecycle_Architecture.md` or its current equivalent;
+- `docs/architecture/MarkmapEditor_Projects_Discovery_MVP_Architecture.md` or its current equivalent;
+- `docs/architecture/MarkmapEditor_Quick_Report_and_task_Metadata_MVP_PLAN.md`;
+- the current Draw.io Report architecture documents;
+- the current source owners in `js/workspace/`, `js/tasks/`, `js/links/`, `js/report/`, `js/core/`, `js/main.js`, and `sw.js`.
+
+Repository facts that constrain this program:
+
+- Markdown remains canonical.
+- The current Workspace format is `workspace-root/notes/*.md`.
+- Notes, Knowledge, Pinned, and Archive are projections over the same physical Notes.
+- `WORKSPACE_INDEX_STATE` already aggregates files, Tasks, links, tags, and Projects.
+- Current Document scope already parses the live editor buffer through the shared Workspace parser.
+- Task lifecycle is owned by `MME_TASK_LIFECYCLE` and task-local `mme-task` comments.
+- Task Review and Task Board already consume the shared Workspace read model.
+- Projects are already discovered by the parser and aggregated into the Workspace Index.
+- Quick Report, reviewed Markdown import, Draw.io reconciliation, and Report panel foundations already exist.
+- Version 0.6.2 is published. Notes architecture is frozen except for defects proven by real use.
+
+---
+
+## 3. Product Principles
+
+### 3.1 Markdown-first
+
+The Markdown file is the canonical unit. Visual experiences may project, filter, aggregate, and safely edit Markdown, but must not create a competing hidden database.
+
+### 3.2 Progressive opt-in
+
+A workflow must work at its simplest level first. Optional Workspace aggregation, metadata enrichment, Reports, and future attribute layers may add value later without making the base workflow mandatory.
+
+### 3.3 Standalone first where useful
+
+A standalone Markdown file must remain a first-class experience. Workspace is an optional aggregation layer, not a prerequisite for editing or using document-local features.
+
+### 3.4 One owner per responsibility
+
+Do not add:
+
+- a second Workspace scanner;
+- a second Workspace Index;
+- a second Task lifecycle owner;
+- a parallel Project database;
+- a Report source of truth outside Markdown;
+- duplicate physical open, Save, or navigation paths.
+
+### 3.5 Conservative mutation
+
+When identity or reconciliation is ambiguous, do not write automatically. Preserve user content and report the ambiguity.
+
+### 3.6 Small packages, stable checkpoints
+
+Every package must end in a browser-tested checkpoint. Version, Service Worker, Help, Release Notes, and documentation are updated once, only after that package is accepted.
+
+---
+
+## 4. Accepted Notes and Workspace Contract
+
+### 4.1 Physical layout
+
+```text
+workspace-root/
+└── notes/
+    └── *.md
+```
+
+### 4.2 Projections
+
+- **Notes:** every active Note.
+- **Knowledge:** active Notes with `knowledge: true`. Knowledge Notes remain visible in Notes.
+- **Pinned:** active Notes with `pinned: true`, displayed once in the Pinned area.
+- **Archive:** Notes with `archived: true`, excluded from active Notes, Knowledge, and Pinned.
+
+Archive is reversible metadata. It never moves, copies, renames, or deletes a file.
+
+### 4.3 Identity
+
+- H1 is the primary saved visual title.
+- Filename and exact path remain the physical identity.
+- Duplicate H1 values are allowed.
+- Navigation uses path, not title.
+
+### 4.4 Scope
+
+```text
+Current Document
+→ live editor buffer
+→ one shared parser result
+→ never persisted as a second store
+
+Workspace
+→ saved physical Notes
+→ WORKSPACE_INDEX_STATE aggregation
+```
+
+Unsaved changes belong to Current Document scope. Workspace projections represent saved content until Save rebuilds the Index.
+
+### 4.5 Freeze rule
+
+The accepted Notes architecture must not be redesigned during the 1.0 program. Changes are limited to defects found through real laptop use and narrowly scoped usability improvements assigned to an approved package.
+
+---
+
+## 5. Application Entry and Standalone Notes
+
+Standalone Notes are part of 1.0.
+
+### 5.1 Target entry contract
+
+```text
+Open Standalone Note
+→ open one Markdown file
+→ document-relevant tools only
+
+Open Workspace
+→ open the Notes Workspace
+→ document tools plus Workspace aggregation
+```
+
+The implementation must adapt existing owners. It must not create two independent applications or two independently maintained Sidebars.
+
+### 5.2 Candidate Standalone tools
+
+The consumer-fit package must evaluate and explicitly classify each feature as `Current Document`, `Workspace`, `Both`, or `Workspace-only`.
+
+Likely useful in Standalone scope:
+
+- Editor;
+- Markmap;
+- HTML Preview;
+- Outline;
+- local Tasks;
+- local Projects;
+- local tags;
+- outgoing Wiki Links;
+- document information and metrics;
+- virtual local Projects view with Return;
+- virtual Quick Report with Return, if the data and Save contract remain simple.
+
+Likely Workspace-only:
+
+- Notes, Knowledge, Pinned, and Archive aggregation;
+- search across files;
+- backlinks from other files;
+- global tags inventory;
+- All Tasks;
+- All Projects;
+- Workspace Report;
+- Workspace migration and indexing controls.
+
+### 5.3 Virtual-view contract
+
+Projects and Reports may open as virtual views without replacing the physical file identity.
+
+```text
+Physical Markdown document
+→ open virtual view
+→ inspect or configure derived content
+→ Return
+→ restore the previous physical document and layout safely
+```
+
+Virtual views must preserve dirty-state protection, writable handle, Current Document identity, Navigation History, and Return behavior.
+
+---
+
+## 6. Tasks Architecture for 1.0
+
+### 6.1 Existing foundation
+
+Tasks already use:
+
+- Markdown checkbox state as the completion authority;
+- task-local `<!-- mme-task: ... -->` metadata;
+- lifecycle states `backlog`, `todo`, `ongoing`, and `done`;
+- lifecycle dates such as `opened`, `started`, and `completed`;
+- conservative Save reconciliation;
+- Task Review;
+- Task Board;
+- exact source navigation.
+
+### 6.2 1.0 stabilization scope
+
+The Task package must stabilize:
+
+- Task Review display and filtering;
+- exact source navigation;
+- Task Board and Review consistency;
+- first-save `opened` behavior;
+- completion and reopening reconciliation;
+- duplicate visible Task text;
+- line movement and reorder behavior;
+- ambiguous matching without unsafe writes;
+- lifecycle dates consumed by Reports;
+- local Current Document feasibility without adding a second lifecycle model.
+
+### 6.3 Explicit exclusions
+
+Do not add before 1.0 unless a later accepted package proves the need:
+
+- stable Task UUIDs;
+- person assignment system;
+- priority editing from the Board;
+- automatic priority ordering;
+- file grouping mode;
+- history column;
+- complex dependencies;
+- subtasks;
+- configurable workflow columns.
+
+---
+
+## 7. Wiki Links Architecture for 1.0
+
+The stabilization package must cover:
+
+- exact filename target resolution;
+- saved H1 target resolution;
+- duplicate basename ambiguity;
+- duplicate H1 ambiguity;
+- missing targets;
+- exact path identity;
+- Workspace backlinks and Related;
+- Current Document outgoing links;
+- safe source navigation through the canonical opener;
+- preservation of links during all 1.0 packages.
+
+Rename File and automatic Wiki Link rewriting remain deferred. The 1.0 work may document requirements needed by a future rename workflow but must not implement it.
+
+---
+
+## 8. Projects Architecture for 1.0
+
+### 8.1 Product model
+
+Projects remain Markdown-first and standalone-capable.
+
+Minimal declaration:
+
+```md
+Project: Project name
+```
+
+The first declaration identifies the Project. Subsequent lines remain ordinary Markdown content. Optional metadata is enriched through visual controls and persisted in a managed `mme-project` comment, following the same conservative principles used by `mme-task`.
+
+Legacy Project fields do not require migration. New optional metadata may be recreated manually through the Expanded View.
+
+### 8.2 Three-level architecture
+
+```text
+Level 1
+Shared parser + Current Document/Workspace read model
+
+Level 2
+Lightweight Projects projection in the Sidebar or document tools
+
+Level 3
+Virtual Projects Expanded View with modal editing
+```
+
+No `projects/` folder and no second Project store are introduced.
+
+### 8.3 Required Project metadata for 1.0
+
+The initial managed Project model must support:
+
+- **status**;
+- **created date**;
+- **PO date**;
+- **delivery date**;
+- **completed date**;
+- **normalized quarter**;
+- **archived state**.
+
+Suggested canonical managed keys, subject to source reconciliation during the Project PLAN:
+
+```text
+status
+created
+po
+ delivery
+completed
+quarter
+archived
+```
+
+The PLAN must validate final key names against existing parser vocabulary and avoid conflicting aliases. The accidental leading space shown before `delivery` is not part of the key; the final key must be `delivery`.
+
+### 8.4 Date semantics
+
+All Project dates use local calendar ISO format:
+
+```text
+YYYY-MM-DD
+```
+
+Definitions:
+
+- `created`: date the Project record is intentionally created or first enriched;
+- `po`: date the purchase order is received or confirmed;
+- `delivery`: planned or confirmed delivery date, with the exact semantic finalized in the Project PLAN and reflected in the UI label;
+- `completed`: date the Project is completed.
+
+The PLAN must decide whether `delivery` means planned delivery or actual delivery. Do not support both meanings under one field. If the product later needs both, add a separate candidate field in a later package.
+
+No mass backfill is required. Missing dates remain unknown.
+
+### 8.5 Status ownership
+
+Status is an explicit user selection. Dates do not silently change status.
+
+The UI may provide non-blocking consistency guidance, for example:
+
+```text
+Status = Completed
+Completed date is empty
+```
+
+or:
+
+```text
+Completed date exists
+Status is not Completed
+```
+
+The user remains the decision owner. Automatic status transitions are deferred unless explicitly designed and accepted later.
+
+The status vocabulary must be proposed by the Project PLAN after reconciling existing values and reporting needs. Do not invent an excessively detailed pipeline. Prefer a small, understandable set.
+
+### 8.6 Expanded View and modal
+
+The Expanded View must:
+
+- operate as a virtual view with Return;
+- show parent Project records from the selected scope;
+- open the exact source Note;
+- provide a modal or focused edit surface;
+- use dropdowns or controlled inputs for structured fields;
+- preserve normal Markdown content;
+- write only the managed `mme-project` comment;
+- validate dates without rewriting unrelated fields;
+- archive instead of delete;
+- refresh the appropriate Current Document or Workspace projection after successful Save.
+
+The modal should use controlled fields for nearly all structured metadata. Free text should remain limited to fields that truly require it.
+
+### 8.7 Subprojects
+
+Subprojects are explicitly deferred to the Idea Bucket.
+
+Do not implement:
+
+- subproject parser semantics;
+- parent IDs;
+- nested Project UI;
+- automatic hierarchy;
+- subproject rollups;
+- subproject reporting.
+
+Future design must first decide whether subprojects are inline items, relationships, references, or independent Projects. The 1.0 model must not create compatibility obligations for an undecided hierarchy.
+
+### 8.8 Additional candidates, not accepted requirements
+
+Keep these as candidates until a consumer is proven:
+
+- health;
+- priority;
+- owner;
+- probability;
+- budget/value redesign;
+- actual delivery date separate from planned delivery;
+- customer identity;
+- Project-task synchronization;
+- milestones.
+
+---
+
+## 9. Reports Architecture for 1.0
+
+### 9.1 Canonical pipeline
+
+```text
+Current Document or Workspace read model
+→ Quick Report configuration
+→ Markdown Report
+→ user review and editing
+→ HTML presentation
+→ optional Draw.io reconciliation and generation
+```
+
+Markdown remains canonical. HTML and Draw.io are derived outputs.
+
+### 9.2 Task information available to Reports
+
+Reports may use source-proven lifecycle data:
+
+- Task opened date;
+- Task started date;
+- Task completed date;
+- reopened/open state;
+- effective status;
+- calculated aging or duration where dates are valid;
+- exact source Note and line.
+
+Unknown historical dates remain unknown. Reports must not fabricate them.
+
+### 9.3 Project information available to Reports
+
+After the Project package defines the managed model, Reports may use:
+
+- Project status;
+- created date;
+- PO date;
+- delivery date;
+- completed date;
+- normalized quarter;
+- archived state where explicitly included;
+- source Note;
+- existing value/currency fields only if retained by the source-proven Project model.
+
+Reports must not invent Project lifecycle semantics. They consume the contract created by Projects.
+
+### 9.4 Report workflow completion
+
+The 1.0 Report packages must complete:
+
+- useful Quick Report Markdown;
+- Current Document versus Workspace scope selection where valuable;
+- section configuration;
+- reviewed Markdown import;
+- placeholder extraction;
+- normalization;
+- reconciliation categories;
+- insertion of missing fields into Markdown;
+- partial generation where supported;
+- persistence of appropriate user settings;
+- neutral presentation styling;
+- editable uncompressed `.drawio` generation through the accepted thin workflow.
+
+### 9.5 Report boundaries
+
+Do not make Draw.io canonical. Do not add an embedded Draw.io editor, template library, automatic AI field generation, complex grouping, or geometry rewriting as part of 1.0.
+
+---
+
+## 10. Final Visual Consistency ACT
+
+Reserve one final visual ACT after Standalone Notes, Tasks, Projects, and Reports are functionally accepted.
+
+The exact visual scope is intentionally defined later from the completed experiences, but the ACT is constrained to consistency and usability. It is not an open redesign.
+
+Candidate review areas:
+
+- initial choice between Open Standalone Note and Open Workspace;
+- Sidebar composition by scope;
+- panel hierarchy and density;
+- modal and dropdown consistency;
+- labels, badges, and empty states;
+- H1 title and path presentation;
+- touch targets;
+- keyboard focus and Escape behavior;
+- mobile, DeX, and laptop layouts;
+- virtual-view headers and Return controls;
+- Projects and Reports visual alignment;
+- contextual help entry points;
+- dark mode consistency.
+
+The visual ACT must not change data contracts, parser semantics, lifecycle ownership, or Save boundaries.
+
+---
+
+## 11. Implementation Packages and Order
+
+### Package 0: Published 0.6.2 acceptance
+
+Purpose:
+
+- run `VERIFY.md` published-laptop checks;
+- validate Update Ready from 0.6.1 to 0.6.2;
+- validate migrated Workspace use;
+- record real defects.
+
+Exit:
+
+```text
+RELEASE 0.6.2 FULLY ACCEPTED
+NOTES ARCHITECTURE FROZEN
+```
+
+### Package 1: Post-release defect stabilization
+
+Only defects reproduced during real use. No speculative redesign.
+
+### Package 2: Task Review stabilization
+
+Stabilize lifecycle, reconciliation, Review, Board, source navigation, and Report-ready dates.
+
+### Package 3: Wiki Links stabilization
+
+Stabilize resolution, ambiguity, missing targets, Related/backlinks, and exact source navigation.
+
+### Package 4: Standalone Notes and scope composition
+
+Classify consumers, implement the application entry choice, adapt existing UI composition, and connect only useful Current Document consumers.
+
+### Package 5: Projects data foundation
+
+Implement the accepted managed model, date/status semantics, parser/index normalization, archive rule, and Current Document/Workspace provider contract.
+
+### Package 6: Projects Expanded View
+
+Implement virtual view, Return, modal/dropdowns, safe metadata editing, source navigation, filtering, and browser acceptance.
+
+### Package 7: Quick Report Markdown
+
+Complete useful Markdown generation using the accepted Task and Project contracts.
+
+### Package 8: Enriched Reports
+
+Add Task lifecycle and Project date/status information, scope behavior, report sections, and saved preferences where approved.
+
+### Package 9: HTML and Draw.io workflow completion
+
+Complete reviewed Markdown import, placeholder reconciliation, missing-field workflow, partial generation, persistence, and editable output.
+
+### Package 10: Final Visual Consistency ACT
+
+Perform the constrained cross-experience visual review defined in Section 10.
+
+### Package 11: 1.0 integration and release closure
+
+Complete Help, documentation, onboarding, validators, browser acceptance, release notes, version/cache update, commit, publication, and PWA update validation.
+
+---
+
+## 12. Standard PLAN and ACT Lifecycle
+
+Each package must begin with a source-proven PLAN containing:
+
+1. starting branch, HEAD, working tree, and protected changes;
+2. current behavior and reproduced problem;
+3. authoritative source owners;
+4. product contract;
+5. data contract;
+6. exact implementation sequence;
+7. likely files;
+8. non-touch files;
+9. validators and mutation tests;
+10. browser checkpoints;
+11. risks and mitigations;
+12. exit criteria;
+13. deferred candidates;
+14. closure requirements.
+
+Recommended ACT structure:
+
+```text
+ACT A
+pure data/parser/owner contract
+
+Static validation
+
+ACT B
+shared plumbing and consumers
+
+Static validation
+
+ACT C
+UI or virtual-view integration
+
+Browser checkpoint
+
+ACT D
+edge cases and reconciliation
+
+Full regression
+
+Browser acceptance
+
+CLOSURE
+Help + docs + Release Notes + one version/cache update
+```
+
+The exact number of ACTs is decided by each PLAN. Do not combine unrelated concerns merely to reduce the ACT count.
+
+---
+
+## 13. Cross-Package Non-Touch Rules
+
+Unless the package PLAN explicitly proves a required change, do not modify:
+
+- Notes storage format;
+- physical Workspace migration behavior;
+- canonical file Save ownership;
+- Navigation History transaction contract;
+- Service Worker lifecycle during intermediate ACTs;
+- unrelated app contexts;
+- Markmap engine loading;
+- HTML Preview ownership;
+- Draw.io geometry and template source files;
+- user Workspace content;
+- historical architecture documents as if they were current implementation handoffs.
+
+Do not bump the version or cache identity during unaccepted experiments.
+
+---
+
+## 14. Validation Strategy
+
+Each package must include:
+
+- `node --check` on every touched JS/CJS file;
+- focused owner validators;
+- source-owner wiring validators;
+- regression suites for consumers;
+- mutation tests for the reproduced defect or new contract where practical;
+- `git diff --check`;
+- suite-by-suite reporting;
+- meaningful browser checkpoints;
+- PWA/update testing only at package closure.
+
+Validator harnesses should prefer:
+
+```text
+exit code = 0
+failed = 0
+expected owner marker present
+```
+
+Avoid brittle cross-package assertions that pin exact sibling-suite pass counts unless the exact count protects against silent fixture removal.
+
+---
+
+## 15. Definition of MarkmapEditor 1.0
+
+Version 1.0 is ready when:
+
+- Notes Workspace is stable in productive use;
+- standalone Markdown files remain first-class;
+- the app offers a clear Open Standalone Note/Open Workspace path;
+- useful document-local consumers work without requiring Workspace;
+- Task Review and Task Board are stable and lifecycle dates are reliable;
+- Wiki Links resolve conservatively and explain ambiguity;
+- Projects use the simple Markdown declaration plus optional managed metadata;
+- Projects support explicit status, created date, PO date, delivery date, completed date, quarter, and archive;
+- Projects Expanded View safely edits managed metadata;
+- Reports produce useful canonical Markdown from Task and Project information;
+- HTML presentation remains reliable;
+- the accepted thin Draw.io workflow is complete and reproducible;
+- the final visual consistency ACT is accepted on mobile and laptop;
+- Help and documentation match the product;
+- the complete validator chain is green;
+- PWA update and Release Notes behavior pass;
+- the 1.0 release is published and browser-accepted.
+
+---
+
+## 16. Deferred 2.0 and Idea Bucket
+
+The following remain outside the 1.0 implementation program:
+
+- subprojects and Project hierarchy;
+- Highlights as stable referencable text fragments;
+- Reminders and alert subsystem;
+- shared `@` attribute layer;
+- autocomplete;
+- people/assignment system;
+- Rename File and automatic Wiki Link rewriting;
+- monthly calendar;
+- automatic extraction to Knowledge;
+- non-Markdown asset browser;
+- Mermaid or Graph View;
+- Reveal.js completion;
+- Draw.io internal architecture redesign;
+- embedded Draw.io editor;
+- complex Project/task synchronization;
+- milestones and Gantt;
+- major visual redesign.
+
+Future Highlights and Reminders should be evaluated as one model:
+
+```text
+Undated reminder
+→ possible Highlight
+
+Dated reminder
+→ alerting/reminder behavior
+```
+
+Referencable Highlights require a separate identity and reconciliation design. The shared `@` layer and autocomplete should be planned together with that future subsystem, not added incrementally during 1.0.
+
+---
+
+## 17. Closed Decisions
+
+Do not reopen without blocking source evidence:
+
+- Markdown is canonical.
+- Workspace is optional aggregation.
+- Standalone Notes belong in 1.0.
+- Notes architecture is frozen after 0.6.2 acceptance.
+- Knowledge remains a projection within Notes.
+- Archive is metadata, not deletion.
+- Tasks retain checkbox-authoritative completion and `mme-task` metadata.
+- Projects remain standalone-first and file-based.
+- Project status is explicitly selected, not silently derived from dates.
+- Required Project dates are created, PO, delivery, and completed.
+- Project metadata uses a managed comment model.
+- Subprojects are deferred.
+- Reports keep Markdown canonical.
+- Draw.io remains derived.
+- A final visual consistency ACT is reserved before 1.0 closure.
+- Highlights, Reminders, `@`, autocomplete, Mermaid, Graph, Reveal.js, and Rename remain post-1.0.
+
+---
+
+## 18. Decisions Required During Package PLANs
+
+These are not blockers for this architecture document. They must be closed in the relevant source-proven PLAN:
+
+### Projects
+
+- final small status vocabulary;
+- whether `delivery` means planned or actual delivery;
+- final `mme-project` serialization grammar;
+- creation-date initialization boundary;
+- whether quarter is independent or derived from one selected date;
+- exact behavior when status/date fields are inconsistent;
+- Current Document mutation and Save flow from the Expanded View.
+
+### Standalone
+
+- exact tools shown by default;
+- whether a local Task Board adds enough value;
+- whether local Quick Report is included in the first Standalone package or after Workspace Reports stabilize;
+- how the existing Sidebar is composed when no Workspace is active.
+
+### Reports
+
+- default 1.0 report sections;
+- which Project date filters are useful;
+- which user preferences are persisted;
+- whether Current Document Report and Workspace Report share one panel with a scope selector or use contextual entry points.
+
+### Final visual ACT
+
+- exact visual changes based on the accepted end-to-end product;
+- no visual decision may alter underlying data contracts.
+
+---
+
+## 19. First Official Handoff
+
+After 0.6.2 published-laptop acceptance, begin only with the next authorized package.
+
+```text
+MARKMAPEDITOR 1.0 PROGRAM
+PACKAGE 1: POST-RELEASE DEFECT INTAKE
+MODE: PLAN ONLY
+
+Read:
+- MarkmapEditor_1.0_PRODUCT_ARCHITECTURE_AND_IMPLEMENTATION_PROGRAM.md
+- NEXT_CYCLE_PLAN.md
+- VERIFY.md
+- STATUS.md
+- docs/WORKSPACE_FORMAT.md
+- docs/AI_DEVELOPMENT_WORKFLOW.md
+
+Inspect the current repository and real-use defect evidence.
+
+Do not implement speculative improvements.
+Do not redesign Notes.
+Do not begin Task Review, Wiki Links, Standalone, Projects, or Reports unless
+no blocking post-release defect exists and the owner explicitly advances to
+the next package.
+
+Return:
+- starting state;
+- published-laptop acceptance results;
+- reproduced defects only;
+- exact owners;
+- proposed focused ACTs;
+- non-touch list;
+- validators;
+- browser checkpoints;
+- exit criteria.
+
+STOP after PLAN.
+```
+
+---
+
+## 20. Program Status
+
+```text
+0.6.2 release
+→ closed and published
+
+Published-laptop acceptance
+→ required before architecture freeze is fully confirmed
+
+1.0 architecture
+→ defined by this document
+
+1.0 runtime implementation
+→ not started by this document
+
+Next authorization
+→ one package PLAN at a time
+```
