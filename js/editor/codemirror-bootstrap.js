@@ -531,26 +531,20 @@ function createWikiLinkDecorationExtension() {
 
   function computeDecorations(state) {
     const index = getWorkspaceIndex();
+    // ACT 3A — the status for every link in THIS document comes from the one
+    // canonical resolver. The previous implementation built its status map from
+    // the Workspace-wide index.links key set and fell back to 'missing' for any
+    // target absent from that set, so an unsaved or Index-unlisted link in the
+    // active document was decorated as a FALSE missing target.
     if (!index?.ready) {
-      return Decoration.none;
-    }
-
-    const links = index.links;
-    if (!links || links.size === 0) {
       return Decoration.none;
     }
 
     const widgets = [];
     const docText = state.doc.toString();
 
-    // Build a map of link text -> status
-    const linkStatusMap = new Map();
-    for (const [target, paths] of links) {
-      const status = resolveTargetStatus(target);
-      linkStatusMap.set(target.toLowerCase(), status);
-    }
-
-    // Find all wiki link occurrences in current document
+    // Occurrences come from the live buffer, so an unsaved link is decorated
+    // from the same canonical owner rather than from a stale Index key set.
     const WIKI_RE = /\[\[([^\[\]\n]+?)\]\]/g;
     let match;
     while ((match = WIKI_RE.exec(docText)) !== null) {
@@ -562,7 +556,7 @@ function createWikiLinkDecorationExtension() {
 
       const from = match.index;
       const to = from + match[0].length;
-      const status = linkStatusMap.get(target.toLowerCase()) || 'missing';
+      const status = resolveTargetStatus(target);
 
       let className = 'wikiLink';
       if (status === 'missing') className = 'wikiLink wikiLinkMissing';

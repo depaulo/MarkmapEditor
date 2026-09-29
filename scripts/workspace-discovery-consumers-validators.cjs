@@ -444,16 +444,25 @@ function setActive(p) {
     const r = WIKI.resolveTarget('No Such Note Anywhere');
     return r.status === 'missing' && WIKI.isMissingTarget('No Such Note Anywhere') === true;
   })(), 'missing');
-  check('W24', 'ambiguous target preserves current behavior', (() => {
+  check('W24', 'physical filename beats a colliding H1 (ACT 3A precedence)', (() => {
+    // ACT 3A changed this deliberately. [[Architecture]] matches the FILENAME
+    // of notes/Architecture.md AND the H1 of notes/Deployment.md. The old
+    // pooled resolver reported 'ambiguous' — a resolution failure dressed up as
+    // ambiguity. The canonical contract resolves the physical key instead.
     const r = WIKI.resolveTarget('Architecture');
-    return r.status === 'ambiguous' && Array.isArray(r.matches) && r.matches.length >= 2;
-  })(), 'ambiguous');
-  check('W25', 'duplicate H1 Notes remain separate candidates', (() => {
-    const r = WIKI.resolveTarget('Architecture');
-    if (r.status !== 'ambiguous') return false;
-    const paths = r.matches.map((f) => f.path).sort();
-    return paths.includes('notes/Architecture.md') && paths.includes('notes/Deployment.md');
-  })(), 'both paths present');
+    return r.status === 'resolved' && r.file.path === 'notes/Architecture.md';
+  })(), 'resolved by filename');
+  check('W25', 'duplicate H1 Notes are never merged into one candidate', (() => {
+    // Both notes still carry H1 'Architecture' and stay DISTINCT physical
+    // records. The H1 tier alone would still be ambiguous; only the stronger
+    // physical tier decides the link.
+    const byPath = WORKSPACE_INDEX_STATE.byPath;
+    const a = byPath.get('notes/Architecture.md');
+    const d = byPath.get('notes/Deployment.md');
+    return a && d && a !== d &&
+      a.title === 'Architecture' && d.title === 'Architecture' &&
+      WIKI.resolveTarget('Architecture').file.path === 'notes/Architecture.md';
+  })(), 'two records, one deterministic target');
   check('W26', 'no link rewrite', (() => {
     const before = NOTE_SOURCES['notes/Architecture.md'].text;
     WIKI.resolveTarget('Deployment');
@@ -532,8 +541,11 @@ function setActive(p) {
     const tPaths = new Set(getWorkspaceTagFiles('beta').map((f) => f.path));
     setActive('notes/Architecture.md');
     const bPaths = new Set(findBacklinksForConcept(getActiveConceptName()).map((f) => f.path));
+    // Wiki Links now resolve deterministically to the exact physical path
+    // (ACT 3A); the join key across consumers is the path, not a title.
+    const wikiPath = WIKI.resolveTarget('Architecture').file.path;
     return sPaths.has('notes/Architecture.md') && tPaths.has('notes/Architecture.md') &&
-      WIKI.resolveTarget('Architecture').status === 'ambiguous' && bPaths.size > 0;
+      wikiPath === 'notes/Architecture.md' && bPaths.size > 0;
   })(), 'path is the join key');
   check('X42', 'H1 is presentation only', (() => {
     const { input } = searchDom(); input.value = 'arch'; runWorkspaceSearch(input.value);
