@@ -139,6 +139,116 @@ Package 2.
 
 ---
 
+## 0.0.2 ACT 3A canonical Wiki Link resolution (STATICALLY ACCEPTED)
+
+**ACT 3A — STATICALLY ACCEPTED. DEVICE ACCEPTANCE DEFERRED TO PACKAGE 3
+CLOSURE.**
+
+No browser acceptance is claimed for ACT 3A. The repository owner authorized
+deferring manual S22/DeX checkpoints for ACT 3A and the following Package 3
+ACTS to one integrated Package 3 closure checkpoint. This does not weaken any
+static requirement.
+
+**What ACT 3A established (source-proven):**
+
+1. **One canonical resolution owner.** `resolveWikiTarget(rawTarget,
+   indexSnapshot)` in `js/links/wiki-links.js` is the single owner. It is pure
+   with respect to its input: it reads the PASSED saved Index, returns a plain
+   object, and never opens a file, scans, mutates the Index, or consults a
+   clock. `resolveTarget()` is now a thin back-compat wrapper over it.
+2. **Documented precedence, strongest physical identity first:**
+   `path` → `filename` → `h1`. The first tier that yields candidates decides; a
+   weaker tier is consulted only when every stronger tier produced zero
+   candidates. Physical keys (`path`, `filename`) are case-SENSITIVE; only the
+   visual `h1` key is case-insensitive. Extension is stripped for all keys.
+3. **Four states.** `resolved` (exactly one physical path), `missing` (none),
+   `ambiguous` (2+ distinct paths in the SAME tier — all candidate paths
+   returned, nothing selected, order-independent), `not-ready` (saved Index
+   unavailable; never degrades to `missing`).
+4. **Proven defect corrected.** The pre-ACT 3A resolver pooled every key into a
+   single candidate list with no precedence, so a target matching one file's
+   filename AND another Note's H1 was reported `ambiguous` — a resolution
+   failure presented as ambiguity. Mutation control **W-M3** executes the legacy
+   pooled algorithm alongside the canonical one on the same fixture and proves
+   the defect existed and is gone.
+5. **Proven defect corrected.** CodeMirror's `computeDecorations` derived link
+   status from the Workspace-wide `index.links` key set and fell back to
+   `'missing'` for any target absent from it, so an unsaved or Index-unlisted
+   link in the active document was decorated as a **false missing target**. It
+   now asks the canonical owner per target, using live-buffer offsets.
+6. **Identity and safety preserved.** `targetPath` (exact physical path) remains
+   the navigation identity. Missing, ambiguous and not-ready never call the
+   physical opener. `openTarget` continues to reuse the existing
+   `openWorkspaceFile` / `findWorkspaceFileByPath` contract unchanged.
+7. **Classification preserved.** Archived, Knowledge and Pinned Notes remain
+   eligible targets — preserving current accepted behavior rather than changing
+   it by preference. Classification cannot duplicate a candidate because
+   de-duplication is by exact path over the single `index.files` collection.
+
+**Static proof at committed HEAD (`3ab143a`):**
+
+- `scripts/wiki-link-resolution-validators.cjs` (new) — **65 fixtures, 0
+  failed**, including 10 mutation controls (W-M1..W-M10) that execute the real
+  resolver and the real legacy algorithm.
+- Full affected regression — **1113 passed, 0 failed** across 13 suites,
+  including the Package 2 Task contract (184/0), the ACT 2A checkpoint harness
+  (56/0) and ACT V0 visual (50/0).
+- Task Lifecycle built-in 101/101; Task Board built-in 115/115.
+- `scripts/release-parity.cjs` OK, normal **and** `RELEASE_PARITY_STRICT_SW=1`;
+  product identity remains `0.6.2` / `markmap-journal-pwa-0.6.2-notes-workspace-foundation`.
+- `node --check` clean on every touched JS/CJS file; `git diff --check` clean.
+
+**Three sibling assertions were updated, deliberately.** `workspace-discovery-consumers-validators`
+W24/W25/X41 encoded the OLD pooled ambiguity for `[[Architecture]]` (which
+matches the filename of `notes/Architecture.md` AND the H1 of
+`notes/Deployment.md`). They now assert the new physical-beats-visual
+precedence. The two Notes remain distinct physical records and are never merged.
+
+**Deferred to ACT 3B:** the Wiki Link extraction grammar still exists in 7
+places across 4 files with 2 different regexes, and Related still matches
+normalized names rather than resolved target identity.
+
+---
+
+## 0.1 Package 3 deferred-test register (ACCUMULATES — do not replace)
+
+Manual S22/DeX scenarios deferred to the integrated Package 3 closure
+checkpoint. **No entry here is complete.** This register grows with each ACT;
+later ACTs append, they do not overwrite.
+
+### ACT 3A — deferred (device acceptance deferred)
+
+| # | Scenario | Status |
+|---|---|---|
+| A-01 | exact filename resolution | DEFERRED |
+| A-02 | filename with extension | DEFERRED |
+| A-03 | saved H1 resolution | DEFERRED |
+| A-04 | filename versus H1 precedence (physical key wins) | DEFERRED |
+| A-05 | missing target | DEFERRED |
+| A-06 | duplicate H1 ambiguity | DEFERRED |
+| A-07 | duplicate basename ambiguity, when the Workspace structure permits | DEFERRED |
+| A-08 | not-ready behavior without an open Workspace | DEFERRED |
+| A-09 | dirty-state cancellation leaves source and History unchanged | DEFERRED |
+| A-10 | exact physical opener is the one used | DEFERRED |
+| A-11 | Back returns to the source Note | DEFERRED |
+| A-12 | Forward returns to the target Note | DEFERRED |
+| A-13 | saved versus unsaved H1 behavior | DEFERRED |
+| A-14 | unsaved outgoing-link decoration (false-missing regression) | DEFERRED |
+| A-15 | Related regression — still renders, not renamed | DEFERRED |
+| A-16 | Search, Tags, Tasks and Projects regression | DEFERRED |
+
+### ACT 3B — deferred
+
+*(to be appended when ACT 3B is statically accepted)*
+
+### ACT 3C — integrated Package 3 checkpoint
+
+*(to be appended when ACT 3C is statically accepted: one disposable Workspace
+covering resolution, states, direction, navigation, scope, classification and
+full regression)*
+
+---
+
 ## 1. Diagnostics & Runtime Checks
 
 ### A. Host Diagnostic Output

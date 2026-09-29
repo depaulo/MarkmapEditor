@@ -62,13 +62,63 @@
   - Planning handoff:
     `docs/architecture/MarkmapEditor_1.0_PACKAGE_2_TASK_STABILIZATION_PLAN.md`.
 
-**Not started, and not authorized by any document here:** Package 3, ACT 2C,
-Wiki Links changes, Standalone Notes, Projects, Reports, Active or Workspace Index
-disclosures, pane-layout changes.
+- **Package 3 (Wiki Links stabilization)**: IN PROGRESS.
+  - **ACT 3A — STATICALLY ACCEPTED. DEVICE ACCEPTANCE DEFERRED TO PACKAGE 3
+    CLOSURE.** No browser acceptance is claimed.
+    - One canonical target-resolution owner: `resolveWikiTarget(rawTarget,
+      indexSnapshot)` in `js/links/wiki-links.js`, pure with respect to its
+      input, returning `resolved` / `missing` / `ambiguous` / `not-ready` plus
+      `targetPath`, `targetTitle`, `candidates`, `resolutionKind` and
+      `diagnostic`.
+    - Documented precedence, strongest physical identity first:
+      **path → filename → h1**. The first tier yielding candidates decides; a
+      weaker tier is never consulted once a stronger one matched. Physical keys
+      are case-sensitive; only the visual H1 key is case-insensitive.
+    - Proven defect corrected: the previous resolver pooled every key into one
+      candidate list, so a target matching one file's filename and another
+      Note's H1 was reported `ambiguous` — a resolution failure presented as
+      ambiguity.
+    - Proven defect corrected: CodeMirror derived link status from the
+      Workspace-wide `index.links` key set with a `'missing'` fallback, so an
+      unsaved link in the active document was decorated as a **false missing
+      target**.
+    - `targetPath` (exact physical path) remains the navigation identity;
+      missing, ambiguous and not-ready never call the physical opener.
+    - Archived / Knowledge / Pinned Notes remain eligible targets, preserving
+      current accepted behavior; classification cannot duplicate a candidate.
+    - Static proof: `scripts/wiki-link-resolution-validators.cjs` **65/0**
+      including 10 mutation controls; full affected regression **1113 passed,
+      0 failed** across 13 suites; Task Lifecycle 101/101; Task Board 115/115;
+      release parity OK in normal and strict modes at `0.6.2`.
+    - Deferred to ACT 3B: the Wiki Link extraction grammar still exists in 7
+      places across 4 files with 2 different regexes, and Related still matches
+      normalized names rather than resolved target identity.
+  - **ACT 3B**: NEXT, NOT STARTED. Requires complete static acceptance of ACT
+    3A first. Device acceptance may also be deferred to Package 3 closure.
+  - **ACT 3C**: NOT STARTED. Prepares the one integrated device-acceptance
+    Workspace and checklist.
+  - **Package 3 cannot be finally closed, versioned or published until the
+    integrated device checkpoint passes.** The planned release/cache boundary
+    remains **0.6.3 (Tasks + Wiki Links)** at Package 3 closure; no version,
+    cache or Service Worker change is made in any intermediate ACT.
+
+**Accepted repository state:** `origin/development` and `origin/main` are both
+`bcb6972`; `main` was intentionally promoted by the repository owner to support
+intermediate device testing. No coder action or remediation is required.
+
+**Not started, and not authorized by any document here:** Package 3 ACT 3B/3C
+execution, Wiki Link relationship UI, Active or Workspace Index link
+disclosures, candidate-selection UI, Rename File, automatic Wiki Link
+rewriting, Graph View, Mermaid, Standalone Notes, Projects, Reports, Draw.io,
+pane-layout changes.
 
 **Explicitly NOT delivered by Package 2:** no Board redesign, no automatic
 priority sorting, no Active or Workspace Index cards, no version or cache change,
-no Service Worker change, no promotion to `main`.
+no Service Worker change.
+
+**Explicitly NOT delivered by ACT 3A:** no Links In / Links Out UI, no Related
+rename, no candidate picker, no Active or Workspace Index disclosure, no Wiki Link
+rewriting, no Graph or Mermaid, no version or cache change.
 
 ---
 
