@@ -17,6 +17,75 @@
   //   limitations?, helpTopic? (links to a Help topic ID).
   const RELEASES = Object.freeze([
     {
+      version: '0.6.3',
+      title: 'MarkmapEditor 0.6.3: Tasks and Wiki Links Foundation',
+      summary: t`Version 0.6.3 stabilizes Tasks and Wiki Links. Tasks now share one
+normalized contract across Task Review and the Task Board, and a Task Board card can
+set priority directly. Wiki Links now resolve through one canonical owner, and the
+Sidebar panel that showed related Notes is now a Links In panel driven by real
+resolved relationships.`,
+      expanded: true,
+      changes: [
+        {
+          group: 'Tasks',
+          items: [
+            'Task Review and the Task Board now read one shared Task contract, so a Task shows the same status and priority in both places.',
+            'Task lifecycle dates are written conservatively: opened, started and completed are only recorded where they are actually established.',
+            'Added a priority selector to every Task Board card. Choose -- for no priority, or P1, P2 or P3.',
+            'Task priority is written as a visible #p1, #p2 or #p3 token on the Task line.',
+            'Existing Tasks that still carry the older priority metadata continue to be read correctly, and are converted the first time you change their priority.',
+            'Changing only a Task priority does not alter any lifecycle date, and never renames or rewrites a Task.',
+            'When two Tasks share the same visible text, the exact one you are editing is changed, and the other is left alone.',
+          ],
+        },
+        {
+          group: 'Wiki Links',
+          items: [
+            'All Wiki Links are now recognized by one shared rule, so a link looks the same in the editor, in HTML Preview and in your saved Notes.',
+            'Wiki Link targets resolve in a fixed order: an exact path or filename first, then a Note\'s saved H1 heading. A filename always wins over a matching title.',
+            'A link is shown distinctly when its target is missing, or when more than one Note could match. A missing or ambiguous target never opens a file by guesswork.',
+            'Opening a resolved Wiki Link always uses the target\'s exact file path.',
+          ],
+        },
+        {
+          group: 'Links In and Links Out',
+          items: [
+            'Added canonical Links Out (the Wiki Links a Note declares) and Links In (the Notes that link to it).',
+            'The Sidebar panel formerly called Related is now Links In. It is driven by real resolved relationships, so a Note linked by its title is now correctly listed.',
+            'Repeated links from one Note produce a single Links In row instead of duplicates.',
+            'Selecting a Links In entry opens that exact source Note.',
+            'Links In requires a ready Workspace Index. Before that, the panel reports that it is unavailable rather than claiming there are none.',
+          ],
+        },
+        {
+          group: 'Sidebar and Active actions',
+          items: [
+            'Panel separators and title weights are now consistent across the Sidebar.',
+            'Related and Tags badges show a plain number.',
+            'Archive and Restore now live in the Active panel.',
+            'Archiving remains metadata-based: Archive a Note and Save to make the change stick.',
+          ],
+        },
+        {
+          group: 'Scope',
+          items: [
+            'The Links In Sidebar panel is the relationship view in 0.6.3. Richer relationship cards inside Active and the Workspace Index are planned for a later release.',
+            'Markdown remains the source of truth. Nothing renames, rewrites, or creates Notes on your behalf.',
+          ],
+        },
+      ],
+      helpTopic: 'journal-links',
+      tryIt: t`Open a workspace, open a Note, and type a link to another Note:
+[[Alpha]]. Save, then open the Sidebar and read the Links In panel on the target
+Note. On the Task Board, set a Task to P1 and the card shows P1.`,
+      limitations: [
+        'The Links In Sidebar panel is the relationship view in 0.6.3. Richer relationship cards inside Active and the Workspace Index are planned for a later release.',
+        'Cross-file Wiki Link resolution and Links In use the saved Workspace Index, so Save after renaming or retitling a Note.',
+        'When one Note links to the same target several times, the saved data counts it once, so the panel shows a single row.',
+        'Archiving stays metadata-based: archive a Note and Save for the change to take effect.',
+      ],
+    },
+    {
       version: '0.6.2',
       title: 'MarkmapEditor 0.6.2: Notes Workspace Foundation',
       summary: t`Version 0.6.2 introduces the new Workspace format. Every Markdown file

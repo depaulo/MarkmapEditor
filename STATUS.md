@@ -149,6 +149,37 @@
     - Integrated checkpoint Workspace: `scripts/package3-device-workspace.cjs`
       generates 20 generic Notes covering every case the closure checklist needs.
   - **ACT 3D**: the integrated Package 3 device checkpoint, not yet performed.
+
+  - **Package 3: CLOSED and DEVICE-ACCEPTED. Release 0.6.3 ready.**
+    - **ACT 3A CLOSED** (static + device), **ACT 3B CLOSED** (static + device),
+      **ACT 3C CLOSED** (static + device). No corrective ACT was required.
+    - Device acceptance (owner, integrated checkpoint, generated disposable
+      Workspace): the runtime loaded on localhost; the Workspace opened as
+      valid-notes; the Workspace Index reached ready; the visible inbound panel
+      is **Links In, not Related**; available zero rendered badge `0` and
+      `No Links In.`; exact source navigation from Links In opened the correct
+      physical Note; a target containing spaces resolved through the canonical
+      owner and opened `notes/Spaced Name.md`; logs confirmed
+      `resolve status=resolved`, exact physical targetPath, canonical-lookup
+      open, Workspace active-file update and Index rebuild; Knowledge, Archive,
+      Search, Tasks and Projects remained operational; no runtime exception; and
+      **no physical file was modified merely by discovering or navigating a
+      relationship**.
+    - **Accepted product clarification:** Package 3 adds NO final relationship
+      cards inside Active and NO final disclosure cards inside the Workspace
+      Index. Those visual consumers remain scheduled for **Package 10**. The
+      Sidebar **Links In** panel is the accepted specialized relationship
+      surface for 0.6.3.
+    - **Release 0.6.3 — Tasks and Wiki Links Foundation** is the prepared
+      boundary: `productVersion 0.6.3`, cache identity
+      `markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation`. The shared Wiki
+      Link grammar module was added to the Service Worker precache so offline
+      shells receive the complete accepted package.
+  - **Package 4: NEXT, NOT STARTED.** It owns Standalone Notes and scope
+    composition; the Active relationship cards are NOT moved into it.
+  - **Package 9.5**: Architecture Hygiene Gate remains planned.
+  - **Package 10**: final Active and Workspace Index disclosure cards remain
+    planned.
   - **Package 3 cannot be finally closed, versioned or published until the
     integrated device checkpoint passes.** The planned release/cache boundary
     remains **0.6.3 (Tasks + Wiki Links)** at Package 3 closure; no version,

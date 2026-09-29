@@ -275,6 +275,79 @@ a product defect.
 
 ---
 
+## 0.0.4 Package 3 device acceptance — ACCEPTED
+
+**Package 3 is DEVICE-ACCEPTED and CLOSED.** Release boundary 0.6.3 prepared.
+No corrective ACT was required.
+
+**Confirmed by the accepted integrated device run (owner, generated disposable
+Workspace, localhost):**
+
+- [x] Workspace opened as valid-notes
+- [x] Workspace Index reached ready state
+- [x] visible inbound panel is **Links In**, not Related
+- [x] available zero rendered **badge 0** and **"No Links In."**
+- [x] exact source navigation from Links In opened the correct physical Note
+- [x] a target containing spaces resolved through the canonical owner
+- [x] navigation opened `notes/Spaced Name.md`
+- [x] logs confirmed `resolve status=resolved`
+- [x] logs confirmed exact physical targetPath
+- [x] logs confirmed open through the canonical lookup
+- [x] Workspace active-file updated
+- [x] Workspace Index rebuilt after navigation
+- [x] Knowledge remained operational
+- [x] Archive remained operational
+- [x] Search remained operational
+- [x] Tasks remained operational
+- [x] Projects remained operational
+- [x] no runtime exception observed
+- [x] no physical mutation from relationship discovery or navigation
+
+**Accepted product clarification:** Package 3 adds no final relationship cards
+inside Active and no final disclosure cards inside the Workspace Index. Those
+visual consumers remain scheduled for **Package 10**. The Sidebar **Links In**
+panel is the accepted specialized relationship surface for 0.6.3.
+
+### Register resolution (not automatically promoted to PASS)
+
+The accumulated Package 3 register resolved as follows. Scenarios the accepted
+run did not directly exercise are recorded as **NOT EXERCISED** rather than PASS:
+
+| Group | Result |
+|---|---|
+| ACT 3A A-01..A-16 (resolution, navigation, Back/Forward, dirty state) | **NOT EXERCISED** in the integrated run; covered by the accepted ACT 3A/3B device passes |
+| ACT 3B B-01..B-22 | **NOT EXERCISED** in the integrated run; covered by the accepted ACT 3A/3B device passes |
+| ACT 3C C-01 Links In panel visible | **PASS** |
+| ACT 3C C-02 filename-resolved inbound source | **NOT EXERCISED** |
+| ACT 3C C-03 H1-resolved inbound source | **NOT EXERCISED** |
+| ACT 3C C-04 repeated links deduplicated | **NOT EXERCISED** |
+| ACT 3C C-05 occurrence count shown | **NOT EXERCISED** |
+| ACT 3C C-06 Links In available zero | **PASS** |
+| ACT 3C C-07 Links In unavailable state | **NOT EXERCISED** |
+| ACT 3C C-08 live Links Out (Current Document) | **NOT EXERCISED** |
+| ACT 3C C-09 saved Workspace Links Out | **NOT EXERCISED** |
+| ACT 3C C-10 resolved/missing/ambiguous/not-ready previews | **NOT EXERCISED** |
+| ACT 3C C-11 exact source-path navigation | **PASS** |
+| ACT 3C C-12 Back / Forward | **NOT EXERCISED** |
+| ACT 3C C-13 dirty-state cancellation | **NOT EXERCISED** |
+| ACT 3C C-14 no-Workspace behaviour | **NOT EXERCISED** |
+| ACT 3C C-15 saved vs unsaved relationships | **NOT EXERCISED** |
+| ACT 3C C-16 archived / Knowledge / Pinned behaviour | **PASS** (operational; not exercised as link state) |
+| ACT 3C C-17 Search / Tags / Tasks / Projects regression | **PASS** |
+| ACT 3C C-18 no physical mutation | **PASS** |
+| ACT 3C C-19 no stale name-keyed Related | **PASS** |
+| ACT 3C C-20 Help reads Links In / Links Out | **PASS** |
+| Final Active / Workspace Index cards | **NOT APPLICABLE** — intentionally deferred to Package 10 |
+| Help / Release Notes for the future visual package | **NOT APPLICABLE** — deferred to Package 3 closure documentation, written as planned-not-present |
+
+**Device checkpoint not exercised:** the 0.6.2 -> 0.6.3 PWA update transition
+(detect, Defer, Accept, controllerchange, once-only Release Notes) is marked
+**NOT EXERCISED** — a genuine 0.6.2-controlled profile was not available. The
+0.6.3 controller and once-only Release Notes behavior are proven statically by
+`update-ready-validators.cjs` (93/0) and `release-notes-validators.cjs` (68/0).
+
+---
+
 ## 0.1 Package 3 deferred-test register (ACCUMULATES — do not replace)
 
 Manual S22/DeX scenarios deferred to the integrated Package 3 closure

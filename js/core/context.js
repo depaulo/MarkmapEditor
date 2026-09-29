@@ -163,14 +163,57 @@ export const APP_CONTEXTS = {
 
 ## Tasks
 - [ ] Capture today's main work.
-- [ ] Create or update a related concept.
+- [ ] Create or update a related Note.
 - [ ] Review open follow-ups.
+- Task Review and the Task Board read the same Task data.
+- In the Task Board, set priority from the selector on each card:
+  -- (no priority), P1, P2 or P3.
+- Priority is saved as a visible #p1, #p2 or #p3 token on the Task line.
+- Older Tasks using the previous priority metadata are still read, and are
+  converted the first time you change their priority.
+- Changing only priority never changes a lifecycle date.
+- If two Tasks share the same text, the exact Task you are editing changes and
+  the other is left alone.
+
+## Wiki Links
+- [[Note]] links one Note to another.
+- [[Note|custom text]] shows different text but still opens Note.
+- A link never spans a line break, and the target cannot contain brackets.
+- Cross-file resolution uses the SAVED Workspace Index, so Save after renaming
+  or retitling a Note.
+
+### How a link target is resolved
+- An exact path or filename wins first, then a Note's saved H1 heading.
+- A filename always takes precedence over a matching H1, so a link never
+  silently picks a different Note than you meant.
+- A Note may be found by its H1, but opening it always uses its exact file path.
+- H1 is a visual identity: two Notes may share one H1.
+
+### Link states
+- Resolved: the target was found and can be opened.
+- Missing: nothing matched. No file is created and nothing is opened.
+- Ambiguous: more than one Note matched. Nothing is opened, because choosing for
+  you would be a guess.
+- Not ready: the saved Workspace Index is not available yet, which is different
+  from the target being missing.
 
 ## Links In and Links Out
-- Link Notes with [[2026-07-07]].
-- Link Notes with [[CustomerDiscovery]].
-- Use the Links In panel to move from a Note to the Notes pointing at it.
-- Your own outgoing links are the Note's Links Out.
+- Links Out are the Wiki Links the current Note declares. While you are editing,
+  they follow your unsaved text.
+- Links In are the saved Notes whose resolved outgoing links point at the active
+  Note. A Note linked by its H1 is included.
+- Repeated links from one Note produce a single Links In row.
+- Links In needs the saved Workspace Index. Before that, the panel says it is
+  unavailable rather than reporting none.
+- In the Sidebar, the Links In panel shows the count and the source Notes.
+  A confirmed empty result shows 0 and "No Links In."; an unavailable one is
+  shown differently.
+- Selecting a Links In entry opens that exact source Note.
+
+## Not in this release
+- Compact Active and Workspace Index relationship cards are planned for a later
+  visual-consistency release. For now, the Links In Sidebar panel is the
+  relationship view.
 `,
   },
 
