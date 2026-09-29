@@ -102,17 +102,42 @@
   }
 
   // ---- Task data enrichment ----
-
+  //
+  // ACT 2A: display text, effective status and priority are now resolved by the
+  // single shared owner (MME_TASK_LIFECYCLE.toNormalizedTask), so Task Review,
+  // Task Board and the future projection cannot drift. Escaping stays HERE and
+  // happens exactly once, at the HTML boundary.
   function enrichTask(task) {
-    const priority = task.priority || null;
-    const displayText = priority ? stripPriorityTokens(task.text) : (task.text || '');
+    const normalized =
+      globalThis.MME_TASK_LIFECYCLE &&
+      typeof globalThis.MME_TASK_LIFECYCLE.toNormalizedTask === 'function'
+        ? globalThis.MME_TASK_LIFECYCLE.toNormalizedTask(task)
+        : null;
+
+    if (!normalized) {
+      const priority = task.priority || null;
+      const displayText = priority ? stripPriorityTokens(task.text) : (task.text || '');
+      return {
+        ...task,
+        priority,
+        displayText: escapeHtml(displayText || ''),
+        filePath: task.filePath || task.path || '',
+        fileKind: task.fileKind || task.kind || '',
+        fileName: task.fileName || task.name || task.filePath || '',
+      };
+    }
+
     return {
       ...task,
-      priority,
-      displayText: escapeHtml(displayText || ''),
-      filePath: task.filePath || task.path || '',
-      fileKind: task.fileKind || task.kind || '',
-      fileName: task.fileName || task.name || task.filePath || '',
+      priority: normalized.priority,
+      displayText: escapeHtml(normalized.displayText),
+      filePath: normalized.sourcePath,
+      fileKind: normalized.sourceKind,
+      fileName: normalized.sourceName,
+      sourcePath: normalized.sourcePath,
+      sourceName: normalized.sourceName,
+      sourceKind: normalized.sourceKind,
+      sourceLine: normalized.sourceLine,
     };
   }
 
@@ -128,7 +153,12 @@
     const status = normalizeStatusFilterValue(selectedStatus);
     if (status === 'all') return true;
 
+    // ACT 2A: one interpretation. The shared normalized contract supplies
+    // effectiveStatus; the checkbox remains the sole authority behind it.
     let effective = task?.effectiveStatus;
+    if (!effective && typeof globalThis.MME_TASK_LIFECYCLE?.toNormalizedTask === 'function') {
+      effective = globalThis.MME_TASK_LIFECYCLE.toNormalizedTask(task).effectiveStatus;
+    }
     if (!effective && typeof globalThis.MME_TASK_LIFECYCLE?.effectiveStatusOf === 'function') {
       effective = globalThis.MME_TASK_LIFECYCLE.effectiveStatusOf(
         Boolean(task?.done),
@@ -912,30 +942,33 @@
           return;
         }
 
-        const taskMatch = lineText.match(/^(\s*[-*+]\s+\[[ xX]\]\s+)(.*)$/);
-        if (!taskMatch) {
-          safeLog(`TaskReview: line ${actualLine} is not a task`);
-          globalThis.showToast?.('Line is not a task', 'error', 2200);
+        // ACT 2A — the physical line patch is delegated to the SINGLE Task
+        // owner (MME_TASK_LIFECYCLE.applyPriority). This module previously kept
+        // its own duplicate task-line regex and its own strip/append sequence,
+        // which meant the Board could never be given the same writer without
+        // copying a second grammar. The canonical representation is the visible
+        // `#pN` token; the mme-task comment is re-attached byte-identically.
+        const lifecycle = globalThis.MME_TASK_LIFECYCLE;
+        const patch =
+          lifecycle && typeof lifecycle.applyPriority === 'function'
+            ? lifecycle.applyPriority(lineText, { value: newPriority })
+            : null;
+
+        if (!patch || !patch.ok) {
+          safeLog(
+            `TaskReview: priority edit refused reason=${patch ? patch.reason : 'no-owner'}`
+          );
+          globalThis.showToast?.('Priority edit failed', 'error', 2200);
           return;
         }
 
-        const prefix = taskMatch[1];
-        const content = taskMatch[2];
-
-        // Remove existing priority tokens (shared removal grammar; identical
-        // semantics: tokens removed, whitespace collapsed, trimmed)
-        let newContent = stripPriorityTokens(content);
-
-        // Add new priority token
-        if (newPriority === 'p1') newContent = newContent + ' #p1';
-        else if (newPriority === 'p2') newContent = newContent + ' #p2';
-        else if (newPriority === 'p3') newContent = newContent + ' #p3';
-        // clear: no token added
-
-        const newLine = prefix + newContent;
+        if (!patch.changed) {
+          safeLog(`TaskReview: priority already ${newPriority || 'unset'} (no-op)`);
+          return;
+        }
 
         // Apply edit via CodeMirror bridge
-        const success = replaceLine(actualLine, newLine, { scrollTo: true });
+        const success = replaceLine(actualLine, patch.line, { scrollTo: true });
         if (!success) {
           safeLog('TaskReview: priority edit failed (replaceLine returned false)');
           globalThis.showToast?.('Priority edit failed', 'error', 2200);

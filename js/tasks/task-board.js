@@ -256,6 +256,11 @@
   // Unescaped, normalized visible Task text for comparison. Uses the shared
   // priority-token cleaner (never raw Markdown with checkbox/mme-task/#pN).
   // Unrelated hashtags remain part of the name. Does not mutate task.text.
+  //
+  // ACT 2A: the token grammar is owned by MME_TASK_LIFECYCLE and is the SAME
+  // primitive the canonical writer uses, so a `#pN` token can never be visible
+  // on one surface and hidden on another. The inline regex below is only a
+  // guard for the lifecycle module being absent; it is not a second grammar.
   function sortableTaskText(task) {
     const lifecycle = globalThis.MME_TASK_LIFECYCLE;
     if (lifecycle && typeof lifecycle.removePriorityTokens === 'function') {
@@ -360,6 +365,17 @@
     }
 
     const lifecycle = globalThis.MME_TASK_LIFECYCLE;
+
+    // ACT 2A: the Board resolves an absent effectiveStatus through the SAME
+    // normalized contract Task Review uses, so the two surfaces cannot disagree
+    // about which column a Task belongs to.
+    if (lifecycle && typeof lifecycle.toNormalizedTask === 'function') {
+      const status = lifecycle.toNormalizedTask(task).effectiveStatus;
+
+      if (COLUMN_ORDER.includes(status)) {
+        return status;
+      }
+    }
 
     if (lifecycle && typeof lifecycle.effectiveStatusOf === 'function') {
       const rawStatus = task?.metadata?.status ?? task?.status ?? '';

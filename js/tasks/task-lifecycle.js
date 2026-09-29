@@ -316,15 +316,305 @@
     return normalizePriorityValue(metadataPriority);
   }
 
+  // ---- ACT 2A: exact token removal (the one token primitive) ----
+  //
+  // The single primitive used by BOTH the writer and the display path, so the
+  // accepted token grammar can never drift between them. It consumes the
+  // whitespace immediately preceding a recognized token (so a trailing token
+  // does not leave a dangling space) and touches NOTHING else: ordinary
+  // hashtags, Unicode, and interior spacing survive byte-for-byte.
+  function stripPriorityTokensExact(text) {
+    return String(text == null ? '' : text)
+      .replace(/[ \t]*#p[123]\b/gi, '')
+      .trim();
+  }
+
   // Pure visible-token removal for presentation/canonical text.
+  // Uses the exact primitive above, then normalizes whitespace for display.
   // Removes recognized #p1/#p2/#p3 tokens only; preserves all other text,
   // unrelated hashtags, and mme-task comments (callers strip comments
   // separately when their contract requires it). Never writes source.
   function removePriorityTokens(text) {
-    return String(text == null ? '' : text)
-      .replace(/#p[123]\b/gi, '')
+    return stripPriorityTokensExact(text)
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  // Splits task content into its visible text and its mme-task comment, so a
+  // priority write can edit the text while leaving the comment BYTE-IDENTICAL.
+  function splitTaskContent(content) {
+    const str = String(content == null ? '' : content);
+    const { comment } = parseCommentEntries(str);
+
+    if (!comment) return { text: str, commentText: '' };
+
+    return {
+      text: str.slice(0, comment.index) + str.slice(comment.index + comment[0].length),
+      commentText: comment[0],
+    };
+  }
+
+  // ACT 2A — CANONICAL PRIORITY WRITE OWNER.
+  //
+  // Decision: the canonical physical representation is the VISIBLE `#pN`
+  // token, because
+  //   (1) the accepted reader `priorityOf()` already ranks a recognized visible
+  //       token ABOVE `mme-task: priority=`, and
+  //   (2) Markdown is the canonical unit: a priority stored only in a hidden
+  //       comment would be a second, invisible store.
+  //
+  // Tolerated READ form: `mme-task: priority=pN` (lower precedence, never
+  // written, never migrated automatically).
+  //
+  // No priority is represented by ABSENCE of the token. `--`, `none`, an empty
+  // value or any unrecognized value is never serialized.
+  //
+  // Pure: transforms one line, touches no Editor, no file, no Date, no Index.
+  // Returns { ok, changed, line, priority, reason? }.
+  function applyPriority(rawLine, options) {
+    const opts = options || {};
+    const source = typeof rawLine === 'string' ? rawLine : (rawLine && rawLine.raw) || '';
+    const parsed = parseTaskLine(source);
+
+    if (!parsed) {
+      return { ok: false, changed: false, line: source, reason: 'not-a-task-line' };
+    }
+
+    const requested = opts.value == null ? '' : String(opts.value).trim();
+    const level = requested ? normalizePriorityValue(requested) : null;
+
+    // A non-empty but unrecognized value is REFUSED, never coerced and never
+    // written. This is what keeps `--` and `none` out of the Markdown.
+    if (requested && !level) {
+      return { ok: false, changed: false, line: source, reason: 'invalid-priority' };
+    }
+
+    const { text, commentText } = splitTaskContent(parsed.content);
+    const stripped = stripPriorityTokensExact(text);
+    const nextText = level ? stripped + ' #' + level : stripped;
+
+    // ACT 2A — exactly ONE representation survives a write. A legacy
+    // `mme-task: priority=` key is removed on the SAME line, because leaving it
+    // would be a dual representation AND a trap: removing the visible token
+    // later would silently resurrect the stale metadata priority. Every other
+    // metadata key, its order and its formatting is preserved.
+    //
+    // This is not a mass migration: it happens only on the exact line the user
+    // explicitly edited, which is what the "one canonical write representation"
+    // policy requires.
+    let content;
+    if (commentText) {
+      const { entries } = parseCommentEntries(commentText);
+      const kept = applyEntryOps(entries, { set: {}, remove: ['priority'] });
+      const newComment = buildTaskMetadataComment(kept);
+      content = nextText + (newComment ? (nextText ? ' ' : '') + newComment : '');
+    } else {
+      content = nextText;
+    }
+
+    const newLine =
+      parsed.indent +
+      parsed.bullet +
+      parsed.gap +
+      parsed.open +
+      parsed.marker +
+      parsed.close +
+      parsed.after +
+      content;
+
+    // Idempotence: an unchanged line is a strict no-op, so repeated writes and
+    // repeated removals both converge after the first application.
+    if (newLine === source) {
+      return { ok: true, changed: false, line: source, priority: level };
+    }
+
+    return { ok: true, changed: true, line: newLine, priority: level };
+  }
+
+  // ---- ACT 2A: normalized Task contract ----
+  //
+  // The ONE contract every consumer shares. It does NOT introduce a second
+  // Task object: it projects the existing parser record onto the canonical
+  // field names required by the program, reusing the owners that already exist
+  // (normalizeTask, effectiveStatusOf, priorityOf, removePriorityTokens).
+  // Pure, and it never mutates the input record.
+  //
+  // Identity rules enforced here: visible text is NEVER identity, a filename is
+  // NEVER identity, an H1 is NEVER identity. Identity is the exact source path
+  // plus the source occurrence, so duplicate text in one Note stays distinct
+  // and the same text in two Notes stays distinct.
+  function displayTextOf(task) {
+    if (!task) return '';
+    const raw = task.text != null && task.text !== '' ? task.text : task.raw || '';
+    return removePriorityTokens(String(raw).replace(/<!--\s*mme-task:[\s\S]*?-->/gi, ' '));
+  }
+
+  function sourceIdentityOf(task) {
+    const t = task || {};
+    const path = String(t.filePath || t.path || '').trim();
+    const name = String(t.fileName || t.name || '').trim();
+    const kind = String(t.fileKind || t.kind || '').trim();
+    const line = t.line == null || t.line === '' ? null : Number(t.line);
+
+    return {
+      sourcePath: path,
+      sourceName: name || (path ? path.split('/').pop() : ''),
+      sourceKind: kind,
+      sourceLine: Number.isFinite(line) ? line : null,
+    };
+  }
+
+  function toNormalizedTask(task) {
+    const base = normalizeTask(task || {});
+    const display = displayTextOf(base);
+    const identity = sourceIdentityOf(base);
+    const rawStatus = (base.metadata && base.metadata.status) || '';
+
+    return {
+      // ---- canonical contract fields ----
+      text: String(base.text == null ? '' : base.text),
+      displayText: display,
+      done: Boolean(base.done),
+      status: base.status == null ? null : base.status,
+      effectiveStatus: effectiveStatusOf(Boolean(base.done), rawStatus),
+      openedDate: isValidIsoDate(base.openedDate) ? String(base.openedDate) : null,
+      startedDate: isValidIsoDate(base.startedDate) ? String(base.startedDate) : null,
+      completedDate: isValidIsoDate(base.completedDate) ? String(base.completedDate) : null,
+      priority: priorityOf(base.text, (base.metadata && base.metadata.priority) || ''),
+
+      // ---- exact source identity (never the visible text) ----
+      sourcePath: identity.sourcePath,
+      sourceName: identity.sourceName,
+      sourceKind: identity.sourceKind,
+      sourceLine: identity.sourceLine,
+
+      // ---- preserved source fields (no data loss) ----
+      raw: base.raw == null ? '' : base.raw,
+      line: base.line == null ? null : base.line,
+      metadata: base.metadata && typeof base.metadata === 'object' ? base.metadata : {},
+      filePath: identity.sourcePath,
+      fileName: identity.sourceName,
+      fileKind: identity.sourceKind,
+    };
+  }
+
+  // ---- ACT 2A: scope-aware pure Task projection ----
+  //
+  // ONE UI-neutral projection for every future consumer (Task Review, Task
+  // Board, Standalone local Tasks, Active Open/Done, Workspace Index Open/Done,
+  // Reports). It is pure: it never parses, never touches the Index, never reads
+  // the editor, and never mutates a record. Scope selection is explicit, so a
+  // caller cannot accidentally mix saved Workspace Tasks with the live Current
+  // Document.
+  const PROJECTION_SCOPES = Object.freeze(['workspace', 'current-document']);
+  const PROJECTION_STATUS_FILTERS = Object.freeze(['all', 'open', 'done', 'backlog', 'todo', 'ongoing']);
+  const PROJECTION_PRIORITY_FILTERS = Object.freeze(['all', 'none', 'p1', 'p2', 'p3']);
+  const PROJECTION_SORTS = Object.freeze(['source', 'status', 'priority', 'text']);
+
+  function normalizeProjectionScope(value) {
+    const v = String(value == null ? '' : value).trim().toLowerCase();
+    return PROJECTION_SCOPES.indexOf(v) === -1 ? 'workspace' : v;
+  }
+
+  function normalizeProjectionStatusFilter(value) {
+    const v = String(value == null ? '' : value).trim().toLowerCase();
+    return PROJECTION_STATUS_FILTERS.indexOf(v) === -1 ? 'all' : v;
+  }
+
+  function normalizeProjectionPriorityFilter(value) {
+    const v = String(value == null ? '' : value).trim().toLowerCase();
+    if (v === 'none' || v === '--') return 'none';
+    if (v === 'all') return 'all';
+    const level = normalizePriorityValue(v);
+    return level || 'all';
+  }
+
+  function normalizeProjectionSort(value) {
+    const v = String(value == null ? '' : value).trim().toLowerCase();
+    return PROJECTION_SORTS.indexOf(v) === -1 ? 'source' : v;
+  }
+
+  const PROJECTION_PRIORITY_RANK = Object.freeze({ p1: 0, p2: 1, p3: 2 });
+
+  function compareProjectionStrings(a, b) {
+    const x = String(a == null ? '' : a);
+    const y = String(b == null ? '' : b);
+    return x < y ? -1 : x > y ? 1 : 0;
+  }
+
+  function projectTasks(records, options) {
+    const opts = options || {};
+    const scope = normalizeProjectionScope(opts.scope);
+    const statusFilter = normalizeProjectionStatusFilter(opts.statusFilter);
+    const priorityFilter = normalizeProjectionPriorityFilter(opts.priorityFilter);
+    const sort = normalizeProjectionSort(opts.sort);
+
+    const source = Array.isArray(records) ? records : [];
+    const activePath = String(opts.activeSourcePath == null ? '' : opts.activeSourcePath).trim();
+
+    const windowFrom = isValidIsoDate(opts.completedFrom) ? String(opts.completedFrom) : null;
+    const windowTo = isValidIsoDate(opts.completedTo) ? String(opts.completedTo) : null;
+
+    const out = [];
+
+    for (let i = 0; i < source.length; i += 1) {
+      const record = source[i];
+      if (!record || typeof record !== 'object') continue;
+
+      // Scope isolation. Current Document is restricted to one exact source
+      // path, so Workspace Tasks can never leak into it. Workspace scope
+      // consumes the saved records it is handed and nothing else.
+      if (scope === 'current-document') {
+        const identity = sourceIdentityOf(record);
+        if (!activePath || identity.sourcePath !== activePath) continue;
+      }
+
+      const task = toNormalizedTask(record);
+
+      if (statusFilter === 'open' && task.effectiveStatus === 'done') continue;
+      if (statusFilter !== 'all' && statusFilter !== 'open' && task.effectiveStatus !== statusFilter) continue;
+
+      if (priorityFilter === 'none' && task.priority !== null) continue;
+      if (priorityFilter !== 'all' && priorityFilter !== 'none' && task.priority !== priorityFilter) continue;
+
+      if (windowFrom || windowTo) {
+        // A Task with an UNKNOWN completion date cannot satisfy a date window.
+        // It is excluded rather than given a fabricated date (Reports contract).
+        if (!task.completedDate) continue;
+        if (windowFrom && task.completedDate < windowFrom) continue;
+        if (windowTo && task.completedDate > windowTo) continue;
+      }
+
+      out.push(task);
+    }
+
+    out.sort((a, b) => {
+      if (sort === 'status') {
+        const c = STATUS_VALUES.indexOf(a.effectiveStatus) - STATUS_VALUES.indexOf(b.effectiveStatus);
+        if (c !== 0) return c;
+      } else if (sort === 'priority') {
+        // Unprioritized sorts last. This ordering is only ever used when a
+        // caller explicitly asks for it; it is never the default.
+        const ra = a.priority ? PROJECTION_PRIORITY_RANK[a.priority] : 99;
+        const rb = b.priority ? PROJECTION_PRIORITY_RANK[b.priority] : 99;
+        if (ra !== rb) return ra - rb;
+      } else if (sort === 'text') {
+        const c = compareProjectionStrings(
+          removePriorityTokens(a.text).toLowerCase(),
+          removePriorityTokens(b.text).toLowerCase()
+        );
+        if (c !== 0) return c;
+      }
+      // Deterministic tie-breaks, always ending in the exact source identity.
+      const c = compareProjectionStrings(a.sourcePath, b.sourcePath);
+      if (c !== 0) return c;
+      const la = a.sourceLine == null ? 0 : a.sourceLine;
+      const lb = b.sourceLine == null ? 0 : b.sourceLine;
+      if (la !== lb) return la - lb;
+      return compareProjectionStrings(a.displayText, b.displayText);
+    });
+
+    return out;
   }
 
 
@@ -453,9 +743,30 @@
   const MAX_SAFE_NEW_TOTAL = 16;
   const MAX_SAFE_INSERT_TOTAL = 20;
 
+  // ACT 2A.1 — PRIORITY-NEUTRAL LIFECYCLE MATCHING IDENTITY.
+  //
+  // Proven cause of a false `ambiguous=1` after a priority-only mutation:
+  // this function stripped the mme-task COMMENT but kept the visible `#pN`
+  // token, so a baseline record read "Alpha task" and the current record read
+  // "Alpha task #p1". The LCS therefore found no pair, the gap became a
+  // replacement region, and it was reported as ambiguous.
+  //
+  // A status transition never had this problem, because status is written INTO
+  // the comment this function already removes. Priority is a visible
+  // presentation marker with no lifecycle meaning, so the matcher must treat it
+  // exactly like status: neutral for identity.
+  //
+  // Only the canonical priority representations are removed, through the SAME
+  // single primitive the writer uses. Ordinary hashtags are NOT hashtags of this
+  // kind: `#customer` stays part of the visible content and therefore part of
+  // identity. Occurrence indexing (text + occurrence) and the LCS alignment are
+  // untouched, so same-text duplicates in one file stay distinguishable and
+  // genuinely ambiguous regions stay ambiguous. This value is used ONLY for
+  // matching identity, never for display.
   function canonicalTaskText(value) {
-    return String(value == null ? '' : value)
-      .replace(/<!--\s*mme-task:[\s\S]*?-->/gi, '')
+    return stripPriorityTokensExact(
+      String(value == null ? '' : value).replace(/<!--\s*mme-task:[\s\S]*?-->/gi, '')
+    )
       .replace(/\s+/g, ' ')
       .trim();
   }
@@ -1574,6 +1885,20 @@
     priorityOf,
     normalizePriorityValue,
     removePriorityTokens,
+    stripPriorityTokensExact,
+    canonicalTaskText,
+    // ACT 2A additions: the canonical writer, the normalized contract, and the
+    // scope-aware pure projection. All pure; none of them touches an Editor, a
+    // file, a Date clock, the Index, or the DOM.
+    applyPriority,
+    displayTextOf,
+    sourceIdentityOf,
+    toNormalizedTask,
+    projectTasks,
+    PROJECTION_SCOPES,
+    PROJECTION_STATUS_FILTERS,
+    PROJECTION_PRIORITY_FILTERS,
+    PROJECTION_SORTS,
     applyTransition,
     applySaveLifecycle,
     matchTasksForSave,
