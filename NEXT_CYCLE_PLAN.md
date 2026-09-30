@@ -223,11 +223,31 @@ the current canonical architecture and this roadmap.
   `Related == Links In` **before** any visible label change.
 
 **Package 4 - Standalone Notes and scope composition**
-- Owners: the Current Document scope owner in `js/main.js`; the app-context owner
+- Owners: the Current Document scope owner in `js/main.js`
+  (`getCurrentDocumentScope()`, `:1396`); the app-context owner
   (`js/core/context.js`); Mode Session (`js/core/mode-session.js`); the Sidebar
-  host/composition owner; `js/workspace/workspace-host.js`; the virtual-view Return owner.
-- Non-touch: the Notes projection; the metadata writer.
+  host/composition owner; `js/workspace/workspace-host.js`; the virtual-view Return
+  owner.
+- Non-touch: the Notes projection; the metadata writer; `js/release/release.js`;
+  `sw.js`.
 - **One Sidebar, two entry points. Never two independent Sidebars.**
+- **ACT order (accepted at Gate 4):** ACT 4A shared scope contract and Current
+  Document snapshot; ACT 4B Open Note entry and Standalone Sidebar composition;
+  ACT 4C transitions, recovery, History and integrated acceptance; ACT 4D
+  conditional correction only.
+- **Source-owner summary:** the Current Document snapshot and the physical
+  Open Note path (`openSmart()`, `js/main.js:10299`) already exist, so 4A and 4B
+  are alignment/composition work rather than construction; Sidebar availability
+  is the genuine new work. `currentSaveHandle` stays the single file-handle and
+  Save owner. Full detail in
+  `docs/architecture/MarkmapEditor_1.0_PACKAGE_4_STANDALONE_SCOPE_PLAN.md`.
+- **Entry decision:** the existing `btnOpen` (`index.html:54`) becomes
+  **Open Note**; no second open control is added.
+- **Release boundary: 0.6.4 — Standalone Notes and Scope Composition.**
+- **Non-touch list:** final Active and Workspace Index disclosure cards
+  (Package 10); Projects metadata, `mme-project` writer and Expanded View
+  (Packages 5-6); Reports and Draw.io (Packages 7-9); broad `main.js` refactor
+  (Package 9.5); Service Worker and cache identity; Help; Release Notes.
 
 **Packages 5-6 - Projects**
 - Owners: `js/workspace/workspace-parser.js` (`parseProjects`,

@@ -196,8 +196,23 @@ intermediate device testing. No coder action or remediation is required.
   build. Documentation-only closure record: `VERIFY.md` §0.0.5.
 - **Package 2 (Task Stabilization): CLOSED.**
 - **Package 3 (Wiki Links Stabilization): CLOSED.**
-- **Package 4: NEXT, NOT STARTED.** It owns Standalone Notes and scope
-  composition. The Active relationship cards are NOT moved into it.
+- **Package 4: GATE 4 IN PROGRESS; RUNTIME NOT STARTED.** It owns Standalone
+  Notes and scope composition. The Active relationship cards are NOT moved into
+  it.
+  - Gate 4 completed **documentation and planning only**. No runtime, Help,
+    Release Notes, version, cache or Service Worker change was made, and nothing
+    was committed or pushed.
+  - Accepted plan:
+    `docs/architecture/MarkmapEditor_1.0_PACKAGE_4_STANDALONE_SCOPE_PLAN.md`.
+  - Key source findings: the Current Document snapshot
+    (`getCurrentDocumentScope()`, `js/main.js:1396`) and the physical Open Note
+    path (`openSmart()`, `js/main.js:10299`) **already exist**; Sidebar panel
+    availability is the genuine new work.
+  - Entry decision: the existing `btnOpen` becomes **Open Note**; no second open
+    control.
+  - Expected release boundary: **0.6.4 — Standalone Notes and Scope
+    Composition**. Release identity remains **0.6.3** until implementation is
+    accepted.
 - **Package 9.5**: Architecture Hygiene Gate remains planned.
 - **Package 10**: owns the final shared summary-card integration, including the
   Active and Workspace Index relationship cards.

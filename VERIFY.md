@@ -495,6 +495,79 @@ full regression)*
 
 ---
 
+## 0.0.6 Package 4 — Standalone Notes and Scope Composition (FUTURE)
+
+**Status: FUTURE STRUCTURE ONLY. Package 4 runtime is NOT started.**
+Gate 4 produced planning documentation only. Nothing below has been executed,
+and no result may be recorded as PASS until the corresponding ACT is accepted.
+
+Contract source: `docs/architecture/MarkmapEditor_1.0_PACKAGE_4_STANDALONE_SCOPE_PLAN.md`.
+
+### ACT 4A — shared scope contract and Current Document snapshot
+
+*(to be executed)*
+
+- [ ] live Markdown snapshot reflects unsaved buffer edits
+- [ ] saved title and filename identity correct
+- [ ] file handle optionality (present and absent)
+- [ ] writable vs non-writable state
+- [ ] local Tags present and correctly scoped
+- [ ] local Tasks present and Package-2 normalized
+- [ ] local Links Out present
+- [ ] Workspace reported unavailable
+- [ ] Links In unavailable, **not zero**
+- [ ] no second parser owner
+- [ ] no second Task store / Wiki Link store
+- [ ] no `WORKSPACE_INDEX_STATE` mutation from a live-scope read
+- [ ] live/saved boundary proven
+- [ ] deterministic snapshot
+- [ ] input immutability
+
+### ACT 4B — Open Note entry and Standalone Sidebar composition
+
+*(to be executed; mobile-first S22/DeX)*
+
+- [ ] open a writable Markdown file via Open Note
+- [ ] edit, Save, and confirm the physical file on disk changes
+- [ ] reopen and confirm saved content
+- [ ] local Tags reflect the live document
+- [ ] local Tasks render; a status toggle mutates the buffer and marks dirty
+- [ ] local Links Out render, each "unresolved (no Workspace)" and non-navigating
+- [ ] Links In absent/unavailable — no false zero
+- [ ] no Workspace panels visible
+- [ ] open Workspace — all accepted 0.6.3 panels return
+- [ ] return to Standalone — document panels only, no ghost panels
+- [ ] dirty-state cancel leaves content and handle untouched
+- [ ] no stale handle points at the prior file
+- [ ] static Sidebar shell free of stale "Related" / "No active concept" text
+
+### ACT 4C — transitions, recovery, History and integrated acceptance
+
+*(to be executed)*
+
+- [ ] no transition silently discards dirty content
+- [ ] no transition leaves a stale writable handle
+- [ ] no Workspace panel remains active without a Workspace
+- [ ] cancelled/failed open pushes no History entry
+- [ ] failed Save does not refresh the baseline and does not rebuild the Index
+- [ ] History identity is handle-based, never the visible H1
+- [ ] reload recovery restores the draft without claiming writability
+- [ ] an unrecoverable handle requires the user to reopen
+- [ ] virtual-view Return remains distinct from Navigation History
+- [ ] Workspace function not reduced (full regression chain green)
+
+### ACT 4D — conditional correction
+
+*(opens only on source-proven or browser-proven focused defect; not scheduled)*
+
+### Laptop-only triggers
+
+*(request explicitly; not required per ACT)*: desktop-only keyboard/focus, wide
+multi-pane layout, File System Access behaviour not reproducible on S22/DeX, PWA
+release/update behaviour, productive Workspace acceptance.
+
+---
+
 ## 1. Diagnostics & Runtime Checks
 
 ### A. Host Diagnostic Output

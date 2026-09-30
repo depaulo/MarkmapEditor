@@ -872,6 +872,43 @@ Stabilize resolution, ambiguity, missing targets, Related/backlinks, and exact s
 
 Classify consumers, implement the application entry choice, adapt existing UI composition, and connect only useful Current Document consumers.
 
+**Accepted at Gate 4 (documentation and planning only; no runtime change).**
+The full source-proven contract, owner map, consumer matrix, transition matrix
+and ACT handoffs are recorded in
+`docs/architecture/MarkmapEditor_1.0_PACKAGE_4_STANDALONE_SCOPE_PLAN.md`.
+
+Three source findings shape the package:
+
+- **The Current Document snapshot already exists.** `getCurrentDocumentScope()`
+  (`js/main.js:1396`) already reads the live `md.value` buffer, parses through the
+  shared `parseWorkspaceDocument()` family, reports `sourceFreshness: 'live'`, and
+  exposes explicit `workspaceAvailable` / `belongsToWorkspace` membership. ACT 4A
+  therefore aligns, proves and adds availability — it does **not** build a new
+  global snapshot object.
+- **The physical Open Note path already exists.** `openSmart()`
+  (`js/main.js:10299`) already opens a physical Markdown file through
+  `showOpenFilePicker` and stores a writable handle. The accepted entry decision
+  is that the existing `btnOpen` (`index.html:54`) **becomes "Open Note"**; no
+  second open control is added.
+- **Sidebar availability is not yet first-class.** No `workspaceOnly` mechanism
+  exists in `js/workspace/workspace-sidebar.js`; only collapse and resize state
+  do. The composition registry is therefore genuine ACT 4B work.
+
+Accepted structure: **ACT 4A** shared scope contract and Current Document
+snapshot; **ACT 4B** Open Note entry and Standalone Sidebar composition;
+**ACT 4C** transitions, recovery, History and integrated acceptance; **ACT 4D**
+conditional correction only.
+
+Accepted consumer rulings: local Tasks use **Option B** (existing Task Review
+adapted to Current Document scope — no second Task parser or store); local Tags
+and local Links Out reuse the shared parser and Package 3 Wiki Link grammar;
+Links In is **unavailable, not zero**, without a Workspace; local Projects defer
+to Packages 5-6; local Quick Report defers to Package 7; Outline/metrics defer
+from Package 4; Navigation History is **handle-based and session-local**, never
+H1-based. The final Active and Workspace Index disclosure cards remain
+**Package 10**, as does broad `main.js` refactor (**Package 9.5**). Package 4
+closure targets release **0.6.4 — Standalone Notes and Scope Composition**.
+
 ### Package 5: Projects data foundation
 
 Implement the accepted managed model, date/status semantics, parser/index normalization, archive rule, and Current Document/Workspace provider contract.
