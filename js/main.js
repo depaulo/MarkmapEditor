@@ -1940,6 +1940,321 @@ try {
   window.getCurrentDocumentComposition = getCurrentDocumentComposition;
 } catch {}
 
+// ===================================================================
+// ACT 4B — Open Note entry, Standalone composition and Sidebar
+//           availability owner.
+//
+// ONE composition owner consumes the ACT 4A availability data and drives the
+// EXISTING Sidebar host. This block adds:
+//   - one panel-availability registry (no copied markup tree);
+//   - one document-only entry that REUSES openSmart() (no second opener);
+//   - explicit Workspace-only panel hiding (unavailable is NOT empty);
+//   - safe Workspace <-> Standalone transitions.
+//
+// It adds NO second Sidebar, NO second file opener, NO second Save owner and
+// NO fake single-file Workspace. currentSaveHandle remains the only physical
+// handle owner, and WORKSPACE_INDEX_STATE is never fabricated.
+// ===================================================================
+
+// The single panel registry. `elementId` values are the EXISTING internal IDs
+// in index.html; they are never renamed, so panel collapse state in
+// localStorage stays stable across every composition change.
+const MME_PANEL_COMPOSITION = Object.freeze({
+  // Document-scope panels: available with or without a Workspace.
+  //
+  // Record shape is fixed by this owner. `elementId` is the EXISTING internal
+  // DOM ID (never renamed, so collapse state in localStorage stays stable),
+  // `availabilityKey` is the ACT 4A consumer-availability key, and
+  // `preserveCollapseState` records that hiding never destroys the preference.
+  activeDocumentIdentity: {
+    key: 'activeDocumentIdentity', elementId: 'workspaceActivePanel', scope: 'document',
+    availabilityKey: 'activeDocumentIdentity', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+  localTags: {
+    key: 'localTags', elementId: 'workspaceTagsPanel', scope: 'document',
+    availabilityKey: 'localTags', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+  localTasks: {
+    key: 'localTasks', elementId: 'workspaceTasksPanel', scope: 'document',
+    availabilityKey: 'localTasks', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+  localLinksOut: {
+    key: 'localLinksOut', elementId: 'workspaceRelatedPanel', scope: 'document',
+    availabilityKey: 'localLinksOut', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+
+  // Workspace-only panels: unavailable (never empty) without a Workspace.
+  linksIn: {
+    key: 'linksIn', elementId: 'workspaceRelatedPanel', scope: 'workspace',
+    availabilityKey: 'linksIn', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+  notes: {
+    key: 'notes', elementId: 'workspaceJournalsPanel', scope: 'workspace',
+    availabilityKey: 'notes', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+  knowledge: {
+    key: 'knowledge', elementId: 'workspaceConceptsPanel', scope: 'workspace',
+    availabilityKey: 'knowledge', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+  pinned: {
+    key: 'pinned', elementId: 'workspacePinnedPanel', scope: 'workspace',
+    availabilityKey: 'pinned', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+  archive: {
+    key: 'archive', elementId: 'workspaceArchivePanel', scope: 'workspace',
+    availabilityKey: 'archive', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+  search: {
+    key: 'search', elementId: 'workspaceSearchPanel', scope: 'workspace',
+    availabilityKey: 'search', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+  workspaceTagsInventory: {
+    key: 'workspaceTagsInventory', elementId: 'workspaceTagsPanel', scope: 'workspace',
+    availabilityKey: 'workspaceTagsInventory', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+  taskBoard: {
+    key: 'taskBoard', elementId: 'workspaceTaskBoardPanel', scope: 'workspace',
+    availabilityKey: 'taskBoard', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+  workspaceProjects: {
+    key: 'workspaceProjects', elementId: 'workspaceProjectsPanel', scope: 'workspace',
+    availabilityKey: 'workspaceProjects', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+  workspaceIndex: {
+    key: 'workspaceIndex', elementId: 'workspaceIndexPanel', scope: 'workspace',
+    availabilityKey: 'workspaceIndex', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+  workspaceReport: {
+    key: 'workspaceReport', elementId: 'workspaceReportPanel', scope: 'workspace',
+    availabilityKey: 'workspaceReport', visibleWhen: 'available',
+    preserveCollapseState: true,
+  },
+});
+
+// Resolve the current composition. This is the ONLY place ACT 4B decides what
+// is available; every consumer reads this result rather than re-deriving scope.
+function getSidebarComposition(options) {
+  const o = options || {};
+  const composition = getCurrentDocumentComposition(o);
+  const workspaceAvailable = Boolean(composition.workspaceContext.workspaceAvailable);
+  const availability = composition.consumers || {};
+
+  const panels = {};
+  // Any registry record whose availabilityKey is unknown to ACT 4A is recorded
+  // here and fails SAFE (never 'available'), so a future key typo cannot silently
+  // degrade a panel into a permanently hidden or permanently shown state.
+  const unknownAvailabilityKeys = [];
+
+  for (const key of Object.keys(MME_PANEL_COMPOSITION)) {
+    const def = MME_PANEL_COMPOSITION[key];
+    const availabilityKey = def.availabilityKey || key;
+    const consumer = availability[availabilityKey] || null;
+
+    if (!consumer) unknownAvailabilityKeys.push(key);
+
+    // No fallback from an unknown key to 'available': unknown is unavailable.
+    const state = consumer ? consumer.availability : MME_AVAILABILITY.UNAVAILABLE;
+
+    // A Workspace-only panel is UNAVAILABLE without a Workspace and is never
+    // rendered as a confirmed-empty list. A deferred consumer is never shown.
+    panels[key] = {
+      key: key,
+      elementId: def.elementId,
+      scope: def.scope,
+      availabilityKey: availabilityKey,
+      preserveCollapseState: def.preserveCollapseState !== false,
+      availability: state,
+      reason: consumer?.reason || (consumer ? '' : 'unknown-availability-key'),
+      deferred: Boolean(consumer?.deferred),
+      // Deterministic: visible only on an explicit 'available' state.
+      visible: state === MME_AVAILABILITY.AVAILABLE,
+    };
+  }
+
+  return {
+    composition: workspaceAvailable ? 'workspace' : 'document',
+    workspaceAvailable: workspaceAvailable,
+    document: composition,
+    panels: panels,
+    // Registry records whose availabilityKey is unknown to ACT 4A. Non-empty
+    // means the registry and the composition contract have drifted.
+    unknownAvailabilityKeys: unknownAvailabilityKeys,
+    // Convenience: element IDs to withdraw for this composition.
+    //
+    // Two keys may legitimately share one host element (`localLinksOut` and
+    // `linksIn` both render into `workspaceRelatedPanel`). An element is hidden
+    // ONLY when EVERY key mapping to it is not visible, so an unavailable
+    // cross-file consumer can never withdraw the available local one.
+    hiddenElementIds: (() => {
+      const byElement = new Map();
+      for (const p of Object.values(panels)) {
+        if (!byElement.has(p.elementId)) byElement.set(p.elementId, []);
+        byElement.get(p.elementId).push(p);
+      }
+      const hidden = [];
+      for (const [id, entries] of byElement) {
+        if (entries.every((p) => !p.visible)) hidden.push(id);
+      }
+      return hidden;
+    })(),
+  };
+}
+
+// Apply the composition to the EXISTING Sidebar host. This is the only Sidebar
+// mutation entry in ACT 4B; it never creates or clones markup, and it never
+// clears persisted collapse state.
+function applySidebarComposition(options) {
+  const composition = getSidebarComposition(options);
+  if (typeof document === 'undefined' || !document?.getElementById) return composition;
+
+  for (const id of composition.hiddenElementIds) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
+  }
+
+  const empty = document.getElementById('workspaceEmptyState');
+  if (empty) {
+    // The accepted no-Workspace placeholder states the truth: this is an
+    // unopened Workspace, not an empty one.
+    empty.hidden = composition.workspaceAvailable;
+  }
+
+  // Tell the EXISTING Task Review owner which scope supplies its records. It has
+  // one renderer and one record shape; only its input changes. The provider
+  // reads the ACT 4A live Current Document Task projection, so no second Task
+  // parser, lifecycle owner or store is introduced here.
+  try {
+    const review = globalThis.MME_TASK_REVIEW || window.MME_TASK_REVIEW;
+    if (review && typeof review.setTaskScope === 'function') {
+      review.setTaskScope(
+        composition.workspaceAvailable ? 'workspace' : 'current-document',
+        () => {
+          const c = getCurrentDocumentComposition();
+          return c.tasks && c.tasks.availability === MME_AVAILABILITY.AVAILABLE
+            ? c.tasks.tasks
+            : [];
+        }
+      );
+    }
+  } catch (e) {
+    log?.(`Sidebar composition: Task Review scope not applied (${e?.message || e})`);
+  }
+
+  return composition;
+}
+
+try {
+  // ---- ACT 4B: Open Note entry, composition and Sidebar availability ----
+  globalThis.MME_PANEL_COMPOSITION = MME_PANEL_COMPOSITION;
+  globalThis.getSidebarComposition = getSidebarComposition;
+  globalThis.applySidebarComposition = applySidebarComposition;
+  globalThis.deactivateWorkspaceComposition = deactivateWorkspaceComposition;
+  globalThis.openNote = openNote;
+  window.openNote = openNote;
+  window.applySidebarComposition = applySidebarComposition;
+} catch {}
+
+// Leave Workspace scope WITHOUT destroying recoverable Workspace configuration.
+//
+// This withdraws the ACTIVE in-memory projection only — the same fields the
+// single activation boundary (activateWorkspaceStorage) assigns. Persisted
+// Workspace configuration and the saved Index are deliberately NOT touched, so
+// reopening the Workspace restores the accepted 0.6.3 experience; ACT 4C owns
+// deeper reload recovery.
+//
+// Clearing the ACTIVE root handle is REQUIRED, not incidental: `workspaceAvailable`
+// derives from it, and retaining it would leave every Workspace-only panel visible
+// after Open Note — precisely the ghost-panel state the package forbids. No
+// physical Workspace file is read, written or removed here.
+function deactivateWorkspaceComposition() {
+  const state = globalThis.WORKSPACE_STATE || null;
+  if (!state) return false;
+
+  // Withdraw the active Workspace Note and its path claim first.
+  state.activeFile = null;
+  globalThis.persistActiveWorkspaceFile?.();
+  window.updateWorkspaceActiveFileHighlight?.();
+
+  // Then withdraw the active aggregation projection (in-memory only).
+  state.rootHandle = null;
+  state.rootName = '';
+  state.folders.notes = null;
+  state.files.notes = [];
+
+  log?.('deactivateWorkspaceComposition(): active Workspace projection withdrawn');
+  return true;
+}
+
+// Open Note — the document-only entry.
+//
+// It REUSES the existing physical opener (openSmart) and therefore does not
+// introduce a second file opener or a second handle owner.
+//
+// DIRTY-STATE (source-proven): openSmart() has NO dirty guard of its own — it
+// sets `dirty = false` immediately after loading. Reusing it unguarded would
+// silently discard unsaved edits. The EXISTING guard owner
+// (confirmDiscardIfDirty) is therefore invoked HERE, before the opener runs. No
+// second prompt owner is created; cancel returns false and nothing changes.
+async function openNote() {
+  log?.('openNote(): begin (delegating to openSmart)');
+
+  // Existing dirty-state contract. `confirmDiscardIfDirty()` returns true when
+  // the document is clean, and false when the user declines the discard.
+  if (typeof confirmDiscardIfDirty === 'function' && !confirmDiscardIfDirty()) {
+    log?.('openNote(): dirty guard declined — no transition');
+    return false;
+  }
+
+  const hadWorkspace = Boolean(globalThis.WORKSPACE_STATE?.rootHandle);
+
+  // openSmart RESOLVES NORMALLY when the user cancels the picker (it logs
+  // AbortError and returns). It therefore cannot be used as a success signal.
+  // A successful physical open always installs a NEW handle object from the
+  // picker, so identity comparison is the honest completion signal: on cancel
+  // or read failure both the handle and the filename are unchanged.
+  //
+  // SAME-FILE REOPEN: the picker returns a fresh handle object for an already
+  // open file, so identity still changes and the reopen is treated as success.
+  const handleBefore = typeof currentSaveHandle !== 'undefined' ? currentSaveHandle : null;
+  const nameBefore = typeof currentFileName !== 'undefined' ? currentFileName : '';
+
+  await openSmart();
+
+  const handleAfter = typeof currentSaveHandle !== 'undefined' ? currentSaveHandle : null;
+  const nameAfter = typeof currentFileName !== 'undefined' ? currentFileName : '';
+  const opened = handleAfter !== handleBefore || nameAfter !== nameBefore;
+
+  if (!opened) {
+    // Cancelled picker, or a read that failed before activation. Nothing may
+    // change: no Workspace withdrawal, no Sidebar recomposition.
+    log?.('openNote(): no file activated (cancelled or failed) — composition unchanged');
+    return false;
+  }
+
+  if (hadWorkspace) {
+    deactivateWorkspaceComposition();
+    log?.('openNote(): Workspace active projection withdrawn; saved Workspace retained');
+  }
+
+  applySidebarComposition();
+  log?.('openNote(): document composition active');
+  return true;
+}
+
 try {
   window.buildWorkspaceIndex = buildWorkspaceIndex;
   window.scheduleWorkspaceIndexRebuild = scheduleWorkspaceIndexRebuild;
@@ -2950,6 +3265,46 @@ function renderWorkspaceRelatedPanel() {
     return;
   }
 
+  // ---- ACT 4B: Standalone composition ----
+  //
+  // Without a Workspace this host shows LOCAL LINKS OUT from the live Current
+  // Document (ACT 4A). This reuses the EXISTING panel owner and its existing
+  // internal IDs; no second relationship renderer is created. Links IN stays
+  // unavailable and is never shown as a confirmed zero.
+  // If the composition owner is absent (e.g. an isolated owner sandbox) this
+  // host keeps its pre-ACT-4B Workspace behaviour rather than throwing.
+  const localScope = (typeof getSidebarComposition === 'function' &&
+    typeof MME_AVAILABILITY !== 'undefined') ? getSidebarComposition() : null;
+  if (localScope && !localScope.workspaceAvailable) {
+    const linksOut = localScope.document.linksOut;
+    const rows = Array.isArray(linksOut.linksOut) ? linksOut.linksOut : [];
+
+    panel.hidden = false;
+    badge.textContent = '—';
+
+    if (linksOut.availability === MME_AVAILABILITY.AVAILABLE && rows.length === 0) {
+      summary.textContent = 'No outgoing links in this note';
+      list.innerHTML = '';
+    } else {
+      summary.textContent =
+        `Links out — ${rows.length} (resolution ${linksOut.resolutionAvailability})`;
+      list.innerHTML = rows
+        .map((r) => {
+          const label = escapeHtml(r.displayLabel || r.rawTarget || '');
+          // Without a Workspace a target is NOT-READY, which is not "missing"
+          // and is never navigable. Rows are deliberately non-interactive.
+          const state = escapeHtml(r.status || 'not-ready');
+          return `<div class="workspaceRelatedRow" data-scope="current-document" data-status="${state}">` +
+            `<span class="workspaceRelatedRowLabel">${label}</span> ` +
+            `<span class="workspaceRelatedRowState">${state}</span></div>`;
+        })
+        .join('');
+    }
+
+    applyWorkspacePanelCollapsed(panel, 'related', isWorkspacePanelCollapsed('related'));
+    return;
+  }
+
   // ACT 3C — the panel is now LINKS IN, sourced from the canonical Links In
   // provider. The legacy name-keyed Related algorithm is retired from this path.
   //
@@ -3281,6 +3636,26 @@ function ensureWorkspaceTagsPanel() {
 }
 
 function getWorkspaceTagsSummary() {
+  // ---- ACT 4B: local Tags scope ----
+  //
+  // Without a Workspace the SAME renderer lists the LIVE Current Document tags
+  // from the ACT 4A projection. `paths` is empty because a document-local tag
+  // has no cross-file inventory; `count` is therefore 1 and never a Workspace
+  // cross-file count. The existing panel, its internal IDs and its chip grammar
+  // are reused — no second Tags renderer and no second tag parser.
+  const localScope = (typeof getSidebarComposition === 'function' &&
+    typeof MME_AVAILABILITY !== 'undefined') ? getSidebarComposition() : null;
+  if (localScope && !localScope.workspaceAvailable) {
+    const tags = localScope.document.tags;
+    if (!tags || tags.availability !== MME_AVAILABILITY.AVAILABLE) return [];
+    return (Array.isArray(tags.tags) ? tags.tags : []).map((tag) => ({
+      tag: String(tag),
+      count: 1,
+      paths: [],
+      scope: 'current-document',
+    }));
+  }
+
   if (!WORKSPACE_INDEX_STATE?.ready || !WORKSPACE_INDEX_STATE.tags) {
     return [];
   }
@@ -4275,6 +4650,33 @@ function renderWorkspaceActivePanel() {
         badge
       )} body=${Boolean(body)}`
     );
+    return;
+  }
+
+  // ---- ACT 4B: Standalone composition ----
+  //
+  // Without a Workspace the EXISTING Active host shows the ACT 4A Current
+  // Document identity: H1/title as PRIMARY, physical filename as SECONDARY.
+  // No Workspace membership, no Archive/Pin/Knowledge actions, no Workspace
+  // badge, and no fabricated Workspace-relative path are claimed here.
+  const act4bLocalScope = (typeof getSidebarComposition === 'function' &&
+    typeof MME_AVAILABILITY !== 'undefined') ? getSidebarComposition() : null;
+  if (act4bLocalScope && !act4bLocalScope.workspaceAvailable) {
+    const identity = act4bLocalScope.document.identity;
+
+    panel.hidden = false;
+    badge.textContent = 'Note';
+
+    const primary = escapeHtml(identity.visual.displayTitle || identity.visual.title || 'Untitled');
+    const secondary = escapeHtml(identity.physical.filename || '');
+
+    body.innerHTML =
+      `<div class="workspaceActiveEmpty" data-scope="current-document">` +
+      `<div class="workspaceActiveTitle">${primary}</div>` +
+      (secondary ? `<div class="workspaceActiveSource">${secondary}</div>` : '') +
+      `</div>`;
+
+    applyWorkspacePanelCollapsed(panel, 'active', isWorkspacePanelCollapsed('active'));
     return;
   }
 
@@ -7378,10 +7780,13 @@ async function showRecentMenu() {
   recentMenu.appendChild(makeMenuSep());
   recentMenu.appendChild(
     makeMenuItem(
-      'Browse…',
+      // ACT 4B — user-facing entry name. This is the single existing physical
+      // open control; it is RENAMED, never duplicated, and still delegates to
+      // the same owner (openNote -> openSmart).
+      'Open Note…',
       () => {
         hideRecentMenu();
-        openSmart();
+        openNote();
       },
       { icon: '📂' }
     )

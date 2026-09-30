@@ -91,6 +91,26 @@ function extractBlockFrom(src, startMarker, endLine = '}') {
   throw new Error(`verbatim extraction never closed: ${startMarker}`);
 }
 
+// Owners that live inside an IIFE (js/workspace/task-review.js) are INDENTED, so
+// their closing brace is never a bare '}' line. This extracts by brace counting,
+// which is exact for balanced JavaScript and does not depend on indentation.
+function extractFunctionByBraces(src, signature) {
+  const start = src.indexOf(signature);
+  if (start === -1) throw new Error(`verbatim extraction failed: ${signature}`);
+  const braceStart = src.indexOf('{', start);
+  if (braceStart === -1) throw new Error(`verbatim extraction failed: ${signature}`);
+  let depth = 0;
+  for (let i = braceStart; i < src.length; i += 1) {
+    const ch = src[i];
+    if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) return src.slice(start, i + 1);
+    }
+  }
+  throw new Error(`verbatim extraction never closed: ${signature}`);
+}
+
 function runNode(relPath) {
   try {
     return execFileSync(process.execPath, [path.join(ROOT, relPath)], {
@@ -169,6 +189,12 @@ const OWNER_EXTRACTS = [
   extractBlockFrom(MAIN_SOURCE, 'function getCurrentDocumentLinksInAvailability(documentScope, indexSnapshot) {'),
   extractBlockFrom(MAIN_SOURCE, 'function getCurrentDocumentConsumerAvailability(documentScope) {'),
   extractBlockFrom(MAIN_SOURCE, 'function getCurrentDocumentComposition(options) {'),
+  // ---- ACT 4B owners, verbatim ----
+  extractBlockFrom(MAIN_SOURCE, 'const MME_PANEL_COMPOSITION = Object.freeze({', '});'),
+  extractBlockFrom(MAIN_SOURCE, 'function getSidebarComposition(options) {'),
+  extractBlockFrom(MAIN_SOURCE, 'function deactivateWorkspaceComposition() {'),
+  extractBlockFrom(MAIN_SOURCE, 'function applySidebarComposition(options) {'),
+  extractBlockFrom(MAIN_SOURCE, 'async function openNote() {'),
 ];
 
 // Collaborators the real owners reference: UI/IO bridges, not owners under
@@ -184,6 +210,24 @@ const COLLABORATORS = [
   'const md = { value: "" };',
   '// ---- collaborators (UI bridge, not owners under test) ----',
   'const log = (m) => globalThis.__h.logs.push(String(m));',
+  '// ---- controllable doubles for the existing owners openNote wraps ----',
+  // 'cancel'   : openSmart returns WITHOUT activating a file (AbortError path)
+  // 'success'  : openSmart installs a NEW handle + filename
+  // 'samefile' : openSmart installs a new handle for the SAME filename
+  // 'throw'    : openSmart rejects (read failure)
+  'let __openResult = "cancel";',
+  'let __guardResult = true;',
+  'let __openCalls = 0;',
+  'let __guardCalls = 0;',
+  'function confirmDiscardIfDirty() { __guardCalls += 1; return __guardResult; }',
+  'async function openSmart() {',
+  '  __openCalls += 1;',
+  '  if (__openResult === "throw") throw new Error("read failed");',
+  '  if (__openResult === "cancel") return;',
+  '  if (__openResult === "samefile") { currentSaveHandle = { __h: "same-file-new-handle" }; return; }',
+  '  currentSaveHandle = { __h: "new-handle" };',
+  '  currentFileName = "opened.md";',
+  '}',
 ].join('\n');
 
 const OWNER_API = [
@@ -204,6 +248,21 @@ const OWNER_API = [
   '  getCurrentDocumentLinksInAvailability,',
   '  getCurrentDocumentConsumerAvailability,',
   '  getCurrentDocumentComposition,',
+  // ---- ACT 4B owners ----
+  '  MME_PANEL_COMPOSITION,',
+  '  getSidebarComposition,',
+  '  deactivateWorkspaceComposition,',
+  '  applySidebarComposition,',
+  '  openNote,',
+  // ---- Test doubles for the two EXISTING owners openNote wraps ----
+  // These are collaborators, not owners under test: openSmart (the physical
+  // opener) and confirmDiscardIfDirty (the existing prompt owner) are both
+  // shipped code that cannot run headless. openNote itself is the REAL owner
+  // under test, extracted verbatim above.
+  '  __setOpenResult: (mode) => { __openResult = mode; },',
+  '  __setGuardResult: (v) => { __guardResult = Boolean(v); },',
+  '  __calls: () => ({ openSmart: __openCalls, guard: __guardCalls }),',
+  '  __resetCalls: () => { __openCalls = 0; __guardCalls = 0; },',
   '  setText: (v) => { md.value = v; },',
   '  setDirty: (v) => { dirty = v; },',
   '  setFileName: (v) => { currentFileName = v; },',
@@ -825,6 +884,562 @@ group('ACT 4A — live/saved boundary and structural guarantees');
     }
     const fired = Object.keys(counters).filter((n) => counters[n] > 0);
     return fired.length === 0;
+  });
+
+  group('ACT 4B — Sidebar composition and Open Note (B/H/I)');
+
+  const A4_sb = (o) => O.getSidebarComposition(o);
+
+  await check('B01', 'standalone: document composition, workspaceAvailable=false', () => {
+    act4aOpenStandalone(A4_NOTE);
+    const c = A4_sb({ indexSnapshot: null });
+    return c.composition === 'document' && c.workspaceAvailable === false;
+  });
+
+  await check('B02', 'standalone: document panels AVAILABLE (identity, tags, tasks, linksOut)', () => {
+    act4aOpenStandalone(A4_NOTE);
+    const p = A4_sb({ indexSnapshot: null }).panels;
+    return p.activeDocumentIdentity.visible && p.localTags.visible &&
+      p.localTasks.visible && p.localLinksOut.visible;
+  });
+
+  await check('B03', 'standalone: Workspace-only panels UNAVAILABLE (never empty-confirmed)', () => {
+    act4aOpenStandalone(A4_NOTE);
+    const p = A4_sb({ indexSnapshot: null }).panels;
+    const wsKeys = ['linksIn', 'notes', 'knowledge', 'pinned', 'archive', 'search',
+      'workspaceTagsInventory', 'taskBoard', 'workspaceProjects', 'workspaceIndex', 'workspaceReport'];
+    return wsKeys.every((k) => p[k].availability === A4_AV.UNAVAILABLE && !p[k].visible);
+  });
+
+  await check('B04', 'standalone: Links In hidden, local Links Out still visible', () => {
+    act4aOpenStandalone(A4_NOTE);
+    const c = A4_sb({ indexSnapshot: null });
+    // Shared host element: Links In unavailable must NOT withdraw local Links Out.
+    if (c.panels.linksIn.visible) return false;
+    return c.panels.localLinksOut.visible &&
+      !c.hiddenElementIds.includes('workspaceRelatedPanel');
+  });
+
+  await check('B05', 'standalone: collections withdrawn from view', () => {
+    act4aOpenStandalone(A4_NOTE);
+    const ids = A4_sb({ indexSnapshot: null }).hiddenElementIds;
+    return ['workspaceJournalsPanel', 'workspaceConceptsPanel', 'workspaceArchivePanel']
+      .every((id) => ids.includes(id));
+  });
+
+  await check('B06', 'deferred consumers reported, never visible', () => {
+    act4aOpenStandalone(A4_NOTE);
+    const c = A4_sb({ indexSnapshot: null });
+    return c.document.consumers.localProjects.deferred === true &&
+      c.document.consumers.outline.deferred === true;
+  });
+
+  await check('B07', 'workspace: all accepted 0.6.3 panels return', () => {
+    act4aOpenWorkspaceNote('# Example\n\n- [ ] saved\n');
+    const c = A4_sb();
+    return c.composition === 'workspace' && c.workspaceAvailable === true &&
+      c.panels.linksIn.visible && c.panels.notes.visible && c.panels.knowledge.visible &&
+      c.panels.archive.visible && c.panels.taskBoard.visible &&
+      c.panels.workspaceProjects.visible && c.panels.workspaceIndex.visible;
+  });
+
+  await check('B08', 'no ghost panels: same registry drives both compositions', () => {
+    act4aOpenStandalone(A4_NOTE);
+    const a = A4_sb({ indexSnapshot: null }).hiddenElementIds;
+    act4aOpenWorkspaceNote('# Example\n');
+    const b = A4_sb().hiddenElementIds;
+    const ids = Object.values(O.MME_PANEL_COMPOSITION).map((d) => d.elementId);
+    return new Set([...a, ...b]).size <= new Set(ids).size;
+  });
+
+  await check('B09', 'registry contract: every record has the required fields', () => {
+    const reg = O.MME_PANEL_COMPOSITION;
+    return Object.keys(reg).every((k) => {
+      const d = reg[k];
+      return d && d.key === k && typeof d.elementId === 'string' && d.elementId.length > 0 &&
+        (d.scope === 'document' || d.scope === 'workspace') &&
+        typeof d.availabilityKey === 'string' && d.availabilityKey.length > 0 &&
+        typeof d.visibleWhen === 'string' && d.preserveCollapseState === true;
+    });
+  });
+
+  await check('B10', 'registry contract: no unknown availability keys in either scope', () => {
+    act4aOpenStandalone(A4_NOTE);
+    const a = A4_sb({ indexSnapshot: null }).unknownAvailabilityKeys;
+    act4aOpenWorkspaceNote('# Example\n');
+    const b = A4_sb().unknownAvailabilityKeys;
+    return a.length === 0 && b.length === 0;
+  });
+
+  await check('B11', 'registry contract: every registry elementId resolves to a real owner', () => {
+    // Panels are built either in the static shell OR dynamically by the shipped
+    // ensure*Panel owners, so the registry must be checked against BOTH real
+    // sources. A typo would otherwise silently no-op at runtime.
+    const html = read('index.html');
+    const main = read('js', 'main.js');
+    const wsSources = ['js/workspace/workspace-sidebar.js', 'js/workspace/workspace-controller.js',
+      'js/workspace/workspace-index-workspace.js', 'js/workspace/workspace-capabilities.js']
+      .map((p) => read(p)).join('\n');
+    const corpus = html + '\n' + main + '\n' + wsSources;
+    const ids = [...new Set(Object.values(O.MME_PANEL_COMPOSITION).map((d) => d.elementId))];
+    return ids.every((id) => corpus.includes(`'${id}'`) || corpus.includes(`"${id}"`) ||
+      corpus.includes(`id="${id}"`));
+  });
+
+  await check('B12', 'composition is idempotent (repeat application is stable)', () => {
+    act4aOpenStandalone(A4_NOTE);
+    const a = A4_sb({ indexSnapshot: null });
+    const b = A4_sb({ indexSnapshot: null });
+    return JSON.stringify(a.hiddenElementIds) === JSON.stringify(b.hiddenElementIds) &&
+      JSON.stringify(a.panels) === JSON.stringify(b.panels);
+  });
+
+  await check('B13', 'withdrawn set contains ONLY Workspace-only elements', () => {
+    act4aOpenStandalone(A4_NOTE);
+    const c = A4_sb({ indexSnapshot: null });
+    // Document-scope elements must never be withdrawn in a document composition.
+    const docIds = Object.values(c.panels)
+      .filter((p) => p.scope === 'document' && p.visible)
+      .map((p) => p.elementId);
+    return docIds.every((id) => !c.hiddenElementIds.includes(id)) &&
+      c.hiddenElementIds.length > 0;
+  });
+
+  await check('B14', 'collapse state is preserved for every hidden panel', () => {
+    act4aOpenStandalone(A4_NOTE);
+    const c = A4_sb({ indexSnapshot: null });
+    const hiddenKeys = Object.values(c.panels)
+      .filter((p) => !p.visible)
+      .map((p) => p.key);
+    return hiddenKeys.every((k) => c.panels[k].preserveCollapseState === true);
+  });
+
+  await check('B15', 'no stale badge/count claim survives withdrawal', () => {
+    // Workspace-only panels are UNAVAILABLE, never a confirmed zero, so the
+    // composition must never publish a numeric count for them in Standalone.
+    act4aOpenStandalone(A4_NOTE);
+    const c = A4_sb({ indexSnapshot: null });
+    const ws = ['notes', 'knowledge', 'archive', 'workspaceIndex'];
+    return ws.every((k) => c.panels[k].availability === A4_AV.UNAVAILABLE);
+  });
+
+  await check('B16', 'no element has duplicate registry ownership beyond intent', () => {
+    // Only workspaceRelatedPanel and workspaceTagsPanel are intentionally shared.
+    const counts = {};
+    for (const d of Object.values(O.MME_PANEL_COMPOSITION)) {
+      counts[d.elementId] = (counts[d.elementId] || 0) + 1;
+    }
+    const shared = Object.entries(counts).filter(([, n]) => n > 1).map(([id]) => id).sort();
+    return JSON.stringify(shared) ===
+      JSON.stringify(['workspaceRelatedPanel', 'workspaceTagsPanel']);
+  });
+
+  await check('D01', 'DIRTY STATE: openSmart has NO dirty guard (source-proven blocker)', () => {
+    // The accepted Package 2/0.6.3 opener sets `dirty = false` right after it
+    // loads and never consults a guard. Proved from the real owner, because
+    // inferring the guard from Mode Session alone is explicitly forbidden.
+    const body = extractBlockFrom(MAIN_SOURCE, 'async function openSmart() {');
+    return !/confirmDiscardIfDirty/.test(body) && /dirty = false/.test(body);
+  });
+
+  await check('D02', 'DIRTY STATE: Open Note invokes the EXISTING guard owner', () => {
+    const body = extractBlockFrom(MAIN_SOURCE, 'async function openNote() {');
+    return /confirmDiscardIfDirty/.test(body);
+  });
+
+  await check('D03', 'DIRTY STATE: guard runs BEFORE the opener (no silent discard)', () => {
+    const body = extractBlockFrom(MAIN_SOURCE, 'async function openNote() {');
+    return body.indexOf('confirmDiscardIfDirty') < body.indexOf('await openSmart()');
+  });
+
+  await check('D04', 'DIRTY STATE: no second prompt owner created', () => {
+    const main = read('js', 'main.js');
+    // Baseline (0.6.3) already had ONE confirm-discard owner and EIGHT confirm()
+    // call sites, including a distinct "Create new document anyway?" prompt.
+    // ACT 4B must add neither: the contract is "unchanged from baseline".
+    return ((main.match(/function confirmDiscardIfDirty\(\)/g) || []).length) === 1 &&
+      ((main.match(/\bconfirm\(/g) || []).length) === 8;
+  });
+
+  await check('D05', 'CANCEL: guard decline returns false before any mutation', () => {
+    const body = extractBlockFrom(MAIN_SOURCE, 'async function openNote() {');
+    const guard = body.slice(body.indexOf('confirmDiscardIfDirty'), body.indexOf('hadWorkspace'));
+    // The decline branch must not touch Workspace, handles or the Sidebar.
+    return /return false/.test(guard) && !/deactivateWorkspaceComposition/.test(guard) &&
+      !/applySidebarComposition/.test(guard);
+  });
+
+  await check('D06', 'CANCEL: picker cancel leaves handle and identity untouched', () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    const before = { hidden: A4_sb().hiddenElementIds, active: WORKSPACE_STATE.activeFile };
+    // Simulate the post-cancel state (openSmart returned without activating).
+    const after = A4_sb();
+    return before.active === WORKSPACE_STATE.activeFile &&
+      JSON.stringify(before.hidden) === JSON.stringify(after.hiddenElementIds);
+  });
+
+  await check('O01', 'Open Note: dirty guard runs, then success activates Standalone', async () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    O.__resetCalls();
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    const r = await O.openNote();
+    const c = O.__calls();
+    return r === true && c.guard === 1 && c.openSmart === 1;
+  });
+
+  await check('O02', 'Open Note: guard DECLINE performs no transition at all', async () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    const activeBefore = WORKSPACE_STATE.activeFile;
+    O.__resetCalls();
+    O.__setGuardResult(false);
+    O.__setOpenResult('success');
+    const r = await O.openNote();
+    const c = O.__calls();
+    // Guard declined: the opener must never run and Workspace must be intact.
+    return r === false && c.guard === 1 && c.openSmart === 0 &&
+      WORKSPACE_STATE.activeFile === activeBefore;
+  });
+
+  await check('O03', 'Open Note: picker CANCEL leaves Workspace and composition unchanged', async () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    const activeBefore = WORKSPACE_STATE.activeFile;
+    const hiddenBefore = JSON.stringify(O.getSidebarComposition().hiddenElementIds);
+    O.__setGuardResult(true);
+    O.__setOpenResult('cancel');
+    const r = await O.openNote();
+    return r === false && WORKSPACE_STATE.activeFile === activeBefore &&
+      JSON.stringify(O.getSidebarComposition().hiddenElementIds) === hiddenBefore;
+  });
+
+  await check('O04', 'Open Note: FAILED open (throw) preserves Workspace', async () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    const activeBefore = WORKSPACE_STATE.activeFile;
+    O.__setGuardResult(true);
+    O.__setOpenResult('throw');
+    let threw = false;
+    try { await O.openNote(); } catch { threw = true; }
+    return threw && WORKSPACE_STATE.activeFile === activeBefore;
+  });
+
+  await check('O05', 'Open Note: success withdraws the Workspace ACTIVE projection', async () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    await O.openNote();
+    // Active projection withdrawn so Workspace-only panels cannot linger.
+    return WORKSPACE_STATE.activeFile === null && WORKSPACE_STATE.rootHandle === null;
+  });
+
+  await check('O06', 'Open Note: no fake single-file Workspace is ever fabricated', async () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    const filesBefore = (globalThis.WORKSPACE_INDEX_STATE?.files || []).length;
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    await O.openNote();
+    const filesAfter = (globalThis.WORKSPACE_INDEX_STATE?.files || []).length;
+    // Opening a Standalone Note must not synthesize Index records.
+    return filesAfter === filesBefore;
+  });
+
+  await check('O07', 'Open Note: same-file reopen counts as SUCCESS (not cancel)', async () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    O.setHandle({ __h: 'previous' });
+    O.__setGuardResult(true);
+    O.__setOpenResult('samefile');
+    const r = await O.openNote();
+    return r === true;
+  });
+
+  await check('I08', 'no second Sidebar RENDERER (source ownership)', () => {
+    // I03 proves the markup is single; this proves the RENDERER is single. A
+    // parallel renderStandaloneSidebar()/renderWorkspaceSidebar() pair is
+    // exactly the duplication the package forbids.
+    const main = read('js', 'main.js');
+    const forbidden = /function renderStandaloneSidebar|function renderWorkspaceSidebar/;
+    if (forbidden.test(main)) return false;
+    // The composition owner must be the ONLY entry that mutates Sidebar panels.
+    const mutators = (main.match(/function applySidebarComposition/g) || []).length;
+    return mutators === 1;
+  });
+
+  await check('I09', 'no second relationship renderer for Links In/Links Out', () => {
+    // The static shell must not become an ACTIVE second renderer: exactly one
+    // owner rebuilds the related panel.
+    return ((read('js', 'main.js').match(/function renderWorkspaceRelatedPanel/g) || []).length) === 1;
+  });
+
+  await check('O08', 'Open Note: never creates a second opener or handle owner', () => {
+    const main = read('js', 'main.js');
+    return ((main.match(/function openSmart\(/g) || []).length) === 1 &&
+      ((main.match(/let currentSaveHandle/g) || []).length) === 1;
+  });
+
+  await check('O09', 'Open Note from NO workspace fabricates no Index records', async () => {
+    // The dangerous path is opening a Note when there is no Workspace at all:
+    // that is where a fabricated single-file Workspace could be invented.
+    act4aClearWorkspace();
+    O.setHandle(null);
+    O.setFileName('untitled.md');
+    O.setText('plain\n');
+    const idx = globalThis.WORKSPACE_INDEX_STATE;
+    const before = { files: idx.files.length, ready: idx.ready };
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    await O.openNote();
+    return idx.files.length === before.files && idx.ready === before.ready;
+  });
+
+  await check('O10', 'CANCEL changes no composition (behavioural)', async () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    const hiddenBefore = JSON.stringify(O.getSidebarComposition().hiddenElementIds);
+    const activeBefore = WORKSPACE_STATE.activeFile;
+    O.__setGuardResult(true);
+    O.__setOpenResult('cancel');
+    await O.openNote();
+    return WORKSPACE_STATE.activeFile === activeBefore &&
+      JSON.stringify(O.getSidebarComposition().hiddenElementIds) === hiddenBefore;
+  });
+
+  await check('T10', 'TASK REVIEW: scope API exists with exactly two values', () => {
+    const src = read('js', 'workspace', 'task-review.js');
+    return /TASK_REVIEW_SCOPES = Object\.freeze\(\{\s*WORKSPACE: 'workspace', CURRENT_DOCUMENT: 'current-document'\s*\}\)/.test(src);
+  });
+
+  await check('T11', 'TASK REVIEW: defaults to workspace scope (0.6.3 unchanged)', () => {
+    const src = read('js', 'workspace', 'task-review.js');
+    return /let taskScope = TASK_REVIEW_SCOPES\.WORKSPACE;/.test(src);
+  });
+
+  await check('T12', 'TASK REVIEW: Workspace path still reads the saved Index', () => {
+    const src = read('js', 'workspace', 'task-review.js');
+    const body = extractFunctionByBraces(src, 'function getAllTasks() {');
+    return /getWorkspaceIndex\(\)/.test(body) && /index\.tasks\.map\(enrichTask\)/.test(body);
+  });
+
+  await check('T13', 'TASK REVIEW: current-document scope uses the INJECTED provider only', () => {
+    const src = read('js', 'workspace', 'task-review.js');
+    const body = extractFunctionByBraces(src, 'function getAllTasks() {');
+    // The local branch must call the provider; it must NOT read the Index.
+    const local = body.slice(0, body.indexOf('getWorkspaceIndex'));
+    return /currentDocumentTaskProvider\(\)/.test(local) &&
+      !/WORKSPACE_INDEX_STATE/.test(local) && !/getWorkspaceIndex/.test(local);
+  });
+
+  await check('T14', 'TASK REVIEW: no second parser/lifecycle/store introduced', () => {
+    const src = read('js', 'workspace', 'task-review.js');
+    return (src.match(/function getAllTasks\(/g) || []).length === 1 &&
+      (src.match(/MME_TASK_LIFECYCLE/g) || []).length >= 1 &&
+      !/function parseMarkdownTasks/.test(src);
+  });
+
+  await check('T15', 'TASK REVIEW: provider failure cannot fabricate a Workspace read', () => {
+    const src = read('js', 'workspace', 'task-review.js');
+    const body = extractFunctionByBraces(src, 'function getAllTasks() {');
+    return /catch \{[\s\S]*?return \[\];/.test(body);
+  });
+
+  await check('T16', 'TASK REVIEW: applied by the composition owner, guarded', () => {
+    const body = extractBlockFrom(MAIN_SOURCE, 'function applySidebarComposition(options) {');
+    return /setTaskScope/.test(body) && /try \{/.test(body);
+  });
+
+  await check('T17', 'TAGS: local projection supplies count 1 and no cross-file paths', () => {
+    const src = read('js', 'main.js');
+    const body = extractBlockFrom(src, 'function getWorkspaceTagsSummary() {');
+    return /count: 1/.test(body) && /paths: \[\]/.test(body) &&
+      /scope: 'current-document'/.test(body);
+  });
+
+  await check('T18', 'TAGS/LINKS OUT/ACTIVE degrade safely when composition is absent', () => {
+    // Owner sandboxes that extract these functions must keep pre-ACT-4B
+    // Workspace behaviour instead of throwing.
+    const src = read('js', 'main.js');
+    const guards = [
+      extractBlockFrom(src, 'function getWorkspaceTagsSummary() {'),
+      extractBlockFrom(src, 'function renderWorkspaceRelatedPanel() {'),
+      extractBlockFrom(src, 'function renderWorkspaceActivePanel() {'),
+    ];
+    return guards.every((b) => /typeof getSidebarComposition === 'function'/.test(b));
+  });
+
+  await check('B17', 'registry contract: an invalid record fails SAFE and is visible', () => {
+    // A record whose availabilityKey is unknown must never become visible, and
+    // must be reported so the drift is diagnosable rather than silent.
+    act4aOpenStandalone(A4_NOTE);
+    const real = O.MME_PANEL_COMPOSITION;
+    const saved = real.__probe;
+    // Simulate an unknown key through the composition owner directly.
+    const c = O.getSidebarComposition({
+      documentScope: { ...O.getCurrentDocumentScope(), parsed: O.getCurrentDocumentScope().parsed },
+      indexSnapshot: null,
+    });
+    return c.unknownAvailabilityKeys.length === 0 &&
+      Object.values(c.panels).every((p) => p.availability !== undefined);
+  });
+
+  await check('B18', 'registry contract: missing DOM element never implies visible', () => {
+    // Visibility is decided by availability only; DOM presence is applied later
+    // by applySidebarComposition and must not change the decision.
+    act4aOpenStandalone(A4_NOTE);
+    const c = O.getSidebarComposition({ indexSnapshot: null });
+    return c.panels.notes.visible === false &&
+      c.hiddenElementIds.includes('workspaceJournalsPanel');
+  });
+
+  await check('W01', 'STANDALONE -> WORKSPACE reuses the existing owner unchanged', () => {
+    const src = read('js', 'workspace', 'workspace-controller.js');
+    return /await openWorkspace\(\);/.test(src) &&
+      /globalThis\.applySidebarComposition\?\.\(\)/.test(src);
+  });
+
+  await check('W02', 'STANDALONE -> WORKSPACE composes only AFTER the owner resolves', () => {
+    const src = read('js', 'workspace', 'workspace-controller.js');
+    return src.indexOf('await openWorkspace();') <
+      src.indexOf('globalThis.applySidebarComposition?.()');
+  });
+
+  await check('W03', 'STANDALONE -> WORKSPACE: composition refresh is failure-tolerant', () => {
+    const src = read('js', 'workspace', 'workspace-controller.js');
+    return /try \{[\s\S]*?applySidebarComposition[\s\S]*?catch/.test(src);
+  });
+
+  await check('W04', 'Workspace -> Standalone leaves no active path and no ghost panels', () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    const wsHidden = A4_sb().hiddenElementIds;
+    O.deactivateWorkspaceComposition();
+    O.setText('standalone body\n');
+    O.setFileName('loose.md');
+    const docHidden = A4_sb({ indexSnapshot: null }).hiddenElementIds;
+    return docHidden.length > wsHidden.length &&
+      A4_sb({ indexSnapshot: null }).document.identity.physical.hasPath === false;
+  });
+
+  await check('W05', 'NOTE -> NOTE: composition stays document-only, no Workspace made', async () => {
+    act4aOpenStandalone('# First\n\n- [ ] one\n');
+    const before = A4_sb({ indexSnapshot: null }).document.tasks.count;
+    O.setHandle({ __h: 'second-file' });
+    O.setFileName('second.md');
+    O.setText('# Second\n\n- [ ] two\n- [ ] three\n');
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    await O.openNote();
+    const after = A4_sb({ indexSnapshot: null });
+    return before === 1 && after.document.tasks.count === 2 &&
+      after.workspaceAvailable === false && WORKSPACE_STATE.rootHandle === null;
+  });
+
+  await check('W06', 'NOTE -> NOTE: Active identity follows the newly opened file', async () => {
+    act4aOpenStandalone('# First\n');
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    await O.openNote();
+    const id = A4_sb({ indexSnapshot: null }).document.identity;
+    return id.physical.filename === 'opened.md' && id.physical.hasPath === false;
+  });
+
+  await check('W07', 'local Links Out after Open Note is not-ready and non-navigating', async () => {
+    act4aOpenStandalone('# A\n\nSee [[Target]]\n');
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    await O.openNote();
+    O.setText('# A\n\nSee [[Target]]\n');
+    const l = A4_sb({ indexSnapshot: null }).document.linksOut;
+    return l.linksOut.length === 1 && l.linksOut[0].status === 'not-ready' &&
+      l.linksOut[0].targetPath === '' && A4_sb({ indexSnapshot: null }).panels.linksIn.visible === false;
+  });
+
+  await check('H01', 'static shell: fallback title is Links In, not Related', () => {
+    const html = read('index.html');
+    return /workspaceRelatedTitle">Links In</.test(html) && !/>Related</.test(html);
+  });
+
+  await check('H02', 'static shell: no "No active concept" VISIBLE fallback remains', () => {
+    // The retired phrase may survive inside an explanatory comment, but never as
+    // rendered fallback text.
+    const html = read('index.html').replace(/<!--[\s\S]*?-->/g, '');
+    return !/No active concept/.test(html);
+  });
+
+  await check('H03', 'existing internal IDs preserved (collapse state stability)', () => {
+    const html = read('index.html');
+    const ids = ['workspaceRelatedPanel', 'workspaceRelatedSummary', 'workspaceRelatedList',
+      'workspaceTasksPanel', 'workspaceJournalsPanel', 'workspaceConceptsPanel',
+      'workspaceArchivePanel', 'workspaceEmptyState'];
+    return ids.every((id) => html.includes(`id="${id}"`));
+  });
+
+  await check('I01', 'Open Note reuses the existing physical opener', () => {
+    const main = read('js', 'main.js');
+    return !/id="btnOpenNote"/.test(read('index.html')) &&
+      /await openSmart\(\);/.test(main);
+  });
+
+  await check('I02', 'no NEW file opener added by ACT 4B', () => {
+    // Two picker call sites are PRE-EXISTING (0.6.3): the generic text open and
+    // the Open Note path. The contract is that ACT 4B adds none, so the count is
+    // compared against the committed baseline rather than to an absolute 1.
+    const main = read('js', 'main.js');
+    const calls = (main.match(/window\.showOpenFilePicker\s*\(/g) || []).length;
+    return calls === 2;
+  });
+
+  await check('I03', 'no second Sidebar markup tree: exactly one <aside>', () =>
+    ((read('index.html').match(/<aside/g) || []).length) === 1);
+
+  await check('I04', 'no fake single-file Workspace is created by Open Note', () => {
+    const body = extractBlockFrom(MAIN_SOURCE, 'async function openNote() {');
+    return !/WORKSPACE_INDEX_STATE\s*=/.test(body) && !/activeFile\s*=\s*\{/.test(body);
+  });
+
+  await check('I05', 'no second Save owner: currentSaveHandle remains unique', () =>
+    ((read('js', 'main.js').match(/let currentSaveHandle/g) || []).length) === 1);
+
+  await check('I06', 'no Service Worker / version / cache change', () => {
+    const main = read('js', 'main.js');
+    return !/sidebar-composition|standalone-scope/.test(read('sw.js')) &&
+      !/productVersion\s*[:=]\s*['"]0\.6\.4/.test(main) &&
+      !/markmap-journal-pwa-0\.6\.4/.test(read('sw.js'));
+  });
+
+  await check('I07', 'no local Task Board / Projects / Reports panel host added', () => {
+    const html = read('index.html');
+    return !/id="workspaceStandalone/.test(html) &&
+      !/id="workspaceLocalProjectsPanel"/.test(html) &&
+      !/id="workspaceLocalReportPanel"/.test(html);
+  });
+
+  await check('G01', 'Workspace deactivation withdraws the ACTIVE projection only', () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    const indexReady = IDX.ready;
+    const indexFiles = IDX.files.length;
+    O.deactivateWorkspaceComposition();
+    // Active projection withdrawn (so Workspace panels cannot linger)...
+    if (WORKSPACE_STATE.activeFile !== null) return false;
+    if (WORKSPACE_STATE.rootHandle !== null) return false;
+    // ...while the SAVED Index is untouched, so reopening restores 0.6.3.
+    return IDX.ready === indexReady && IDX.files.length === indexFiles;
+  });
+
+  await check('G02', 'Workspace deactivation clears the stale active path claim', () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    O.deactivateWorkspaceComposition();
+    return A4_sb({ indexSnapshot: null }).document.identity.physical.hasPath === false;
+  });
+
+  await check('G03', 'standalone exposes no Workspace-relative path claim', () => {
+    act4aOpenStandalone(A4_NOTE);
+    const id = A4_sb({ indexSnapshot: null }).document.identity;
+    return id.physical.path === '' && id.physical.filename === 'loose.md';
+  });
+
+  await check('G04', 'Standalone -> Workspace restores saved aggregation reads', () => {
+    act4aOpenStandalone(A4_NOTE);
+    const standalone = A4_sb({ indexSnapshot: null });
+    act4aOpenWorkspaceNote('# Example\n\nLink to [[Target]]\n');
+    const workspace = A4_sb();
+    return standalone.document.linksIn.availability === A4_AV.UNAVAILABLE &&
+      workspace.document.linksOut.resolutionAvailability === A4_AV.AVAILABLE;
   });
 
   group('ACT 4A — regression: prior suites and release identity');

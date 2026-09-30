@@ -181,10 +181,16 @@
 
         <div id="workspaceRelatedPanel" hidden>
           <div class="workspaceRelatedHeader">
-            <span class="workspaceRelatedTitle">Related</span>
+            <!-- ACT 4B — static fallback terminology aligned with the current
+                 accepted owner. This panel is rendered at runtime as LINKS IN
+                 (Package 3); the former static "Related" / "No active concept"
+                 labels are retired so a shell-only load cannot display a
+                 superseded term or claim a concept that may not exist.
+                 Internal IDs are preserved for collapse-state stability. -->
+            <span class="workspaceRelatedTitle">Links In</span>
           </div>
 
-          <div id="workspaceRelatedSummary" class="workspaceRelatedSummary">No active concept</div>
+          <div id="workspaceRelatedSummary" class="workspaceRelatedSummary">No active note</div>
 
           <div id="workspaceRelatedList" class="workspaceRelatedList"></div>
         </div>

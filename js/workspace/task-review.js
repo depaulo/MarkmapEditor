@@ -171,7 +171,48 @@
     return effective === status;
   }
 
+  // ---- ACT 4B: explicit Task Review scope ----
+  //
+  // Task Review has ONE renderer and ONE record shape. It simply needs to be
+  // told WHICH scope supplies its records:
+  //   'workspace'        -> the saved WORKSPACE_INDEX_STATE (accepted 0.6.3)
+  //   'current-document' -> the ACT 4A live Current Document Task projection
+  //
+  // The provider is INJECTED, never re-derived here, so this module keeps no
+  // second Task parser, no second lifecycle owner and no second store. Package 2
+  // status/priority semantics and the filters are untouched.
+  const TASK_REVIEW_SCOPES = Object.freeze({ WORKSPACE: 'workspace', CURRENT_DOCUMENT: 'current-document' });
+
+  let taskScope = TASK_REVIEW_SCOPES.WORKSPACE;
+  let currentDocumentTaskProvider = null;
+
+  function setTaskScope(scope, provider) {
+    taskScope = scope === TASK_REVIEW_SCOPES.CURRENT_DOCUMENT
+      ? TASK_REVIEW_SCOPES.CURRENT_DOCUMENT
+      : TASK_REVIEW_SCOPES.WORKSPACE;
+    currentDocumentTaskProvider = typeof provider === 'function' ? provider : null;
+    return taskScope;
+  }
+
+  function getTaskScope() {
+    return taskScope;
+  }
+
   function getAllTasks() {
+    // Current-document scope: live records supplied by the ACT 4A composition.
+    if (taskScope === TASK_REVIEW_SCOPES.CURRENT_DOCUMENT) {
+      if (!currentDocumentTaskProvider) return [];
+      let live = [];
+      try {
+        live = currentDocumentTaskProvider() || [];
+      } catch {
+        // A provider failure must never fabricate a confirmed-empty Workspace.
+        return [];
+      }
+      return (Array.isArray(live) ? live : []).map(enrichTask);
+    }
+
+    // Accepted 0.6.3 Workspace behaviour, unchanged.
     const index = getWorkspaceIndex();
     if (!index || !index.ready || !index.tasks) return [];
     return index.tasks.map(enrichTask);
@@ -1358,7 +1399,7 @@
 
   function refresh() {
     const index = getWorkspaceIndex();
-    safeLog(`TaskReview: refresh indexReady=${Boolean(index?.ready)} tasks=${index?.tasks?.length || 0}`);
+    safeLog(`TaskReview: refresh scope=${taskScope} indexReady=${Boolean(index?.ready)} tasks=${index?.tasks?.length || 0}`);
     wire();
     renderPanel();
   }
@@ -1461,6 +1502,10 @@
     applyTaskFilters,
     getFilteredTasks,
     getAllTasks,
+    // ---- ACT 4B scope control (one renderer, two inputs) ----
+    TASK_REVIEW_SCOPES,
+    setTaskScope,
+    getTaskScope,
     getOpenTasks,
     getCompletedTasks,
     openTaskSource,

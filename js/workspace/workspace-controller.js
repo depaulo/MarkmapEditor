@@ -1695,7 +1695,19 @@ function initWorkspace() {
   initJournalSidebarCollapse();
 
   createWorkspaceActions({
-    onOpenWorkspace: openWorkspace,
+    onOpenWorkspace: async () => {
+      // ACT 4B — reuse the EXISTING Workspace owner unchanged. It already
+      // preserves the current document, handle and Sidebar on cancel, on an
+      // invalid folder and on a declined initialization. Only AFTER it resolves
+      // is the shared Sidebar composition recomposed, so accepted Workspace
+      // panels return and Standalone results stop masquerading as aggregation.
+      await openWorkspace();
+      try {
+        globalThis.applySidebarComposition?.();
+      } catch (e) {
+        globalThis.MME_APP?.log?.(`Workspace: composition refresh skipped (${e?.message || e})`);
+      }
+    },
     onToday: openToday,
     onNewConcept: openNamedNoteModal,
   });
