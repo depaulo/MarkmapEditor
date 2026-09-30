@@ -275,6 +275,51 @@ a product defect.
 
 ---
 
+## 0.0.5 Release 0.6.3 — PUBLISHED RUNTIME ACCEPTANCE
+
+**RELEASE 0.6.3: PUBLISHED AND VERIFIED.** Documentation-only closure; no
+runtime, version, cache, Help or Release Notes content was changed.
+
+Verified by the repository owner on the PUBLISHED 0.6.3 build:
+
+- [x] application starts as 0.6.3
+- [x] productive Workspace opens safely
+- [x] Notes render
+- [x] Knowledge renders
+- [x] Archive renders
+- [x] Task Review operates
+- [x] Task Board operates
+- [x] Task Board priority selector is visible and functional
+- [x] Links In is visible
+- [x] canonical Wiki Link navigation opens the correct physical target
+- [x] missing and ambiguous targets do not navigate
+- [x] Search operates
+- [x] Tags operate
+- [x] Projects remain indexed
+- [x] Quick Report opens
+- [x] HTML Preview operates
+- [x] no blocking runtime exception was observed
+
+### Preserved as NOT EXERCISED (no controlled 0.6.2 profile was available)
+
+- [ ] the full 0.6.2 -> 0.6.3 Update Ready transition
+- [ ] Defer against an actual 0.6.2-controlled worker
+- [ ] Accept / controllerchange from an actual 0.6.2-controlled worker
+- [ ] automatic one-time 0.6.3 Release Notes following that exact upgrade path
+
+**The update mechanism remains statically validated** through the existing
+suites on every commit: `scripts/update-ready-validators.cjs` (93/0) proves the
+message-gated worker handshake, that `skipWaiting()` is never called
+unconditionally, and that Defer/Accept are supported; `scripts/release-notes-validators.cjs`
+(68/0) proves the 0.6.3 entry is newest, prior entries are retained, and the
+once-only display state is derived from `MME_RELEASE.productVersion`. The same
+mechanism was exercised live on the earlier 0.6.1 -> 0.6.2 boundary. The gap is
+the absence of a genuine 0.6.2-controlled profile, not an untested code path.
+
+No other Package 3 scenario was converted to PASS.
+
+---
+
 ## 0.0.4 Package 3 device acceptance — ACCEPTED
 
 **Package 3 is DEVICE-ACCEPTED and CLOSED.** Release boundary 0.6.3 prepared.
@@ -340,11 +385,12 @@ run did not directly exercise are recorded as **NOT EXERCISED** rather than PASS
 | Final Active / Workspace Index cards | **NOT APPLICABLE** — intentionally deferred to Package 10 |
 | Help / Release Notes for the future visual package | **NOT APPLICABLE** — deferred to Package 3 closure documentation, written as planned-not-present |
 
-**Device checkpoint not exercised:** the 0.6.2 -> 0.6.3 PWA update transition
-(detect, Defer, Accept, controllerchange, once-only Release Notes) is marked
-**NOT EXERCISED** — a genuine 0.6.2-controlled profile was not available. The
-0.6.3 controller and once-only Release Notes behavior are proven statically by
-`update-ready-validators.cjs` (93/0) and `release-notes-validators.cjs` (68/0).
+**Device checkpoint not exercised (integrated run):** the 0.6.2 -> 0.6.3 PWA
+update transition is **NOT EXERCISED** — a genuine 0.6.2-controlled profile was
+not available. See §0.0.5 for the published runtime acceptance and the preserved
+scope of this gap. The 0.6.3 controller and once-only Release Notes behavior are
+proven statically by `update-ready-validators.cjs` (93/0) and
+`release-notes-validators.cjs` (68/0).
 
 ---
 

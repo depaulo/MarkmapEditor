@@ -189,11 +189,40 @@
 `bcb6972`; `main` was intentionally promoted by the repository owner to support
 intermediate device testing. No coder action or remediation is required.
 
-**Not started, and not authorized by any document here:** Package 3 ACT 3B/3C
-execution, Wiki Link relationship UI, Active or Workspace Index link
-disclosures, candidate-selection UI, Rename File, automatic Wiki Link
-rewriting, Graph View, Mermaid, Standalone Notes, Projects, Reports, Draw.io,
-pane-layout changes.
+## Release status
+
+- **Release 0.6.3 — Tasks and Wiki Links Foundation: PUBLISHED AND VERIFIED.**
+  Promoted to `main` by clean fast-forward and runtime-verified on the published
+  build. Documentation-only closure record: `VERIFY.md` §0.0.5.
+- **Package 2 (Task Stabilization): CLOSED.**
+- **Package 3 (Wiki Links Stabilization): CLOSED.**
+- **Package 4: NEXT, NOT STARTED.** It owns Standalone Notes and scope
+  composition. The Active relationship cards are NOT moved into it.
+- **Package 9.5**: Architecture Hygiene Gate remains planned.
+- **Package 10**: owns the final shared summary-card integration, including the
+  Active and Workspace Index relationship cards.
+
+### Preserved known limitations
+
+- Saved repeated-link occurrences remain **de-duplicated**: the saved record
+  stores one entry per distinct target, so occurrence counts read 1 from Workspace
+  data. Occurrence data survives only in the live Current Document path.
+- Final **Active** and **Workspace Index** relationship cards remain **Package 10**.
+  The Sidebar **Links In** panel is the accepted specialized relationship surface.
+- The **development cache workflow** remains separately tracked: the Service
+  Worker serves local assets cache-first with no revalidation, so an uncommitted
+  build is invisible to a device. Unchanged in this release.
+- The **preexisting `fix-escape-simple.js` syntax failure** remains unrelated and
+  unmodified.
+- The **full 0.6.2 -> 0.6.3 Update Ready transition was not exercised** — no
+  controlled 0.6.2 profile was available. The update mechanism remains statically
+  validated on every commit (`update-ready-validators.cjs` 93/0,
+  `release-notes-validators.cjs` 68/0).
+
+**Not started, and not authorized by any document here:** Package 4, Active or
+Workspace Index link disclosures, candidate-selection UI, Rename File, automatic
+Wiki Link rewriting, Graph View, Mermaid, Standalone Notes, Projects, Reports,
+Draw.io, pane-layout changes.
 
 **Explicitly NOT delivered by Package 2:** no Board redesign, no automatic
 priority sorting, no Active or Workspace Index cards, no version or cache change,
