@@ -495,6 +495,74 @@ full regression)*
 
 ---
 
+## 0.0.7 Package 4 — ACT 4A static acceptance (ACCEPTED)
+
+**Status: STATICALLY ACCEPTED.** No browser checkpoint was executed and none was
+required, because ACT 4A introduced **no visible behaviour change**: no Open Note
+UI, no Sidebar composition, no Task UI, no Wiki Link UI.
+
+Contract source: `docs/architecture/MarkmapEditor_1.0_PACKAGE_4_STANDALONE_SCOPE_PLAN.md`.
+Runtime: `js/main.js` (composition owners, beside the existing scope owners).
+Focused suite: `scripts/scope-contract-validators.cjs` — **55 passed, 0 failed**.
+
+### Vocabulary
+
+- [x] `MME_SCOPE_IDS` contains exactly two values: `current-document`, `workspace`
+- [x] Standalone is `current-document` + `workspaceAvailable=false` (no third scope)
+- [x] `MME_AVAILABILITY` contains exactly four values: `available`, `unavailable`,
+      `not-ready`, `error`
+- [x] `unavailable` is never represented as an empty array or numeric zero alone
+
+### Preserved owners
+
+- [x] `getCurrentDocumentScope()` remains the Current Document owner
+- [x] `getWorkspaceScope()` remains the Workspace aggregation owner
+- [x] `currentSaveHandle` remains the single physical file-handle owner
+- [x] no second snapshot store, parser, Index, Task store or Link store
+- [x] composition records reuse existing owners **by reference** (identity asserted)
+- [x] the physical file handle is never copied or persisted into the scope record
+
+### Projections
+
+- [x] local Tags reflect the live buffer, with no Workspace inventory
+- [x] local Tasks reuse Package 2 normalized records; no Workspace Index required
+- [x] local Links Out reuse the Package 3 Wiki Link grammar
+- [x] Links Out without a Workspace resolves `not-ready`, never `missing`
+- [x] Links In without a Workspace is `unavailable` with `count: null`
+- [x] composition is deterministic and does not mutate the buffer, the dirty flag,
+      the supplied Index, or any file
+
+### Task source identity (source-proven)
+
+- [x] Task records carry exact physical source identity, one-based `line`, `raw`
+- [x] no `occurrence` field was added to Task records
+- [x] two same-text Tasks remain separate records with different lines (no merge)
+- [x] no stable UUID/identity is introduced
+- [x] Package 2 identity semantics unchanged
+
+### Scope boundary
+
+- [x] no Sidebar markup or panel-state change
+- [x] no Workspace activation, app-context change or Workspace Index mutation
+- [x] no DOM access, file read or Save inside the pure composition owners
+- [x] no version, Service Worker or cache identity change
+- [x] `sw.js`, `index.html`, Help and Release Notes unchanged
+
+### Mutation controls (all bite)
+
+M1 live-source · M2 H1-as-identity · M3 tags-from-Index · M4 tasks-from-Index ·
+M5 not-ready-to-missing · M6 unavailable-to-available-zero · M7 Index-mutation ·
+M8 second-Task-parser · M9 fake-Workspace · M10 Sidebar-touch. Each mutation was
+applied to the real `js/main.js`, executed against the real shipped owners, and
+restored; every one produced failing fixtures.
+
+### Not in ACT 4A
+
+Open Note UI, Sidebar composition, Workspace ↔ Standalone transition UI, final
+Task/Tags/Links panels, and the release boundary remain **ACT 4B+**.
+
+---
+
 ## 0.0.6 Package 4 — Standalone Notes and Scope Composition (FUTURE)
 
 **Status: FUTURE STRUCTURE ONLY. Package 4 runtime is NOT started.**
