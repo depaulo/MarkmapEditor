@@ -1493,6 +1493,429 @@ function logDocumentScopes() {
   return { current, workspace };
 }
 
+// ===================================================================
+// ACT 4A — SHARED SCOPE CONTRACT AND CURRENT DOCUMENT COMPOSITION
+//
+// ONE scope vocabulary and ONE availability vocabulary, composed as a PURE
+// projection over the owners that already exist:
+//   - getCurrentDocumentScope()  (live buffer + shared parser, ACT 3)
+//   - getWorkspaceScope()        (saved WORKSPACE_INDEX_STATE, ACT 3)
+//   - MME_TASK_LIFECYCLE         (Package 2 normalized Task contract)
+//   - MME_WIKI_LINKS             (Package 3 relationship providers)
+//
+// ACT 4A adds NO second store, NO second parser, NO second Index, NO second
+// Task store, NO second Wiki Link store and NO second file opener. It performs
+// no Save, requests no permission, and mutates neither the editor, the dirty
+// flag, nor the saved Index.
+// ===================================================================
+
+// Exactly TWO scopes. "Standalone" is NOT a third pseudo-scope: it is
+// current-document scope with workspaceAvailable === false.
+const MME_SCOPE_IDS = Object.freeze({
+  CURRENT_DOCUMENT: 'current-document',
+  WORKSPACE: 'workspace',
+});
+
+// Explicit availability. `unavailable` is NEVER encoded as an empty array or a
+// numeric zero alone, so a consumer can always tell "no Workspace" apart from
+// "no records".
+const MME_AVAILABILITY = Object.freeze({
+  AVAILABLE: 'available',
+  UNAVAILABLE: 'unavailable',
+  NOT_READY: 'not-ready',
+  ERROR: 'error',
+});
+
+// The saved Index is supplied BY THE CALLER. Reading it through this helper
+// keeps composition pure and makes the live/saved boundary explicit: a missing
+// snapshot is NOT-READY, never silently empty.
+function resolveSavedIndexSnapshot(indexSnapshot) {
+  if (indexSnapshot && typeof indexSnapshot === 'object') {
+    return {
+      status: MME_AVAILABILITY.AVAILABLE,
+      index: indexSnapshot,
+      reason: 'saved-index-provided',
+    };
+  }
+  return {
+    status: MME_AVAILABILITY.NOT_READY,
+    index: null,
+    reason: 'no-saved-index',
+  };
+}
+
+// Workspace context for the Current Document: MEMBERSHIP and availability
+// only. It never fabricates a Workspace path for a document outside one.
+function getCurrentDocumentWorkspaceContext(documentScope) {
+  const s = documentScope || {};
+  const workspaceAvailable = Boolean(s.workspaceAvailable);
+  const belongsToWorkspace = Boolean(s.belongsToWorkspace);
+
+  let status;
+  if (!workspaceAvailable) status = MME_AVAILABILITY.UNAVAILABLE;
+  else if (belongsToWorkspace) status = MME_AVAILABILITY.AVAILABLE;
+  else status = MME_AVAILABILITY.NOT_READY;
+
+  return {
+    availability: status,
+    workspaceAvailable: workspaceAvailable,
+    belongsToWorkspace: belongsToWorkspace,
+    // Only ever the PROVEN path. A standalone document keeps the neutral
+    // fallback path and can never be presented as a Workspace member.
+    path: belongsToWorkspace ? String(s.workspacePath || '') : '',
+    reason: String(s.membershipReason || 'unknown'),
+  };
+}
+
+// Identity is split on purpose. VISUAL identity is display-only. PHYSICAL
+// identity is the physical file. MEMBERSHIP is the handle-PROVEN Workspace
+// fact. The H1 is NEVER used as physical identity, and no synthetic Workspace
+// path is invented for a document outside one.
+function getCurrentDocumentIdentity(documentScope) {
+  const s = documentScope || {};
+  const parsed = s.parsed || null;
+  const workspaceContext = getCurrentDocumentWorkspaceContext(s);
+  const filename = String(s.physicalName || CURRENT_DOCUMENT_FALLBACK_NAME);
+  const visualTitle = String((parsed && parsed.title) || '');
+
+  let membershipAvailability = MME_AVAILABILITY.AVAILABLE;
+  if (!workspaceContext.workspaceAvailable) {
+    membershipAvailability = MME_AVAILABILITY.UNAVAILABLE;
+  } else if (!workspaceContext.belongsToWorkspace) {
+    membershipAvailability = MME_AVAILABILITY.NOT_READY;
+  }
+
+  return {
+    scope: MME_SCOPE_IDS.CURRENT_DOCUMENT,
+
+    // VISUAL — display only.
+    visual: {
+      title: visualTitle,
+      displayTitle: visualTitle || filename,
+    },
+
+    // PHYSICAL — the file itself. The handle stays owned by its runtime owner
+    // and is deliberately NOT copied in here.
+    physical: {
+      filename: filename,
+      // Only ever a PROVEN Workspace-relative path; empty otherwise. A browser
+      // that supplies only a handle needs no persistent path, so none is
+      // required or fabricated.
+      path: workspaceContext.path,
+      hasPath: Boolean(workspaceContext.path),
+    },
+
+    // MEMBERSHIP — proven, never assumed.
+    membership: {
+      belongsToWorkspace: workspaceContext.belongsToWorkspace,
+      availability: membershipAvailability,
+      reason: workspaceContext.reason,
+    },
+
+    sourceKind: {
+      documentCategory: String(s.documentCategory || 'document'),
+      isReport: Boolean(s.isReport),
+    },
+  };
+}
+
+// LOCAL TAGS projection, composed from the SHARED parser output already
+// carried by the Current Document scope. There is no second tag parser and no
+// second normalizer. No Workspace inventory, no cross-file counts.
+function getCurrentDocumentTagsProjection(documentScope) {
+  const s = documentScope || {};
+  const parsed = s.parsed || null;
+
+  // A failed parse is an ERROR, never a confirmed empty document.
+  if (!parsed) {
+    return {
+      scope: MME_SCOPE_IDS.CURRENT_DOCUMENT,
+      availability: MME_AVAILABILITY.ERROR,
+      reason: String(s.parseError || 'no-parse-result'),
+      sourceFreshness: String(s.sourceFreshness || 'live'),
+      tags: [],
+      count: null,
+    };
+  }
+
+  const tags = Array.isArray(parsed.tags) ? parsed.tags : [];
+
+  return {
+    scope: MME_SCOPE_IDS.CURRENT_DOCUMENT,
+    availability: MME_AVAILABILITY.AVAILABLE,
+    reason: 'live-parse',
+    sourceFreshness: String(s.sourceFreshness || 'live'),
+    // Composed by reference, never cloned into a second store.
+    tags: tags,
+    count: tags.length,
+  };
+}
+
+// LOCAL TASKS projection. The records are the SAME normalized records the
+// shared parser already produced through MME_TASK_LIFECYCLE (Package 2), so
+// effectiveStatus, canonical priority, line and occurrence are the shared
+// contract. No second Task store, no second lifecycle, no Board UI, and no
+// lifecycle mutation happens while projecting.
+function getCurrentDocumentTasksProjection(documentScope) {
+  const s = documentScope || {};
+  const parsed = s.parsed || null;
+  const workspaceContext = getCurrentDocumentWorkspaceContext(s);
+  const filename = String(s.physicalName || CURRENT_DOCUMENT_FALLBACK_NAME);
+
+  if (!parsed) {
+    return {
+      scope: MME_SCOPE_IDS.CURRENT_DOCUMENT,
+      availability: MME_AVAILABILITY.ERROR,
+      reason: String(s.parseError || 'no-parse-result'),
+      sourceFreshness: String(s.sourceFreshness || 'live'),
+      tasks: [],
+      count: null,
+    };
+  }
+
+  const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+
+  return {
+    scope: MME_SCOPE_IDS.CURRENT_DOCUMENT,
+    availability: MME_AVAILABILITY.AVAILABLE,
+    reason: 'live-parse',
+    sourceFreshness: String(s.sourceFreshness || 'live'),
+    // Source identity is the ACTIVE PHYSICAL DOCUMENT. It never depends on the
+    // Workspace Index.
+    source: {
+      filename: filename,
+      // A local Task outside a Workspace has no Workspace path, and needs none.
+      path: workspaceContext.path,
+      belongsToWorkspace: workspaceContext.belongsToWorkspace,
+    },
+    tasks: tasks,
+    count: tasks.length,
+  };
+}
+
+// LOCAL LINKS OUT projection, delegated to the Package 3 owner
+// (MME_WIKI_LINKS.getLinksOut). ACT 4A adds no Wiki Link grammar of its own.
+//
+// Without a saved Index the owner already returns 'not-ready' for every target.
+// That is NOT a fabricated 'missing', and it is not navigable.
+function getCurrentDocumentLinksOutProjection(documentScope, indexSnapshot) {
+  const s = documentScope || {};
+  const parsed = s.parsed || null;
+  const workspaceContext = getCurrentDocumentWorkspaceContext(s);
+  const saved = resolveSavedIndexSnapshot(indexSnapshot);
+  const links = globalThis.MME_WIKI_LINKS;
+
+  if (!parsed) {
+    return {
+      scope: MME_SCOPE_IDS.CURRENT_DOCUMENT,
+      availability: MME_AVAILABILITY.ERROR,
+      reason: String(s.parseError || 'no-parse-result'),
+      sourceFreshness: String(s.sourceFreshness || 'live'),
+      linksOut: [],
+      count: null,
+    };
+  }
+
+  // No Wiki Link owner loaded is NOT-READY, not an empty result.
+  if (!links || typeof links.getLinksOut !== 'function') {
+    return {
+      scope: MME_SCOPE_IDS.CURRENT_DOCUMENT,
+      availability: MME_AVAILABILITY.NOT_READY,
+      reason: 'wiki-link-provider-unavailable',
+      sourceFreshness: String(s.sourceFreshness || 'live'),
+      linksOut: [],
+      count: null,
+    };
+  }
+
+  const result = links.getLinksOut({
+    // The LIVE buffer is authoritative for the source text.
+    markdown: String(s.text || ''),
+    sourcePath: workspaceContext.path,
+    sourceTitle: String((parsed && parsed.title) || ''),
+    indexSnapshot: saved.index,
+  });
+
+  const relationships = Array.isArray(result && result.relationships) ? result.relationships : [];
+
+  return {
+    scope: MME_SCOPE_IDS.CURRENT_DOCUMENT,
+    // Extraction itself is available; RESOLUTION is what may be not-ready.
+    availability: MME_AVAILABILITY.AVAILABLE,
+    resolutionAvailability: saved.status,
+    reason: 'live-parse',
+    sourceFreshness: String(s.sourceFreshness || 'live'),
+    linksOut: relationships,
+    count: relationships.length,
+  };
+}
+
+// LINKS IN AVAILABILITY. Cross-file relationships are a saved-Workspace
+// concern, so without a Workspace the honest state is 'unavailable' and the
+// count is explicitly null — NEVER a confirmed zero. ACT 4A exposes
+// availability and data only; it adds no visible card.
+function getCurrentDocumentLinksInAvailability(documentScope, indexSnapshot) {
+  const s = documentScope || {};
+  const workspaceContext = getCurrentDocumentWorkspaceContext(s);
+  const saved = resolveSavedIndexSnapshot(indexSnapshot);
+  const links = globalThis.MME_WIKI_LINKS;
+
+  const base = {
+    scope: MME_SCOPE_IDS.CURRENT_DOCUMENT,
+    linksIn: [],
+    count: null,
+  };
+
+  // 1. No Workspace at all — unavailable, not zero.
+  if (!workspaceContext.workspaceAvailable) {
+    return Object.assign(base, {
+      availability: MME_AVAILABILITY.UNAVAILABLE,
+      reason: 'workspace-unavailable',
+    });
+  }
+
+  // 2. Workspace open, but this document's membership is not proven.
+  if (!workspaceContext.belongsToWorkspace) {
+    return Object.assign(base, {
+      availability: MME_AVAILABILITY.NOT_READY,
+      reason: workspaceContext.reason || 'membership-not-proven',
+    });
+  }
+
+  // 3. Membership proven, but the saved Index is not ready.
+  if (saved.status !== MME_AVAILABILITY.AVAILABLE) {
+    return Object.assign(base, {
+      availability: MME_AVAILABILITY.NOT_READY,
+      reason: saved.reason,
+    });
+  }
+
+  // 4. Package 3 owner absent.
+  if (!links || typeof links.getLinksIn !== 'function') {
+    return Object.assign(base, {
+      availability: MME_AVAILABILITY.NOT_READY,
+      reason: 'wiki-link-provider-unavailable',
+    });
+  }
+
+  // 5. Ready: canonical Links In from the SAVED Index.
+  const result = links.getLinksIn({
+    targetPath: workspaceContext.path,
+    indexSnapshot: saved.index,
+  });
+
+  const rows = Array.isArray(result && result.rows) ? result.rows : [];
+
+  return {
+    scope: MME_SCOPE_IDS.CURRENT_DOCUMENT,
+    availability: result && result.available
+      ? MME_AVAILABILITY.AVAILABLE
+      : MME_AVAILABILITY.NOT_READY,
+    reason: 'saved-index',
+    linksIn: rows,
+    // A count is claimed ONLY when a saved Index genuinely answered.
+    count: rows.length,
+  };
+}
+
+// CONSUMER AVAILABILITY MAP — the minimum contract ACT 4B needs to compose
+// panels WITHOUT repeating scope logic. This is DATA, not panel visibility:
+// ACT 4A renders nothing and hides nothing.
+//
+// The Workspace-requiring list is driven by ONE boolean (workspaceAvailable),
+// so a consumer can never disagree with the membership owner.
+function getCurrentDocumentConsumerAvailability(documentScope) {
+  const s = documentScope || {};
+  const workspaceContext = getCurrentDocumentWorkspaceContext(s);
+  const hasWorkspace = workspaceContext.workspaceAvailable;
+  const writable = Boolean(s.hasWritableHandle);
+
+  const available = (reason) => ({ availability: MME_AVAILABILITY.AVAILABLE, reason: reason });
+  const workspaceOnly = hasWorkspace
+    ? available('workspace-available')
+    : { availability: MME_AVAILABILITY.UNAVAILABLE, reason: 'workspace-unavailable' };
+  const deferred = (reason) => ({ availability: MME_AVAILABILITY.NOT_READY, reason: reason, deferred: true });
+
+  return {
+    // Document-scope consumers: work with or without a Workspace.
+    editor: available('current-document'),
+    markmap: available('current-document'),
+    htmlPreview: available('current-document'),
+    activeDocumentIdentity: available('current-document'),
+    localTags: available('current-document'),
+    localTasks: available('current-document'),
+    localLinksOut: available('current-document'),
+    logs: available('current-document'),
+    help: available('current-document'),
+    save: writable
+      ? available('writable-handle-present')
+      : { availability: MME_AVAILABILITY.UNAVAILABLE, reason: 'no-writable-handle' },
+    saveAs: available('always-available'),
+
+    // Cross-file consumers: UNAVAILABLE without a Workspace, never zero.
+    linksIn: workspaceOnly,
+    notes: workspaceOnly,
+    knowledge: workspaceOnly,
+    pinned: workspaceOnly,
+    archive: workspaceOnly,
+    search: workspaceOnly,
+    workspaceTagsInventory: workspaceOnly,
+    taskBoard: workspaceOnly,
+    workspaceProjects: workspaceOnly,
+    workspaceIndex: workspaceOnly,
+    workspaceReport: workspaceOnly,
+
+    // Deferred by accepted decision — NOT part of Package 4.
+    localProjects: deferred('deferred-to-packages-5-6'),
+    localTaskBoard: deferred('deferred-in-package-4'),
+    outline: deferred('deferred-in-package-4'),
+    documentMetrics: deferred('deferred-in-package-4'),
+    localReport: deferred('deferred-to-package-7'),
+  };
+}
+
+// THE COMPOSITION API — one call, pure, side-effect free.
+//
+// `documentScope` defaults to the live getCurrentDocumentScope() result, and
+// `indexSnapshot` to the SAVED Workspace Index. Passing a snapshot explicitly
+// is what lets a caller project the LIVE document against SAVED Workspace
+// relationships without conflating the two.
+//
+// It opens no file, performs no Save, mutates no editor content, no dirty flag
+// and no Index, and creates no persistent store. For identical inputs it
+// returns an identical result.
+function getCurrentDocumentComposition(options) {
+  const o = options || {};
+  const documentScope = o.documentScope || getCurrentDocumentScope();
+  const indexSnapshot =
+    typeof o.indexSnapshot !== 'undefined' ? o.indexSnapshot : WORKSPACE_INDEX_STATE;
+
+  return {
+    scope: MME_SCOPE_IDS.CURRENT_DOCUMENT,
+    // A failed live parse is an ERROR at the composition level too; it never
+    // becomes a confirmed-empty document.
+    availability: documentScope.parsed
+      ? MME_AVAILABILITY.AVAILABLE
+      : MME_AVAILABILITY.ERROR,
+    sourceFreshness: String(documentScope.sourceFreshness || 'live'),
+
+    document: {
+      text: String(documentScope.text || ''),
+      parseError: String(documentScope.parseError || ''),
+      dirty: Boolean(documentScope.dirty),
+    },
+
+    identity: getCurrentDocumentIdentity(documentScope),
+    tags: getCurrentDocumentTagsProjection(documentScope),
+    tasks: getCurrentDocumentTasksProjection(documentScope),
+    linksOut: getCurrentDocumentLinksOutProjection(documentScope, indexSnapshot),
+    linksIn: getCurrentDocumentLinksInAvailability(documentScope, indexSnapshot),
+
+    workspaceContext: getCurrentDocumentWorkspaceContext(documentScope),
+    consumers: getCurrentDocumentConsumerAvailability(documentScope),
+  };
+}
+
 try {
   window.getCurrentDocumentScope = getCurrentDocumentScope;
   window.getWorkspaceScope = getWorkspaceScope;
@@ -1500,6 +1923,21 @@ try {
   globalThis.getCurrentDocumentScope = getCurrentDocumentScope;
   globalThis.getWorkspaceScope = getWorkspaceScope;
   globalThis.logDocumentScopes = logDocumentScopes;
+
+  // ---- ACT 4A: shared scope contract and Current Document composition ----
+  // Pure projections over the owners above. Exposed for ACT 4B to consume and
+  // for the focused validator suite to execute the REAL shipped owners.
+  globalThis.MME_SCOPE_IDS = MME_SCOPE_IDS;
+  globalThis.MME_AVAILABILITY = MME_AVAILABILITY;
+  globalThis.getCurrentDocumentWorkspaceContext = getCurrentDocumentWorkspaceContext;
+  globalThis.getCurrentDocumentIdentity = getCurrentDocumentIdentity;
+  globalThis.getCurrentDocumentTagsProjection = getCurrentDocumentTagsProjection;
+  globalThis.getCurrentDocumentTasksProjection = getCurrentDocumentTasksProjection;
+  globalThis.getCurrentDocumentLinksOutProjection = getCurrentDocumentLinksOutProjection;
+  globalThis.getCurrentDocumentLinksInAvailability = getCurrentDocumentLinksInAvailability;
+  globalThis.getCurrentDocumentConsumerAvailability = getCurrentDocumentConsumerAvailability;
+  globalThis.getCurrentDocumentComposition = getCurrentDocumentComposition;
+  window.getCurrentDocumentComposition = getCurrentDocumentComposition;
 } catch {}
 
 try {
