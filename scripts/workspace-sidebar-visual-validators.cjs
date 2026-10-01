@@ -800,7 +800,10 @@ function buildTagsSandbox() {
     const row = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceActiveNoteActions() {');
     return (row.match(/addEventListener\(/g) || []).length === 1 &&
       /__noteActionsBound/.test(row) &&
-      (ACTIONS_SOURCE.match(/bindOnce\(/g) || []).length === 4 &&
+      // ACT 4B: the Journal action area owns Open Note, Open Workspace, Today
+      // and New Note -> five bindings, still one registry and one listener each.
+      (ACTIONS_SOURCE.match(/bindOnce\(/g) || []).length === 5 &&
+      /bindOnce\(btnOpenNote, 'Open Note', onOpenNote\)/.test(ACTIONS_SOURCE) &&
       !/btnArchiveActive/.test(ACTIONS_SOURCE);
   });
 

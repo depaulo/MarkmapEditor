@@ -542,14 +542,26 @@
     const ws = getWorkspaceState();
     const index = getWorkspaceIndex();
 
-    if (!ws?.rootHandle) {
+    // ACT 4B — CURRENT-DOCUMENT SCOPE.
+    //
+    // The Workspace readiness gates below are Workspace-only preconditions. In
+    // the Journal Note composition this host is a CURRENT-DOCUMENT consumer: the
+    // live records come from the injected ACT 4A provider and no Workspace Index
+    // exists or is needed. Running the gates first made the panel show
+    // "Open a workspace first" / "Index not ready" — a Workspace readiness
+    // message on a Note — even though the scope branch had already been set by
+    // applySidebarComposition(). Only the two gates are scoped; the filters, the
+    // record shape and the row markup are the accepted Task Review renderer.
+    const scopedToCurrentDocument = taskScope === TASK_REVIEW_SCOPES.CURRENT_DOCUMENT;
+
+    if (!scopedToCurrentDocument && !ws?.rootHandle) {
       badge.textContent = '0';
       summary.textContent = 'Open a workspace first';
       list.innerHTML = '<div class="workspaceTasksEmpty">Open a workspace first</div>';
       return;
     }
 
-    if (!index?.ready) {
+    if (!scopedToCurrentDocument && !index?.ready) {
       badge.textContent = '0';
       summary.textContent = 'Index not ready';
       list.innerHTML = '<div class="workspaceTasksEmpty">Index not ready</div>';
@@ -560,6 +572,32 @@
     const total = getAllTasks().length;
     const groups = groupTasksByFile(filtered);
     const groupCount = groups.length;
+
+    // ACT 4B — local empty state: zero local Tasks is AVAILABLE EMPTY, never a
+    // failure. The canonical local wording is fixed so composition verification
+    // can require it. A filtered/Workspace search that matches nothing keeps the
+    // accepted contextual wording.
+    if (scopedToCurrentDocument && filtered.length === 0 && !filterState.query) {
+      groups.forEach((group) => {
+        if (group.fileName) group.title = group.fileName;
+      });
+      badge.textContent = '0';
+      summary.textContent = 'No tasks.';
+      list.innerHTML = '<div class="workspaceTasksEmpty" data-empty-state="tasks">No tasks.</div>';
+      applyTaskReviewReadonlyChrome(true);
+      return;
+    }
+
+    // ACT 4B — the local Note is the ONE source in this scope, so a group is
+    // never "Unknown source": the provider labels each live record with the
+    // identity of the document it was parsed from. Only the group TITLE is
+    // scope-adjusted; badges, priorities, completion controls and the row markup
+    // are unchanged.
+    if (scopedToCurrentDocument) {
+      groups.forEach((group) => {
+        if (group.fileName) group.title = group.fileName;
+      });
+    }
 
     badge.textContent = `${filtered.length}`;
     summary.textContent = filtered.length

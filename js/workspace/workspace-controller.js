@@ -614,10 +614,23 @@ async function buildActivatedWorkspaceIndex() {
 }
 
 
+// ACT 4B — narrow, backward-compatible result contract. Callers that ignored the
+// previous `undefined` return keep working unchanged; callers that need to know
+// whether a Workspace actually became active can now branch on `ok` instead of
+// assuming a resolved Promise means success.
+const OPEN_WORKSPACE_RESULT = Object.freeze({
+  OK: 'opened',
+  NAVIGATION_BUSY: 'navigation-in-progress',
+  CANCELLED: 'cancelled',
+  INVALID: 'invalid-workspace',
+  DECLINED: 'initialization-declined',
+  FAILURE: 'failure',
+});
+
 async function openWorkspace() {
   if (globalThis.MME_NAVIGATION?.isNavigationInProgress?.()) {
     globalThis.MME_APP?.showToast?.('Navigation in progress. Try again shortly.', 'warn', 2000);
-    return;
+    return { ok: false, reason: OPEN_WORKSPACE_RESULT.NAVIGATION_BUSY, status: '' };
   }
 
   // ACT 1A — strict read-only Workspace format gate. Detection runs BEFORE any
@@ -638,7 +651,7 @@ async function openWorkspace() {
     status !== WORKSPACE_FORMAT.EMPTY &&
     status !== WORKSPACE_FORMAT.UNINITIALIZED
   ) {
-    return;
+    return { ok: false, reason: OPEN_WORKSPACE_RESULT.INVALID, status };
   }
 
   // ACT 1B — an empty or uninitialized folder may only be mutated after an
@@ -646,7 +659,7 @@ async function openWorkspace() {
   // the active Workspace, editor and save handle stay as they are.
   if (status !== WORKSPACE_FORMAT.VALID_NOTES && !confirmWorkspaceInitialization(detection)) {
     reportWorkspaceInitializationDeclined(detection);
-    return;
+    return { ok: false, reason: OPEN_WORKSPACE_RESULT.DECLINED, status };
   }
 
   // Every fallible step (creating notes/, scanning notes/) happens before the
@@ -655,7 +668,7 @@ async function openWorkspace() {
 
   if (!storage.ok) {
     reportWorkspaceStorageFailure(storage);
-    return;
+    return { ok: false, reason: OPEN_WORKSPACE_RESULT.FAILURE, status };
   }
 
   activateWorkspaceStorage(storage.snapshot);
@@ -667,6 +680,16 @@ async function openWorkspace() {
   const indexReady = await buildActivatedWorkspaceIndex();
 
   reportWorkspaceStorageActivated(storage.snapshot, storage.notesCreated, indexReady);
+
+  // ACT 4B — proven activation. The Journal composition is committed here, so
+  // presentation changes only after the Workspace is genuinely active. The
+  // observer generation is advanced so the NEW Workspace composition owns the
+  // observers, and every callback captured under an older generation is stale.
+  globalThis.invalidateWorkspaceObservers?.('note->workspace');
+  globalThis.setJournalComposition?.('workspace');
+  globalThis.activateJournalObservers?.('workspace-committed');
+
+  return { ok: true, reason: OPEN_WORKSPACE_RESULT.OK, status };
 }
 
 // DEAD LEGACY CODE — not called by any path since ACT 1A, and still not called
@@ -1695,17 +1718,65 @@ function initWorkspace() {
   initJournalSidebarCollapse();
 
   createWorkspaceActions({
+    onOpenNote: async () => {
+      // ACT 4B — the Journal Sidebar Open Note transaction. The callback result
+      // is AWAITED and FORWARDED unchanged; nothing here may swallow it.
+      const result = await globalThis.MME_APP?.openJournalNote?.();
+
+      // A missing or malformed result is an integration error, not a normal
+      // outcome, so it is reported distinctly instead of "unknown".
+      if (!result || typeof result.ok !== 'boolean') {
+        globalThis.MME_APP?.log?.(
+          `Open Note: invalid result contract type=${typeof result} ` +
+          `owner=JournalSidebar context=${globalThis.currentAppContextId || '?'}`
+        );
+        return;
+      }
+
+      if (!result.ok) {
+        // cancelled / dirty-declined / not-journal-context / error are normal,
+        // non-transition outcomes and never raise an error toast.
+        globalThis.MME_APP?.log?.(`Open Note: no transition (${result.reason})`);
+        return;
+      }
+
+      // openNote() performs the composition INSIDE its transaction (phase 7),
+      // so the action owner must not re-apply it here. The extra pass would be
+      // redundant and would double-render the local panels. The owner only
+      // reports the outcome.
+      globalThis.MME_APP?.log?.(
+        `Open Note: committed (renderStable=${result.renderStable})`
+      );
+    },
     onOpenWorkspace: async () => {
-      // ACT 4B — reuse the EXISTING Workspace owner unchanged. It already
-      // preserves the current document, handle and Sidebar on cancel, on an
-      // invalid folder and on a declined initialization. Only AFTER it resolves
-      // is the shared Sidebar composition recomposed, so accepted Workspace
-      // panels return and Standalone results stop masquerading as aggregation.
-      await openWorkspace();
+      // ---- ACT 4B BOUNDARY: cross-composition transitions are BLOCKED ------
+      //
+      // Journal Note -> Workspace is NOT an accepted ACT 4B path. The handle
+      // transfer, observer re-parenting and rollback it needs belong to ACT 4C.
+      // ACT 4B refuses it NON-DESTRUCTIVELY: no directory picker, no handle
+      // change, no composition change, no Workspace state change, no reload.
+      // One transparent explanation is shown instead of a silent no-op.
+      const composition = globalThis.getJournalComposition?.();
+      if (composition === 'note') {
+        const message =
+          'Switching from an open Note to a Workspace will be enabled after the transition workflow is stabilized.';
+        globalThis.MME_APP?.log?.('Open Workspace: blocked (cross-composition transition deferred to ACT 4C)');
+        try { globalThis.MME_APP?.showToast?.(message, 'info', 3600); } catch {}
+        return;
+      }
+      // ACT 4B — reuse the EXISTING Workspace owner unchanged. It now returns a
+      // structured result, so Workspace composition is applied ONLY on proven
+      // success. Cancel / invalid / declined / failure leave the Neutral state
+      // exactly as it was.
+      const result = await openWorkspace();
+      if (!result || !result.ok) {
+        globalThis.MME_APP?.log?.(`Open Workspace: no transition (${result?.reason || 'unknown'})`);
+        return;
+      }
       try {
         globalThis.applySidebarComposition?.();
       } catch (e) {
-        globalThis.MME_APP?.log?.(`Workspace: composition refresh skipped (${e?.message || e})`);
+        globalThis.MME_APP?.log?.(`Open Workspace: composition refresh skipped (${e?.message || e})`);
       }
     },
     onToday: openToday,

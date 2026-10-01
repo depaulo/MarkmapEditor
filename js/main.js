@@ -1947,7 +1947,7 @@ try {
 // ONE composition owner consumes the ACT 4A availability data and drives the
 // EXISTING Sidebar host. This block adds:
 //   - one panel-availability registry (no copied markup tree);
-//   - one document-only entry that REUSES openSmart() (no second opener);
+//   - one document-only entry that REUSES MME_APP.openJournalNote() (no second opener);
 //   - explicit Workspace-only panel hiding (unavailable is NOT empty);
 //   - safe Workspace <-> Standalone transitions.
 //
@@ -2047,11 +2047,100 @@ const MME_PANEL_COMPOSITION = Object.freeze({
 
 // Resolve the current composition. This is the ONLY place ACT 4B decides what
 // is available; every consumer reads this result rather than re-deriving scope.
+// Resolve the current composition. This is the ONLY place ACT 4B decides what
+// is available; every consumer reads this result rather than re-deriving scope.
+//
+// JOURNAL COMPOSITION (ACT 4B correction)
+//
+// MME_SCOPE_IDS deliberately stays two-valued: `standalone` is NOT a data scope.
+// Journal presentation is a separate, explicit state with three values:
+//   none      - Journal entered; no Note or Workspace selected
+//   note      - a physical Markdown file was opened through Journal Open Note
+//   workspace - a valid Workspace is the active Journal composition
+//
+// This is what lets Journal show a standalone Note while the recoverable
+// Workspace root and the saved Index stay INTACT — so no shared Workspace
+// owner is ever destructively cleared just to change what is visible.
+const MME_JOURNAL_COMPOSITION = Object.freeze({
+  NONE: 'none',
+  NOTE: 'note',
+  WORKSPACE: 'workspace',
+});
+
+let journalComposition = MME_JOURNAL_COMPOSITION.NONE;
+
+function getJournalComposition() {
+  return journalComposition;
+}
+
+function setJournalComposition(next) {
+  const allowed = Object.values(MME_JOURNAL_COMPOSITION);
+  journalComposition = allowed.includes(next) ? next : MME_JOURNAL_COMPOSITION.NONE;
+  return journalComposition;
+}
+
+// True only in the Journal app context. Every Journal composition entry point
+// checks this, so Editor and Slides can never be mutated by Journal logic.
+//
+// The canonical signal is the applied context dataset written by
+// applyAppContextDataset(); localStorage is the fallback. Nothing here reads or
+// writes app state — it is a read-only guard.
+function isJournalContext() {
+  try {
+    const datasetId = typeof document !== 'undefined'
+      ? (document.documentElement?.dataset?.appContext || '')
+      : '';
+    if (datasetId) return datasetId === 'journal';
+    if (typeof globalThis.getStoredAppContextId === 'function') {
+      return globalThis.getStoredAppContextId() === 'journal';
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function getSidebarComposition(options) {
   const o = options || {};
   const composition = getCurrentDocumentComposition(o);
-  const workspaceAvailable = Boolean(composition.workspaceContext.workspaceAvailable);
-  const availability = composition.consumers || {};
+  const journal = getJournalComposition();
+
+  // Outside Journal this owner is a strict no-op: Editor and Slides keep their
+  // own pre-ACT-4B presentation untouched.
+  if (!isJournalContext()) {
+    return {
+      composition: 'journal-inactive',
+      workspaceAvailable: false,
+      journalComposition: journal,
+      document: composition,
+      panels: {},
+      unknownAvailabilityKeys: [],
+      hiddenElementIds: [],
+      inactive: true,
+    };
+  }
+
+  // Workspace aggregation is active in Journal ONLY when the explicit
+  // composition says so. A retained root handle alone never re-activates it.
+  const workspaceAvailable =
+    journal === MME_JOURNAL_COMPOSITION.WORKSPACE &&
+    Boolean(composition.workspaceContext.workspaceAvailable);
+
+  const availability = workspaceAvailable
+    ? composition.consumers || {}
+    : { ...(composition.consumers || {}) };
+
+  if (!workspaceAvailable) {
+    // Force every Workspace-only consumer to unavailable for this presentation,
+    // without touching any Workspace owner.
+    for (const key of [
+      'linksIn', 'notes', 'knowledge', 'pinned', 'archive', 'search',
+      'workspaceTagsInventory', 'taskBoard', 'workspaceProjects',
+      'workspaceIndex', 'workspaceReport',
+    ]) {
+      availability[key] = { availability: MME_AVAILABILITY.UNAVAILABLE, reason: 'journal-composition' };
+    }
+  }
 
   const panels = {};
   // Any registry record whose availabilityKey is unknown to ACT 4A is recorded
@@ -2108,8 +2197,23 @@ function getSidebarComposition(options) {
       const hidden = [];
       for (const [id, entries] of byElement) {
         if (entries.every((p) => !p.visible)) hidden.push(id);
+      }      return hidden;
+    })(),
+    // ACT 4B — the mirror of hiddenElementIds. An element is VISIBLE when at
+    // least one key mapping to it is visible. The application owner needs this
+    // to un-hide the local Note hosts, which ship with a static `hidden`
+    // attribute in index.html.
+    visibleElementIds: (() => {
+      const byElement = new Map();
+      for (const p of Object.values(panels)) {
+        if (!byElement.has(p.elementId)) byElement.set(p.elementId, []);
+        byElement.get(p.elementId).push(p);
       }
-      return hidden;
+      const visible = [];
+      for (const [id, entries] of byElement) {
+        if (entries.some((p) => p.visible)) visible.push(id);
+      }
+      return visible;
     })(),
   };
 }
@@ -2117,10 +2221,119 @@ function getSidebarComposition(options) {
 // Apply the composition to the EXISTING Sidebar host. This is the only Sidebar
 // mutation entry in ACT 4B; it never creates or clones markup, and it never
 // clears persisted collapse state.
+// ACT 4B — project the explicit Journal composition onto <html>.
+//
+// The `hidden` attribute is not the only Sidebar visibility owner. The Workspace
+// session owner (updateWorkspaceUiState) toggles `html.workspace-empty` whenever
+// no root handle exists, and that class projection hides the Workspace panels
+// with class-level `display: none !important` rules. That owner can never know
+// that Journal selected a standalone Note, so on a fresh Journal load it leaves
+// the ENTIRE Note Sidebar blank — every host correctly `hidden = false` and every
+// host still `display: none`. `hidden`-only reasoning cannot see this, exactly as
+// it cannot see the author ID rules. The class owner itself is left untouched;
+// this writes the ONE explicit composition value the CSS needs to scope its
+// exception, and it writes it from the ONE composition owner.
+//
+// It is CLEARED outside Journal so Editor and Slides can never inherit Journal
+// presentation state, and it derives from getJournalComposition() rather than
+// being a second source of truth.
+function syncJournalCompositionDataset() {
+  try {
+    if (typeof document === 'undefined' || !document.documentElement) return null;
+    const dataset = document.documentElement.dataset;
+    if (!dataset) return null;
+
+    if (!isJournalContext()) {
+      if (dataset.journalComposition) delete dataset.journalComposition;
+      return null;
+    }
+
+    const next = getJournalComposition();
+    if (dataset.journalComposition !== next) dataset.journalComposition = next;
+    return next;
+  } catch {
+    return null;
+  }
+}
+
+// ACT 4B — Journal Sidebar identity and action hierarchy (presentation only).
+//
+// Reads the explicit journalComposition + workspaceAvailable + current
+// filename and writes labels/regions only: composition label + name, OPEN
+// section (always visible in Journal), WORKSPACE section (Workspace
+// composition only, with Today + New Note visually inside it). No second
+// Workspace name owner: the Workspace name is read from the single shipped
+// WORKSPACE_STATE.rootName. No action rewiring, no collapse reset, no Index
+// or scope change.
+function updateJournalSidebarIdentity(composition) {
+  if (typeof document === 'undefined' || !document.getElementById) return null;
+  const journal = getJournalComposition();
+  const workspaceAvailable = Boolean(composition && composition.workspaceAvailable);
+  const isNote = journal === MME_JOURNAL_COMPOSITION.NOTE;
+  const isWorkspace = journal === MME_JOURNAL_COMPOSITION.WORKSPACE && workspaceAvailable;
+
+  const title = document.getElementById('workspaceTitle');
+  if (title) title.textContent = 'Journal';
+
+  const label = document.getElementById('workspaceCompositionLabel');
+  const name = document.getElementById('workspaceCompositionName');
+  if (label) {
+    label.textContent = isNote ? 'Standalone Note'
+      : (isWorkspace ? 'Workspace' : '');
+  }
+  if (name) {
+    if (isNote) {
+      name.textContent = String((typeof currentFileName !== 'undefined' && currentFileName) || '');
+    } else if (isWorkspace) {
+      try {
+        name.textContent = String(globalThis.WORKSPACE_STATE?.rootName || 'Workspace');
+      } catch { name.textContent = 'Workspace'; }
+    } else {
+      name.textContent = '';
+    }
+  }
+
+  const wsSection = document.getElementById('workspaceWorkspaceSection');
+  if (wsSection) wsSection.hidden = !isWorkspace;
+
+  const wsName = document.getElementById('workspaceWorkspaceName');
+  if (wsName) {
+    try {
+      wsName.textContent = isWorkspace
+        ? String(globalThis.WORKSPACE_STATE?.rootName || 'Workspace')
+        : '';
+    } catch { wsName.textContent = isWorkspace ? 'Workspace' : ''; }
+  }
+
+  return { isNote, isWorkspace };
+}
+
 function applySidebarComposition(options) {
   const composition = getSidebarComposition(options);
   if (typeof document === 'undefined' || !document?.getElementById) return composition;
 
+  // Runs BEFORE the inactive return so leaving Journal always clears the
+  // projected composition, even when this owner is a no-op there.
+  syncJournalCompositionDataset();
+
+  // Outside Journal this owner mutates NOTHING: no panel is hidden, no empty
+  // state is toggled, and no Task Review scope is changed. Editor and Slides
+  // therefore keep their exact pre-ACT-4B presentation.
+  if (composition.inactive) return composition;
+
+  // ACT 4B — CRITICAL: the composition must SHOW as well as hide.
+  // This owner previously only ever set `hidden = true`. The Related and Tasks
+  // hosts ship with a static `hidden` attribute in index.html, so they stayed
+  // hidden forever: the Journal Note composition could withdraw Workspace
+  // panels and still never reveal its own local panels. Both directions are now
+  // applied, driven by the same element grouping that decides visibility, so a
+  // host is shown exactly when at least one key mapping to it is visible.
+  const hiddenSet = new Set(composition.hiddenElementIds);
+  for (const id of composition.visibleElementIds) {
+    if (hiddenSet.has(id)) continue;
+    const el = document.getElementById(id);
+    if (el) el.hidden = false;
+  }
   for (const id of composition.hiddenElementIds) {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
@@ -2130,13 +2343,32 @@ function applySidebarComposition(options) {
   if (empty) {
     // The accepted no-Workspace placeholder states the truth: this is an
     // unopened Workspace, not an empty one.
-    empty.hidden = composition.workspaceAvailable;
+    //
+    // ACT 4B — during a NOTE composition the Sidebar is not the Workspace
+    // projection at all, so the Workspace placeholder must not sit beside the
+    // Current Document hosts claiming "No workspace opened". It stays visible in
+    // the NEUTRAL state, which is the state it describes.
+    const noteComposition = getJournalComposition() === MME_JOURNAL_COMPOSITION.NOTE;
+    empty.hidden = composition.workspaceAvailable || noteComposition;
   }
 
   // Tell the EXISTING Task Review owner which scope supplies its records. It has
   // one renderer and one record shape; only its input changes. The provider
   // reads the ACT 4A live Current Document Task projection, so no second Task
   // parser, lifecycle owner or store is introduced here.
+  //
+  // Outside Journal this block is skipped entirely, so Editor and Slides keep
+  // the accepted Workspace/default Task Review scope untouched.
+  //
+  // ACT 4B — Journal identity, OPEN/WORKSPACE regions. Pure presentation over
+  // the explicit journalComposition + workspaceAvailable + current filename:
+  // no second Workspace name owner, no collapse reset, no action rewiring.
+  try {
+    updateJournalSidebarIdentity(composition);
+  } catch (e) {
+    log?.(`Sidebar composition: Journal identity not applied (${e?.message || e})`);
+  }
+
   try {
     const review = globalThis.MME_TASK_REVIEW || window.MME_TASK_REVIEW;
     if (review && typeof review.setTaskScope === 'function') {
@@ -2144,9 +2376,23 @@ function applySidebarComposition(options) {
         composition.workspaceAvailable ? 'workspace' : 'current-document',
         () => {
           const c = getCurrentDocumentComposition();
-          return c.tasks && c.tasks.availability === MME_AVAILABILITY.AVAILABLE
-            ? c.tasks.tasks
-            : [];
+          if (!(c.tasks && c.tasks.availability === MME_AVAILABILITY.AVAILABLE)) return [];
+          const localName = String(c.tasks.source?.filename || '');
+
+          // ACT 4B — LOCAL IDENTITY. The shared parser's Task records carry line,
+          // done, text and metadata but NO file identity, and a standalone Note
+          // deliberately has no Workspace path. Without this tag the ONE Task
+          // Review renderer would group the note's own rows under "Unknown
+          // source" — a Workspace-shaped label for a Current Document. No record
+          // field is overwritten and no second Task parser or store appears; the
+          // live records are only labelled with the identity of the document they
+          // were parsed from.
+          return (Array.isArray(c.tasks.tasks) ? c.tasks.tasks : []).map((t) => ({
+            ...t,
+            fileName: t.fileName || localName,
+            filePath: t.filePath || '',
+            fileKind: t.fileKind || 'note',
+          }));
         }
       );
     }
@@ -2184,76 +2430,728 @@ function deactivateWorkspaceComposition() {
   const state = globalThis.WORKSPACE_STATE || null;
   if (!state) return false;
 
-  // Withdraw the active Workspace Note and its path claim first.
+  // Withdraw the active Workspace Note and its path claim only.
   state.activeFile = null;
   globalThis.persistActiveWorkspaceFile?.();
   window.updateWorkspaceActiveFileHighlight?.();
 
-  // Then withdraw the active aggregation projection (in-memory only).
-  state.rootHandle = null;
-  state.rootName = '';
-  state.folders.notes = null;
-  state.files.notes = [];
-
-  log?.('deactivateWorkspaceComposition(): active Workspace projection withdrawn');
   return true;
 }
+// ---- ACT 4B: Journal Open Note transaction ----
+//
+// Journal SIDEBAR entry only. It refuses to run outside the Journal context, so
+// Editor and Slides can never be mutated by Journal logic. The transaction is
+// GUARD -> OPEN -> COMMIT: nothing is mutated until the physical open is proven
+// successful, and any earlier failure leaves the previous stable state intact.
+//
+// Result contract (explicit, never inferred from Promise resolution alone):
+//   { ok, reason, handle, fileName, writable, sameFile, renderStable, compositionOk }
+// `compositionOk` reports whether the Journal Note Sidebar could be PROVEN to be
+// showing the Current Document hosts. The physical open is unaffected by it.
+// --------------------------------------------------------------------
+// ACT 4B — JOURNAL TRANSACTION SUPPORT OWNERS
+//
+// These are narrow, additive owners for the Journal Open Note transaction.
+// They add no new store, no new scope, no new opener and no new Save owner.
+// --------------------------------------------------------------------
 
-// Open Note — the document-only entry.
+// The completion contract of ONE render() call. Settled exactly once.
+let __openRenderCompletion = null;
+
+// Creates a one-shot completion signal for a single render() invocation.
+function createOpenRenderCompletion() {
+  let settled = false;
+  let resolveFn = null;
+  const signal = {
+    settled: false,
+    ok: false,
+    source: '',
+    error: null,
+    settle(result) {
+      if (settled) return;
+      settled = true;
+      signal.settled = true;
+      signal.ok = Boolean(result && result.ok);
+      signal.source = result?.source || '';
+      signal.error = result?.error || null;
+      if (resolveFn) resolveFn(signal);
+    },
+    // Resolves on settle, or after a bounded timeout. The timeout guarantees a
+    // transition can never hang forever on a render that never reports back.
+    wait(timeoutMs = 3000) {
+      if (settled) return Promise.resolve(signal);
+      return new Promise((resolve) => {
+        resolveFn = resolve;
+        setTimeout(() => {
+          if (!settled) signal.settle({ ok: false, source: 'timeout' });
+          resolve(signal);
+        }, timeoutMs);
+      });
+    },
+  };
+  return signal;
+}
+
+// The published result of the most recent openSmart() render.
+function getLastOpenRenderCompletion() {
+  return __openRenderCompletion;
+}
+
+// ---- Workspace observer generation (ACT 4B) ----------------------------
 //
-// It REUSES the existing physical opener (openSmart) and therefore does not
-// introduce a second file opener or a second handle owner.
-//
-// DIRTY-STATE (source-proven): openSmart() has NO dirty guard of its own — it
-// sets `dirty = false` immediately after loading. Reusing it unguarded would
-// silently discard unsaved edits. The EXISTING guard owner
-// (confirmDiscardIfDirty) is therefore invoked HERE, before the opener runs. No
-// second prompt owner is created; cancel returns false and nothing changes.
+// A monotonically increasing token identifying which composition owns the
+// active observers. A callback captured under an older generation is stale and
+// must not act. This REUSES the existing Workspace callback surface; it does
+// not remove listeners, add a second observer, or add a second Workspace store.
+let __journalObserverGeneration = 0;
+let __journalActiveGeneration = 0;
+
+function getJournalObserverGeneration() {
+  return __journalObserverGeneration;
+}
+
+// Invalidates every callback captured before this call.
+function invalidateWorkspaceObservers(reason) {
+  __journalObserverGeneration += 1;
+  try {
+    log?.(`Journal observers: invalidated generation=${__journalObserverGeneration} reason=${reason || 'transition'}`);
+  } catch {}
+  return __journalObserverGeneration;
+}
+
+// Bumps the generation so the newly committed composition owns the observers.
+function activateJournalObservers(reason) {
+  __journalObserverGeneration += 1;
+  __journalActiveGeneration = __journalObserverGeneration;
+  try {
+    log?.(`Journal observers: activated generation=${__journalActiveGeneration} reason=${reason || 'transition'}`);
+  } catch {}
+  return __journalActiveGeneration;
+}
+
+// A captured callback is ignored when the composition moved on without it.
+function isObserverGenerationStale(captured) {
+  return captured !== __journalActiveGeneration;
+}
+
+// Whether a Workspace aggregation is CURRENTLY presented. A retained
+// rootHandle alone means recoverable configuration EXISTS — it does not mean
+// the Workspace is the active Journal composition. This single explicit answer
+// replaces ambiguous `if (WORKSPACE_STATE.rootHandle)` presentation checks.
+function isWorkspaceAggregationActive() {
+  if (!isJournalContext()) return false;
+  return getJournalComposition() === MME_JOURNAL_COMPOSITION.WORKSPACE;
+}
+
+// The Journal Open Note transaction lifecycle. Private to this transition
+// owner; it is not an application-wide store and it is never persisted.
+const JOURNAL_NOTE_TRANSITION = Object.freeze({
+  IDLE: 'idle',
+  GUARDING: 'guarding',
+  OPENING: 'opening',
+  STABILIZING: 'stabilizing',
+  COMMITTING: 'committing',
+  COMPOSING: 'composing',
+  READY: 'ready',
+  FAILED: 'failed',
+});
+
+let __journalNotePhase = JOURNAL_NOTE_TRANSITION.IDLE;
+let __journalNoteTransitionSeq = 0;
+
+// Overlapping Journal transitions are rejected rather than interleaved.
+let __journalNoteTransitionBusy = false;
+
+function getJournalNotePhase() {
+  return __journalNotePhase;
+}
+
+function setJournalNotePhase(phase) {
+  __journalNotePhase = phase;
+  try {
+    // The diagnostic reads this so a later reload can classify an interrupted
+    // transition. No document content is ever written here.
+    globalThis.MME_ACT4B_DIAG?.recordPhase?.(phase);
+  } catch {}
+  return phase;
+}
+
+const OPEN_NOTE_REASON = Object.freeze({
+  OK: 'opened',
+  NOT_JOURNAL: 'not-journal-context',
+  TRANSITION_BUSY: 'transition-busy',
+  // ACT 4B boundary: an unsafe cross-composition transition was refused
+  // non-destructively. ACT 4C owns making it work.
+  TRANSITION_BLOCKED: 'cross-composition-not-yet-supported',
+  DIRTY_DECLINED: 'dirty-declined',
+  CANCELLED: 'cancelled',
+  READ_FAILED: 'read-failed',
+  ERROR: 'error',
+});
+
 async function openNote() {
-  log?.('openNote(): begin (delegating to openSmart)');
-
-  // Existing dirty-state contract. `confirmDiscardIfDirty()` returns true when
-  // the document is clean, and false when the user declines the discard.
-  if (typeof confirmDiscardIfDirty === 'function' && !confirmDiscardIfDirty()) {
-    log?.('openNote(): dirty guard declined — no transition');
-    return false;
-  }
-
-  const hadWorkspace = Boolean(globalThis.WORKSPACE_STATE?.rootHandle);
-
-  // openSmart RESOLVES NORMALLY when the user cancels the picker (it logs
-  // AbortError and returns). It therefore cannot be used as a success signal.
-  // A successful physical open always installs a NEW handle object from the
-  // picker, so identity comparison is the honest completion signal: on cancel
-  // or read failure both the handle and the filename are unchanged.
+  // ---- ACT 4B BOUNDARY: cross-composition transitions are BLOCKED ----------
   //
-  // SAME-FILE REOPEN: the picker returns a fresh handle object for an already
-  // open file, so identity still changes and the reopen is treated as success.
-  const handleBefore = typeof currentSaveHandle !== 'undefined' ? currentSaveHandle : null;
-  const nameBefore = typeof currentFileName !== 'undefined' ? currentFileName : '';
-
-  await openSmart();
-
-  const handleAfter = typeof currentSaveHandle !== 'undefined' ? currentSaveHandle : null;
-  const nameAfter = typeof currentFileName !== 'undefined' ? currentFileName : '';
-  const opened = handleAfter !== handleBefore || nameAfter !== nameBefore;
-
-  if (!opened) {
-    // Cancelled picker, or a read that failed before activation. Nothing may
-    // change: no Workspace withdrawal, no Sidebar recomposition.
-    log?.('openNote(): no file activated (cancelled or failed) — composition unchanged');
-    return false;
+  // Journal Workspace -> Note is NOT an accepted ACT 4B path. It was observed
+  // to terminate Chrome, and the rollback, observer-generation transfer and
+  // reload recovery it needs belong to ACT 4C. ACT 4B therefore refuses the
+  // transition NON-DESTRUCTIVELY: no picker, no handle change, no composition
+  // change, no Workspace state change, no reload. The user receives one
+  // transparent explanation instead of a silent no-op or a disabled control.
+  if (isJournalContext() && getJournalComposition() === MME_JOURNAL_COMPOSITION.WORKSPACE) {
+    const message =
+      'Switching from an active Workspace to a standalone Note is temporarily unavailable.';
+    log?.(`Open Note: blocked (cross-composition transition deferred to ACT 4C)`);
+    try { showToast?.(message, 'info', 3200); } catch {}
+    return {
+      ok: false, reason: OPEN_NOTE_REASON.TRANSITION_BLOCKED, handle: null,
+      fileName: '', writable: false, sameFile: false, renderStable: false,
+      message,
+    };
   }
 
-  if (hadWorkspace) {
-    deactivateWorkspaceComposition();
-    log?.('openNote(): Workspace active projection withdrawn; saved Workspace retained');
+  // PHASE 0 — the transition lock. An overlapping Journal transition is
+  // rejected so two openers can never interleave their commits.
+  if (__journalNoteTransitionBusy) {
+    return {
+      ok: false, reason: OPEN_NOTE_REASON.TRANSITION_BUSY, handle: null,
+      fileName: '', writable: false, sameFile: false, renderStable: false,
+    };
+  }
+  __journalNoteTransitionBusy = true;
+  const transitionId = (++__journalNoteTransitionSeq);
+
+  // Outside Journal this is a hard no-op, and the lock is always released.
+  if (!isJournalContext()) {
+    __journalNoteTransitionBusy = false;
+    setJournalNotePhase(JOURNAL_NOTE_TRANSITION.IDLE);
+    return {
+      ok: false, reason: OPEN_NOTE_REASON.NOT_JOURNAL, handle: null,
+      fileName: '', writable: false, sameFile: false, renderStable: false,
+    };
   }
 
-  applySidebarComposition();
-  log?.('openNote(): document composition active');
+  // PHASE 1 — CAPTURE the last stable state, so a failure can never leave the
+  // Sidebar, the handle and the document referring to different documents.
+  const snapshot = {
+    composition: getJournalComposition(),
+    handle: typeof currentSaveHandle !== 'undefined' ? currentSaveHandle : null,
+    fileName: typeof currentFileName !== 'undefined' ? currentFileName : '',
+    workspaceActiveFile: globalThis.WORKSPACE_STATE?.activeFile ?? null,
+  };
+  let committed = false;
+
+  try {
+    setJournalNotePhase(JOURNAL_NOTE_TRANSITION.GUARDING);
+
+    // PHASE 2 — GUARD. Decline changes nothing at all.
+    if (typeof confirmDiscardIfDirty === 'function' && !confirmDiscardIfDirty()) {
+      return {
+        ok: false, reason: OPEN_NOTE_REASON.DIRTY_DECLINED, handle: null,
+        fileName: '', writable: false, sameFile: false, renderStable: false,
+      };
+    }
+
+    // PHASE 3 — OPEN CANDIDATE, reusing the ONE existing opener family. The
+    // Journal composition is NOT committed here.
+    setJournalNotePhase(JOURNAL_NOTE_TRANSITION.OPENING);
+    await openSmart();
+
+    const handleAfter = typeof currentSaveHandle !== 'undefined' ? currentSaveHandle : null;
+    const nameAfter = typeof currentFileName !== 'undefined' ? currentFileName : '';
+
+    // Success is proven by an adopted physical identity, never by resolution.
+    const opened = handleAfter !== snapshot.handle || nameAfter !== snapshot.fileName;
+    if (!opened) {
+      return {
+        ok: false, reason: OPEN_NOTE_REASON.CANCELLED, handle: null,
+        fileName: '', writable: false, sameFile: false, renderStable: false,
+      };
+    }
+
+    // PHASE 4 — STABILITY BARRIER. openSmart() adopts the handle, filename and
+    // editor text synchronously but its render() is fire-and-forget, so the
+    // initial render can still be in flight here. Committing the composition
+    // now would let a late old-document render overwrite the new Sidebar. Wait
+    // only for THIS render; the bounded timeout guarantees no hang.
+    setJournalNotePhase(JOURNAL_NOTE_TRANSITION.STABILIZING);
+    const renderCompletion = __openRenderCompletion;
+    const renderStable = renderCompletion ? Boolean((await renderCompletion.wait()).ok) : true;
+
+    // PHASE 5 — DEACTIVATE the old active projection. Only needed when the
+    // previous composition was a Workspace: its observers are invalidated
+    // first so no stale callback can act after the commit. Recoverable
+    // Workspace configuration (rootHandle, discovered records) is preserved.
+    if (snapshot.composition === MME_JOURNAL_COMPOSITION.WORKSPACE) {
+      invalidateWorkspaceObservers('workspace->note');
+      deactivateWorkspaceComposition();
+    }
+
+    // PHASE 6 — COMMIT. The physical Note is adopted and becomes the single
+    // active document of the Journal.
+    setJournalNotePhase(JOURNAL_NOTE_TRANSITION.COMMITTING);
+    setJournalComposition(MME_JOURNAL_COMPOSITION.NOTE);
+    committed = true;
+    activateJournalObservers('note-committed');
+
+    // PHASE 7 — COMPOSE. Local consumers are rendered explicitly here. A
+    // Standalone Note has no Workspace Index event to wait for, so nothing in
+    // this step may depend on one.
+    setJournalNotePhase(JOURNAL_NOTE_TRANSITION.COMPOSING);
+    // The composition returns the DOM RESULT of the Note Sidebar. A composition
+    // that could not prove the local hosts are on screen is surfaced as
+    // compositionOk=false in the transaction result (the caller reports it) and
+    // never as a silent success. The document itself IS open at this point, so
+    // the transaction stays ok: the file was adopted, only the Sidebar is wrong.
+    const compositionReport = composeStandaloneNotePanels();
+    const compositionOk = !compositionReport || compositionReport.complete !== false;
+
+    // PHASE 8 — FINALIZE.
+    setJournalNotePhase(JOURNAL_NOTE_TRANSITION.READY);
+    log?.(`openNote(): journal note committed transition=${transitionId} file=${nameAfter} renderStable=${renderStable} sidebarComposition=${compositionOk ? 'ok' : 'FAILED'}`);
+    if (!compositionOk) {
+      log?.('openNote(): Journal Note Sidebar composition did not verify — ' +
+        (compositionReport.verification ? compositionReport.verification.failures.join(' ') : 'no detail'));
+    }
+    return {
+      ok: true,
+      reason: OPEN_NOTE_REASON.OK,
+      handle: handleAfter,
+      fileName: nameAfter,
+      writable: Boolean(handleAfter),
+      sameFile: nameAfter === snapshot.fileName,
+      renderStable,
+      compositionOk,
+    };
+  } catch (e) {
+    // PHASE 8b — FAILURE. Restore the stable state; never clear handles and
+    // never reload. If the commit already happened, the newly opened physical
+    // file is kept (rolling the handle back would leave new editor content
+    // bound to an old handle) and that state is reported explicitly.
+    const afterCommit = committed;
+    try {
+      if (!afterCommit) {
+        setJournalComposition(snapshot.composition);
+        if (typeof currentSaveHandle !== 'undefined') currentSaveHandle = snapshot.handle;
+        if (typeof currentFileName !== 'undefined') currentFileName = snapshot.fileName;
+        if (globalThis.WORKSPACE_STATE) {
+          globalThis.WORKSPACE_STATE.activeFile = snapshot.workspaceActiveFile;
+        }
+      }
+    } catch {}
+    log?.(`openNote(): failed transition=${transitionId} phase=${__journalNotePhase} error=${e?.name || ''} ${e?.message || e} afterCommit=${afterCommit}`);
+    setJournalNotePhase(JOURNAL_NOTE_TRANSITION.FAILED);
+    return {
+      ok: false, reason: OPEN_NOTE_REASON.ERROR, handle: null,
+      fileName: '', writable: false, sameFile: false, renderStable: false,
+      afterCommit,
+    };
+  } finally {
+    // The lock is released on EVERY path, including the early returns.
+    __journalNoteTransitionBusy = false;
+    if (__journalNotePhase === JOURNAL_NOTE_TRANSITION.FAILED) {
+      setJournalNotePhase(JOURNAL_NOTE_TRANSITION.IDLE);
+    }
+  }
+}
+
+// Explicitly renders the Standalone Note local consumers. A Standalone Note has
+// no Workspace Index, so none of these may wait for one. Every step reuses an
+// EXISTING panel owner; none of them is a second renderer.
+// The composition report must state the DOM RESULT, never merely that a renderer
+// returned. A renderer that is not scope-aware can return successfully and still
+// leave its own panel hidden (or leave a Workspace-only panel on screen), which
+// is precisely how the Sidebar was visibly wrong while every log line read
+// "rendered" and "complete". Reading `hidden` AND the computed `display` covers
+// both failure modes: the property alone cannot reveal that an author CSS rule
+// outranks the UA `[hidden] { display: none }` rule.
+function describePanelVisibility(elementId) {
+  try {
+    const el = document.getElementById(elementId);
+    if (!el) return `${elementId}=absent`;
+    let display = '?';
+    try {
+      display = typeof getComputedStyle === 'function' ? getComputedStyle(el).display : '?';
+    } catch { display = '?'; }
+    return `${elementId}[hidden=${el.hidden},display=${display}]`;
+  } catch (e) {
+    return `${elementId}=error`;
+  }
+}
+
+// Every host the ACT 4B composition owns, in registry order. Used by the
+// "complete" line so one log entry proves the whole Sidebar state at commit.
+const ACT4B_REPORTED_PANEL_IDS = Object.freeze(
+  Object.keys(MME_PANEL_COMPOSITION).map((k) => MME_PANEL_COMPOSITION[k].elementId)
+);
+
+// ACT 4B — "visible" as the BROWSER understands it, not as the `hidden`
+// property suggests. An author `display:` rule on the host itself or a class
+// rule on an ancestor (html.workspace-empty, html.journal-sidebar-collapsed)
+// can keep a host on screen with `hidden = true`, and can equally suppress a
+// host with `hidden = false`. Both are invisible to a property-only check.
+function isPanelActuallyVisible(element) {
+  const el = element && typeof element === 'object'
+    ? element
+    : (typeof document !== 'undefined' && document.getElementById
+      ? document.getElementById(element)
+      : null);
+  if (!el) return false;
+  if (el.hidden) return false;
+  try {
+    if (typeof getComputedStyle !== 'function') return true;
+    const cs = getComputedStyle(el);
+    if (!cs) return true;
+    if (cs.display === 'none') return false;
+    if (cs.visibility === 'hidden') return false;
+    if (String(cs.opacity) === '0') return false;
+  } catch {}
   return true;
 }
+
+// ACT 4B — the DOM RESULT of one Journal Note composition, as a VALUE.
+//
+// "Journal Note composition: complete" must mean the Sidebar is actually
+// showing the Current Document composition, so the completion line is gated on
+// this evidence instead of on the fact that four renderers returned. It checks
+// the four local hosts positively and every Workspace-only host negatively,
+// because the reported failure was a Workspace panel LEFT VISIBLE and a local
+// panel left hidden — the two directions a "renderer returned" log cannot see.
+//
+// LOCAL CONSUMER STATES (focused empty-state correction):
+//   AVAILABLE WITH RECORDS — provider ok, count > 0, visible rows required,
+//     and the empty state must be hidden.
+//   AVAILABLE EMPTY — provider ok, count = 0, explicit empty state required,
+//     composition stays successful. Zero is NEVER a failure.
+//   ERROR — provider failed; composition reports the specific consumer error.
+//   UNAVAILABLE does not apply to local Tags/Tasks/Links Out when a valid
+//     Current Document exists.
+// Canonical empty states: Tags "No tags.", Tasks "No tasks.", Links Out
+// "No Links Out.".
+function verifyStandaloneNoteComposition() {
+  const failures = [];
+
+  const composition = typeof getSidebarComposition === 'function' ? getSidebarComposition() : null;
+  const document_ = (composition && composition.document) || {};
+
+  // The four Current Document hosts, with the projection that supplies their
+  // expected rows. Active carries document identity rather than a row list.
+  const LOCAL_HOSTS = [
+    { elementId: 'workspaceActivePanel', bodyId: 'workspaceActiveBody', projection: null, rowsOf: null },
+    { elementId: 'workspaceTagsPanel', bodyId: 'workspaceTagsList', projection: document_.tags, rowsOf: (p) => (p ? p.tags : []), emptyText: 'No tags.' },
+    { elementId: 'workspaceTasksPanel', bodyId: 'workspaceTasksList', projection: document_.tasks, rowsOf: (p) => (p ? p.tasks : []), emptyText: 'No tasks.' },
+    { elementId: 'workspaceRelatedPanel', bodyId: 'workspaceRelatedList', projection: document_.linksOut, rowsOf: (p) => (p ? p.linksOut : []), emptyText: 'No Links Out.' },
+  ];
+
+  for (const host of LOCAL_HOSTS) {
+    const el = typeof document.getElementById === 'function' ? document.getElementById(host.elementId) : null;
+    if (!el) {
+      failures.push(`${host.elementId}=absent`);
+      continue;
+    }
+    if (!isPanelActuallyVisible(el)) {
+      failures.push(`${host.elementId}=not-visible(${describePanelVisibility(host.elementId)})`);
+      continue;
+    }
+
+    const body = document.getElementById(host.bodyId);
+    if (!body) {
+      failures.push(`${host.bodyId}=absent`);
+      continue;
+    }
+    if (host.rowsOf == null) continue;
+
+    const projection = host.projection || null;
+    const availability = String((projection && projection.availability) || '');
+    if (availability === 'error') {
+      failures.push(`${host.bodyId}=provider-error(${(projection && projection.reason) || 'error'})`);
+      continue;
+    }
+    if (availability !== 'available') {
+      failures.push(`${host.bodyId}=not-available(${availability || 'missing'})`);
+      continue;
+    }
+
+    // "Expected rows exist": an AVAILABLE projection with rows must have RENDERED
+    // rows and NO visible empty state; an AVAILABLE projection with zero rows
+    // must have a VISIBLE explicit empty state and NO data rows. Zero records do
+    // not fail composition. A body that is empty AND silent is a failure.
+    //
+    // TASKS SCOPE NOTE: the Tasks host is the accepted Task Review renderer fed
+    // the live Task projection as its ONLY input. The canonical local empty
+    // state is "No tasks."; a narrowed search/filter that matches nothing keeps
+    // the accepted contextual wording ("No tasks match this search" or the
+    // status-filter wording such as "No open tasks"). Either satisfies AVAILABLE
+    // EMPTY for the Tasks host, because the provider itself succeeded with the
+    // records it was given — the projection is the expectation, never the DOM.
+    const expected = Number(((host.rowsOf(projection) || []).length) || 0);
+    const acceptedEmptyTexts = host.bodyId === 'workspaceTasksList'
+      ? [host.emptyText, 'No tasks match this search', 'No open tasks',
+        'No backlog tasks', 'No todo tasks', 'No ongoing tasks',
+        'No done tasks', 'No tasks match', 'No tasks']
+      : [host.emptyText];
+    const bodyText = String(body.textContent || '');
+    const hasEmptyState = acceptedEmptyTexts.some((t) => t && bodyText.includes(t));
+    const rendered = body.children ? body.children.length : 0;
+    if (expected > 0 && rendered === 0) {
+      failures.push(`${host.bodyId}=0/expected-${expected}`);
+    } else if (expected === 0 && (rendered === 0 && !bodyText.trim())) {
+      failures.push(`${host.bodyId}=empty-and-silent`);
+    } else if (expected === 0 && !hasEmptyState) {
+      failures.push(`${host.bodyId}=empty-state-missing`);
+    } else if (expected > 0 && hasEmptyState) {
+      failures.push(`${host.bodyId}=empty-and-rows-coexist`);
+    }
+  }
+
+  // Every host the composition decided is fully withdrawn must be OFF SCREEN.
+  const hiddenIds = Array.isArray(composition && composition.hiddenElementIds)
+    ? composition.hiddenElementIds
+    : [];
+  for (const id of hiddenIds) {
+    const el = typeof document.getElementById === 'function' ? document.getElementById(id) : null;
+    if (el && isPanelActuallyVisible(el)) failures.push(`${id}=workspace-panel-still-visible`);
+  }
+
+  return { ok: failures.length === 0, failures, checked: LOCAL_HOSTS.length, withdrawn: hiddenIds.length };
+}
+
+function composeStandaloneNotePanels() {
+  const report = { active: false, tags: false, tasks: false, linksOut: false, withdrawn: false, linksIn: false };
+  try { log?.('Journal Note composition: begin'); } catch {}
+
+  // Sidebar composition withdraws the Workspace-only panels and sets Task
+  // Review to the current-document scope in one pass.
+  try {
+    if (typeof applySidebarComposition === 'function') applySidebarComposition();
+    report.withdrawn = true;
+  } catch (e) {
+    try { log?.(`Journal Note composition: sidebar withdraw skipped (${e?.message || e})`); } catch {}
+  }
+
+  // Active identity — the existing renderer, fed the ACT 4A Current Document
+  // composition. Never a second Active renderer.
+  try {
+    if (typeof renderWorkspaceActivePanel === 'function') {
+      renderWorkspaceActivePanel();
+      report.active = true;
+      log?.(`Journal Note composition: Active rendered (${describePanelVisibility('workspaceActivePanel')})`);
+    }
+  } catch (e) {
+    try { log?.(`Journal Note composition: Active failed (${e?.message || e})`); } catch {}
+  }
+
+  // Local Tags and local Links Out reuse the existing panel owners, fed the
+  // ACT 4A live projections. No Workspace Index is required.
+  try {
+    if (typeof renderWorkspaceTagsPanel === 'function') {
+      renderWorkspaceTagsPanel();
+      report.tags = true;
+      log?.(`Journal Note composition: Tags rendered (${describePanelVisibility('workspaceTagsPanel')})`);
+    }
+  } catch (e) {
+    try { log?.(`Journal Note composition: Tags failed (${e?.message || e})`); } catch {}
+  }
+
+  try {
+    if (typeof renderWorkspaceRelatedPanel === 'function') {
+      renderWorkspaceRelatedPanel();
+      report.linksOut = true;
+      log?.(`Journal Note composition: Links Out rendered (${describePanelVisibility('workspaceRelatedPanel')})`);
+    }
+  } catch (e) {
+    try { log?.(`Journal Note composition: Links Out failed (${e?.message || e})`); } catch {}
+  }
+
+  // Task Review is rendered by its OWN single renderer, in the scope the
+  // composition owner just selected. Reading the real DOM afterwards is what
+  // proves the panel shows the note's tasks: previously this step only LOGGED
+  // "Tasks rendered" without rendering, so the panel could keep Workspace content
+  // (or a Workspace readiness message) while the log claimed success.
+  try {
+    if (typeof renderWorkspaceTasksPanel === 'function') {
+      renderWorkspaceTasksPanel();
+      report.tasks = true;
+      log?.(`Journal Note composition: Tasks rendered (${describePanelVisibility('workspaceTasksPanel')})`);
+    }
+  } catch (e) {
+    try { log?.(`Journal Note composition: Tasks failed (${e?.message || e})`); } catch {}
+  }
+
+  // Links In is unavailable without a Workspace and is never shown as zero.
+  report.linksIn = false;
+  log?.('Journal Note composition: Workspace panels withdrawn; Links In unavailable');
+
+  // The "complete" line proves the ACTUAL DOM state of every panel host, so a
+  // composition that returns successfully while leaving the Sidebar visibly
+  // wrong can no longer read as a success.
+  const verification = verifyStandaloneNoteComposition();
+  report.verification = verification;
+  try {
+    log?.('Journal Note composition: panel state ' +
+      ACT4B_REPORTED_PANEL_IDS.map(describePanelVisibility).join(' '));
+  } catch (e) {}
+
+  if (!verification.ok) {
+    // A focused warning AND a structured failure, so the caller can see that the
+    // Note Sidebar is NOT correct. The app is neither closed nor reloaded; the
+    // previous state is left as it is.
+    report.complete = false;
+    try {
+      log?.('Journal Note composition: FAILED — ' + verification.failures.join(' '));
+    } catch {}
+    return report;
+  }
+
+  report.complete = true;
+  log?.('Journal Note composition: complete');
+  return report;
+}
+
+// --------------------------------------------------------------------
+// ACT 4B — TEMPORARY RESTART/CLOSE CLASSIFICATION DIAGNOSTIC
+//
+// Development-only. It exists solely to classify the observed Scenario B
+// termination (JavaScript error vs. pagehide vs. Service Worker
+// controllerchange reload vs. explicit reload) because the in-app Logs panel
+// cannot be read after the page closes.
+//
+// It records ONLY non-content facts. It never writes Markdown, file contents,
+// serialized handles, or absolute filesystem paths. It is REMOVED before final
+// ACT 4B acceptance.
+// --------------------------------------------------------------------
+const MME_ACT4B_DIAG_KEY = 'mme_act4b_termination_diagnostic';
+
+function installAct4bTerminationDiagnostic() {
+  try {
+    if (globalThis.MME_ACT4B_DIAG) return globalThis.MME_ACT4B_DIAG;
+    if (typeof window === 'undefined' || !window.addEventListener) return null;
+    if (typeof localStorage === 'undefined') return null;
+
+    const record = (event, extra) => {
+      try {
+        const entry = {
+          t: new Date().toISOString(),
+          event,
+          context: (() => {
+            try { return document?.documentElement?.dataset?.appContext || ''; } catch { return ''; }
+          })(),
+          journalComposition: (() => {
+            try { return getJournalComposition(); } catch { return ''; }
+          })(),
+          phase: (() => { try { return getJournalNotePhase(); } catch { return ''; } })(),
+          fileName: (() => {
+            // Filename only. Never a path, never content.
+            try { return typeof currentFileName !== 'undefined' ? String(currentFileName || '') : ''; } catch { return ''; }
+          })(),
+          hasHandle: (() => {
+            try { return Boolean(typeof currentSaveHandle !== 'undefined' && currentSaveHandle); } catch { return false; }
+          })(),
+          hasWorkspaceRoot: (() => {
+            try { return Boolean(globalThis.WORKSPACE_STATE?.rootHandle); } catch { return false; }
+          })(),
+          workspaceActivePath: (() => {
+            try { return String(globalThis.WORKSPACE_STATE?.activeFile || ''); } catch { return ''; }
+          })(),
+          swController: (() => {
+            try { return Boolean(navigator?.serviceWorker?.controller); } catch { return false; }
+          })(),
+          errName: '',
+          errMessage: '',
+          stack: '',
+          ...(extra || {}),
+        };
+        localStorage.setItem(MME_ACT4B_DIAG_KEY, JSON.stringify(entry));
+      } catch {}
+    };
+
+    const api = {
+      key: MME_ACT4B_DIAG_KEY,
+      record,
+      recordPhase(phase) { record('journal-transition-phase', { phase }); },
+      read() {
+        try { return JSON.parse(localStorage.getItem(MME_ACT4B_DIAG_KEY) || 'null'); } catch { return null; }
+      },
+      clear() { try { localStorage.removeItem(MME_ACT4B_DIAG_KEY); } catch {} },
+      // Called on the NEXT boot: print the previous termination once.
+      reportPreviousOnBoot() {
+        const prev = api.read();
+        if (!prev) return null;
+        try {
+          console.info('[ACT4B-DIAG] previous termination record:', JSON.stringify(prev));
+          try { log?.(`[ACT4B-DIAG] previous: event=${prev.event} phase=${prev.phase} ctx=${prev.context} comp=${prev.journalComposition} sw=${prev.swController} err=${prev.errName || 'none'}`); } catch {}
+        } catch {}
+        return prev;
+      },
+    };
+
+    window.addEventListener('error', (e) => {
+      record('uncaught-exception', {
+        errName: e?.error?.name || e?.name || 'Error',
+        errMessage: String(e?.message || '').slice(0, 200),
+        stack: String(e?.error?.stack || '').split('\n').slice(0, 3).join(' | ').slice(0, 300),
+      });
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      record('unhandled-rejection', {
+        errName: e?.reason?.name || 'Rejection',
+        errMessage: String(e?.reason?.message || e?.reason || '').slice(0, 200),
+        stack: String(e?.reason?.stack || '').split('\n').slice(0, 3).join(' | ').slice(0, 300),
+      });
+    });
+    window.addEventListener('pagehide', () => record('pagehide'));
+    window.addEventListener('beforeunload', () => record('beforeunload'));
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') record('visibilitychange-hidden');
+    });
+    if (navigator?.serviceWorker) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        record('controllerchange', { note: 'controller now present: update-ready owns the reload decision' });
+      });
+    }
+
+    globalThis.MME_ACT4B_DIAG = api;
+    api.reportPreviousOnBoot();
+    return api;
+  } catch {
+    return null;
+  }
+}
+
+try {
+  // ACT 4B: expose the top-bar command-availability owner so it can be called
+  // directly when the context changes without relying only on the observer.
+  window.updateTopBarCommandAvailability = updateTopBarCommandAvailability;
+  window.isTopBarOpenAvailable = isTopBarOpenAvailable;
+  globalThis.updateTopBarCommandAvailability = updateTopBarCommandAvailability;
+  globalThis.isTopBarOpenAvailable = isTopBarOpenAvailable;
+  globalThis.MME_JOURNAL_COMPOSITION = MME_JOURNAL_COMPOSITION;
+  globalThis.getJournalComposition = getJournalComposition;
+  globalThis.setJournalComposition = setJournalComposition;
+  globalThis.isJournalContext = isJournalContext;
+  globalThis.OPEN_NOTE_REASON = OPEN_NOTE_REASON;
+  // ACT 4B — transaction support owners (additive, no new store/scope/opener).
+  globalThis.JOURNAL_NOTE_TRANSITION = JOURNAL_NOTE_TRANSITION;
+  globalThis.getJournalNotePhase = getJournalNotePhase;
+  globalThis.composeStandaloneNotePanels = composeStandaloneNotePanels;
+  globalThis.createOpenRenderCompletion = createOpenRenderCompletion;
+  globalThis.getLastOpenRenderCompletion = getLastOpenRenderCompletion;
+  globalThis.getJournalObserverGeneration = getJournalObserverGeneration;
+  globalThis.invalidateWorkspaceObservers = invalidateWorkspaceObservers;
+  globalThis.activateJournalObservers = activateJournalObservers;
+  globalThis.isObserverGenerationStale = isObserverGenerationStale;
+  globalThis.isWorkspaceAggregationActive = isWorkspaceAggregationActive;
+  // ACT 4B: the temporary termination classifier is NOT installed. It failed to
+  // produce a usable record after Chrome closed, and now that the unsafe
+  // cross-composition transitions are blocked it is no longer required for
+  // ACT 4B. The owner `installAct4bTerminationDiagnostic` is retained in source
+  // so ACT 4C can re-introduce and finish it; ACT 4B runtime installs nothing.
+  try { globalThis.MME_ACT4B_DIAG?.clear?.(); } catch {}
+  try { globalThis.MME_ACT4B_DIAG = null; } catch {}
+  // NOTE: MME_APP.openJournalNote is registered inside the canonical MME_APP
+  // object below, NOT here — MME_APP does not exist yet at module scope.
+  window.openJournalNote = openNote;
+} catch {}
 
 try {
   window.buildWorkspaceIndex = buildWorkspaceIndex;
@@ -3280,23 +4178,31 @@ function renderWorkspaceRelatedPanel() {
     const rows = Array.isArray(linksOut.linksOut) ? linksOut.linksOut : [];
 
     panel.hidden = false;
-    badge.textContent = '—';
+    badge.textContent = rows.length ? `${rows.length}` : '—';
+
+    // ACT 4B — the host is SHARED between the two directions, so its visible
+    // title must state the direction it actually shows. With no Workspace this
+    // host is LINKS OUT from the live Current Document; leaving the header
+    // reading "Links In" above a body reading "Links out — n" would mislabel the
+    // only direction a standalone Note has. One host, one renderer, one write.
+    const localTitle = panel.querySelector?.('.workspaceRelatedTitle');
+    if (localTitle) localTitle.textContent = 'Links Out';
 
     if (linksOut.availability === MME_AVAILABILITY.AVAILABLE && rows.length === 0) {
-      summary.textContent = 'No outgoing links in this note';
-      list.innerHTML = '';
+      summary.textContent = 'No Links Out.';
+      list.innerHTML = '<div class="workspaceRelatedEmpty" data-empty-state="links-out">No Links Out.</div>';
     } else {
-      summary.textContent =
-        `Links out — ${rows.length} (resolution ${linksOut.resolutionAvailability})`;
+      // Standalone Note semantics: extraction is available but cross-file
+      // resolution needs a Workspace, so every target stays not-ready.
+      summary.textContent = 'Resolution requires a Workspace.';
       list.innerHTML = rows
         .map((r) => {
           const label = escapeHtml(r.displayLabel || r.rawTarget || '');
           // Without a Workspace a target is NOT-READY, which is not "missing"
           // and is never navigable. Rows are deliberately non-interactive.
-          const state = escapeHtml(r.status || 'not-ready');
-          return `<div class="workspaceRelatedRow" data-scope="current-document" data-status="${state}">` +
+          return `<div class="workspaceRelatedRow" data-scope="current-document" data-status="not-ready" role="listitem" aria-label="${label}, not ready">` +
             `<span class="workspaceRelatedRowLabel">${label}</span> ` +
-            `<span class="workspaceRelatedRowState">${state}</span></div>`;
+            `<span class="workspaceRelatedRowState">Not ready</span></div>`;
         })
         .join('');
     }
@@ -3313,6 +4219,13 @@ function renderWorkspaceRelatedPanel() {
   // terminology and the data source change.
   const activePath = String(WORKSPACE_STATE?.activeFile?.path || '');
   const activeLabel = getActiveConceptName();
+
+  // ACT 4B — the SHARED host must read LINKS IN whenever a Workspace is the
+  // active composition. The two branches are mutually exclusive, so exactly one
+  // direction label is ever written and the static shell's "Links In" default is
+  // restored rather than left over from a previous Note composition.
+  const workspaceTitle = panel.querySelector?.('.workspaceRelatedTitle');
+  if (workspaceTitle) workspaceTitle.textContent = 'Links In';
 
   // ACT V0 — the badge carries the numeric count only.
   if (!activePath) {
@@ -3723,6 +4636,57 @@ function renderWorkspaceTagsPanel() {
         badge
       )} summary=${Boolean(summary)} list=${Boolean(list)} results=${Boolean(results)}`
     );
+    return;
+  }
+
+  // ACT 4B — LOCAL TAGS for the Standalone Note composition.
+  //
+  // Same contract as the Links Out branch in renderWorkspaceRelatedPanel: when
+  // the composition says no Workspace is PRESENTED, this host is a
+  // CURRENT-DOCUMENT consumer and must render the note's own tags — never the
+  // Workspace inventory, and never a Workspace readiness message such as
+  // "Index not ready". This host was the last of the four Note panels without
+  // such a branch, so the Workspace path below ran against the deliberately
+  // RETAINED root handle (deactivateWorkspaceComposition preserves recoverable
+  // Workspace configuration), missed the `!WORKSPACE_STATE.rootHandle` gate,
+  // and left the panel visible reading "Index not ready" while the composition
+  // owner still logged "Tags rendered".
+  //
+  // If the composition owner is absent (e.g. an isolated owner sandbox) this
+  // host keeps its pre-ACT-4B Workspace behaviour rather than throwing.
+  const localScope = (typeof getSidebarComposition === 'function' &&
+    typeof MME_AVAILABILITY !== 'undefined') ? getSidebarComposition() : null;
+  if (localScope && !localScope.workspaceAvailable) {
+    const localTags = localScope.document.tags;
+    const rows = Array.isArray(localTags.tags) ? localTags.tags : [];
+
+    panel.hidden = false;
+    badge.textContent = `${rows.length}`;
+
+    if (localTags.availability === MME_AVAILABILITY.AVAILABLE && rows.length === 0) {
+      summary.textContent = 'No tags.';
+      list.innerHTML = '<div class="workspaceTagsEmpty" data-empty-state="tags">No tags.</div>';
+    } else {
+      summary.textContent = `Tags — ${rows.length} (${localTags.availability})`;
+      list.innerHTML = rows
+        .map((tag) => {
+          const label = escapeHtml(String(tag || ''));
+          // Without a Workspace a tag has no cross-file inventory, so the row
+          // is deliberately NON-INTERACTIVE: it is a span, not a button, and
+          // carries data-scope="current-document" so no Workspace tag filter or
+          // file navigation can be reached from it.
+          return `<span class="workspaceTagItem" data-scope="current-document" title="#${label}">` +
+            `<span class="workspaceTagName">#${label}</span></span>`;
+        })
+        .join('');
+    }
+
+    if (results) {
+      results.hidden = true;
+      results.innerHTML = '';
+    }
+
+    applyWorkspacePanelCollapsed(panel, 'tags', isWorkspacePanelCollapsed('tags'));
     return;
   }
 
@@ -6119,6 +7083,13 @@ globalThis.MME_APP = {
   setWritableHandleForCurrentFile,
   showToast,
   log,
+  // ACT 4B — the Journal Sidebar Open Note transaction. Registered HERE, in the
+  // canonical MME_APP object, because the Journal action owner calls it through
+  // MME_APP.openJournalNote(). Assigning it from an earlier module-scope block
+  // ran before MME_APP existed, so the assignment silently no-oped and the
+  // action received `undefined` (logged as "no transition (unknown)").
+  // Returns a structured result: { ok, reason, handle, fileName, writable, sameFile }
+  openJournalNote: () => openNote(),
   // ACT B: Expose the programmatic text suppression helper for mode-session.js.
   runProgrammaticTextChange,
 
@@ -7659,6 +8630,59 @@ function isSlidesContext() {
   }
 }
 
+// ---- ACT 4B: top-bar Open command availability ----
+//
+// The single shared #btnOpen element stays in the DOM. Its VISIBILITY is
+// derived from the active app mode:
+//   editor -> visible (accepted Editor behaviour unchanged)
+//   slides -> visible (accepted Slides behaviour unchanged)
+//   journal -> HIDDEN, because the Journal Sidebar owns both opening actions
+//
+// This function only toggles visibility. It opens no picker, changes no handle,
+// no document, no dirty state and no Workspace state, and it never invokes any
+// Journal composition entry.
+function isTopBarOpenAvailable() {
+  return !isJournalContext();
+}
+
+function updateTopBarCommandAvailability() {
+  try {
+    const btn = document.getElementById('btnOpen');
+    if (!btn) return false;
+    const available = isTopBarOpenAvailable();
+    btn.hidden = !available;
+    btn.disabled = !available;
+    // Keep the accepted Editor label/semantics untouched; only availability
+    // is derived, and it is restored automatically when Journal is left.
+    return available;
+  } catch (e) {
+    log?.(`Top bar: command availability update skipped (${e?.message || e})`);
+    return false;
+  }
+}
+
+// Mode switching must never run a transition. This observer only reacts to the
+// existing context dataset and re-derives toolbar visibility.
+function installTopBarCommandAvailabilityWatcher() {
+  try {
+    if (typeof MutationObserver !== 'function') return null;
+    if (globalThis.__mmeTopBarAvailabilityObserver) return globalThis.__mmeTopBarAvailabilityObserver;
+    const observer = new MutationObserver(() => {
+      updateTopBarCommandAvailability();
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-app-context'],
+    });
+    globalThis.__mmeTopBarAvailabilityObserver = observer;
+    updateTopBarCommandAvailability();
+    return observer;
+  } catch (e) {
+    log?.(`Top bar: availability watcher not installed (${e?.message || e})`);
+    return null;
+  }
+}
+
 function showExportMenu() {
   try {
     if (!exportMenu) return;
@@ -7780,13 +8804,15 @@ async function showRecentMenu() {
   recentMenu.appendChild(makeMenuSep());
   recentMenu.appendChild(
     makeMenuItem(
-      // ACT 4B — user-facing entry name. This is the single existing physical
-      // open control; it is RENAMED, never duplicated, and still delegates to
-      // the same owner (openNote -> openSmart).
-      'Open Note…',
+      // ACT 4B CORRECTION — the global Editor toolbar Open menu is restored to
+      // its exact pre-ACT-4B semantics: it opens a physical Markdown file and
+      // NOTHING else. It must not call openNote(), must not withdraw Workspace
+      // state, and must not apply any Journal Sidebar composition. Opening a
+      // file in Editor mode leaves the Journal presentation untouched.
+      'Browse…',
       () => {
         hideRecentMenu();
-        openNote();
+        openSmart();
       },
       { icon: '📂' }
     )
@@ -9176,7 +10202,7 @@ async function updateMindmap(source) {
   }
 }
 
-function render(source = 'render()') {
+function render(source = 'render()', completion = null) {
   (async () => {
     try {
       log(`${source}: begin`);
@@ -9188,8 +10214,20 @@ function render(source = 'render()') {
         syncHtmlScrollToEditor('render html updated');
       }
       log(`${source}: end`);
+      // ACT 4B — RENDER STABILITY BARRIER (PART 2 of 2).
+      // render() is fire-and-forget by design, so a caller that must not proceed
+      // until the document is stably rendered passes a completion object. The
+      // signal is settled exactly once, on BOTH the success and failure paths,
+      // so a render fault can never leave a transition waiting forever. Every
+      // pre-existing call site omits this argument and is unchanged.
+      if (completion && typeof completion.settle === 'function') {
+        completion.settle({ ok: true, source });
+      }
     } catch (err) {
       log(`❌ ${source} crashed: ${describeAssetFailure(err)}`);
+      if (completion && typeof completion.settle === 'function') {
+        completion.settle({ ok: false, source, error: err });
+      }
     }
   })();
 }
@@ -11215,7 +12253,16 @@ async function openSmart() {
       const restored = maybeRestoreDraftAfterOpen('openSmart(writable)');
       if (!restored) {
         hasAutoFitted = false;
-        render('openSmart(writable) render()');
+        // ACT 4B — RENDER STABILITY BARRIER (PART 1 of 2).
+        // render() is fire-and-forget (it starts an async IIFE and returns), so
+        // calling it here leaves the initial render in flight when openSmart()
+        // resolves. Journal composition must not commit against a half-rendered
+        // document, so the completion signal is captured and published. The
+        // narrow, backward-compatible completion contract lives on the owner
+        // (getLastOpenRenderCompletion), NOT on the opener's return value, so no
+        // existing caller of openSmart() changes behaviour.
+        __openRenderCompletion = createOpenRenderCompletion();
+        render('openSmart(writable) render()', __openRenderCompletion);
       }
 
       // ACT G / T1B: capture the post-open Task baseline so the next physical
@@ -13934,6 +14981,13 @@ function applyAppContextUi(contextId, reason = 'applyAppContextUi') {
 
   globalThis.currentAppContextId = ctx.id;
 
+  // ACT 4B — top-bar command availability follows the active mode. This only
+  // re-derives toolbar visibility; it opens no picker, changes no handle, no
+  // document, no dirty state and no Workspace state.
+  try {
+    updateTopBarCommandAvailability();
+  } catch {}
+
   const select = document.getElementById('appContextSelect');
   if (select) {
     select.value = ctx.id;
@@ -14171,3 +15225,11 @@ window.addEventListener('beforeunload', (ev) => {
 // ================================
 // End of APP SCRIPT
 // ================================
+
+// ACT 4B — install the top-bar command-availability watcher once the shared
+// toolbar exists. It only re-derives visibility from the active app mode.
+try {
+  installTopBarCommandAvailabilityWatcher();
+} catch (e) {
+  log?.(`Top bar: availability watcher install failed (${e?.message || e})`);
+}

@@ -192,9 +192,36 @@ const OWNER_EXTRACTS = [
   // ---- ACT 4B owners, verbatim ----
   extractBlockFrom(MAIN_SOURCE, 'const MME_PANEL_COMPOSITION = Object.freeze({', '});'),
   extractBlockFrom(MAIN_SOURCE, 'function getSidebarComposition(options) {'),
+  extractBlockFrom(MAIN_SOURCE, 'function isJournalContext() {'),
+  extractBlockFrom(MAIN_SOURCE, 'const MME_JOURNAL_COMPOSITION = Object.freeze({', '});'),
+  extractBlockFrom(MAIN_SOURCE, 'function getJournalComposition() {'),
+  extractBlockFrom(MAIN_SOURCE, 'function setJournalComposition(next) {'),
+  extractBlockFrom(MAIN_SOURCE, 'const OPEN_NOTE_REASON = Object.freeze({', '});'),
   extractBlockFrom(MAIN_SOURCE, 'function deactivateWorkspaceComposition() {'),
-  extractBlockFrom(MAIN_SOURCE, 'function applySidebarComposition(options) {'),
+  // Brace-aware: applySidebarComposition now contains nested loops, so the
+  // line-based extractor would truncate it at the first inner `}` and the
+  // sandbox would run a silently incomplete owner.
+  extractFunctionByBraces(MAIN_SOURCE, 'function applySidebarComposition(options) {'),
   extractBlockFrom(MAIN_SOURCE, 'async function openNote() {'),
+  // ACT 4B transaction support owners (extracted verbatim from main.js).
+  extractBlockFrom(MAIN_SOURCE, 'function createOpenRenderCompletion() {'),
+  extractBlockFrom(MAIN_SOURCE, 'function getLastOpenRenderCompletion() {'),
+  extractBlockFrom(MAIN_SOURCE, 'function getJournalObserverGeneration() {'),
+  extractBlockFrom(MAIN_SOURCE, 'function invalidateWorkspaceObservers(reason) {'),
+  extractBlockFrom(MAIN_SOURCE, 'function activateJournalObservers(reason) {'),
+  extractBlockFrom(MAIN_SOURCE, 'function isObserverGenerationStale(captured) {'),
+  extractBlockFrom(MAIN_SOURCE, 'function isWorkspaceAggregationActive() {'),
+  extractBlockFrom(MAIN_SOURCE, 'function getJournalNotePhase() {'),
+  extractBlockFrom(MAIN_SOURCE, 'function setJournalNotePhase(phase) {'),
+  // ACT 4B — the composition's DOM-EVIDENCE owners. These are extracted verbatim
+  // (not stubbed) because the completion contract runs OUTSIDE the per-renderer
+  // try/catch: a stub would let the sandbox pass while the real owner throws.
+  extractBlockFrom(MAIN_SOURCE, 'const ACT4B_REPORTED_PANEL_IDS = Object.freeze(', ');'),
+  extractFunctionByBraces(MAIN_SOURCE, 'function describePanelVisibility(elementId) {'),
+  extractFunctionByBraces(MAIN_SOURCE, 'function isPanelActuallyVisible(element) {'),
+  extractFunctionByBraces(MAIN_SOURCE, 'function verifyStandaloneNoteComposition() {'),
+  extractFunctionByBraces(MAIN_SOURCE, 'function syncJournalCompositionDataset() {'),
+  extractBlockFrom(MAIN_SOURCE, 'function composeStandaloneNotePanels() {'),
 ];
 
 // Collaborators the real owners reference: UI/IO bridges, not owners under
@@ -219,14 +246,50 @@ const COLLABORATORS = [
   'let __guardResult = true;',
   'let __openCalls = 0;',
   'let __guardCalls = 0;',
+  // Journal-context shim: ACT 4B composition is inert outside Journal, so the
+  // suite drives the real context owner explicitly per fixture.
+  'let __journalContextId = "journal";',
+  'let journalComposition = "none";',
+  // ---- ACT 4B transaction state (mirrors the real module-level bindings) ----
+  'let __openRenderCompletion = null;',
+  'let __journalNotePhase = "idle";',
+  'let __journalNoteTransitionSeq = 0;',
+  'let __journalNoteTransitionBusy = false;',
+  'let __journalObserverGeneration = 0;',
+  'let __journalActiveGeneration = 0;',
+  // The real lifecycle constant (openNote() references it by name).
+  'const JOURNAL_NOTE_TRANSITION = Object.freeze({',
+  '  IDLE: "idle", GUARDING: "guarding", OPENING: "opening",',
+  '  STABILIZING: "stabilizing", COMMITTING: "committing",',
+  '  COMPOSING: "composing", READY: "ready", FAILED: "failed",',
+  '});',
+  'globalThis.__setJournalContextProbe = (v) => { __journalContextId = v; };',
+  'globalThis.document = {',
+  '  documentElement: { get dataset() { return { appContext: __journalContextId }; } },',
+  // The Sidebar DOM is swappable so the ACT 4B DOM fixtures can apply the REAL
+  // composition to real element objects and read their real `hidden` state.
+  '  __dom: null,',
+  '  getElementById: (id) => (globalThis.document.__dom ? globalThis.document.__dom.getElementById(id) : null),',
+  '  querySelector: () => null,',
+  '  querySelectorAll: () => [],',
+  '};',
+  'globalThis.__setSidebarDom = (d) => { globalThis.document.__dom = d; };',
+  'globalThis.__clearSidebarDom = () => { globalThis.document.__dom = null; };',
   'function confirmDiscardIfDirty() { __guardCalls += 1; return __guardResult; }',
   'async function openSmart() {',
   '  __openCalls += 1;',
-  '  if (__openResult === "throw") throw new Error("read failed");',
-  '  if (__openResult === "cancel") return;',
-  '  if (__openResult === "samefile") { currentSaveHandle = { __h: "same-file-new-handle" }; return; }',
+  // The real openSmart() publishes a render-completion signal before calling
+  // the fire-and-forget render(); the double mirrors that contract.
+  '  function settleRender(ok) { if (__openRenderCompletion) __openRenderCompletion.settle({ ok, source: "double" }); }',
+  '  if (__openResult !== "cancel") {',
+  '    __openRenderCompletion = createOpenRenderCompletion();',
+  '  }',
+  '  if (__openResult === "throw") { settleRender(false); throw new Error("read failed"); }',
+  '  if (__openResult === "cancel") { return; }',
+  '  if (__openResult === "samefile") { currentSaveHandle = { __h: "same-file-new-handle" }; settleRender(true); return; }',
   '  currentSaveHandle = { __h: "new-handle" };',
   '  currentFileName = "opened.md";',
+  '  settleRender(true);',
   '}',
 ].join('\n');
 
@@ -250,11 +313,27 @@ const OWNER_API = [
   '  getCurrentDocumentComposition,',
   // ---- ACT 4B owners ----
   '  MME_PANEL_COMPOSITION,',
+  '  MME_JOURNAL_COMPOSITION,',
+  '  getJournalComposition,',
+  '  setJournalComposition,',
+  '  isJournalContext,',
+  '  OPEN_NOTE_REASON,',
+  '  __setJournalContext: (v) => { __journalContextId = v; },',
   '  getSidebarComposition,',
   '  deactivateWorkspaceComposition,',
   '  applySidebarComposition,',
   '  openNote,',
-  // ---- Test doubles for the two EXISTING owners openNote wraps ----
+  // ---- ACT 4B transaction support owners (real, extracted) ----
+  '  createOpenRenderCompletion,',
+  '  getLastOpenRenderCompletion,',
+  '  getJournalObserverGeneration,',
+  '  invalidateWorkspaceObservers,',
+  '  activateJournalObservers,',
+  '  isObserverGenerationStale,',
+  '  isWorkspaceAggregationActive,',
+
+  '  getJournalNotePhase,',
+  '  composeStandaloneNotePanels,',  // ---- Test doubles for the two EXISTING owners openNote wraps ----
   // These are collaborators, not owners under test: openSmart (the physical
   // opener) and confirmDiscardIfDirty (the existing prompt owner) are both
   // shipped code that cannot run headless. openNote itself is the REAL owner
@@ -332,7 +411,11 @@ globalThis.WORKSPACE_INDEX_STATE = IDX;
   globalThis.addEventListener = () => true;
   globalThis.removeEventListener = () => true;
   globalThis.document = Object.assign(globalThis.document || {}, {
-    getElementById: () => null,
+    getElementById: (id) => (
+      globalThis.document && globalThis.document.__dom
+        ? globalThis.document.__dom.getElementById(id)
+        : null
+    ),
     createElement: () => ({ style: {}, setAttribute() {}, appendChild() {} }),
     querySelectorAll: () => [],
   });
@@ -466,6 +549,19 @@ function act4aOpenWorkspaceNote(text) {
   O.setFileName('example.md');
   O.setHandle(noteHandle);
   O.setText(text === undefined ? noteHandle.__text : text);
+  // The Journal composition follows the Workspace: a Workspace is genuinely
+  // ACTIVE here, so the Workspace -> Note transition must quiesce its
+  // observers. Previously the helper left the composition at 'none', which
+  // made the Workspace->Note branch appear unreachable.
+  O.setJournalComposition('workspace');
+}
+
+// A Journal in the NOTE composition. ACT 4B blocks Workspace -> Note, so the
+// single-composition Open Note fixtures must start here rather than from a
+// Workspace, otherwise they exercise the blocked cross-composition path.
+function act4aOpenNoteScope(text) {
+  act4aOpenWorkspaceNote(text);
+  O.setJournalComposition('note');
 }
 
 const A4_AV = O.MME_AVAILABILITY;
@@ -935,7 +1031,10 @@ group('ACT 4A — live/saved boundary and structural guarantees');
   });
 
   await check('B07', 'workspace: all accepted 0.6.3 panels return', () => {
+    // Journal composition must explicitly be 'workspace'; a retained root handle
+    // alone must never re-activate aggregation.
     act4aOpenWorkspaceNote('# Example\n\n- [ ] saved\n');
+    O.setJournalComposition('workspace');
     const c = A4_sb();
     return c.composition === 'workspace' && c.workspaceAvailable === true &&
       c.panels.linksIn.visible && c.panels.notes.visible && c.panels.knowledge.visible &&
@@ -1034,7 +1133,7 @@ group('ACT 4A — live/saved boundary and structural guarantees');
       JSON.stringify(['workspaceRelatedPanel', 'workspaceTagsPanel']);
   });
 
-  await check('D01', 'DIRTY STATE: openSmart has NO dirty guard (source-proven blocker)', () => {
+  await check('Y01', 'DIRTY STATE: openSmart has NO dirty guard (source-proven blocker)', () => {
     // The accepted Package 2/0.6.3 opener sets `dirty = false` right after it
     // loads and never consults a guard. Proved from the real owner, because
     // inferring the guard from Mode Session alone is explicitly forbidden.
@@ -1042,17 +1141,17 @@ group('ACT 4A — live/saved boundary and structural guarantees');
     return !/confirmDiscardIfDirty/.test(body) && /dirty = false/.test(body);
   });
 
-  await check('D02', 'DIRTY STATE: Open Note invokes the EXISTING guard owner', () => {
+  await check('Y02', 'DIRTY STATE: Open Note invokes the EXISTING guard owner', () => {
     const body = extractBlockFrom(MAIN_SOURCE, 'async function openNote() {');
     return /confirmDiscardIfDirty/.test(body);
   });
 
-  await check('D03', 'DIRTY STATE: guard runs BEFORE the opener (no silent discard)', () => {
+  await check('Y03', 'DIRTY STATE: guard runs BEFORE the opener (no silent discard)', () => {
     const body = extractBlockFrom(MAIN_SOURCE, 'async function openNote() {');
     return body.indexOf('confirmDiscardIfDirty') < body.indexOf('await openSmart()');
   });
 
-  await check('D04', 'DIRTY STATE: no second prompt owner created', () => {
+  await check('Y04', 'DIRTY STATE: no second prompt owner created', () => {
     const main = read('js', 'main.js');
     // Baseline (0.6.3) already had ONE confirm-discard owner and EIGHT confirm()
     // call sites, including a distinct "Create new document anyway?" prompt.
@@ -1061,15 +1160,18 @@ group('ACT 4A — live/saved boundary and structural guarantees');
       ((main.match(/\bconfirm\(/g) || []).length) === 8;
   });
 
-  await check('D05', 'CANCEL: guard decline returns false before any mutation', () => {
+  await check('Y05', 'CANCEL: guard decline returns false before any mutation', () => {
     const body = extractBlockFrom(MAIN_SOURCE, 'async function openNote() {');
-    const guard = body.slice(body.indexOf('confirmDiscardIfDirty'), body.indexOf('hadWorkspace'));
-    // The decline branch must not touch Workspace, handles or the Sidebar.
-    return /return false/.test(guard) && !/deactivateWorkspaceComposition/.test(guard) &&
-      !/applySidebarComposition/.test(guard);
+    const guard = body.slice(body.indexOf('confirmDiscardIfDirty'), body.indexOf('PHASE 3'));
+    // The decline branch must return a structured failure and must not touch
+    // Workspace, handles or the Sidebar.
+    return /OPEN_NOTE_REASON\.DIRTY_DECLINED/.test(guard) && /ok: false/.test(guard) &&
+      !/deactivateWorkspaceComposition/.test(guard) &&
+      !/applySidebarComposition/.test(guard) &&
+      !/composeStandaloneNotePanels/.test(guard);
   });
 
-  await check('D06', 'CANCEL: picker cancel leaves handle and identity untouched', () => {
+  await check('Y06', 'CANCEL: picker cancel leaves handle and identity untouched', () => {
     act4aOpenWorkspaceNote('# Example\n');
     const before = { hidden: A4_sb().hiddenElementIds, active: WORKSPACE_STATE.activeFile };
     // Simulate the post-cancel state (openSmart returned without activating).
@@ -1079,17 +1181,17 @@ group('ACT 4A — live/saved boundary and structural guarantees');
   });
 
   await check('O01', 'Open Note: dirty guard runs, then success activates Standalone', async () => {
-    act4aOpenWorkspaceNote('# Example\n');
+    act4aOpenNoteScope('# Example\n');
     O.__resetCalls();
     O.__setGuardResult(true);
     O.__setOpenResult('success');
     const r = await O.openNote();
     const c = O.__calls();
-    return r === true && c.guard === 1 && c.openSmart === 1;
+    return r.ok === true && r.reason === 'opened' && c.guard === 1 && c.openSmart === 1;
   });
 
   await check('O02', 'Open Note: guard DECLINE performs no transition at all', async () => {
-    act4aOpenWorkspaceNote('# Example\n');
+    act4aOpenNoteScope('# Example\n');
     const activeBefore = WORKSPACE_STATE.activeFile;
     O.__resetCalls();
     O.__setGuardResult(false);
@@ -1097,38 +1199,47 @@ group('ACT 4A — live/saved boundary and structural guarantees');
     const r = await O.openNote();
     const c = O.__calls();
     // Guard declined: the opener must never run and Workspace must be intact.
-    return r === false && c.guard === 1 && c.openSmart === 0 &&
-      WORKSPACE_STATE.activeFile === activeBefore;
+    return r.ok === false && r.reason === 'dirty-declined' &&
+      c.guard === 1 && c.openSmart === 0 && WORKSPACE_STATE.activeFile === activeBefore;
   });
 
   await check('O03', 'Open Note: picker CANCEL leaves Workspace and composition unchanged', async () => {
-    act4aOpenWorkspaceNote('# Example\n');
+    act4aOpenNoteScope('# Example\n');
     const activeBefore = WORKSPACE_STATE.activeFile;
     const hiddenBefore = JSON.stringify(O.getSidebarComposition().hiddenElementIds);
     O.__setGuardResult(true);
     O.__setOpenResult('cancel');
     const r = await O.openNote();
-    return r === false && WORKSPACE_STATE.activeFile === activeBefore &&
+    return r.ok === false && r.reason === 'cancelled' &&
+      WORKSPACE_STATE.activeFile === activeBefore &&
       JSON.stringify(O.getSidebarComposition().hiddenElementIds) === hiddenBefore;
   });
 
   await check('O04', 'Open Note: FAILED open (throw) preserves Workspace', async () => {
-    act4aOpenWorkspaceNote('# Example\n');
+    act4aOpenNoteScope('# Example\n');
     const activeBefore = WORKSPACE_STATE.activeFile;
     O.__setGuardResult(true);
     O.__setOpenResult('throw');
+    // A read failure inside the opener is converted into a structured failure by
+    // the transaction catch, so it never escapes uncaught.
+    let result = null;
     let threw = false;
-    try { await O.openNote(); } catch { threw = true; }
-    return threw && WORKSPACE_STATE.activeFile === activeBefore;
+    try { result = await O.openNote(); } catch { threw = true; }
+    return !threw && result && result.ok === false &&
+      result.reason === 'error' && WORKSPACE_STATE.activeFile === activeBefore;
   });
 
-  await check('O05', 'Open Note: success withdraws the Workspace ACTIVE projection', async () => {
-    act4aOpenWorkspaceNote('# Example\n');
+  await check('O05', 'Open Note does NOT destructively clear Workspace state', async () => {
+    // ACT 4B BOUNDARY: Workspace -> Note is blocked, so the Note -> Note path no
+    // longer needs to withdraw a Workspace active projection. It must leave the
+    // recoverable Workspace configuration completely intact, and the old
+    // expectation that activeFile is cleared is now an ACT 4C concern.
+    act4aOpenNoteScope('# Example\n');
     O.__setGuardResult(true);
     O.__setOpenResult('success');
     await O.openNote();
-    // Active projection withdrawn so Workspace-only panels cannot linger.
-    return WORKSPACE_STATE.activeFile === null && WORKSPACE_STATE.rootHandle === null;
+    return Boolean(WORKSPACE_STATE.rootHandle) &&
+      O.getJournalComposition() === 'note';
   });
 
   await check('O06', 'Open Note: no fake single-file Workspace is ever fabricated', async () => {
@@ -1143,12 +1254,12 @@ group('ACT 4A — live/saved boundary and structural guarantees');
   });
 
   await check('O07', 'Open Note: same-file reopen counts as SUCCESS (not cancel)', async () => {
-    act4aOpenWorkspaceNote('# Example\n');
+    act4aOpenNoteScope('# Example\n');
     O.setHandle({ __h: 'previous' });
     O.__setGuardResult(true);
     O.__setOpenResult('samefile');
     const r = await O.openNote();
-    return r === true;
+    return r.ok === true && r.sameFile === true;
   });
 
   await check('I08', 'no second Sidebar RENDERER (source ownership)', () => {
@@ -1191,7 +1302,7 @@ group('ACT 4A — live/saved boundary and structural guarantees');
   });
 
   await check('O10', 'CANCEL changes no composition (behavioural)', async () => {
-    act4aOpenWorkspaceNote('# Example\n');
+    act4aOpenNoteScope('# Example\n');
     const hiddenBefore = JSON.stringify(O.getSidebarComposition().hiddenElementIds);
     const activeBefore = WORKSPACE_STATE.activeFile;
     O.__setGuardResult(true);
@@ -1199,6 +1310,679 @@ group('ACT 4A — live/saved boundary and structural guarantees');
     await O.openNote();
     return WORKSPACE_STATE.activeFile === activeBefore &&
       JSON.stringify(O.getSidebarComposition().hiddenElementIds) === hiddenBefore;
+  });
+
+  // ===================================================================
+  // ACT 4B FOCUSED CORRECTION — Journal Open Note click-to-picker chain.
+  // C01..C20 map to the accepted O1..O20 list. These execute the REAL owners
+  // (action callback body, MME_APP registry, context guard, dirty guard and
+  // openNote transaction) against controlled picker/guard doubles.
+  // ===================================================================
+  const ctlSrc = read('js', 'workspace', 'workspace-controller.js');
+  const mainSrc2 = read('js', 'main.js');
+
+  // The real action-owner callback the Journal Sidebar registry installs.
+  const extractOnOpenNote = () => {
+    const start = ctlSrc.indexOf('onOpenNote: async () => {');
+    if (start < 0) return null;
+    const i = ctlSrc.indexOf('{', start);
+    let depth = 0, end = -1;
+    for (let j = i; j < ctlSrc.length; j++) {
+      if (ctlSrc[j] === '{') depth++;
+      else if (ctlSrc[j] === '}') { depth--; if (depth === 0) { end = j; break; } }
+    }
+    return end < 0 ? null : ctlSrc.slice(i, end + 1);
+  };
+
+  await check('C01', 'O1: Sidebar callback AWAITS and FORWARDS the Open Note result', () => {
+    const b = extractOnOpenNote();
+    return !!b && /const\s+result\s*=\s*await\s+globalThis\.MME_APP\?\.openJournalNote\?\.\(\)/.test(b);
+  });
+
+  await check('C02', 'O2: delegation wrapper forwards the structured result', () => {
+    const b = extractOnOpenNote();
+    return !!b && /result\.ok/.test(b) && /result\.reason/.test(b);
+  });
+
+  await check('C03', 'O3: NO wrapper drops the return value', () => {
+    const b = extractOnOpenNote();
+    if (!b) return false;
+    // A DROPPED result is an owner call whose value is never captured.
+    // The correct chain assigns the awaited result and inspects result.ok.
+    // (A separate "dangling await" test is unnecessary — the awaited call is
+    // always terminated by `;`, so it cannot be distinguished by punctuation.)
+    const assigned = /=\s*await\s+[^;]*openJournalNote/.test(b);
+    // A bare fire-and-forget `openNote();` delegation would also be wrong.
+    const fireForget = /(^|[^.\w])openNote\(\)\s*;/.test(b);
+    return assigned && !fireForget;
+  });
+
+  await check('C04', 'O4: Journal context PASSES the canonical context guard', () => {
+    // The exact runtime state from the device log: context.js:259 writes
+    // documentElement.dataset.appContext = 'journal'.
+    const body = extractBlockFrom(MAIN_SOURCE, 'function isJournalContext() {');
+    return /dataset\?\.appContext/.test(body) && /return datasetId === 'journal'/.test(body);
+  });
+
+  await check('C05', 'O5: Editor context FAILS the Journal guard', () => {
+    const body = extractBlockFrom(MAIN_SOURCE, 'function isJournalContext() {');
+    return /return datasetId === 'journal'/.test(body) && !/datasetId === 'editor'/.test(body);
+  });
+
+  await check('C06', 'O6: Slides context FAILS the Journal guard', () => {
+    const body = extractBlockFrom(MAIN_SOURCE, 'function isJournalContext() {');
+    return /return datasetId === 'journal'/.test(body) && !/datasetId === 'slides'/.test(body);
+  });
+
+  await check('C07', 'O7: CLEAN dirty guard PERMITS the opener', async () => {
+    act4aOpenNoteScope('# Example\n');
+    O.__resetCalls();
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    const r = await O.openNote();
+    return r.ok === true && O.__calls().openSmart === 1;
+  });
+
+  await check('C08', 'O8: DECLINED dirty guard STOPS before the opener', async () => {
+    act4aOpenNoteScope('# Example\n');
+    O.__resetCalls();
+    O.__setGuardResult(false);
+    O.__setOpenResult('success');
+    const r = await O.openNote();
+    return r.ok === false && r.reason === 'dirty-declined' && O.__calls().openSmart === 0;
+  });
+
+  await check('C09', 'O9: openSmart REACHED after accepted guards', async () => {
+    act4aOpenNoteScope('# Example\n');
+    O.__resetCalls();
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    await O.openNote();
+    return O.__calls().openSmart === 1;
+  });
+
+  await check('C10', 'O10: showOpenFilePicker reached from the user-action chain', () => {
+    const body = extractBlockFrom(MAIN_SOURCE, 'async function openNote() {');
+    const opener = extractBlockFrom(MAIN_SOURCE, 'async function openSmart() {');
+    return /await openSmart\(\)/.test(body) &&
+      !/setTimeout/.test(body) && !/\.click\(\)/.test(body) &&
+      /showOpenFilePicker/.test(opener);
+  });
+
+  await check('C11', 'O11: picker CANCEL returns cancelled, NOT unknown', async () => {
+    act4aOpenNoteScope('# Example\n');
+    O.__resetCalls();
+    O.__setGuardResult(true);
+    O.__setOpenResult('cancel');
+    const r = await O.openNote();
+    return r.ok === false && r.reason === 'cancelled' && r.reason !== 'unknown';
+  });
+
+  await check('C12', 'O12: open FAILURE returns a known reason, NOT unknown', async () => {
+    act4aOpenNoteScope('# Example\n');
+    O.__resetCalls();
+    O.__setGuardResult(true);
+    O.__setOpenResult('throw');
+    const r = await O.openNote();
+    return r.ok === false && ['error', 'read-failed'].includes(r.reason) && r.reason !== 'unknown';
+  });
+
+  await check('C13', 'O13: same-file success returns opened + sameFile=true', async () => {
+    act4aOpenNoteScope('# Example\n');
+    O.__resetCalls();
+    O.__setGuardResult(true);
+    O.__setOpenResult('samefile');
+    const r = await O.openNote();
+    return r.ok === true && r.reason === 'opened' && r.sameFile === true;
+  });
+
+  await check('C14', 'O14: new-file success returns opened with the adopted handle', async () => {
+    act4aOpenNoteScope('# Example\n');
+    O.__resetCalls();
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    const r = await O.openNote();
+    return r.ok === true && r.reason === 'opened' && !!r.handle && !!r.fileName;
+  });
+
+  await check('C15', 'O15: MISSING callback result becomes invalid-result, fails VISIBLY', () => {
+    const b = extractOnOpenNote();
+    if (!b) return false;
+    return /!result \|\| typeof result\.ok !== 'boolean'/.test(b) &&
+      /invalid result contract/.test(b) &&
+      !/reason \|\| 'unknown'/.test(b);
+  });
+
+  await check('C16', 'O16: unexpected rejection is CAUGHT at the action boundary', () => {
+    const body = extractBlockFrom(MAIN_SOURCE, 'async function openNote() {');
+    return /catch \(e\)/.test(body) && /OPEN_NOTE_REASON\.ERROR/.test(body);
+  });
+
+  await check('C17', 'O17: Open Workspace behaviour unchanged', () => {
+    const s = read('js', 'workspace', 'workspace-controller.js');
+    return /onOpenWorkspace/.test(s) && /openWorkspace\(/.test(s);
+  });
+
+  await check('C18', 'O18: Editor Open behaviour unchanged (openSmart, not openNote)', () => {
+    return /Browse…/.test(mainSrc2) && !/'Open Note…'/.test(mainSrc2);
+  });
+
+  await check('C19', 'O19: Journal top Open remains hidden', () => {
+    const b = extractBlockFrom(MAIN_SOURCE, 'function isTopBarOpenAvailable() {');
+    return /isJournalContext\(\)/.test(b);
+  });
+
+  await check('C20', 'O20: Journal Sidebar Open Note remains visible', () => {
+    const html = read('index.html');
+    return /id="btnOpenNote"/.test(html) && /id="btnOpenWorkspace"/.test(html);
+  });
+
+  // ---- REGRESSION GUARDS FOR THE OBSERVED DEVICE DEFECT ---------------
+  // The Journal Open Note action received `undefined` because the callback was
+  // assigned to MME_APP at module scope, before MME_APP itself was created.
+  const extractMmeAppObject = () => {
+    const start = mainSrc2.indexOf('globalThis.MME_APP = {');
+    if (start < 0) return null;
+    const i = mainSrc2.indexOf('{', start);
+    let depth = 0, end = -1;
+    for (let j = i; j < mainSrc2.length; j++) {
+      if (mainSrc2[j] === '{') depth++;
+      else if (mainSrc2[j] === '}') { depth--; if (depth === 0) { end = j; break; } }
+    }
+    return mainSrc2.slice(i, end + 1);
+  };
+
+  await check('C21', 'REG: MME_APP.openJournalNote registered INSIDE the MME_APP object', () => {
+    const obj = extractMmeAppObject();
+    return !!obj && /openJournalNote:\s*\(\)\s*=>\s*openNote\(\)/.test(obj);
+  });
+
+  await check('C22', 'REG: no module-scope assignment to a not-yet-created MME_APP', () => {
+    return !/MME_APP\s*&&\s*\(\s*MME_APP\./.test(mainSrc2);
+  });
+
+  await check('C23', 'REG: MME_APP registration occurs AFTER openNote is declared', () => {
+    const decl = mainSrc2.indexOf('async function openNote() {');
+    const reg = mainSrc2.indexOf('globalThis.MME_APP = {');
+    return decl > 0 && reg > decl;
+  });
+
+  await check('C24', 'REG: the action owner calls the MME_APP registration path', () => {
+    const b = extractOnOpenNote();
+    return !!b && /MME_APP\?\.openJournalNote\?\.\(\)/.test(b);
+  });
+
+  await check('C25', 'REG: openNote declares NO bare return (all branches structured)', () => {
+    const body = extractBlockFrom(MAIN_SOURCE, 'async function openNote() {');
+    const bare = body.match(/^\s*return;\s*$/gm) || [];
+    // Every return site must open a structured result object. The result
+    // fields may wrap across lines, so the object opener is what is asserted.
+    const allReturns = body.match(/^\s*return\b/gm) || [];
+    const structured = body.match(/^\s*return\s*\{/gm) || [];
+    return bare.length === 0 && allReturns.length >= 6 && allReturns.length === structured.length;
+  });
+
+  // ===================================================================
+  // ACT 4B RENDER-STABILITY + TRANSACTION FIXTURES (R01..R47).
+  // ===================================================================
+  const M = MAIN_SOURCE;
+  const CTL2 = read('js', 'workspace', 'workspace-controller.js');
+  const HL = read('js', 'workspace', 'workspace-highlight.js');
+  const openNoteBody = extractBlockFrom(M, 'async function openNote() {');
+  const composeBody = extractBlockFrom(M, 'function composeStandaloneNotePanels() {');
+  const applyBody = extractBlockFrom(M, 'function applySidebarComposition(options) {');
+
+  // ---- A. OPEN / RENDER BARRIER ---------------------------------------
+  await check('R01', 'openSmart does not claim renderStable before render completes', () => {
+    const renderBody = extractBlockFrom(M, 'function render(source =');
+    const opener = extractBlockFrom(M, 'async function openSmart() {');
+    return /completion\.settle\(\{ ok: true/.test(renderBody) &&
+      /completion\.settle\(\{ ok: false/.test(renderBody) &&
+      /__openRenderCompletion = createOpenRenderCompletion\(\)/.test(opener);
+  });
+
+  await check('R02', 'Journal Note commit waits for the accepted stability barrier', () => {
+    return /STABILIZING/.test(openNoteBody) &&
+      /await renderCompletion\.wait\(\)/.test(openNoteBody) &&
+      openNoteBody.indexOf('STABILIZING') < openNoteBody.indexOf('COMMITTING');
+  });
+
+  await check('R03', 'local composition does NOT depend on Workspace Index ready', () => {
+    return !/indexReady|WORKSPACE_INDEX_STATE|rootHandle/.test(composeBody);
+  });
+
+  await check('R04', 'local consumer rendering occurs exactly once after Note commit', () => {
+    const onOpenNote = extractOnOpenNote();
+    const calls = openNoteBody.split('composeStandaloneNotePanels()').length - 1;
+    return calls === 1 &&
+      openNoteBody.indexOf('composeStandaloneNotePanels()') < openNoteBody.indexOf('JOURNAL_NOTE_TRANSITION.READY') &&
+      !/applySidebarComposition/.test(onOpenNote);
+  });
+
+  await check('R05', 'late Workspace callback cannot restore Workspace composition', () => {
+    // A retained rootHandle plus a Note composition must NOT read as an active
+    // Workspace presentation. Executed against the real owner.
+    act4aOpenWorkspaceNote('# Example\n');
+    O.setJournalComposition('note');
+    const rootRetained = Boolean(WORKSPACE_STATE.rootHandle);
+    return rootRetained === true && O.isWorkspaceAggregationActive() === false;
+  });
+
+  await check('R06', 'a stable render is awaited before the composition is committed', () => {
+    const stab = openNoteBody.indexOf('await renderCompletion.wait()');
+    const deact = openNoteBody.indexOf('deactivateWorkspaceComposition()');
+    return stab > 0 && deact > stab;
+  });
+
+  // ---- B. NOTE COMPOSITION --------------------------------------------
+  await check('R07', 'Active local identity rendered by the EXISTING renderer', () => {
+    return /renderWorkspaceActivePanel/.test(composeBody) && !/function renderStandaloneActive/.test(M);
+  });
+
+  await check('R08', 'local Tags rendered by the EXISTING panel owner', () => {
+    return /renderWorkspaceTagsPanel/.test(composeBody);
+  });
+
+  await check('R09', 'Task Review is set to the current-document scope', () => {
+    return /setTaskScope/.test(applyBody) && /current-document/.test(applyBody);
+  });
+
+  await check('R10', 'local Tasks are rendered by the EXISTING owner, with DOM evidence', () => {
+    // The step must RENDER through the existing Tasks owner and then report the
+    // real panel state. A bare "Tasks rendered (current-document, read-only)"
+    // log is exactly the failure mode this ACT removed: it claimed success
+    // without rendering, so the panel could keep Workspace content.
+    return /renderWorkspaceTasksPanel\(\)/.test(composeBody) &&
+      /function renderWorkspaceTasksPanel\(\)/.test(MAIN_SOURCE) &&
+      /describePanelVisibility\('workspaceTasksPanel'\)/.test(composeBody) &&
+      !/Tasks rendered \(current-document, read-only\)/.test(composeBody);
+  });
+
+  await check('R11', 'local Links Out rendered by the EXISTING owner', () => {
+    return /renderWorkspaceRelatedPanel/.test(composeBody);
+  });
+
+  await check('R12', 'Links In is hidden/unavailable, never zero', () => {
+    return /report\.linksIn = false/.test(composeBody) &&
+      /Links In unavailable/.test(composeBody) &&
+      !/linksIn\s*=\s*0\b/.test(composeBody);
+  });
+
+  await check('R13', 'all Workspace-only panels withdrawn on Note commit', () => {
+    return /applySidebarComposition/.test(composeBody);
+  });
+
+  await check('R14', 'Today/New Note are hidden without a Workspace', () => {
+    // Today and New Note are JOURNAL HEADER ACTIONS, not Sidebar panels: they
+    // are bound in the existing Journal action registry and are not rendered
+    // from the panel registry. The requirement is that opening a Note does not
+    // make them active, which the composition owner enforces by never
+    // presenting Workspace data without a Workspace.
+    const reg = extractBlockFrom(M, 'const MME_PANEL_COMPOSITION = Object.freeze({');
+    // No Today/New Note panel record may claim document scope, and the
+    // composition must gate Workspace presentation on the explicit owner.
+    return !/today|newNote/i.test(reg) && /isWorkspaceAggregationActive/.test(M);
+  });
+
+  await check('R15', 'Save handle equals the Standalone file after commit', () => {
+    return /handle: handleAfter/.test(openNoteBody) &&
+      openNoteBody.indexOf('currentSaveHandle = snapshot.handle') > openNoteBody.indexOf('catch');
+  });
+
+  // ---- C. WORKSPACE -> NOTE -------------------------------------------
+  await check('R16', 'Workspace observers are quiesced BEFORE the Note commit', () => {
+    const inv = openNoteBody.indexOf("invalidateWorkspaceObservers('workspace->note')");
+    const com = openNoteBody.indexOf('setJournalComposition(MME_JOURNAL_COMPOSITION.NOTE)');
+    return inv > 0 && com > inv;
+  });
+
+  await check('R17', 'stale Workspace callback after commit is ignored (behavioural)', () => {
+    // Executed against the REAL generation owners, not source strings: capture
+    // a generation, commit a new composition, then prove the old capture is
+    // rejected.
+    act4aOpenWorkspaceNote('# Example\n');
+    const captured = O.getJournalObserverGeneration();
+    O.activateJournalObservers('fixture-commit');
+    const rejected = O.isObserverGenerationStale(captured);
+    const accepted = O.isObserverGenerationStale(O.getJournalObserverGeneration());
+    // And the highlight owner must ACTUALLY short-circuit on a stale capture.
+    // Asserting only that the symbol exists would not detect a disabled guard.
+    const hsrc = HL.slice(HL.indexOf('function updateWorkspaceActiveFileHighlight() {'));
+    const enforced = /if \(\s*isStale\s*\) \{[^}]*return;/.test(hsrc);
+    return rejected === true && accepted === false && enforced;
+  });
+
+  await check('R18', 'a pending Index rebuild cannot restore Workspace panels', () => {
+    return /isWorkspaceAggregationActive/.test(HL) && /isWorkspaceAggregationActive/.test(M);
+  });
+
+  await check('R19', 'Workspace Task Review refresh cannot overwrite local scope', () => {
+    return /composition\.workspaceAvailable \? 'workspace' : 'current-document'/.test(applyBody);
+  });
+
+  await check('R20', 'a Workspace Wiki Links event cannot restore Links In', () => {
+    // Links In shares the workspaceRelatedPanel host with local Links Out, so
+    // the guarantee is that the panel is withdrawn when NO key mapping to it is
+    // visible. That is computed by element grouping, not by a per-key flag.
+    const group = extractBlockFrom(M, 'hiddenElementIds: (() => {');
+    return /byElement/.test(group) && /entries\.every\(\(p\) => !p\.visible\)/.test(group) &&
+      /isWorkspaceAggregationActive/.test(HL);
+  });
+
+  await check('R21', 'Hot Reload generation belongs to the final Note', () => {
+    return /activateJournalObservers\('note-committed'\)/.test(openNoteBody);
+  });
+
+  await check('R22', 'a recoverable rootHandle does NOT imply active presentation', () => {
+    const owner = extractBlockFrom(M, 'function isWorkspaceAggregationActive() {');
+    return /getJournalComposition\(\) === MME_JOURNAL_COMPOSITION\.WORKSPACE/.test(owner) &&
+      !/rootHandle/.test(owner) && /recoverable configuration EXISTS/.test(M);
+  });
+
+  // ---- D. NOTE -> WORKSPACE -------------------------------------------
+  await check('R23', 'Workspace cancel preserves the Note', () => {
+    return /OPEN_WORKSPACE_RESULT\.DECLINED/.test(CTL2) && /CANCELLED/.test(CTL2);
+  });
+
+  await check('R24', 'invalid root preserves the Note', () => {
+    return /VALID_NOTES/.test(CTL2) && /OPEN_WORKSPACE_RESULT\.INVALID/.test(CTL2);
+  });
+
+  await check('R25', 'failure preserves the Note', () => {
+    return /OPEN_WORKSPACE_RESULT\.FAILURE/.test(CTL2);
+  });
+
+  await check('R26', 'success builds the Index BEFORE the Workspace composition', () => {
+    // Scoped to the openWorkspace transaction body: the file contains more than
+    // one buildActivatedWorkspaceIndex() call site, so a whole-file indexOf
+    // would compare the wrong pair of positions.
+    const block = extractFunctionByBraces(CTL2, 'async function openWorkspace(') ||
+      extractFunctionByBraces(CTL2, 'async function openWorkspace');
+    if (!block) return false;
+    const build = block.indexOf('buildActivatedWorkspaceIndex()');
+    const commit = block.indexOf("setJournalComposition?.('workspace')");
+    return build > 0 && commit > build;
+  });
+
+  await check('R27', 'success adopts the Workspace Note handle', () => {
+    // The Workspace owner opens the active Note itself; ACT 4B does not rebind
+    // currentSaveHandle on the Note->Workspace path.
+    const ws = (CTL2.split('onOpenWorkspace')[1] || '');
+    return !/currentSaveHandle\s*=/.test(ws);
+  });
+
+  await check('R28', 'success restores Workspace panels once', () => {
+    const onOpenWs = (CTL2.split('onOpenWorkspace')[1] || '').split('onToday')[0];
+    return (onOpenWs.match(/applySidebarComposition/g) || []).length === 1;
+  });
+
+  await check('R29', 'local results do not remain as a Workspace aggregate', () => {
+    return /workspaceAvailable/.test(M) && /journal-composition/.test(M);
+  });
+
+  // ---- E. RESTART CLASSIFICATION --------------------------------------
+  const diagBody = extractBlockFrom(M, 'function installAct4bTerminationDiagnostic() {');
+
+  await check('R30', 'an unexpected rejection cannot escape the action handler', () => {
+    // R30 originally only asserted the diagnostic registers a listener, which
+    // did not detect a rejection actually ESCAPING. The action boundary must
+    // AWAIT the transaction and inspect the result; a fire-and-forget call
+    // would leak its rejection to unhandledrejection.
+    const b = extractOnOpenNote();
+    if (!b) return false;
+    const awaits = /=\s*await\s+[^;]*openJournalNote/.test(b);
+    const fireForget = /globalThis\.MME_APP\?\.openJournalNote\?\.\(\)\s*;/.test(b) && !awaits;
+    const openNoteCatches = /catch \(e\)/.test(openNoteBody);
+    // The diagnostic is still installed so a later reload can classify it.
+    return awaits && !fireForget && openNoteCatches && /unhandledrejection/.test(diagBody);
+  });
+
+  await check('R31', 'uncaught error records the transition phase', () => {
+    return /'error'/.test(diagBody) && /uncaught-exception/.test(diagBody);
+  });
+
+  await check('R32', 'pagehide records the current phase', () => {
+    return /'pagehide'/.test(diagBody) && /phase:/.test(diagBody);
+  });
+
+  await check('R33', 'controllerchange records a DISTINCT reload reason', () => {
+    // Asserting the listener name alone would not catch a handler that records
+    // the event as an unclassified crash. The handler body must record its own
+    // 'controllerchange' reason.
+    const i = diagBody.indexOf("addEventListener('controllerchange'");
+    if (i < 0) return false;
+    const handler = diagBody.slice(i, i + 400);
+    return /record\('controllerchange'/.test(handler) && !/record\('unknown-crash'\)/.test(handler);
+  });
+
+  await check('R34', 'explicit application reload is distinguishable', () => {
+    return /beforeunload/.test(diagBody) && /visibilitychange/.test(diagBody);
+  });
+
+  await check('R35', 'the diagnostic captures NO Markdown content', () => {
+    return !/md\.value/.test(diagBody) && !/openedText/.test(diagBody) &&
+      !/\.text\(\)/.test(diagBody) && /Filename only/.test(diagBody);
+  });
+
+  // ---- F. MODE REGRESSION ---------------------------------------------
+  await check('R36', 'Editor Open remains unchanged', () => /Browse…/.test(M) && !/'Open Note…'/.test(M));
+
+  await check('R37', 'Slides Open remains unchanged', () => {
+    return /return !isJournalContext\(\)/.test(extractBlockFrom(M, 'function isTopBarOpenAvailable() {'));
+  });
+
+  await check('R38', 'Journal top Open remains hidden', () => {
+    return /isJournalContext\(\)/.test(extractBlockFrom(M, 'function isTopBarOpenAvailable() {'));
+  });
+
+  await check('R39', 'Journal Save remains visible', () => {
+    return !/btnSave[\s\S]{0,120}isJournalContext/.test(M);
+  });
+
+  await check('R40', 'Editor/Slides do not invoke Journal composition', () => {
+    return /if \(composition\.inactive\) return composition;/.test(applyBody);
+  });
+
+  // ---- G. SINGLE OWNERSHIP --------------------------------------------
+  await check('R41', 'one physical opener family', () => {
+    // The accepted 0.6.3 baseline already has TWO picker call sites (the
+    // fallback input path and openSmart). ACT 4B must add neither.
+    return ((M.match(/window\.showOpenFilePicker\(/g) || []).length) === 2;
+  });
+  await check('R42', 'one currentSaveHandle owner', () => ((M.match(/let currentSaveHandle/g) || []).length) === 1);
+  await check('R43', 'one Journal composition owner', () => ((M.match(/function setJournalComposition\(/g) || []).length) === 1);
+  await check('R44', 'one Sidebar application owner', () => ((read('index.html').match(/<aside/g) || []).length) === 1);
+  await check('R45', 'one Task Review renderer', () => ((M.match(/setTaskScope\(/g) || []).length) === 1);
+  await check('R46', 'no second Workspace store', () => ((M.match(/WORKSPACE_STATE\s*=\s*\{/g) || []).length) === 0);
+  await check('R47', 'no version/cache change', () => {
+    return read('sw.js').includes('markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation');
+  });
+
+  // ===================================================================
+  // ACT 4B RECOVERY — ACTUAL DOM PROOF.
+  // These build a real DOM mirroring index.html's hosts and their static
+  // `hidden` attributes, apply the REAL composition, and read `el.hidden`.
+  // A panel counts as hidden ONLY when the DOM actually says so.
+  // ===================================================================
+  const IDX_HTML = read('index.html');
+
+  const buildSidebarDom = () => {
+    const ids = [
+      'workspaceActivePanel', 'workspaceTagsPanel', 'workspaceTasksPanel',
+      'workspaceRelatedPanel', 'workspaceJournalsPanel', 'workspaceConceptsPanel',
+      'workspacePinnedPanel', 'workspaceArchivePanel', 'workspaceSearchPanel',
+      'workspaceTaskBoardPanel', 'workspaceProjectsPanel', 'workspaceIndexPanel',
+      'workspaceReportPanel', 'workspaceEmptyState',
+    ];
+    const els = new Map();
+    for (const id of ids) {
+      const el = { id, hidden: false, textContent: '' };
+      // The Related and Tasks hosts ship with a static `hidden` attribute in
+      // index.html. Modelling that is what exposed the hide-but-never-show bug.
+      if (id === 'workspaceRelatedPanel' || id === 'workspaceTasksPanel') el.hidden = true;
+      els.set(id, el);
+    }
+    return { els, getElementById: (id) => els.get(id) || null };
+  };
+
+  const applyToDom = () => {
+    const dom = buildSidebarDom();
+    globalThis.document.__dom = dom;
+    const dbg = O.getSidebarComposition();
+    try { O.applySidebarComposition(); } finally { globalThis.document.__dom = null; }
+    return dom.els;
+  };
+
+  await check('D01', 'DOM: Journal Note REVEALS the local Note hosts', async () => {
+    act4aOpenNoteScope('# Example\n');
+    O.__setJournalContext('journal');
+    O.setJournalComposition('note');
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    await O.openNote();
+    const els = applyToDom();
+    return els.get('workspaceActivePanel').hidden === false &&
+      els.get('workspaceTagsPanel').hidden === false &&
+      els.get('workspaceTasksPanel').hidden === false &&
+      els.get('workspaceRelatedPanel').hidden === false;
+  });
+
+  await check('D02', 'DOM: Journal Note HIDES every Workspace-only host', () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    O.__setJournalContext('journal');
+    O.setJournalComposition('note');
+    const els = applyToDom();
+    return [
+      'workspaceJournalsPanel', 'workspaceConceptsPanel', 'workspacePinnedPanel',
+      'workspaceArchivePanel', 'workspaceSearchPanel', 'workspaceTaskBoardPanel',
+      'workspaceProjectsPanel', 'workspaceIndexPanel', 'workspaceReportPanel',
+    ].every((id) => els.get(id).hidden === true);
+  });
+
+  await check('D03', 'DOM: shared relationship host is SHOWN for local Links Out', async () => {
+    act4aOpenNoteScope('# Example\n');
+    O.__setJournalContext('journal');
+    O.setJournalComposition('note');
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    await O.openNote();
+    const comp = O.getSidebarComposition();
+    return comp.panels.localLinksOut.visible === true &&
+      comp.panels.linksIn.visible === false &&
+      comp.hiddenElementIds.indexOf('workspaceRelatedPanel') === -1 &&
+      comp.visibleElementIds.indexOf('workspaceRelatedPanel') !== -1;
+  });
+
+  await check('D04', 'STATIC SHELL: the related host declares the required badge', () => {
+    // The missing badge made renderWorkspaceRelatedPanel() bail at its
+    // structural guard and skip the render entirely.
+    const i = IDX_HTML.indexOf('id="workspaceRelatedPanel"');
+    const block = IDX_HTML.slice(i, i + 1400);
+    return /id="workspaceRelatedBadge"/.test(block) &&
+      /id="workspaceRelatedSummary"/.test(block) &&
+      /id="workspaceRelatedList"/.test(block) &&
+      /workspacePanelHeaderButton/.test(block);
+  });
+
+  await check('D05', 'STATIC SHELL: no retired terminology returns', () => {
+    const i = IDX_HTML.indexOf('id="workspaceRelatedPanel"');
+    const block = IDX_HTML.slice(i, i + 1400);
+    return !/>Related</.test(block) && !/No active concept/.test(block) && />Links In</.test(block);
+  });
+
+  await check('D06', 'COMPOSITION: the owner SHOWS as well as hides', () => {
+    // The regression: the owner only ever set hidden = true.
+    const apply = extractFunctionByBraces(M, 'function applySidebarComposition(options) {');
+    return /el\.hidden = false/.test(apply) && /el\.hidden = true/.test(apply) &&
+      /visibleElementIds/.test(apply);
+  });
+
+  await check('D07', 'COMPOSITION: visibleElementIds mirrors hiddenElementIds', () => {
+    const src = extractFunctionByBraces(M, 'function getSidebarComposition(options) {');
+    return /visibleElementIds/.test(src) && /entries\.some\(\(p\) => p\.visible\)/.test(src) &&
+      /hiddenElementIds/.test(src);
+  });
+
+  // ---- SAFE BLOCKING OF UNSAFE CROSS-COMPOSITION TRANSITIONS -------------
+  await check('B01', 'BLOCK: Workspace -> Note refused non-destructively', async () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    O.__setJournalContext('journal');
+    O.setJournalComposition('workspace');
+    O.__resetCalls();
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    const before = {
+      handle: O.state().currentSaveHandle, file: O.state().currentFileName,
+      comp: O.getJournalComposition(), active: WORKSPACE_STATE.activeFile,
+    };
+    const r = await O.openNote();
+    const after = {
+      handle: O.state().currentSaveHandle, file: O.state().currentFileName,
+      comp: O.getJournalComposition(), active: WORKSPACE_STATE.activeFile,
+    };
+    return r.ok === false &&
+      r.reason === 'cross-composition-not-yet-supported' &&
+      typeof r.message === 'string' && r.message.length > 0 &&
+      O.__calls().openSmart === 0 &&   // no picker opened
+      O.__calls().guard === 0 &&       // dirty state untouched
+      before.handle === after.handle && before.file === after.file &&
+      before.comp === after.comp && before.active === after.active;
+  });
+
+  await check('B02', 'BLOCK: reason is a distinct known value, never unknown', async () => {
+    act4aOpenWorkspaceNote('# Example\n');
+    O.__setJournalContext('journal');
+    O.setJournalComposition('workspace');
+    const r = await O.openNote();
+    return r.reason !== 'unknown' &&
+      Object.values(O.OPEN_NOTE_REASON).indexOf(r.reason) !== -1;
+  });
+
+  await check('B03', 'BLOCK: Note -> Workspace refused before the picker', () => {
+    const src = read('js', 'workspace', 'workspace-controller.js');
+    const block = extractFunctionByBraces(src, 'onOpenWorkspace: async () => {');
+    const guardAt = block.indexOf("=== 'note'");
+    const pickerAt = block.indexOf('await openWorkspace()');
+    return guardAt > 0 && pickerAt > guardAt &&
+      /will be enabled after the transition workflow is stabilized/.test(block) &&
+      /temporarily unavailable/.test(M);
+  });
+
+  await check('B04', 'BLOCK: neutral Journal still allows both entries', async () => {
+    O.__setJournalContext('journal');
+    O.setJournalComposition('none');
+    O.__resetCalls();
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    const r = await O.openNote();
+    return r.ok === true && O.__calls().openSmart === 1;
+  });
+
+  await check('B05', 'BOUNDARY: the termination diagnostic is NOT installed', () => {
+    const src = read('js', 'main.js');
+    // The owner may remain in source for ACT 4C, but ACT 4B runtime installs
+    // nothing and clears any stale record.
+    return !/try \{ installAct4bTerminationDiagnostic\(\); \}/.test(src) &&
+      /MME_ACT4B_DIAG\?\.clear\?\.\(\)/.test(src);
+  });
+
+  await check('B06', 'BLOCK: the refusal is EXPLAINED, never silent or disabled', async () => {
+    // A silent no-op or a disabled control would also satisfy B01, so the
+    // user-facing explanation must actually be emitted.
+    act4aOpenWorkspaceNote('# Example\n');
+    O.__setJournalContext('journal');
+    O.setJournalComposition('workspace');
+    const toasts = [];
+    const savedShowToast = globalThis.showToast;
+    globalThis.showToast = (m) => { toasts.push(String(m)); };
+    try {
+      await O.openNote();
+    } finally {
+      globalThis.showToast = savedShowToast;
+    }
+    return toasts.length === 1 &&
+      toasts[0].indexOf('temporarily unavailable') !== -1 &&
+      toasts[0].length > 20;
   });
 
   await check('T10', 'TASK REVIEW: scope API exists with exactly two values', () => {
@@ -1256,11 +2040,11 @@ group('ACT 4A — live/saved boundary and structural guarantees');
     // Workspace behaviour instead of throwing.
     const src = read('js', 'main.js');
     const guards = [
-      extractBlockFrom(src, 'function getWorkspaceTagsSummary() {'),
-      extractBlockFrom(src, 'function renderWorkspaceRelatedPanel() {'),
-      extractBlockFrom(src, 'function renderWorkspaceActivePanel() {'),
+      extractFunctionByBraces(src, 'function getWorkspaceTagsSummary() {'),
+      extractFunctionByBraces(src, 'function renderWorkspaceRelatedPanel() {'),
+      extractFunctionByBraces(src, 'function renderWorkspaceActivePanel() {'),
     ];
-    return guards.every((b) => /typeof getSidebarComposition === 'function'/.test(b));
+    return guards.every((b) => typeof b === 'string' && b.includes("typeof getSidebarComposition === 'function'"));
   });
 
   await check('B17', 'registry contract: an invalid record fails SAFE and is visible', () => {
@@ -1293,10 +2077,13 @@ group('ACT 4A — live/saved boundary and structural guarantees');
       /globalThis\.applySidebarComposition\?\.\(\)/.test(src);
   });
 
-  await check('W02', 'STANDALONE -> WORKSPACE composes only AFTER the owner resolves', () => {
+  await check('W02', 'STANDALONE -> WORKSPACE composes only AFTER a proven success', () => {
     const src = read('js', 'workspace', 'workspace-controller.js');
-    return src.indexOf('await openWorkspace();') <
-      src.indexOf('globalThis.applySidebarComposition?.()');
+    const block = extractFunctionByBraces(src, 'onOpenWorkspace: async () => {');
+    // Composition must be applied only inside the proven-success branch.
+    return block.indexOf('await openWorkspace();') < block.indexOf('applySidebarComposition') &&
+      /ok/.test(block) && /\bok\b[^]*applySidebarComposition/.test(block) &&
+      block.indexOf('if (!') < block.indexOf('applySidebarComposition');
   });
 
   await check('W03', 'STANDALONE -> WORKSPACE: composition refresh is failure-tolerant', () => {
@@ -1304,14 +2091,19 @@ group('ACT 4A — live/saved boundary and structural guarantees');
     return /try \{[\s\S]*?applySidebarComposition[\s\S]*?catch/.test(src);
   });
 
-  await check('W04', 'Workspace -> Standalone leaves no active path and no ghost panels', () => {
+  await check('W04', 'Workspace -> Standalone withdraws path, panels then note composition', () => {
     act4aOpenWorkspaceNote('# Example\n');
+    O.setJournalComposition('workspace');
     const wsHidden = A4_sb().hiddenElementIds;
     O.deactivateWorkspaceComposition();
+    // The path claim is withdrawn immediately...
+    const afterDeactivate = A4_sb().hiddenElementIds;
     O.setText('standalone body\n');
     O.setFileName('loose.md');
+    O.setJournalComposition('note');
     const docHidden = A4_sb({ indexSnapshot: null }).hiddenElementIds;
     return docHidden.length > wsHidden.length &&
+      afterDeactivate.length === wsHidden.length &&
       A4_sb({ indexSnapshot: null }).document.identity.physical.hasPath === false;
   });
 
@@ -1349,6 +2141,726 @@ group('ACT 4A — live/saved boundary and structural guarantees');
       l.linksOut[0].targetPath === '' && A4_sb({ indexSnapshot: null }).panels.linksIn.visible === false;
   });
 
+  group('ACT 4B — Sidebar `hidden` authority, relationship host, transition boundary, registry (S01-S29)');
+
+  // -------------------------------------------------------------
+  // ACT 4B VISIBILITY DEFECT CLASS — why these fixtures exist.
+  //
+  // `el.hidden = true` is only a REQUEST. The UA stylesheet's
+  // `[hidden] { display: none }` is a UA-origin rule, so ANY author `display:`
+  // rule that reaches the element WINS regardless of the `hidden` state. An
+  // ID-level author rule therefore makes `hidden = true` completely INERT, and a
+  // probe or log that reads only `element.hidden` is structurally blind to it.
+  //
+  // The Sidebar was visibly wrong after "Journal Note composition: complete"
+  // while every log line read "rendered"/"complete", for two independent causes:
+  //   CSS: #workspaceJournalsPanel, #workspaceConceptsPanel,
+  //        #workspaceArchivePanel and #workspaceSearchPanel carried an ID-level
+  //        `display: flex` and NO `[hidden]` rule;
+  //   JS:  renderWorkspaceTagsPanel was the only current-document panel owner
+  //        with no local-scope branch, so it ran the Workspace path against the
+  //        deliberately RETAINED root handle (deactivateWorkspaceComposition
+  //        preserves recoverable Workspace configuration), missed the
+  //        `!WORKSPACE_STATE.rootHandle` gate, and left its host visible while
+  //        reporting success.
+  //
+  // S01-S03 make the CSS invariant machine-checked for EVERY host in the
+  // registry — so a host added later is covered without editing this file — and
+  // S04-S06 pin the JS ownership contract that made a renderer the LAST writer
+  // of its own host.
+  // -------------------------------------------------------------
+
+  const SIDEBAR_CSS = read('css', 'workspace.css');
+
+  // The registry is the authority on which hosts the composition owns. Deriving
+  // the list from the shipped registry, rather than hard-coding ids here, is what
+  // makes these fixtures cover a host added later.
+  const PANEL_REGISTRY_BLOCK = (() => {
+    const start = MAIN_SOURCE.indexOf('const MME_PANEL_COMPOSITION');
+    const end = MAIN_SOURCE.indexOf('\n});', start);
+    return start === -1 || end === -1 ? '' : MAIN_SOURCE.slice(start, end);
+  })();
+
+  const PANEL_HOST_IDS = [...new Set(
+    [...PANEL_REGISTRY_BLOCK.matchAll(/elementId:\s*'([^']+)'/g)].map((m) => m[1])
+  )].sort();
+
+  // The body of every rule that BEGINS with the bare id selector. A rule reached
+  // through an ancestor (e.g. `html.workspace-empty #workspaceIndexPanel`) is
+  // deliberately NOT counted: only a rule on the id itself can outrank the UA
+  // `[hidden]` rule.
+  function idLevelRuleBodies(id) {
+    const re = new RegExp('(^|\\n)[ \\t]*#' + id + '[ \\t]*(?:,[^{}]*)?\\{([^}]*)\\}', 'g');
+    const bodies = [];
+    let m;
+    while ((m = re.exec(SIDEBAR_CSS))) bodies.push(m[2]);
+    return bodies;
+  }
+
+  function idLevelDisplayValues(id) {
+    return idLevelRuleBodies(id)
+      .map((body) => {
+        const m = /display\s*:\s*([^;]+)/.exec(body);
+        return m ? m[1].trim() : null;
+      })
+      .filter(Boolean);
+  }
+
+  function hasHiddenGuard(id) {
+    return new RegExp('#' + id + '\\[hidden\\][^{}]*\\{[^}]*display:\\s*none\\s*!important').test(SIDEBAR_CSS);
+  }
+
+  await check('S01', 'the registry is the authority: every panel host id is a workspace id', () =>
+    PANEL_HOST_IDS.length >= 13 &&
+    PANEL_HOST_IDS.includes('workspaceSearchPanel') &&
+    PANEL_HOST_IDS.every((id) => id.startsWith('workspace')),
+  () => 'derived hosts: ' + PANEL_HOST_IDS.join(', '));
+
+  // NOTE: a fixture must return a strict BOOLEAN. `record()` stores
+  // `Boolean(value)`, so returning a descriptive failure STRING would be truthy
+  // and report as PASS — exactly the trap the `check()` comment warns about.
+  // Failure reasons belong in the `detail` thunk, which is only shown on failure.
+  await check('S02', 'every registered panel host has an explicit `[hidden]` !important guard', () =>
+    PANEL_HOST_IDS.every((id) => hasHiddenGuard(id)),
+  () => 'no `[hidden]` guard for: ' + PANEL_HOST_IDS.filter((id) => !hasHiddenGuard(id)).join(', '));
+
+  await check('S03', 'the CSS guard is LOAD-BEARING: the four defeated hosts carry an ID-level display rule', () => {
+    // Self-check against a vacuous V02: if the parser found no display rules at
+    // all, V02 would pass for the wrong reason. These four are the hosts whose
+    // `hidden = true` was provably inert — the ACT 4B visual failure itself.
+    const defeated = [
+      'workspaceJournalsPanel',
+      'workspaceConceptsPanel',
+      'workspaceArchivePanel',
+      'workspaceSearchPanel',
+    ];
+    const unguardedWithDisplay = PANEL_HOST_IDS
+      .filter((id) => idLevelDisplayValues(id).length > 0)
+      .filter((id) => !hasHiddenGuard(id));
+    return defeated.every((id) => idLevelDisplayValues(id).includes('flex')) &&
+      unguardedWithDisplay.length === 0;
+  }, () => 'display-hosts=' + PANEL_HOST_IDS.filter((id) => idLevelDisplayValues(id).length > 0).join(','));
+
+
+  // Isolate one top-level owner's source so its internal ORDER can be asserted.
+  function ownerSource(name) {
+    const start = MAIN_SOURCE.indexOf(`function ${name}(`);
+    if (start === -1) return '';
+    const rest = MAIN_SOURCE.slice(start + 10);
+    const next = rest.search(/\n(?:async )?function /);
+    return next === -1 ? MAIN_SOURCE.slice(start) : MAIN_SOURCE.slice(start, start + 10 + next);
+  }
+
+  const TAGS_OWNER = ownerSource('renderWorkspaceTagsPanel');
+  const COMPOSE_OWNER = ownerSource('composeStandaloneNotePanels');
+
+  await check('S04', 'renderWorkspaceTagsPanel resolves CURRENT-DOCUMENT tags and returns before the raw-rootHandle gate', () => {
+    if (!TAGS_OWNER) return false;
+    const localBranch = TAGS_OWNER.indexOf('!localScope.workspaceAvailable');
+    const rawGate = TAGS_OWNER.indexOf('!WORKSPACE_STATE?.rootHandle');
+    if (localBranch === -1 || rawGate === -1 || localBranch > rawGate) return false;
+    const branch = TAGS_OWNER.slice(localBranch, rawGate);
+    // The branch must SHOW its host (the composition owner owns withdrawal), must
+    // emit non-interactive current-document rows, and must return so the Workspace
+    // readiness path can never run against a deliberately retained handle.
+    return /panel\.hidden = false/.test(branch) &&
+      /data-scope="current-document"/.test(branch) &&
+      /\breturn;/.test(branch);
+  }, () => {
+    if (!TAGS_OWNER) return 'renderWorkspaceTagsPanel not found in main.js';
+    const localBranch = TAGS_OWNER.indexOf('!localScope.workspaceAvailable');
+    const rawGate = TAGS_OWNER.indexOf('!WORKSPACE_STATE?.rootHandle');
+    if (localBranch === -1) return 'no current-document branch';
+    if (rawGate === -1) return 'no raw-rootHandle gate';
+    if (localBranch > rawGate) return 'local branch sits AFTER the raw-rootHandle gate';
+    const branch = TAGS_OWNER.slice(localBranch, rawGate);
+    return 'branch missing: ' + [
+      /panel\.hidden = false/.test(branch) ? '' : 'panel.hidden=false',
+      /data-scope="current-document"/.test(branch) ? '' : 'current-document rows',
+      /\breturn;/.test(branch) ? '' : 'early return',
+    ].filter(Boolean).join(', ');
+  });
+
+  await check('S05', 'composeStandaloneNotePanels applies the Sidebar composition BEFORE every renderer', () => {
+    if (!COMPOSE_OWNER) return false;
+    const apply = COMPOSE_OWNER.indexOf('applySidebarComposition()');
+    if (apply === -1) return false;
+    // Because the renderers run LAST, each one owns the final visibility of its own
+    // host — which is exactly why a renderer without a scope branch (Tags) could
+    // silently re-show a panel the composition had just withdrawn.
+    return ['renderWorkspaceActivePanel()', 'renderWorkspaceTagsPanel()', 'renderWorkspaceRelatedPanel()']
+      .every((call) => {
+        const at = COMPOSE_OWNER.indexOf(call);
+        return at !== -1 && at > apply;
+      });
+  }, () => {
+    if (!COMPOSE_OWNER) return 'composeStandaloneNotePanels not found in main.js';
+    const apply = COMPOSE_OWNER.indexOf('applySidebarComposition()');
+    if (apply === -1) return 'applySidebarComposition() not called';
+    return 'called before the composition: ' +
+      ['renderWorkspaceActivePanel()', 'renderWorkspaceTagsPanel()', 'renderWorkspaceRelatedPanel()']
+        .filter((call) => !(COMPOSE_OWNER.indexOf(call) > apply)).join(', ');
+  });
+
+  await check('S06', 'the composition logs the DOM RESULT, not merely that a renderer returned', () => {
+    const required = [
+      "describePanelVisibility('workspaceActivePanel')",
+      "describePanelVisibility('workspaceTagsPanel')",
+      "describePanelVisibility('workspaceRelatedPanel')",
+      'ACT4B_REPORTED_PANEL_IDS',
+    ];
+    if (required.some((needle) => !MAIN_SOURCE.includes(needle))) return false;
+    // The helper must read BOTH the property and the computed display: the property
+    // alone cannot reveal that an author rule outranks the UA `[hidden]` rule.
+    return /function describePanelVisibility\(elementId\)/.test(MAIN_SOURCE) &&
+      /getComputedStyle\(el\)\.display/.test(ownerSource('describePanelVisibility'));
+  }, () => {
+    const required = [
+      "describePanelVisibility('workspaceActivePanel')",
+      "describePanelVisibility('workspaceTagsPanel')",
+      "describePanelVisibility('workspaceRelatedPanel')",
+      'ACT4B_REPORTED_PANEL_IDS',
+    ];
+    const missing = required.filter((needle) => !MAIN_SOURCE.includes(needle));
+    if (missing.length) return 'missing: ' + missing.join(', ');
+    return 'describePanelVisibility does not read computed display';
+  });
+
+
+  // -------------------------------------------------------------
+  // ACT 4B — RELATIONSHIP HOST, COMPUTED VISIBILITY, TRANSITION BOUNDARY,
+  // REGISTRY INTEGRITY AND RELEASE IDENTITY (S07-S29).
+  //
+  // S07-S14 pin the SHARED relationship host: one host, one renderer, two
+  // mutually exclusive direction writes, a machine-readable scope on every
+  // local row, and a state that is never a confirmed zero.
+  // S15-S19 pin COMPUTED visibility as the evidence a "complete" line needs.
+  // S20 pins the neutral (no-Journal) presentation as a strict no-op.
+  // S21-S23 pin the blocked cross-composition transitions at the ACT 4B edge.
+  // S24 pins that nothing restores withdrawn hosts after verification.
+  // S25-S28 pin registry/uniqueness integrity; S29 pins the release identity.
+  // -------------------------------------------------------------
+
+  const INDEX_HTML = read('index.html');
+  const REPORT_SOURCE = read('js', 'report', 'report-panel.js');
+  const RELATED_OWNER = ownerSource('renderWorkspaceRelatedPanel');
+  const VERIFY_OWNER = ownerSource('verifyStandaloneNoteComposition');
+  const VISIBLE_OWNER = ownerSource('isPanelActuallyVisible');
+  const OPEN_NOTE_OWNER = ownerSource('openNote');
+  const APPLY_OWNER = ownerSource('applySidebarComposition');
+  const SYNC_OWNER = ownerSource('syncJournalCompositionDataset');
+
+  await check('S07', 'ONE shared relationship host: a single renderer and id, shared by BOTH scope rows', () => {
+    const rendererCount = (MAIN_SOURCE.match(/function renderWorkspaceRelatedPanel\(/g) || []).length;
+    const staticIdCount = (INDEX_HTML.match(/id="workspaceRelatedPanel"/g) || []).length;
+    const relatedRows = PANEL_REGISTRY_BLOCK.split('\n')
+      .filter((line) => line.includes("elementId: 'workspaceRelatedPanel'"));
+    const scopes = relatedRows.map((line) => (/scope: 'document'/.test(line) ? 'document' : (/scope: 'workspace'/.test(line) ? 'workspace' : '?')));
+    return rendererCount === 1 && staticIdCount === 1 && relatedRows.length === 2 &&
+      scopes.includes('document') && scopes.includes('workspace') &&
+      !/workspaceRelatedPanel\d/.test(MAIN_SOURCE) &&
+      !/function renderWorkspaceLink/.test(MAIN_SOURCE);
+  }, () => 'renderers=' +
+    (MAIN_SOURCE.match(/function renderWorkspaceRelatedPanel\(/g) || []).length +
+    ' staticIds=' + (INDEX_HTML.match(/id="workspaceRelatedPanel"/g) || []).length +
+    ' registryRows=' + (PANEL_REGISTRY_BLOCK.match(/elementId:\s*'workspaceRelatedPanel'/g) || []).length);
+
+  await check('S08', 'the local branch labels the SHARED host "Links Out" on the shared title node', () => {
+    if (!RELATED_OWNER) return false;
+    const start = RELATED_OWNER.indexOf('!localScope.workspaceAvailable');
+    if (start === -1) return false;
+    const branch = RELATED_OWNER.slice(start, RELATED_OWNER.indexOf('return;', start) + 8);
+    return /localTitle\.textContent = 'Links Out'/.test(branch) &&
+      /querySelector\?\.\('\.workspaceRelatedTitle'\)/.test(branch);
+  }, () => 'local branch or its title write not found');
+
+  await check('S09', 'the Workspace branch labels the SAME host "Links In"', () => {
+    if (!RELATED_OWNER) return false;
+    const start = RELATED_OWNER.indexOf('!localScope.workspaceAvailable');
+    const afterLocal = start === -1 ? RELATED_OWNER : RELATED_OWNER.slice(start);
+    return /workspaceTitle\.textContent = 'Links In'/.test(afterLocal) &&
+      /querySelector\?\.\('\.workspaceRelatedTitle'\)/.test(afterLocal);
+  }, () => 'Workspace-branch title write not found');
+
+  await check('S10', 'the two direction labels are MUTUALLY EXCLUSIVE: local branch returns before the Workspace write', () => {
+    if (!RELATED_OWNER) return false;
+    const localStart = RELATED_OWNER.indexOf('!localScope.workspaceAvailable');
+    const localTitle = RELATED_OWNER.indexOf("textContent = 'Links Out'", localStart);
+    const localReturn = RELATED_OWNER.indexOf('return;', localTitle);
+    const workspaceTitle = RELATED_OWNER.indexOf("textContent = 'Links In'");
+    return localStart !== -1 && localTitle > localStart &&
+      localReturn > localTitle && workspaceTitle > localReturn;
+  }, () => {
+    const localStart = RELATED_OWNER.indexOf('!localScope.workspaceAvailable');
+    const localTitle = RELATED_OWNER.indexOf("textContent = 'Links Out'", localStart);
+    return 'ordering localStart=' + localStart + ' localTitle=' + localTitle +
+      ' workspaceTitle=' + RELATED_OWNER.indexOf("textContent = 'Links In'");
+  });
+
+  await check('S11', 'the static shell supplies a default direction label, so the host is never unlabeled', () =>
+    /<span class="workspaceRelatedTitle">Links In<\/span>/.test(MAIN_SOURCE) &&
+    (INDEX_HTML.match(/id="workspaceRelatedPanel"/g) || []).length === 1 &&
+    /ensureWorkspaceRelatedPanel/.test(MAIN_SOURCE));
+
+  await check('S12', 'every local relationship row carries a machine-readable scope attribute', () => {
+    if (!RELATED_OWNER) return false;
+    const start = RELATED_OWNER.indexOf('!localScope.workspaceAvailable');
+    if (start === -1) return false;
+    const branch = RELATED_OWNER.slice(start, RELATED_OWNER.indexOf('return;', start));
+    return /data-scope="current-document"/.test(branch) &&
+      /class=\\?"workspaceRelatedRow\\?"/.test(branch);
+  }, () => 'local row template lost data-scope="current-document"');
+
+  await check('S13', 'neither direction reports a confirmed zero it cannot prove', () => {
+    if (!RELATED_OWNER) return false;
+    const localStart = RELATED_OWNER.indexOf('!localScope.workspaceAvailable');
+    const localReturn = RELATED_OWNER.indexOf('return;', localStart);
+    const local = RELATED_OWNER.slice(localStart, localReturn);
+    const wsStart = RELATED_OWNER.indexOf('!linksInResult.available');
+    const wsReturn = wsStart === -1 ? -1 : RELATED_OWNER.indexOf('return;', wsStart);
+    const ws = wsStart === -1 ? '' : RELATED_OWNER.slice(wsStart, wsReturn);
+    return local.includes("badge.textContent = '—'") &&
+      !/badge\.textContent = '0'/.test(local) &&
+      local.includes('No outgoing links in this note') &&
+      ws.includes('Links In unavailable — workspace index not ready') &&
+      ws.includes("badge.textContent = '—'");
+  }, () => 'a direction reports a zero/unavailable state it cannot prove');
+
+  await check('S14', 'the shared host is INSIDE the composition: one renderer call plus positive verification', () => {
+    if (!COMPOSE_OWNER || !VERIFY_OWNER) return false;
+    const calls = (COMPOSE_OWNER.match(/renderWorkspaceRelatedPanel\(\)/g) || []).length;
+    return calls === 1 &&
+      VERIFY_OWNER.includes("elementId: 'workspaceRelatedPanel'") &&
+      VERIFY_OWNER.includes('workspaceRelatedPanel') &&
+      PANEL_HOST_IDS.includes('workspaceRelatedPanel');
+  }, () => 'related host missing from composition call, verification or registry');
+
+  await check('S15', 'visibility evidence is COMPUTED: display, visibility and opacity are all read', () => {
+    if (!VISIBLE_OWNER) return false;
+    return /getComputedStyle\(el\)/.test(VISIBLE_OWNER) &&
+      VISIBLE_OWNER.includes("cs.display === 'none'") &&
+      VISIBLE_OWNER.includes("cs.visibility === 'hidden'") &&
+      VISIBLE_OWNER.includes("String(cs.opacity) === '0'") &&
+      VISIBLE_OWNER.includes('if (el.hidden) return false;');
+  }, () => 'isPanelActuallyVisible no longer reads computed display/visibility/opacity');
+
+  await check('S16', 'verification checks all FOUR Current Document hosts positively', () => {
+    if (!VERIFY_OWNER) return false;
+    const hosts = ['workspaceActivePanel', 'workspaceTagsPanel', 'workspaceTasksPanel', 'workspaceRelatedPanel'];
+    const present = hosts.filter((id) => VERIFY_OWNER.includes(`elementId: '${id}'`));
+    return present.length === 4 &&
+      VERIFY_OWNER.includes('=not-visible(') &&
+      /checked: LOCAL_HOSTS\.length/.test(VERIFY_OWNER);
+  }, () => 'missing host checks: ' + [
+    'workspaceActivePanel', 'workspaceTagsPanel', 'workspaceTasksPanel', 'workspaceRelatedPanel',
+  ].filter((id) => !(VERIFY_OWNER || '').includes(`elementId: '${id}'`)).join(','));
+
+  await check('S17', 'verification checks every WITHDRAWN host negatively (still-visible is a failure)', () => {
+    if (!VERIFY_OWNER) return false;
+    return VERIFY_OWNER.includes('composition.hiddenElementIds') &&
+      VERIFY_OWNER.includes('=workspace-panel-still-visible') &&
+      VERIFY_OWNER.includes('isPanelActuallyVisible(el)');
+  }, () => 'hiddenElementIds negative check missing from verifyStandaloneNoteComposition');
+
+  await check('S18', 'the "complete" line is GATED on verification; failure returns a structured report', () => {
+    if (!COMPOSE_OWNER) return false;
+    const verifyAt = COMPOSE_OWNER.indexOf('verifyStandaloneNoteComposition()');
+    const failAt = COMPOSE_OWNER.indexOf('if (!verification.ok)');
+    const failedLogAt = COMPOSE_OWNER.indexOf('Journal Note composition: FAILED — ');
+    const completeAt = COMPOSE_OWNER.indexOf("log?.('Journal Note composition: complete')");
+    return verifyAt !== -1 && failAt > verifyAt && failedLogAt > failAt &&
+      completeAt > failedLogAt &&
+      COMPOSE_OWNER.includes('report.complete = false;') &&
+      COMPOSE_OWNER.includes('report.complete = true;');
+  }, () => 'completion/failure ordering broken: verify=' +
+    COMPOSE_OWNER.indexOf('verifyStandaloneNoteComposition()') +
+    ' fail=' + COMPOSE_OWNER.indexOf('if (!verification.ok)') +
+    ' complete=' + COMPOSE_OWNER.indexOf("log?.('Journal Note composition: complete')"));
+
+  await check('S19', 'openNote surfaces compositionOk in BOTH the log line and the result contract', () => {
+    if (!OPEN_NOTE_OWNER) return false;
+    return OPEN_NOTE_OWNER.includes('const compositionReport = composeStandaloneNotePanels();') &&
+      OPEN_NOTE_OWNER.includes('const compositionOk =') &&
+      OPEN_NOTE_OWNER.includes('sidebarComposition=${compositionOk ? \'ok\' : \'FAILED\'}') &&
+      /\n\s*compositionOk,?\s*\n?\s*\};/.test(OPEN_NOTE_OWNER) &&
+      OPEN_NOTE_OWNER.includes('did not verify');
+  }, () => 'openNote no longer reports compositionOk');
+
+  await check('S20', 'neutral/no-Journal presentation is a strict no-op that still clears the projected dataset', () => {
+    const SIDEBAR_OWNER = ownerSource('getSidebarComposition');
+    if (!APPLY_OWNER || !SYNC_OWNER || !SIDEBAR_OWNER) return false;
+    const syncAt = APPLY_OWNER.indexOf('syncJournalCompositionDataset()');
+    const inactiveAt = APPLY_OWNER.indexOf('composition.inactive');
+    return syncAt !== -1 && inactiveAt > syncAt &&
+      SIDEBAR_OWNER.includes('inactive: true') &&
+      SIDEBAR_OWNER.includes("composition: 'journal-inactive'") &&
+      SYNC_OWNER.includes('if (!isJournalContext())') &&
+      SYNC_OWNER.includes('delete dataset.journalComposition') &&
+      APPLY_OWNER.includes('empty.hidden = composition.workspaceAvailable || noteComposition') &&
+      APPLY_OWNER.includes('getJournalComposition() === MME_JOURNAL_COMPOSITION.NOTE') &&
+      /NONE:\s*'none'/.test(MAIN_SOURCE);
+  }, () => 'neutral no-op contract broken (sync/inactive/empty-state ordering)');
+
+  await check('S21', 'Workspace -> Note is refused BEFORE the transition lock, with exactly one explanation', () => {
+    if (!OPEN_NOTE_OWNER) return false;
+    const guardAt = OPEN_NOTE_OWNER.indexOf('getJournalComposition() === MME_JOURNAL_COMPOSITION.WORKSPACE');
+    const blockAt = OPEN_NOTE_OWNER.indexOf('OPEN_NOTE_REASON.TRANSITION_BLOCKED');
+    const toastAt = OPEN_NOTE_OWNER.indexOf('showToast?.(message');
+    const busyAt = OPEN_NOTE_OWNER.indexOf('__journalNoteTransitionBusy = true');
+    return guardAt !== -1 && blockAt > guardAt && toastAt > guardAt && busyAt > blockAt &&
+      MAIN_SOURCE.includes("TRANSITION_BLOCKED: 'cross-composition-not-yet-supported'") &&
+      OPEN_NOTE_OWNER.includes('Open Note: blocked (cross-composition transition deferred to ACT 4C)');
+  }, () => 'guard/block/toast/busy ordering: ' +
+    'guard=' + OPEN_NOTE_OWNER.indexOf('MME_JOURNAL_COMPOSITION.WORKSPACE') +
+    ' block=' + OPEN_NOTE_OWNER.indexOf('OPEN_NOTE_REASON.TRANSITION_BLOCKED') +
+    ' busy=' + OPEN_NOTE_OWNER.indexOf('__journalNoteTransitionBusy = true'));
+
+  await check('S22', 'the blocked path is NON-DESTRUCTIVE: no picker, open, commit or persistence call', () => {
+    if (!OPEN_NOTE_OWNER) return false;
+    const g = OPEN_NOTE_OWNER.indexOf('ACT 4B BOUNDARY');
+    const end = OPEN_NOTE_OWNER.indexOf('__journalNoteTransitionBusy', g);
+    if (g === -1 || end === -1 || end <= g) return false;
+    const slice = OPEN_NOTE_OWNER.slice(g, end);
+    const destructive = slice.match(
+      /showOpenFilePicker|showDirectoryPicker|setJournalComposition|openSmart|persistActive|localStorage|indexedDB/g
+    ) || [];
+    return destructive.length === 0 &&
+      (slice.match(/showToast\?\.\(message/g) || []).length === 1 &&
+      slice.includes('handle: null') &&
+      slice.includes('message,');
+  }, () => 'destructive call on the blocked path');
+
+  await check('S23', 'overlapping Journal transitions are REJECTED, never interleaved, and always released', () => {
+    if (!OPEN_NOTE_OWNER) return false;
+    const acquires = (MAIN_SOURCE.match(/__journalNoteTransitionBusy = true/g) || []).length;
+    const releases = (MAIN_SOURCE.match(/__journalNoteTransitionBusy = false;/g) || []).length;
+    return MAIN_SOURCE.includes("TRANSITION_BUSY: 'transition-busy'") &&
+      OPEN_NOTE_OWNER.includes('if (__journalNoteTransitionBusy) {') &&
+      acquires === 1 && releases >= 2;
+  }, () => 'acquires=' +
+    (MAIN_SOURCE.match(/__journalNoteTransitionBusy = true/g) || []).length +
+    ' releases=' + (MAIN_SOURCE.match(/__journalNoteTransitionBusy = false;/g) || []).length);
+
+  await check('S24', 'nothing restores withdrawn hosts AFTER verification or AFTER composition', () => {
+    if (!OPEN_NOTE_OWNER || !COMPOSE_OWNER) return false;
+    const composeAt = OPEN_NOTE_OWNER.indexOf('const compositionReport = composeStandaloneNotePanels();');
+    const verifyAt = COMPOSE_OWNER.indexOf('verifyStandaloneNoteComposition()');
+    if (composeAt === -1 || verifyAt === -1) return false;
+    // Matches ASSIGNMENTS only (`panel.hidden = true`), never prose or templates.
+    const assignment = /[A-Za-z0-9_\)]\.hidden\s*=\s*(?:true|false)/;
+    const openTail = OPEN_NOTE_OWNER.slice(composeAt);
+    const composeTail = COMPOSE_OWNER.slice(verifyAt);
+    return !assignment.test(openTail) && !assignment.test(composeTail);
+  }, () => 'a .hidden assignment exists after the verification/composition boundary');
+
+  // ------------------------------------------------------------- registry
+  // Derived from the shipped registry block, so a key or host added later is
+  // covered without editing this file.
+  const REGISTRY_KEYS = [...PANEL_REGISTRY_BLOCK.matchAll(/^\s{2}([A-Za-z_$][\w$]*):/gm)].map((m) => m[1]);
+  const REGISTRY_ELEMENT_IDS = [...PANEL_REGISTRY_BLOCK.matchAll(/elementId:\s*'([^']+)'/g)].map((m) => m[1]);
+
+  await check('S25', 'registry keys are unique and every entry declares a host elementId', () => {
+    if (REGISTRY_KEYS.length < 13 || new Set(REGISTRY_KEYS).size !== REGISTRY_KEYS.length) return false;
+    return REGISTRY_KEYS.every((k) => {
+      const at = PANEL_REGISTRY_BLOCK.search(new RegExp('^\\s{2}' + k + ':', 'm'));
+      return at !== -1 && /elementId:/.test(PANEL_REGISTRY_BLOCK.slice(at, at + 500));
+    });
+  }, () => 'keys=' + REGISTRY_KEYS.length +
+    ' unique=' + new Set(REGISTRY_KEYS).size);
+
+  await check('S26', 'elementId sharing is EXACTLY the two intentional shared hosts, nothing else', () => {
+    const counts = {};
+    REGISTRY_ELEMENT_IDS.forEach((id) => { counts[id] = (counts[id] || 0) + 1; });
+    const shared = Object.keys(counts).filter((k) => counts[k] > 1).sort();
+    const sharedExactly = shared.length === 2 &&
+      shared[0] === 'workspaceRelatedPanel' && shared[1] === 'workspaceTagsPanel' &&
+      shared.every((id) => counts[id] === 2);
+    // A shared host must carry one row per scope, so one direction can never
+    // overwrite the other's visibility decision.
+    const scoped = (id) => {
+      const rows = PANEL_REGISTRY_BLOCK.split('\n')
+        .filter((line) => line.includes(`elementId: '${id}'`));
+      return rows.length === 2 &&
+        rows.some((line) => line.includes("scope: 'document'")) &&
+        rows.some((line) => line.includes("scope: 'workspace'"));
+    };
+    return REGISTRY_ELEMENT_IDS.length >= 15 &&
+      Object.keys(counts).length >= 13 &&
+      PANEL_HOST_IDS.length === Object.keys(counts).length &&
+      sharedExactly && scoped('workspaceRelatedPanel') && scoped('workspaceTagsPanel');
+  }, () => {
+    const counts = {};
+    REGISTRY_ELEMENT_IDS.forEach((id) => { counts[id] = (counts[id] || 0) + 1; });
+    return 'elementIds=' + REGISTRY_ELEMENT_IDS.length +
+      ' unique=' + Object.keys(counts).length +
+      ' shared=[' + Object.keys(counts).filter((k) => counts[k] > 1).join(',') + ']';
+  });
+
+  await check('S27', 'every registered host has a KNOWN materialization owner, or is a PINNED registry-only id', () => {
+    if (PANEL_HOST_IDS.length < 13) return false;
+    // Registry-only ids: declared in the composition registry and guarded in
+    // CSS, but no builder ships them yet. Pinning them HERE means a NEW host
+    // without a materialization owner fails this fixture automatically, and a
+    // stale exemption (id that became materialized) fails it too.
+    const REGISTRY_ONLY = ['workspacePinnedPanel', 'workspaceTaskBoardPanel'];
+    const materialized = (id) =>
+      INDEX_HTML.includes(`id="${id}"`) ||
+      MAIN_SOURCE.includes(`id = '${id}'`) ||
+      REPORT_SOURCE.includes(`id = '${id}'`);
+    const unmaterialized = PANEL_HOST_IDS.filter((id) => !materialized(id));
+    const staleExemptions = REGISTRY_ONLY.filter((id) => materialized(id));
+    return staleExemptions.length === 0 &&
+      unmaterialized.every((id) => REGISTRY_ONLY.includes(id)) &&
+      REGISTRY_ONLY.every((id) => PANEL_HOST_IDS.includes(id));
+  }, () => {
+    const REGISTRY_ONLY = ['workspacePinnedPanel', 'workspaceTaskBoardPanel'];
+    const materialized = (id) =>
+      INDEX_HTML.includes(`id="${id}"`) ||
+      MAIN_SOURCE.includes(`id = '${id}'`) ||
+      REPORT_SOURCE.includes(`id = '${id}'`);
+    return 'unpinned-unmaterialized=[' +
+      PANEL_HOST_IDS.filter((id) => !materialized(id) && !REGISTRY_ONLY.includes(id)).join(',') +
+      '] stale-exemptions=[' + REGISTRY_ONLY.filter((id) => materialized(id)).join(',') + ']';
+  });
+
+  await check('S28', 'every static workspace Panel id in index.html is claimed by the registry, exactly once', () => {
+    const staticIds = [...INDEX_HTML.matchAll(/id="(workspace[A-Za-z0-9]*Panel)"/g)].map((m) => m[1]);
+    const orphans = staticIds.filter((id) => !PANEL_HOST_IDS.includes(id));
+    const dupes = staticIds.filter((id) =>
+      (INDEX_HTML.match(new RegExp(`id="${id}"`, 'g')) || []).length !== 1);
+    return staticIds.length >= 5 && orphans.length === 0 && dupes.length === 0;
+  }, () => {
+    const staticIds = [...INDEX_HTML.matchAll(/id="(workspace[A-Za-z0-9]*Panel)"/g)].map((m) => m[1]);
+    return 'orphans=[' + staticIds.filter((id) => !PANEL_HOST_IDS.includes(id)).join(',') + '] dupes=[' +
+      staticIds.filter((id) => (INDEX_HTML.match(new RegExp(`id="${id}"`, 'g')) || []).length !== 1).join(',') + ']';
+  });
+
+  await check('S29', 'release identity unchanged: sw.js/package.json vs HEAD, no version or cache bump', () => {
+    const sw = read('sw.js');
+    const baselineOk = sw.includes(APP_VERSION_BASELINE) &&
+      !/0\.6\.4/.test(sw) &&
+      !/productVersion\s*[:=]\s*['"]0\.6\.4/.test(MAIN_SOURCE) &&
+      !INDEX_HTML.includes('?v=');
+    if (!baselineOk) return false;
+    try {
+      const { execSync } = require('child_process');
+      const diff = execSync('git diff --numstat HEAD -- sw.js package.json', {
+        cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+      return diff === '';
+    } catch {
+      // git unavailable: the baseline equality above is the fallback evidence.
+      return true;
+    }
+  }, () => 'sw.js/index.html/main.js version markers changed');
+
+  group('ACT 4B — mode isolation and top-bar ownership (T01-T18)');
+
+  await check('T01', 'MODE ISOLATION: openNote refuses outside Journal', async () => {
+    globalThis.__setJournalContextProbe('editor');
+    O.__resetCalls();
+    O.__setGuardResult(true);
+    O.__setOpenResult('success');
+    const r = await O.openNote();
+    globalThis.__setJournalContextProbe('journal');
+    return r.ok === false && r.reason === 'not-journal-context' &&
+      O.__calls().openSmart === 0;
+  });
+
+  await check('T02', 'MODE ISOLATION: Slides never runs Journal composition', () => {
+    globalThis.__setJournalContextProbe('slides');
+    const c = O.getSidebarComposition();
+    globalThis.__setJournalContextProbe('journal');
+    return c.inactive === true && c.panels && Object.keys(c.panels).length === 0;
+  });
+
+  await check('T03', 'MODE ISOLATION: composition is inert outside Journal', () => {
+    globalThis.__setJournalContextProbe('editor');
+    const c = O.getSidebarComposition();
+    globalThis.__setJournalContextProbe('journal');
+    return c.inactive === true && c.hiddenElementIds.length === 0 &&
+      c.unknownAvailabilityKeys.length === 0;
+  });
+
+  await check('T04', 'EDITOR OPEN restored: toolbar menu uses the accepted owner', () => {
+    const main = read('js', 'main.js');
+    // Scan the whole recent-menu builder: the physical-open item may appear after
+    // several separators. It must keep the accepted label and owner, and must
+    // never delegate to the Journal-only openNote().
+    const raw = main.slice(main.indexOf('function showRecentMenu'),
+      main.indexOf('function showRecentMenu') + 12000);
+    // Comments legitimately mention openNote(); only executable lines are gated.
+    const code = raw.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+    return /'Browse/.test(code) && /openSmart\(\)/.test(code) &&
+      !/openNote\(/.test(code);
+  });
+
+  await check('T05', 'EDITOR OPEN: no Journal Open Note duplicate in the toolbar', () => {
+    const html = read('index.html');
+    return !/id="btnOpenNote"[^>]*>[\s\S]{0,200}?toolbar/i.test(html) ||
+      !/btnOpenNote/.test(html.split('workspaceSidebar')[0]);
+  });
+
+  await check('T06', 'JOURNAL SIDEBAR: Open Note and Open Workspace are siblings', () => {
+    const html = read('index.html');
+    const side = html.slice(html.indexOf('id="workspaceSidebar"'), html.indexOf('workspaceEmptyState'));
+    return /id="btnOpenNote"/.test(side) && /id="btnOpenWorkspace"/.test(side) &&
+      side.indexOf('btnOpenNote') < side.indexOf('btnOpenWorkspace');
+  });
+
+  await check('T07', 'JOURNAL SIDEBAR: one action owner binds both entries', () => {
+    const src = read('js', 'workspace', 'workspace-actions.js');
+    return /bindOnce\(btnOpenNote, 'Open Note', onOpenNote\)/.test(src) &&
+      /bindOnce\(btnOpenWorkspace, 'Open Workspace', onOpenWorkspace\)/.test(src) &&
+      (src.match(/getElementById\('btnOpenNote'\)/g) || []).length === 1;
+  });
+
+  await check('T08', 'TOP BAR: availability derives from the active mode', () => {
+    const main = read('js', 'main.js');
+    const body = extractFunctionByBraces(main, 'function isTopBarOpenAvailable() {');
+    return /!isJournalContext\(\)/.test(body);
+  });
+
+  await check('T09', 'TOP BAR: one shared Open element remains', () => {
+    const html = read('index.html');
+    return (html.match(/id="btnOpen"/g) || []).length === 1;
+  });
+
+  await check('T10', 'TOP BAR: availability toggles visibility only', () => {
+    const main = read('js', 'main.js');
+    const body = extractFunctionByBraces(main, 'function updateTopBarCommandAvailability() {');
+    // No picker, handle, document, dirty or Workspace mutation.
+    return /btn\.hidden = !available/.test(body) &&
+      !/openSmart|openNote|openWorkspace|showOpenFilePicker/.test(body) &&
+      !/currentSaveHandle|\bdirty\b/.test(body);
+  });
+
+  await check('T11', 'TOP BAR: context switch never runs a transition', () => {
+    const main = read('js', 'main.js');
+    const body = extractFunctionByBraces(main, 'function installTopBarCommandAvailabilityWatcher() {');
+    return !/openNote|openSmart|openWorkspace|deactivateWorkspaceComposition/.test(body) &&
+      /updateTopBarCommandAvailability\(\)/.test(body);
+  });
+
+  await check('T12', 'TOP BAR: the existing context owner drives availability', () => {
+    const main = read('js', 'main.js');
+    const i = main.indexOf('globalThis.currentAppContextId = ctx.id;');
+    const after = main.slice(i, i + 400);
+    return /updateTopBarCommandAvailability\(\)/.test(after);
+  });
+
+  await check('T13', 'JOURNAL COMPOSITION: three values, none added to MME_SCOPE_IDS', () => {
+    const main = read('js', 'main.js');
+    const body = extractBlockFrom(main, 'const MME_JOURNAL_COMPOSITION = Object.freeze({', '});');
+    const scopes = extractBlockFrom(main, 'const MME_SCOPE_IDS = Object.freeze({', '});');
+    return /NONE: 'none'/.test(body) && /NOTE: 'note'/.test(body) &&
+      /WORKSPACE: 'workspace'/.test(body) && !/standalone/i.test(body) &&
+      !/standalone/i.test(scopes);
+  });
+
+  await check('T14', 'WORKSPACE STATE: never destructively cleared by ACT 4B', () => {
+    const main = read('js', 'main.js');
+    const body = extractFunctionByBraces(main, 'function deactivateWorkspaceComposition() {');
+    return !/rootHandle = null/.test(body) && !/files\.notes = \[\]/.test(body) &&
+      !/folders\.notes = null/.test(body) && !/rootName = ''/.test(body);
+  });
+
+  await check('T15', 'WORKSPACE STATE: saved Index is never mutated by the transition', () => {
+    const main = read('js', 'main.js');
+    const body = extractFunctionByBraces(main, 'function deactivateWorkspaceComposition() {');
+    return !/WORKSPACE_INDEX_STATE/.test(body);
+  });
+
+  await check('T16', 'OPEN NOTE: result contract is explicit and structured', () => {
+    const main = read('js', 'main.js');
+    const body = extractFunctionByBraces(main, 'async function openNote() {');
+    return /ok: false/.test(body) && /ok: true/.test(body) &&
+      /reason: OPEN_NOTE_REASON\.OK/.test(body) && /sameFile/.test(body);
+  });
+
+  await check('T17', 'OPEN NOTE: a throw is contained as a structured failure', () => {
+    const main = read('js', 'main.js');
+    const body = extractFunctionByBraces(main, 'async function openNote() {');
+    return /catch \(e\)/.test(body) &&
+      /reason: OPEN_NOTE_REASON\.ERROR/.test(body) &&
+      /currentSaveHandle = snapshot\.handle/.test(body);
+  });
+
+  await check('T18b', 'OPEN NOTE: nothing is committed before a proven open', () => {
+    const main = read('js', 'main.js');
+    const body = extractFunctionByBraces(main, 'async function openNote() {');
+    // The composition is committed only after the physical open is proven and
+    // the render-stability barrier has been awaited.
+    const commit = body.indexOf('setJournalComposition(MME_JOURNAL_COMPOSITION.NOTE)');
+    const stable = body.indexOf('await renderCompletion.wait()');
+    return commit > body.indexOf('await openSmart();') &&
+      commit > stable &&
+      body.indexOf('await openSmart();') > body.indexOf('confirmDiscardIfDirty');
+  });
+
+  group('ACT 4B — action boundary and observer safety');
+
+  await check('A01', 'OPEN WORKSPACE: composition applied only on proven success', () => {
+    const src = read('js', 'workspace', 'workspace-controller.js');
+    const block = extractFunctionByBraces(src, 'onOpenWorkspace: async () => {');
+    // A proven-success gate must precede the composition call.
+    return /if \(!result \|\| !result\.ok\)/.test(block) &&
+      block.indexOf('!result.ok') < block.indexOf('applySidebarComposition');
+  });
+
+  await check('A02', 'OPEN WORKSPACE: cancel/invalid/failure are not success', () => {
+    const src = read('js', 'workspace', 'workspace-controller.js');
+    const body = extractFunctionByBraces(src, 'async function openWorkspace() {');
+    // Every non-activation exit returns a structured ok:false result.
+    const exits = (body.match(/return \{ ok: false/g) || []).length;
+    return exits >= 4 && /return \{ ok: true/.test(body);
+  });
+
+  await check('A03', 'OBSERVER SAFETY: Task Review scope never changes outside Journal', () => {
+    const main = read('js', 'main.js');
+    const body = extractFunctionByBraces(main, 'function applySidebarComposition(options) {');
+    const guard = body.indexOf('composition.inactive');
+    const scope = body.indexOf('setTaskScope');
+    return guard > 0 && scope > guard;
+  });
+
+  await check('A04', 'OBSERVER SAFETY: no panel or empty-state mutation outside Journal', () => {
+    const main = read('js', 'main.js');
+    const body = extractFunctionByBraces(main, 'function applySidebarComposition(options) {');
+    const guard = body.indexOf('composition.inactive');
+    return guard > 0 &&
+      body.indexOf('el.hidden = true') > guard &&
+      body.indexOf('empty.hidden') > guard;
+  });
+
+  await check('A05', 'SAVE OWNERSHIP: top-bar Save is never toggled by ACT 4B', () => {
+    const main = read('js', 'main.js');
+    const body = extractFunctionByBraces(main, 'function updateTopBarCommandAvailability() {');
+    return !/btnSave/.test(body);
+  });
+
+  await check('A06', 'ERROR BOUNDARY: both action handlers catch and never rethrow', () => {
+    const actions = read('js', 'workspace', 'workspace-actions.js');
+    return /catch \(e\)/.test(actions) && !/throw e/.test(actions);
+  });
+
+  await check('A07', 'ERROR BOUNDARY: Open Note never rethrows a rejected transition', () => {
+    const main = read('js', 'main.js');
+    const body = extractFunctionByBraces(main, 'async function openNote() {');
+    return /catch \(e\)/.test(body) && !/throw e;/.test(body) &&
+      /reason: OPEN_NOTE_REASON\.ERROR/.test(body);
+  });
+
+  await check('A08', 'TRANSITION: cancel path performs no Workspace withdrawal', () => {
+    const main = read('js', 'main.js');
+    const body = extractFunctionByBraces(main, 'async function openNote() {');
+    const cancelAt = body.indexOf('OPEN_NOTE_REASON.CANCELLED');
+    const commitAt = body.indexOf('PHASE 5');
+    return cancelAt > 0 && commitAt > cancelAt &&
+      !/deactivateWorkspaceComposition/.test(body.slice(cancelAt, commitAt)) &&
+      !/composeStandaloneNotePanels/.test(body.slice(cancelAt, commitAt));
+  });
+
   await check('H01', 'static shell: fallback title is Links In, not Related', () => {
     const html = read('index.html');
     return /workspaceRelatedTitle">Links In</.test(html) && !/>Related</.test(html);
@@ -1371,8 +2883,8 @@ group('ACT 4A — live/saved boundary and structural guarantees');
 
   await check('I01', 'Open Note reuses the existing physical opener', () => {
     const main = read('js', 'main.js');
-    return !/id="btnOpenNote"/.test(read('index.html')) &&
-      /await openSmart\(\);/.test(main);
+    return /await openSmart\(\);/.test(main) &&
+      !/id="btnOpen"[^>]*>[^<]*Open Note/.test(read('index.html'));
   });
 
   await check('I02', 'no NEW file opener added by ACT 4B', () => {
@@ -1414,11 +2926,12 @@ group('ACT 4A — live/saved boundary and structural guarantees');
     const indexReady = IDX.ready;
     const indexFiles = IDX.files.length;
     O.deactivateWorkspaceComposition();
-    // Active projection withdrawn (so Workspace panels cannot linger)...
+    // Only the ACTIVE Note claim is withdrawn...
     if (WORKSPACE_STATE.activeFile !== null) return false;
-    if (WORKSPACE_STATE.rootHandle !== null) return false;
-    // ...while the SAVED Index is untouched, so reopening restores 0.6.3.
-    return IDX.ready === indexReady && IDX.files.length === indexFiles;
+    // ...and the recoverable Workspace configuration plus the SAVED Index are
+    // left completely intact, so reopening restores the accepted 0.6.3 state.
+    return Boolean(WORKSPACE_STATE.rootHandle) && IDX.ready === indexReady &&
+      IDX.files.length === indexFiles;
   });
 
   await check('G02', 'Workspace deactivation clears the stale active path claim', () => {

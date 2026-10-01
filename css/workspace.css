@@ -270,6 +270,19 @@ html[data-app-context='journal'] #workspaceSidebar {
   gap: 6px;
 }
 
+/* ACT 4B — `hidden` must WIN for this host too.
+   #workspaceSearchPanel is created by JS (ensureWorkspaceSearchPanel) without a
+   `hidden` attribute and is kept off-screen only by the two class rules
+   (`html.workspace-empty`, `html.journal-sidebar-collapsed`). It had NO
+   `[hidden]` rule, so the ID-level `display: flex` above outranked the UA
+   `[hidden] { display: none }` and the composition owner's `hidden = true` was
+   INERT: the Workspace Search panel stayed visible in a Journal Note even
+   though the composition had withdrawn it.
+   The guard itself lives in the single authoritative ACT 4B `[hidden]` contract
+   rule (search `ACT 4B — the SINGLE authoritative`) alongside every other
+   panel host, so one contract covers all of them and a future host cannot be
+   forgotten. */
+
 #workspaceSearchLabel {
   font-size: 12px;
   font-weight: 700;
@@ -564,6 +577,34 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
   font-size: 12px;
   opacity: 0.6;
   padding: 4px 2px;
+}
+
+/* ACT 4B — Links Out row typography: the target label keeps ordinary Sidebar
+   row scale; only the resolution state is secondary. */
+.workspaceRelatedRow {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 2px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.workspaceRelatedRowLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.workspaceRelatedRowState {
+  flex: 0 0 auto;
+  font-size: 11px;
+  opacity: 0.6;
 }
 
 .workspacePanelHeaderButton {
@@ -1137,6 +1178,88 @@ html.journal-sidebar-collapsed #workspaceSearchPanel {
   font-size: 13px;
 }
 
+/* ACT 4B — Journal information architecture: composition identity, OPEN and
+   WORKSPACE regions share the existing header container. Small functional
+   hierarchy only; no large cards or animation. */
+.workspaceCompositionIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+}
+
+.workspaceCompositionIdentity:empty {
+  display: none;
+}
+
+.workspaceCompositionLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+}
+
+.workspaceCompositionName {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceCompositionName:empty {
+  display: none;
+}
+
+.workspaceOpenSection,
+.workspaceWorkspaceSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.workspaceSectionCaption {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+}
+
+/* Today and New Note belong to the WORKSPACE section, never to OPEN. */
+.workspaceWorkspaceSection #btnJournalToday,
+.workspaceWorkspaceSection #btnNewConcept {
+  margin-left: 10px;
+}
+
+.workspaceWorkspaceName {
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceWorkspaceName:empty {
+  display: none;
+}
+
+.workspaceActionText {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.workspaceActionHint {
+  font-size: 11px;
+  opacity: 0.6;
+  line-height: 1.3;
+}
+
 .workspaceHeader button {
   padding: 8px 10px;
   border-radius: 6px;
@@ -1548,6 +1671,19 @@ html.journal-sidebar-collapsed .workspaceIcon {
 .workspaceTagItem.__active {
   background: rgba(34, 197, 94, 0.14);
   border-color: rgba(34, 197, 94, 0.58);
+}
+
+/* ACT 4B — a CURRENT-DOCUMENT tag row has no cross-file inventory, so it is a
+   deliberately NON-INTERACTIVE pill. The geometry stays identical to the
+   Workspace tag pills; only the pointer affordance and the hover highlight,
+   which belong to the Workspace tag filter, are dropped. */
+.workspaceTagItem[data-scope='current-document'] {
+  cursor: default;
+}
+
+.workspaceTagItem[data-scope='current-document']:hover {
+  background: rgba(127, 127, 127, 0.08);
+  border-color: var(--menu-border);
 }
 
 .workspaceTagName {
@@ -2039,6 +2175,32 @@ html[data-app-context='slides'] .contextSlidesOnly {
 .workspaceTaskPriorityBadge.priority-p3 {
   background: rgba(34, 197, 94, 0.15);
   color: #16a34a;
+}
+
+/* ACT 4B — read-only Task Review presentation: interactive controls are
+   removed in current-document scope, so these rules only style the
+   non-interactive read-only badges/labels. */
+.workspaceTaskReadonlyBadge {
+  flex: 0 0 auto;
+  min-width: 16px;
+  text-align: center;
+  opacity: 0.7;
+  line-height: 1;
+}
+
+.workspaceTaskReadonlyState {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+}
+
+.workspaceTaskSourceLine {
+  flex: 0 0 auto;
+  font-size: 11px;
+  opacity: 0.6;
 }
 
 .workspaceTaskPriorityActions {
@@ -3300,6 +3462,77 @@ html.dark .wsIndexDisclosure:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* ACT 4B — the SINGLE authoritative `hidden` contract for every Sidebar panel
+   host that MME_PANEL_COMPOSITION can address.
+
+   WHY THIS RULE MUST EXIST
+   The ACT 4B composition owner (applySidebarComposition) withdraws a panel by
+   setting `el.hidden = true`. That is only a REQUEST: the UA stylesheet's
+   `[hidden] { display: none }` is a UA-origin rule, so ANY author `display:`
+   rule that reaches the element WINS, regardless of the `hidden` state. An
+   ID-level author rule therefore makes `hidden = true` completely INERT.
+
+   Three hosts had no `[hidden]` rule at all while carrying an ID-level
+   `display: flex`: #workspaceJournalsPanel, #workspaceConceptsPanel and
+   #workspaceArchivePanel (the shared ID geometry rule directly above), plus
+   #workspaceSearchPanel. Their visibility was owned ONLY by the class rules
+   `html.workspace-empty` and `html.journal-sidebar-collapsed`, so after
+   "Journal Note composition: complete" the Sidebar still showed the Workspace
+   Notes / Knowledge / Archive / Search panels — the logs were right and the
+   DOM was wrong, which is exactly the reported ACT 4B visual failure.
+
+   `!important` is REQUIRED, not stylistic: it must beat an ID selector.
+   The class-based owners keep working unchanged and are unaffected by this
+   rule, which only ever acts when `hidden` is already set. */
+#workspaceActivePanel[hidden],
+#workspaceTagsPanel[hidden],
+#workspaceTasksPanel[hidden],
+#workspaceRelatedPanel[hidden],
+#workspaceJournalsPanel[hidden],
+#workspaceConceptsPanel[hidden],
+#workspacePinnedPanel[hidden],
+#workspaceSearchPanel[hidden],
+#workspaceArchivePanel[hidden],
+#workspaceTaskBoardPanel[hidden],
+#workspaceProjectsPanel[hidden],
+#workspaceIndexPanel[hidden],
+#workspaceReportPanel[hidden] {
+  display: none !important;
+}
+
+/* ACT 4B — JOURNAL NOTE COMPOSITION IS A CURRENT-DOCUMENT SIDEBAR.
+   ----------------------------------------
+   A SECOND, independent visibility owner exists beside `hidden`: the Workspace
+   session owner toggles `html.workspace-empty` whenever no root handle exists
+   (updateWorkspaceUiState), and the class projection above hides the Workspace
+   panels with `display: none !important`.
+
+   That owner cannot know that Journal selected a standalone Note. On a fresh
+   Journal load there is no root handle, so `html.workspace-empty` is present and
+   the four local hosts below are `display: none` even though the composition
+   owner has correctly set `hidden = false` on every one of them. Result: the
+   entire Note Sidebar is blank and the log reads "complete" — a third owner of
+   the same visual failure, invisible to any `hidden`-only reasoning.
+
+   The exception is scoped by the explicit `data-journal-composition` value that
+   applySidebarComposition() writes from the one authoritative composition owner
+   (and clears outside Journal, so Editor and Slides can never inherit it):
+
+     - only when the composition IS `note`,
+     - only for the four Current Document hosts,
+     - only while the host is NOT `hidden` (:not([hidden])), so this rule and the
+       authoritative `[hidden]` contract NEVER compete over the same element.
+
+   It cannot re-expose a Workspace-only panel: those keep `hidden` and the rule
+   above still wins for them. The class owner itself is untouched, so neutral
+   Journal, Editor and Slides keep their accepted presentation exactly. */
+html[data-journal-composition='note'].workspace-empty #workspaceActivePanel:not([hidden]),
+html[data-journal-composition='note'].workspace-empty #workspaceTagsPanel:not([hidden]),
+html[data-journal-composition='note'].workspace-empty #workspaceTasksPanel:not([hidden]),
+html[data-journal-composition='note'].workspace-empty #workspaceRelatedPanel:not([hidden]) {
+  display: flex !important;
 }
 
 html.journal-sidebar-collapsed #workspaceJournalsPanel,

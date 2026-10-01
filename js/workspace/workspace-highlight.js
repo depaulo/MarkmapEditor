@@ -71,10 +71,32 @@ function isSameWorkspaceFileButton(btn, active) {
 
 function updateWorkspaceActiveFileHighlight() {
   try {
+    // ACT 4B — STALE CALLBACK PROTECTION.
+    // A callback captured under an older Journal observer generation must not
+    // act: after Workspace -> Note the Workspace panels are withdrawn, and a
+    // late Workspace highlight pass would re-touch the old composition. The
+    // generation check is a guard, not a listener change, so no observer is
+    // added or removed.
+    const isStale = globalThis.isObserverGenerationStale?.(globalThis.__workspaceHighlightGeneration);
+    if (isStale) {
+      log?.('Workspace highlight: stale callback ignored');
+      return;
+    }
+
     const active =
       WORKSPACE_STATE?.activeFile ||
       globalThis.WORKSPACE_STATE?.activeFile ||
       null;
+
+    // ACT 4B — WORKSPACE-ACTIVE DETECTION. A retained rootHandle means
+    // recoverable configuration EXISTS; it does not mean the Workspace is the
+    // active Journal composition. The explicit owner decides presentation.
+    if (globalThis.isWorkspaceAggregationActive && !globalThis.isWorkspaceAggregationActive()) {
+      if (active) {
+        log?.('Workspace highlight: suppressed (Workspace is recoverable but not the active composition)');
+      }
+      return;
+    }
 
 
     const activeKind = normalizeWorkspaceKindForCompare(active?.kind || '');
