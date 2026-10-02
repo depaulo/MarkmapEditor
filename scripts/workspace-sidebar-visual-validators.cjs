@@ -363,12 +363,6 @@ function buildRelatedSandbox() {
     'const getWorkspaceSearchIcon = () => "x";',
     'const getWorkspaceSearchKindLabel = () => "Note";',
     'const getActiveConceptName = () => __activeName;',
-    '// ACT 4B — the real renderers now consult the shared composition owner.',
-    '// These fixtures prove WORKSPACE rendering, so the sandbox answers with a',
-    '// Workspace composition; ACT 4B composition is proven by',
-    '// scripts/scope-contract-validators.cjs against the real owner.',
-    'const MME_AVAILABILITY = Object.freeze({ AVAILABLE: "available", UNAVAILABLE: "unavailable", NOT_READY: "not-ready", ERROR: "error" });',
-    'const getSidebarComposition = () => ({ workspaceAvailable: true, composition: "workspace", document: {}, panels: {}, hiddenElementIds: [] });',
     '// ACT 3C — the panel sources canonical Links In; this shim reproduces the',
     '// same file set so these fixtures keep testing BADGE RENDERING, not',
     '// resolution (resolution is proven by the Wiki Link suites).',
@@ -800,10 +794,7 @@ function buildTagsSandbox() {
     const row = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceActiveNoteActions() {');
     return (row.match(/addEventListener\(/g) || []).length === 1 &&
       /__noteActionsBound/.test(row) &&
-      // ACT 4B: the Journal action area owns Open Note, Open Workspace, Today
-      // and New Note -> five bindings, still one registry and one listener each.
-      (ACTIONS_SOURCE.match(/bindOnce\(/g) || []).length === 5 &&
-      /bindOnce\(btnOpenNote, 'Open Note', onOpenNote\)/.test(ACTIONS_SOURCE) &&
+      (ACTIONS_SOURCE.match(/bindOnce\(/g) || []).length === 4 &&
       !/btnArchiveActive/.test(ACTIONS_SOURCE);
   });
 
@@ -896,12 +887,6 @@ function buildTagsSandbox() {
       'const log = () => {};',
       'const ensureWorkspaceRelatedPanel = () => els.workspaceRelatedPanel;',
       'const forceUpgradeWorkspacePanelMarkup = () => {};',
-    '// ACT 4B — the real renderers now consult the shared composition owner.',
-    '// These fixtures prove WORKSPACE rendering, so the sandbox answers with a',
-    '// Workspace composition; ACT 4B composition is proven by',
-    '// scripts/scope-contract-validators.cjs against the real owner.',
-    'const MME_AVAILABILITY = Object.freeze({ AVAILABLE: "available", UNAVAILABLE: "unavailable", NOT_READY: "not-ready", ERROR: "error" });',
-    'const getSidebarComposition = () => ({ workspaceAvailable: true, composition: "workspace", document: {}, panels: {}, hiddenElementIds: [] });',
       'const wireWorkspaceRelatedPanel = () => {};',
       'const isWorkspacePanelCollapsed = () => false;',
       'const applyWorkspacePanelCollapsed = () => {};',

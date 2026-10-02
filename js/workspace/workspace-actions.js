@@ -1,12 +1,10 @@
 // @ts-check
 
 export function createWorkspaceActions({
-  onOpenNote,
   onOpenWorkspace,
   onToday,
   onNewConcept,
 }) {
-  const btnOpenNote = document.getElementById('btnOpenNote');
   const btnOpenWorkspace = document.getElementById('btnOpenWorkspace');
   const btnJournalToday = document.getElementById('btnJournalToday');
   const btnNewConcept = document.getElementById('btnNewConcept');
@@ -57,10 +55,6 @@ export function createWorkspaceActions({
     globalThis.MME_APP?.log?.(`Workspace: ${name} bound`);
   }
 
-  // ACT 4B CORRECTION — Open Note is a SIBLING of Open Workspace, owned by this
-  // same single action registry and bound exactly once. There is deliberately no
-  // Open Note entry in the global Editor toolbar.
-  bindOnce(btnOpenNote, 'Open Note', onOpenNote);
   bindOnce(btnOpenWorkspace, 'Open Workspace', onOpenWorkspace);
   bindOnce(btnJournalToday, 'Today', onToday);
   bindOnce(btnNewConcept, 'New Concept', onNewConcept);

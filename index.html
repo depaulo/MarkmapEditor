@@ -141,54 +141,35 @@
       <aside id="workspaceSidebar" aria-label="Notes workspace">
         <div class="workspaceHeader">
           <div class="workspaceHeaderTop">
-            <div id="workspaceTitle">Journal</div>
+            <div id="workspaceTitle">Notes Workspace</div>
             <button id="btnWorkspaceCollapse" type="button" title="Collapse sidebar">◀</button>
           </div>
-          <div id="workspaceCompositionIdentity" class="workspaceCompositionIdentity" aria-live="polite">
-            <span id="workspaceCompositionLabel" class="workspaceCompositionLabel"></span>
-            <span id="workspaceCompositionName" class="workspaceCompositionName"></span>
-          </div>
 
-          <div class="workspaceOpenSection" aria-label="Open">
-            <div class="workspaceSectionCaption">Open</div>
-            <button id="btnOpenNote" type="button" aria-label="Open Note, single Markdown file">
-              <span class="workspaceIcon">📄</span>
-              <span class="workspaceActionText">
-                <span class="workspaceLabel">Open Note</span>
-                <span class="workspaceActionHint">Single Markdown file</span>
-              </span>
-            </button>
+          <button id="btnOpenWorkspace" type="button">
+            <span class="workspaceIcon">📁</span>
+            <span class="workspaceLabel">Open Workspace</span>
+          </button>
 
-            <button id="btnOpenWorkspace" type="button" aria-label="Open Workspace, folder of Notes">
-              <span class="workspaceIcon">📁</span>
-              <span class="workspaceActionText">
-                <span class="workspaceLabel">Open Workspace</span>
-                <span class="workspaceActionHint">Folder of Notes</span>
-              </span>
-            </button>
-          </div>
+          <button id="btnJournalToday" type="button">
+            <span class="workspaceIcon">📅</span>
+            <span class="workspaceLabel">Today</span>
+          </button>
 
-          <div id="workspaceWorkspaceSection" class="workspaceWorkspaceSection" aria-label="Workspace">
-            <div class="workspaceSectionCaption">Workspace</div>
-            <div id="workspaceWorkspaceName" class="workspaceWorkspaceName"></div>
-            <button id="btnJournalToday" type="button">
-              <span class="workspaceIcon">📅</span>
-              <span class="workspaceLabel">Today</span>
-            </button>
-
-            <button
-              id="btnNewConcept"
-              type="button"
-              title="Create a new named note"
-              aria-label="New Note, create inside this Workspace"
-            >
-              <span class="workspaceIcon">📝</span>
-              <span class="workspaceActionText">
-                <span class="workspaceLabel">New Note</span>
-                <span class="workspaceActionHint">Create inside this Workspace</span>
-              </span>
-            </button>
-          </div>
+          <button
+            id="btnNewConcept"
+            type="button"
+            title="Create a new named note"
+            aria-label="Create a new named note"
+          >
+            <span class="workspaceIcon">📝</span>
+            <span class="workspaceLabel">New Note</span>
+          </button>
+          <!-- ACT V0 — the former global "Archive Active" control was removed
+               from this Workspace creation/action area. Archive and Restore are
+               owned exclusively by the Active panel action row
+               (renderWorkspaceActiveNoteActions() in js/main.js), which reuses
+               the single metadata writer. This global action area is now exactly
+               Open Workspace, Today and New Note. -->
         </div>
 
         <div id="workspaceEmptyState" class="workspaceEmptyState">
@@ -198,39 +179,14 @@
           </div>
         </div>
 
-        <!-- ACT 4B — STRUCTURAL FIX. This static shell previously declared only
-             the header title, summary and list, but the existing
-             renderWorkspaceRelatedPanel() owner requires a
-             `workspaceRelatedBadge` too. Missing markup made the owner bail at
-             its structural guard and skip the render entirely, so the Journal
-             Note Links Out view could never appear. The markup below now
-             matches the structure ensureWorkspaceRelatedPanel() builds, so the
-             static shell and the runtime owner agree and neither performs a
-             partial replacement. Internal IDs are preserved for collapse-state
-             stability, and the retired "Related" / "No active concept" labels
-             do not return. -->
         <div id="workspaceRelatedPanel" hidden>
           <div class="workspaceRelatedHeader">
-            <button
-              type="button"
-              class="workspacePanelHeaderButton"
-              data-workspace-panel-toggle="related"
-              aria-expanded="true"
-            >
-              <span class="workspacePanelHeaderLeft">
-                <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-                <span class="workspaceRelatedTitle">Links In</span>
-              </span>
-            </button>
-            <span class="workspacePanelHeaderControls">
-              <span id="workspaceRelatedBadge" class="workspacePanelBadge">0</span>
-            </span>
+            <span class="workspaceRelatedTitle">Related</span>
           </div>
 
-          <div class="workspacePanelBody">
-            <div id="workspaceRelatedSummary" class="workspaceRelatedSummary">No active note</div>
-            <div id="workspaceRelatedList" class="workspaceRelatedList"></div>
-          </div>
+          <div id="workspaceRelatedSummary" class="workspaceRelatedSummary">No active concept</div>
+
+          <div id="workspaceRelatedList" class="workspaceRelatedList"></div>
         </div>
 
         <div id="workspaceTasksPanel" class="workspaceSection workspaceTasksPanel" hidden>

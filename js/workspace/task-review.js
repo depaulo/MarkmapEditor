@@ -171,48 +171,7 @@
     return effective === status;
   }
 
-  // ---- ACT 4B: explicit Task Review scope ----
-  //
-  // Task Review has ONE renderer and ONE record shape. It simply needs to be
-  // told WHICH scope supplies its records:
-  //   'workspace'        -> the saved WORKSPACE_INDEX_STATE (accepted 0.6.3)
-  //   'current-document' -> the ACT 4A live Current Document Task projection
-  //
-  // The provider is INJECTED, never re-derived here, so this module keeps no
-  // second Task parser, no second lifecycle owner and no second store. Package 2
-  // status/priority semantics and the filters are untouched.
-  const TASK_REVIEW_SCOPES = Object.freeze({ WORKSPACE: 'workspace', CURRENT_DOCUMENT: 'current-document' });
-
-  let taskScope = TASK_REVIEW_SCOPES.WORKSPACE;
-  let currentDocumentTaskProvider = null;
-
-  function setTaskScope(scope, provider) {
-    taskScope = scope === TASK_REVIEW_SCOPES.CURRENT_DOCUMENT
-      ? TASK_REVIEW_SCOPES.CURRENT_DOCUMENT
-      : TASK_REVIEW_SCOPES.WORKSPACE;
-    currentDocumentTaskProvider = typeof provider === 'function' ? provider : null;
-    return taskScope;
-  }
-
-  function getTaskScope() {
-    return taskScope;
-  }
-
   function getAllTasks() {
-    // Current-document scope: live records supplied by the ACT 4A composition.
-    if (taskScope === TASK_REVIEW_SCOPES.CURRENT_DOCUMENT) {
-      if (!currentDocumentTaskProvider) return [];
-      let live = [];
-      try {
-        live = currentDocumentTaskProvider() || [];
-      } catch {
-        // A provider failure must never fabricate a confirmed-empty Workspace.
-        return [];
-      }
-      return (Array.isArray(live) ? live : []).map(enrichTask);
-    }
-
-    // Accepted 0.6.3 Workspace behaviour, unchanged.
     const index = getWorkspaceIndex();
     if (!index || !index.ready || !index.tasks) return [];
     return index.tasks.map(enrichTask);
@@ -542,26 +501,14 @@
     const ws = getWorkspaceState();
     const index = getWorkspaceIndex();
 
-    // ACT 4B — CURRENT-DOCUMENT SCOPE.
-    //
-    // The Workspace readiness gates below are Workspace-only preconditions. In
-    // the Journal Note composition this host is a CURRENT-DOCUMENT consumer: the
-    // live records come from the injected ACT 4A provider and no Workspace Index
-    // exists or is needed. Running the gates first made the panel show
-    // "Open a workspace first" / "Index not ready" — a Workspace readiness
-    // message on a Note — even though the scope branch had already been set by
-    // applySidebarComposition(). Only the two gates are scoped; the filters, the
-    // record shape and the row markup are the accepted Task Review renderer.
-    const scopedToCurrentDocument = taskScope === TASK_REVIEW_SCOPES.CURRENT_DOCUMENT;
-
-    if (!scopedToCurrentDocument && !ws?.rootHandle) {
+    if (!ws?.rootHandle) {
       badge.textContent = '0';
       summary.textContent = 'Open a workspace first';
       list.innerHTML = '<div class="workspaceTasksEmpty">Open a workspace first</div>';
       return;
     }
 
-    if (!scopedToCurrentDocument && !index?.ready) {
+    if (!index?.ready) {
       badge.textContent = '0';
       summary.textContent = 'Index not ready';
       list.innerHTML = '<div class="workspaceTasksEmpty">Index not ready</div>';
@@ -572,32 +519,6 @@
     const total = getAllTasks().length;
     const groups = groupTasksByFile(filtered);
     const groupCount = groups.length;
-
-    // ACT 4B — local empty state: zero local Tasks is AVAILABLE EMPTY, never a
-    // failure. The canonical local wording is fixed so composition verification
-    // can require it. A filtered/Workspace search that matches nothing keeps the
-    // accepted contextual wording.
-    if (scopedToCurrentDocument && filtered.length === 0 && !filterState.query) {
-      groups.forEach((group) => {
-        if (group.fileName) group.title = group.fileName;
-      });
-      badge.textContent = '0';
-      summary.textContent = 'No tasks.';
-      list.innerHTML = '<div class="workspaceTasksEmpty" data-empty-state="tasks">No tasks.</div>';
-      applyTaskReviewReadonlyChrome(true);
-      return;
-    }
-
-    // ACT 4B — the local Note is the ONE source in this scope, so a group is
-    // never "Unknown source": the provider labels each live record with the
-    // identity of the document it was parsed from. Only the group TITLE is
-    // scope-adjusted; badges, priorities, completion controls and the row markup
-    // are unchanged.
-    if (scopedToCurrentDocument) {
-      groups.forEach((group) => {
-        if (group.fileName) group.title = group.fileName;
-      });
-    }
 
     badge.textContent = `${filtered.length}`;
     summary.textContent = filtered.length
@@ -1437,7 +1358,7 @@
 
   function refresh() {
     const index = getWorkspaceIndex();
-    safeLog(`TaskReview: refresh scope=${taskScope} indexReady=${Boolean(index?.ready)} tasks=${index?.tasks?.length || 0}`);
+    safeLog(`TaskReview: refresh indexReady=${Boolean(index?.ready)} tasks=${index?.tasks?.length || 0}`);
     wire();
     renderPanel();
   }
@@ -1540,10 +1461,6 @@
     applyTaskFilters,
     getFilteredTasks,
     getAllTasks,
-    // ---- ACT 4B scope control (one renderer, two inputs) ----
-    TASK_REVIEW_SCOPES,
-    setTaskScope,
-    getTaskScope,
     getOpenTasks,
     getCompletedTasks,
     openTaskSource,
