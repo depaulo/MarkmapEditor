@@ -320,6 +320,107 @@ No other Package 3 scenario was converted to PASS.
 
 ---
 
+## 0.0.6 Package 4 experiment — ARCHIVED, DEVELOPMENT RESTORED
+
+**Package 4 was an UNRELEASED experiment. It is not a release and not a shipped
+feature.** ACT 4A and ACT 4B were explored, reached a meaningful device-test
+state, and were stopped by owner decision (product/maintenance grounds).
+
+### Preservation
+
+- [x] Final experiment record committed:
+      `docs/architecture/MarkmapEditor_1.0_PACKAGE_4_STANDALONE_EXPERIMENT_FINAL.md`
+- [x] Decision record committed on development:
+      `docs/architecture/MarkmapEditor_1.0_PACKAGE_4_STANDALONE_EXPERIMENT_DECISION.md`
+- [x] Archive branch created and pushed:
+      `archive/package4-standalone-experiment` @ `67abbf0`
+- [x] Annotated tag created and pushed:
+      `package4-standalone-experiment-final`
+      ("Final preserved snapshot of the unreleased Package 4 Standalone Note
+      experiment.")
+- [x] Remote verification: `git ls-remote` shows the archive branch at `67abbf0`
+      and the tag object peeling to the same commit
+- [x] Optional non-authoritative ZIP written outside the tracked tree:
+      `/workspaces/archives/MarkmapEditor-package4-standalone-experiment-final.zip`
+      (sha256 `2758dfbbf3d92850239f4e3cd92c467efb80c608854db02abca439b752530732`)
+
+### Restoration
+
+- [x] Package 3 closure proven: `5af68fc` ("docs: record published 0.6.3 runtime
+      acceptance"), the child of `main` `8cf5110` ("chore: release MarkmapEditor
+      0.6.3"). `5af68fc` is the last commit that is purely Package 2/3.
+- [x] All five commits after the closure classified as Package 4 runtime,
+      documentation or validator/diagnostic work; **no independent accepted fix
+      and no unknown commit** exists in that range.
+- [x] Reverted in reverse chronological order with `git revert --no-commit`, then
+      committed once: `9038c03`, `d84a773`, `4396f1a`, `34eb94d`, `42f8005`
+- [x] **Zero conflicts.** No manual conflict resolution was required.
+- [x] Restoration commit: `3ab87b2` — `revert: restore development after Package 4 experiment`
+- [x] **Tree equivalence:** `git diff --stat 5af68fc HEAD` is empty. The restored
+      implementation tree is byte-identical to the Package 3 closure.
+
+### Residue scan (all negative on the restored tree)
+
+- [x] no `journalComposition`, `composeStandaloneNotePanels`,
+      `applySidebarComposition`, `verifyStandaloneNoteComposition`
+- [x] no `data-journal-composition` CSS or markup
+- [x] no Journal Open Note entry (`btnOpenNote`) and no Standalone Note identity
+- [x] no Current Document Task Review scope (`current-document` absent from
+      `js/workspace/task-review.js`, exactly as at the closure)
+- [x] no ACT 4B diagnostic global, temporary Logs action, probe or mutation
+      tooling; experiment-only validators removed
+- [x] no Package 4 runtime asset reference
+
+### Shared Package 2/3 owners preserved
+
+- [x] `MME_TASK_REVIEW` / `MME_TASK_BOARD` present (they exist at the closure and
+      are Workspace owners, not Package 4 additions)
+- [x] Task parser, lifecycle, reconciliation, Wiki Link grammar/resolver, Links In,
+      Workspace Index, Workspace Host, Navigation History, Mode Session, View
+      Layout, Reports, Draw.io, Help, Release Notes, Update Ready all intact
+
+### Release identity (unchanged)
+
+- [x] `productVersion` `0.6.3`
+- [x] cache identity / `sw.js` `APP_VERSION`
+      `markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation`
+- [x] `sw.js`, `js/ui/help-content.js`, `js/ui/release-notes-content.js`
+      identical to the Package 3 closure
+- [x] no 0.6.4 release, no new Service Worker cache boundary, no public Release
+      Notes entry for Package 4
+
+### Focused restoration validation
+
+- [x] `node --check` clean on every affected JS file
+- [x] CSS brace balance `0`, no underflow
+- [x] `git diff --check` and `git diff --cached --check` clean
+- [x] All 22 accepted Package 3 validator scripts exit `0`
+      (workspace-task-contract, task-reconcile, workspace-task-consumers,
+      wiki-link grammar/relationship/resolution, workspace-lifecycle-output,
+      workspace-sidebar-visual, current-document-scope, mode-session,
+      update-ready, release-notes, dependency-cache, workspace-storage,
+      workspace-detection, workspace-index-notes, workspace-discovery-consumers,
+      workspace-notes-sidebar, workspace-note-creation, workspace-note-metadata,
+      workspace-today-index, html-preview-render)
+- [x] `scripts/act2a-checkpoint-harness.cjs` 56/0
+- [x] `scripts/release-parity.cjs` OK, and OK again with
+      `RELEASE_PARITY_STRICT_SW=1`
+- [x] Package 4 validator count assumptions were NOT retained anywhere in the
+      restored tree; the experiment-only suites were deleted with the revert
+
+### Browser smoke
+
+- [ ] **Pending owner device run.** The restored tree is byte-identical to the
+      already-published and device-accepted Package 3 closure (`5af68fc`), so the
+      accepted 0.6.3 device evidence in §0.0.5 applies unchanged. A confirming
+      device pass on the restored branch is requested but was not performed by the
+      coder.
+
+**Standalone Note is NOT part of this checklist.** It must not be tested in
+restored development; it exists only on the archive branch.
+
+---
+
 ## 0.0.4 Package 3 device acceptance — ACCEPTED
 
 **Package 3 is DEVICE-ACCEPTED and CLOSED.** Release boundary 0.6.3 prepared.

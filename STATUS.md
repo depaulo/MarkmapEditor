@@ -196,8 +196,19 @@ intermediate device testing. No coder action or remediation is required.
   build. Documentation-only closure record: `VERIFY.md` §0.0.5.
 - **Package 2 (Task Stabilization): CLOSED.**
 - **Package 3 (Wiki Links Stabilization): CLOSED.**
-- **Package 4: NEXT, NOT STARTED.** It owns Standalone Notes and scope
-  composition. The Active relationship cards are NOT moved into it.
+- **Package 4 (Standalone Note experiment): ARCHIVED — NOT RELEASED.** ACT 4A
+  and ACT 4B were explored, reached a meaningful device-test state, and were then
+  stopped by owner decision: the maintenance and Journal-composition cost
+  exceeded the demonstrated value. The active runtime returned to the Package 3
+  foundation (restoration commit `3ab87b2`). The complete experiment, including
+  its known issues, is preserved on `archive/package4-standalone-experiment` at
+  tag `package4-standalone-experiment-final`; final record:
+  `docs/architecture/MarkmapEditor_1.0_PACKAGE_4_STANDALONE_EXPERIMENT_FINAL.md`.
+  Decision record:
+  `docs/architecture/MarkmapEditor_1.0_PACKAGE_4_STANDALONE_EXPERIMENT_DECISION.md`.
+  ACT 4C and ACT 4D were cancelled. Release `0.6.4` was never created.
+- **Package 5: PLANNING NEXT, NOT STARTED.** Scope requires reassessment; no
+  Package 5 implementation is authorized or begun.
 - **Package 9.5**: Architecture Hygiene Gate remains planned.
 - **Package 10**: owns the final shared summary-card integration, including the
   Active and Workspace Index relationship cards.

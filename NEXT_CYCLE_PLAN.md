@@ -166,7 +166,12 @@ PACKAGE 2   Task Review and Task Board          -> NEXT
 PACKAGE 3   Wiki Links stabilization
             Links In / Links Out contract, ambiguity, relationship providers
 PACKAGE 4   Standalone Notes and scope composition
-PACKAGE 5   Projects data foundation
+            -> CANCELLED. Explored as an unreleased experiment (ACT 4A, ACT 4B),
+               then archived by owner decision on 2026-10-02. ACT 4C and ACT 4D
+               were cancelled. Preserved on archive/package4-standalone-experiment
+               at tag package4-standalone-experiment-final.
+PACKAGE 5   Projects data foundation          -> PLANNING NEXT; scope requires
+                                                reassessment. Not started.
 PACKAGE 6   Projects Expanded View and modal
 PACKAGE 7   Quick Report Markdown
 PACKAGE 8   Enriched Reports
@@ -175,10 +180,15 @@ PACKAGE 10  Final visual consistency
 PACKAGE 11  1.0 integration and release closure
 ```
 
-Packages 2 and 3 may run in either order. **Package 4 is an implementation package**,
-not an analysis package: it classifies consumers and then implements the entry
-composition. Packages 5 and 6 are strictly ordered. Packages 7, 8 and 9 are strictly
+Packages 2 and 3 may run in either order. Package 4 was executed as an
+unreleased experiment (ACT 4A, ACT 4B) and is now **archived**: it is removed
+from the active sequence below, and ACT 4C / ACT 4D are removed with it. Packages
+5 and 6 are strictly ordered. Packages 7, 8 and 9 are strictly
 ordered because Reports must not invent Project lifecycle semantics.
+
+Package 5 is the next planning target, but its scope **requires reassessment**
+before any implementation is authorized. Nothing in this document starts
+Package 5.
 
 Do not renumber historical ACTs inside older documents. This order applies only to
 the current canonical architecture and this roadmap.
@@ -386,3 +396,36 @@ To be unambiguous: Gate 1 changed **documentation only**. No runtime file, no ve
 no cache identity, no Service Worker, no Help and no Release Notes were modified. No
 Task Review, Task Board priority, Wiki Links, Standalone, Projects or Reports work was
 started. ACT 2A is not begun and requires explicit owner authorization.
+
+---
+
+## 15. Deferred roadmap items — outside the active 1.0 sequence
+
+Recorded so the ideas are not lost. **None of these is authorized, scheduled, or in
+progress.** Reopening any of them requires new product evidence.
+
+- Standalone Note
+- fourth Note mode
+- Journal Standalone composition
+- Create Standalone Note
+- Recent Standalone Notes
+- promotion to Workspace
+- Note-to-Workspace
+- Workspace-to-Note
+- Editor with a persistent local Task Sidebar
+- Editor-as-View restructuring
+- Journal-first redesign
+- unified mode architecture
+- unified Open flow
+
+### Future unified-Open study (hypothesis only)
+
+Journal may eventually expose **one primary Open entry** with an explicit choice:
+
+- Open Workspace
+- Open Markdown File
+
+A Markdown file may reuse the **existing Editor experience** rather than restoring
+the Package 4 local Sidebar. This avoids an entire Sidebar composition and all
+Current Document scope infrastructure. It was **not implemented** during the Package 4
+restoration and is not an authorization to start.
