@@ -269,6 +269,36 @@
     return tasks;
   }
 
+  // ---- ACT 4B — read-only chrome owner (panel-level ONLY) ----
+  //
+  // The one renderer renders scope-appropriate ROW markup directly (see the
+  // scoped branch inside renderPanel). This owner owns only panel-level chrome:
+  // title, classes, accessibility and Board-action availability. It never
+  // touches rows and is never a second row renderer.
+  function applyTaskReviewReadonlyChrome(enabled) {
+    const panel = document.getElementById('workspaceTasksPanel');
+    if (!panel) return false;
+
+    const on = Boolean(enabled);
+    panel.classList.toggle('workspaceTaskReviewReadonly', on);
+    panel.dataset.taskReviewReadonly = on ? '1' : '0';
+
+    // Panel-level chrome only. Row markup is owned exclusively by the one
+    // renderer, which branches on the same scope. The title hook is the ONE
+    // static section-title node shipped in index.html inside this panel
+    // (`.workspaceSectionTitle`), not an invented class.
+    const title = panel.querySelector?.('.workspaceSectionTitle');
+    if (title) title.textContent = on ? 'Tasks in this Note' : 'Open Tasks';
+
+    const boardBtn = document.getElementById('workspaceTaskBoardBtn');
+    if (boardBtn) {
+      boardBtn.disabled = on;
+      boardBtn.title = on ? 'Task Board requires a Workspace' : 'Open Task Board';
+    }
+
+    return on;
+  }
+
   function getFilteredTasks() {
     return applyTaskFilters(getAllTasks(), filterState);
   }
@@ -523,10 +553,16 @@
   }
 
   function renderPanel() {
+    // ACT 4B — the render RESULT that refresh() reports. The count contract is
+    // providerCount (scope-correct records read) / filteredCount (records that
+    // survived the visible equation) plus the DOM facts refresh() derives after
+    // this render. Initialised so every early return still reports honestly.
+    const evidence = { scope: taskScope, providerCount: 0, filteredCount: 0 };
+
     const panel = ensureOrUpgradePanel();
     if (!panel) {
       safeLog('TaskReview: render skipped; panel not available');
-      return;
+      return evidence;
     }
     const badge = document.getElementById('workspaceTasksBadge');
     const summary = document.getElementById('workspaceTasksSummary');
@@ -534,7 +570,7 @@
 
     if (!badge || !summary || !list) {
       safeLog('TaskReview: render skipped; panel elements missing');
-      return;
+      return evidence;
     }
 
     panel.hidden = false;
@@ -554,38 +590,52 @@
     // record shape and the row markup are the accepted Task Review renderer.
     const scopedToCurrentDocument = taskScope === TASK_REVIEW_SCOPES.CURRENT_DOCUMENT;
 
+    // ACT 4B — one chrome call per render, driven by the scope. Panel-level
+    // chrome only; row markup below is branched directly in the renderer.
+    applyTaskReviewReadonlyChrome(scopedToCurrentDocument);
+
     if (!scopedToCurrentDocument && !ws?.rootHandle) {
       badge.textContent = '0';
       summary.textContent = 'Open a workspace first';
       list.innerHTML = '<div class="workspaceTasksEmpty">Open a workspace first</div>';
-      return;
+      return evidence;
     }
 
     if (!scopedToCurrentDocument && !index?.ready) {
       badge.textContent = '0';
       summary.textContent = 'Index not ready';
       list.innerHTML = '<div class="workspaceTasksEmpty">Index not ready</div>';
-      return;
+      return evidence;
     }
 
-    const filtered = getFilteredTasks();
-    const total = getAllTasks().length;
+    // ACT 4B — ONE read of the scope's records. The Workspace equation
+    // (status + priority + search) is applied ONLY in the Workspace scope: in
+    // the Current Document scope those controls are withdrawn from the panel by
+    // the read-only presentation, so a stale persisted Workspace filter must
+    // never decide which local rows a Note shows. The parser and the Workspace
+    // filtering owner are untouched.
+    const all = getAllTasks();
+    const filtered = scopedToCurrentDocument ? all : applyTaskFilters(all, filterState);
+    const total = all.length;
     const groups = groupTasksByFile(filtered);
     const groupCount = groups.length;
 
+    evidence.providerCount = total;
+    evidence.filteredCount = filtered.length;
+
     // ACT 4B — local empty state: zero local Tasks is AVAILABLE EMPTY, never a
     // failure. The canonical local wording is fixed so composition verification
-    // can require it. A filtered/Workspace search that matches nothing keeps the
-    // accepted contextual wording.
-    if (scopedToCurrentDocument && filtered.length === 0 && !filterState.query) {
-      groups.forEach((group) => {
-        if (group.fileName) group.title = group.fileName;
-      });
+    // can require it. In the Workspace scope a narrowed status/search filter
+    // that matches nothing keeps the accepted contextual wording below.
+    if (scopedToCurrentDocument && filtered.length === 0) {
       badge.textContent = '0';
-      summary.textContent = 'No tasks.';
+      // ACT 4B — ONE visible empty-state message only. The BODY owns the
+      // canonical local empty text (the composition verifier reads
+      // #workspaceTasksList), so the summary is cleared instead of repeating
+      // the same sentence immediately above it.
+      summary.textContent = '';
       list.innerHTML = '<div class="workspaceTasksEmpty" data-empty-state="tasks">No tasks.</div>';
-      applyTaskReviewReadonlyChrome(true);
-      return;
+      return evidence;
     }
 
     // ACT 4B — the local Note is the ONE source in this scope, so a group is
@@ -600,9 +650,17 @@
     }
 
     badge.textContent = `${filtered.length}`;
-    summary.textContent = filtered.length
-      ? `Showing ${filtered.length} of ${total} tasks, grouped in ${groupCount} files`
-      : 'No tasks match';
+    if (scopedToCurrentDocument) {
+      // ACT 4B — Current Document summary states the read-only local contract
+      // instead of Workspace-shaped "grouped in N files" wording.
+      summary.textContent = filtered.length
+        ? `${filtered.length} local task${filtered.length === 1 ? '' : 's'} — read-only`
+        : 'No tasks match this search';
+    } else {
+      summary.textContent = filtered.length
+        ? `Showing ${filtered.length} of ${total} tasks, grouped in ${groupCount} files`
+        : 'No tasks match';
+    }
 
     if (!filtered.length) {
       const statusEmptyMessages = {
@@ -617,7 +675,7 @@
         ? 'No tasks match this search'
         : statusEmptyMessages[filterState.status] || 'No tasks';
       list.innerHTML = `<div class="workspaceTasksEmpty">${msg}</div>`;
-      return;
+      return evidence;
     }
 
     list.innerHTML = groups
@@ -645,6 +703,42 @@
             const filePath = escapeHtml(task.filePath || '');
             const fileName = escapeHtml(task.fileName || task.filePath || '');
             const line = Number(task.line || 0);
+
+            // ACT 4B — CURRENT-DOCUMENT rows are rendered READ-ONLY directly by
+            // the one renderer (never rendered interactive and repaired later):
+            //   - a non-interactive status state (no enabled status button);
+            //   - the priority badge remains VISIBLE (read-only);
+            //   - no priority mutation buttons;
+            //   - no Workspace source link; the only source cue is a local
+            //     line-navigation control carrying data-current-document-line,
+            //     so no handler can ever see an empty Workspace data-path.
+            if (scopedToCurrentDocument) {
+              return `
+                <div class="workspaceTaskRow workspaceTaskRowReadonly" data-task-id="${escapeHtml(task.id || '')}" data-readonly="1" aria-label="Task, read-only">
+                  <div class="workspaceTaskRowMain">
+                    <span
+                      class="workspaceTaskStatusState"
+                      data-task-state="${task.done ? 'done' : 'open'}"
+                      title="${task.done ? 'Done' : 'Open'} (read-only)"
+                    >${task.done ? '☑' : '☐'}</span>
+                    ${priorityBadge}
+                    <span class="workspaceTaskRowText">${displayText}</span>
+                  </div>
+                  <div class="workspaceTaskRowMeta">
+                    <button
+                      type="button"
+                      class="workspaceTaskCurrentDocLine"
+                      data-current-document="1"
+                      data-current-document-line="${line}"
+                      title="Go to line ${line} in this Note"
+                      aria-label="Go to line ${line} in this note"
+                    >
+                      ${line ? `Line ${line}` : 'No line'}
+                    </button>
+                  </div>
+                </div>
+              `;
+            }
 
             return `
               <div class="workspaceTaskRow${doneClass}" data-task-id="${escapeHtml(task.id || '')}">
@@ -687,7 +781,19 @@
 
         return `
           <div class="workspaceTaskGroup">
-            <button
+            ${
+              scopedToCurrentDocument
+                ? `<!-- ACT 4B — read-only local group: a plain heading, never the
+                       interactive group control, so the Workspace open handler can
+                       never match it and no empty-path refusal can be produced. -->
+              <div class="workspaceTaskGroupHeading" data-workspace-task-group="0">
+                <span class="workspaceTaskGroupTitle">
+                  <span class="workspaceTaskGroupTitleIcon" aria-hidden="true">${icon}</span>
+                  <span class="workspaceTaskGroupTitleText">${groupTitle}</span>
+                </span>
+                <span class="workspaceTaskGroupCount">${group.tasks.length}</span>
+              </div>`
+                : `<button
               type="button"
               class="workspaceTaskGroupHeader"
               data-workspace-task-group="1"
@@ -700,7 +806,8 @@
                 <span class="workspaceTaskGroupTitleText">${groupTitle}</span>
               </span>
               <span class="workspaceTaskGroupCount">${group.tasks.length}</span>
-            </button>
+            </button>`
+            }
             <div class="workspaceTasksGroupItems">
               ${tasksHtml}
             </div>
@@ -708,6 +815,8 @@
         `;
       })
       .join('');
+
+    return evidence;
   }
 
   // ---- Open source file (file-level, no task line) ----
@@ -1135,6 +1244,32 @@
 
     // Delegated click handler on panel
     panel.addEventListener('click', async (event) => {
+      // ACT 4B — CURRENT-DOCUMENT local line navigation. Runs BEFORE the
+      // Workspace status/open branches. The control carries
+      // data-current-document-line and NEVER a data-path, so the existing
+      // editor line-navigation owner (window.__cmScrollToLine / __cmFocus)
+      // navigates the active Current Document directly: no file picker, no
+      // Workspace opener, no empty-path refusal log. No second navigation
+      // implementation is created — this is the same bridge the Workspace
+      // rows consume after activation.
+      const localLineBtn = event.target?.closest?.('.workspaceTaskCurrentDocLine');
+      if (localLineBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const line = Number(localLineBtn.dataset.currentDocumentLine || 0);
+        if (line > 0) {
+          const scrollToLine =
+            typeof window.__cmScrollToLine === 'function' ? window.__cmScrollToLine : null;
+          if (scrollToLine) scrollToLine(line - 1); // Convert 1-based to 0-based
+          const focusEditor = typeof window.__cmFocus === 'function' ? window.__cmFocus : null;
+          if (focusEditor) focusEditor();
+          safeLog(`TaskReview: local source navigation line=${line}`);
+        } else {
+          safeLog('TaskReview: local source navigation skipped; no line');
+        }
+        return;
+      }
+
       // Completion / reopen toggle
       const statusBtn = event.target?.closest?.('.workspaceTaskStatusBtn');
       if (statusBtn) {
@@ -1436,10 +1571,50 @@
   }
 
   function refresh() {
-    const index = getWorkspaceIndex();
-    safeLog(`TaskReview: refresh scope=${taskScope} indexReady=${Boolean(index?.ready)} tasks=${index?.tasks?.length || 0}`);
+    // ACT 4B — refresh ORDER + the count contract. The previous line logged the
+    // Workspace Index task count BEFORE the render, so in the current-document
+    // scope — where no Workspace Index exists — the log read
+    // `scope=current-document tasks=0` while the Note genuinely rendered its
+    // local rows. Wire and render FIRST, then report the RESULT of the render
+    // that just happened: scope-correct provider/filtered counts from the
+    // renderer plus the rendered-row and empty-state facts read from the DOM it
+    // just produced. Parsing is untouched: no evidence showed the parser wrong.
     wire();
-    renderPanel();
+    const result = renderPanel() || {};
+    const index = getWorkspaceIndex();
+
+    let renderedCount = 0;
+    let emptyStateVisible = false;
+    try {
+      const list = document.getElementById('workspaceTasksList');
+      const html = list ? String(list.innerHTML || '') : '';
+      renderedCount = (html.match(/data-task-id=/g) || []).length;
+
+      const emptyEl = list && list.querySelector ? list.querySelector('.workspaceTasksEmpty') : null;
+      if (emptyEl) {
+        emptyStateVisible =
+          typeof getComputedStyle !== 'function' ? true : getComputedStyle(emptyEl).display !== 'none';
+      } else {
+        emptyStateVisible = /workspaceTasksEmpty/.test(html);
+      }
+    } catch {}
+
+    let fileName = '';
+    try {
+      fileName = String(globalThis.MME_APP?.getCurrentFileName?.() || '');
+    } catch {}
+    if (!fileName) {
+      try {
+        fileName = String(document.getElementById('workspaceCompositionName')?.textContent || '');
+      } catch {}
+    }
+
+    safeLog(
+      `TaskReview: refresh scope=${result.scope || taskScope} ` +
+        `providerCount=${result.providerCount ?? 0} filteredCount=${result.filteredCount ?? 0} ` +
+        `renderedCount=${renderedCount} emptyStateVisible=${String(emptyStateVisible)} ` +
+        `file=${fileName} indexReady=${Boolean(index?.ready)}`
+    );
   }
 
   // ---- Deterministic pure validator (no DOM) ----
@@ -1544,6 +1719,7 @@
     TASK_REVIEW_SCOPES,
     setTaskScope,
     getTaskScope,
+    applyTaskReviewReadonlyChrome, // ACT 4B — panel-level chrome owner (fixtures)
     getOpenTasks,
     getCompletedTasks,
     openTaskSource,

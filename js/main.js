@@ -2369,6 +2369,36 @@ function applySidebarComposition(options) {
     log?.(`Sidebar composition: Journal identity not applied (${e?.message || e})`);
   }
 
+  // ACT 4B COLLAPSE — CHILD PANEL COLLAPSE DELEGATION (shared Journal boundary).
+  //
+  // PROVEN ROOT CAUSE (Standalone Note child panels never collapsed): the ONE
+  // existing delegated collapse owner, wireWorkspacePanelCollapses(), had
+  // exactly ONE call site — finalizeWorkspaceSidebar() (Phase 3) — and that
+  // finalizer returns early when there is no active Workspace root handle, and
+  // is itself only reached through setupWorkspacePanels() / the
+  // `mme-workspace-index-ready` event, i.e. only once a Workspace Index builds.
+  // A Standalone Note never builds one, so the delegated listener was never
+  // installed on #workspaceSidebar even though the panel hosts, their
+  // `data-workspace-panel-toggle` keys and their `.workspacePanelBody` bodies
+  // were all created by the existing idempotent ensure/render owners below.
+  //
+  // The correction is ONE extra INVOCATION of the existing, already-idempotent
+  // wiring function at the earliest shared Journal Sidebar boundary — this
+  // composition owner, which runs for the Note composition and for the Workspace
+  // composition — and it runs only AFTER the `inactive` early return above, so
+  // Editor and Slides are still never touched.
+  //
+  // Nothing is duplicated: wireWorkspacePanelCollapses() already guards itself
+  // with the __workspacePanelCollapseOwner marker, so the Workspace call site
+  // in finalizeWorkspaceSidebar() and this one produce exactly ONE delegated
+  // listener. There is no per-panel listener, no Standalone-specific collapse
+  // store, no second persistence format and no new collapse owner.
+  try {
+    wireWorkspacePanelCollapses();
+  } catch (e) {
+    log?.(`Sidebar composition: panel collapse delegation not applied (${e?.message || e})`);
+  }
+
   try {
     const review = globalThis.MME_TASK_REVIEW || window.MME_TASK_REVIEW;
     if (review && typeof review.setTaskScope === 'function') {
@@ -3221,19 +3251,92 @@ function wireWorkspaceSidebarResize() {
     return document.documentElement.classList.contains('journal-sidebar-collapsed');
   }
 
+  // ---- TEMPORARY (ACT 4B device retest) — bounded RESIZE event evidence -----
+  // Reported defect: "Sidebar resize not behaving" in the Standalone Note
+  // composition, with cause E (hit area / stacking) and G (composition layout)
+  // still unclassified because they only manifest DURING a drag.
+  //
+  // Records, for ONE drag: exactly one START line, at most one "first
+  // meaningful move" line, at most one "final meaningful move" line and one END
+  // line. It NEVER logs every pointermove, never adds a listener (the evidence
+  // is read inside the listeners this owner already owns), never polls and
+  // never changes what the owner applies or persists.
+  const act4bResizeEvidence = { start: null, first: null, final: null };
+
+  function readAppliedCssWidthVariable() {
+    try {
+      const rootCs =
+        typeof getComputedStyle === 'function' && document.documentElement
+          ? getComputedStyle(document.documentElement)
+          : null;
+      const value = rootCs ? String(rootCs.getPropertyValue('--workspace-sidebar-width') || '') : '';
+      return value.trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function readComputedSidebarWidth() {
+    try {
+      if (typeof getComputedStyle === 'function') {
+        const cs = getComputedStyle(sidebar);
+        if (cs && cs.width) return cs.width;
+      }
+      return `${Math.round(sidebar.getBoundingClientRect().width)}px`;
+    } catch {
+      return null;
+    }
+  }
+
+  function readPersistedSidebarWidth() {
+    try {
+      return localStorage.getItem(WORKSPACE_SIDEBAR_WIDTH_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  function logAct4bResizeMove(kind, move) {
+    log?.(
+      `ACT 4B Resize move-${kind} clientX=${move.clientX} delta=${move.delta} ` +
+        `calculated=${move.calculatedWidth}px clamped=${move.clampedWidth}px ` +
+        `appliedVar=${move.appliedCssVariable} computed=${move.computedSidebarWidth}`
+    );
+  }
+
   function onPointerMove(event) {
     if (!dragging) return;
 
     event.preventDefault();
 
     const delta = event.clientX - startX;
-    const nextWidth = clampWorkspaceSidebarWidth(startWidth + delta);
+    const calculatedWidth = Math.round(startWidth + delta);
+    const nextWidth = clampWorkspaceSidebarWidth(calculatedWidth);
 
     if (DEBUG_WORKSPACE_RESIZE) {
       log?.(`Workspace: sidebar width live ${nextWidth}px`);
     }
 
     applyWorkspaceSidebarWidth(nextWidth);
+
+    // Evidence AFTER the apply, so the reported applied/computed facts describe
+    // the state this move actually produced. A zero-delta move changes nothing
+    // and is never recorded or logged.
+    if (delta !== 0) {
+      const move = {
+        clientX: Math.round(event.clientX),
+        delta: Math.round(delta),
+        calculatedWidth,
+        clampedWidth: nextWidth,
+        appliedCssVariable: readAppliedCssWidthVariable(),
+        computedSidebarWidth: readComputedSidebarWidth(),
+      };
+      if (!act4bResizeEvidence.first) {
+        act4bResizeEvidence.first = move;
+        logAct4bResizeMove('first', move);
+      }
+      act4bResizeEvidence.final = move;
+    }
   }
 
   function onPointerUp(event) {
@@ -3254,6 +3357,24 @@ function wireWorkspaceSidebarResize() {
     applyWorkspaceSidebarWidth(finalWidth);
 
     log?.(`Workspace: sidebar resize end ${finalWidth}px`);
+
+    // TEMPORARY ACT 4B device retest — the final meaningful move and the end
+    // facts, read AFTER the owner's own persist + apply.
+    if (act4bResizeEvidence.final) {
+      const move = {
+        ...act4bResizeEvidence.final,
+        appliedCssVariable: readAppliedCssWidthVariable(),
+        computedSidebarWidth: readComputedSidebarWidth(),
+      };
+      logAct4bResizeMove('final', move);
+    } else {
+      log?.('ACT 4B Resize move-final none (no meaningful move)');
+    }
+
+    log?.(
+      `ACT 4B Resize end applied=${finalWidth}px computed=${readComputedSidebarWidth()} ` +
+        `persisted=${readPersistedSidebarWidth()} changed=${String(finalWidth !== Math.round(startWidth))}`
+    );
   }
 
   handle.addEventListener(
@@ -3283,6 +3404,28 @@ function wireWorkspaceSidebarResize() {
       } catch {}
 
       log?.(`Workspace: sidebar resize start ${Math.round(startWidth)}px`);
+
+      // TEMPORARY ACT 4B device retest — one START record per drag.
+      try {
+        const handleRect = handle.getBoundingClientRect();
+        act4bResizeEvidence.start = {
+          pointerType: event.pointerType || null,
+          clientX: Math.round(event.clientX),
+          startWidth: Math.round(startWidth),
+          handleHitWidth: Math.round(handleRect.width),
+          composition: getJournalComposition(),
+        };
+        act4bResizeEvidence.first = null;
+        act4bResizeEvidence.final = null;
+        const start = act4bResizeEvidence.start;
+        log?.(
+          `ACT 4B Resize start pointer=${start.pointerType} clientX=${start.clientX} ` +
+            `startWidth=${start.startWidth}px hitWidth=${start.handleHitWidth}px ` +
+            `composition=${start.composition}`
+        );
+      } catch (e) {
+        log?.(`ACT 4B Resize start evidence failed: ${e?.message || e}`);
+      }
     },
     true
   );
@@ -3290,6 +3433,237 @@ function wireWorkspaceSidebarResize() {
   handle.__workspaceSidebarResizeBound = true;
   log?.('Workspace: sidebar resize wired');
 }
+
+// ---- ACT 4B — BOUNDED Sidebar resize DIAGNOSTIC (read-only) ----
+//
+// ACT 4B device review reported Sidebar resize not behaving in the Standalone
+// Note composition. The ONE resize owner was audited against every candidate
+// cause BEFORE any correction, classified A–G:
+//   A. node identity — the handle is replaced/recreated per composition:
+//      NOT REPRODUCED. The handle is statically shipped inside #workspaceSidebar
+//      (index.html), and ensureWorkspaceSidebarResizeHandle() returns the SAME
+//      node; no per-composition replacement exists.
+//   B. binding loss — the pointerdown listener is dropped on recomposition:
+//      NOT REPRODUCED. wireWorkspaceSidebarResize() binds exactly ONE listener
+//      guarded by a marker ON THE NODE, so a composition cannot re-bind or lose
+//      it.
+//   C. width reset — a composition writes a default width back:
+//      NOT REPRODUCED. Neither applySidebarComposition() nor openNote() calls
+//      applyWorkspaceSidebarWidth()/restoreWorkspaceSidebarWidth(), and there is
+//      ONE storage key (markmap:workspace:sidebarWidth).
+//   D. clamp rejection — the dragged width is outside the accepted range:
+//      NOT REPRODUCED. The accepted 220/420 clamp is untouched.
+//   E. hit area / stacking — the handle is covered, or the collapsed state
+//      ignores drags: NOT ESTABLISHED AT REST. The diagnostic reports the
+//      handle's computed pointer-events, touch-action, display, position, right,
+//      z-index and hit width, plus the collapsed flag, so a device report can
+//      classify it without guessing.
+//   F. persistence — restore reads a different key, or fails silently:
+//      NOT REPRODUCED. One key is both written and read.
+//   G. composition layout — resize works but is not visible in the Note
+//      composition (an author-level rule defeating the inline width):
+//      NOT ESTABLISHED AT REST. The diagnostic reports the Sidebar's computed
+//      width and flex-basis, which is exactly where such an override shows.
+// Because no cause is reproducible from source, the contract-mandated bounded
+// browser diagnostic is added instead of guessing a correction. It is
+// READ-ONLY: it never mutates the document, the handle, the width or storage.
+function collectWorkspaceSidebarResizeDiagnostics() {
+  const sidebar = document.getElementById('workspaceSidebar');
+  const handle = document.getElementById('workspaceSidebarResizeHandle');
+
+  const facts = {
+    sidebarFound: Boolean(sidebar),
+    handleFound: Boolean(handle),
+    handleTag: handle ? handle.tagName : null,
+    // Identity provenance, read-only: a single statically shipped handle is
+    // inside the Sidebar and resolves exactly once document-wide. A runtime
+    // re-creation would either detach it from the Sidebar or leave a duplicate,
+    // and both are visible here without writing a marker anywhere.
+    handleInsideSidebar: Boolean(sidebar && handle && handle.parentNode === sidebar),
+    handleCount: document.querySelectorAll
+      ? document.querySelectorAll('#workspaceSidebarResizeHandle').length
+      : (handle ? 1 : 0),
+    boundMarker: Boolean(handle && handle.__workspaceSidebarResizeBound),
+    collapsedClass: Boolean(
+      document.documentElement && document.documentElement.classList &&
+      document.documentElement.classList.contains('journal-sidebar-collapsed')
+    ),
+  };
+
+  if (sidebar) {
+    const cs = getComputedStyle(sidebar);
+    const rect = sidebar.getBoundingClientRect();
+    facts.sidebarWidth = Math.round(rect.width);
+    facts.sidebarFlexBasis = cs.flexBasis;
+    facts.sidebarPointerEvents = cs.pointerEvents;
+  }
+
+  if (handle) {
+    const cs = getComputedStyle(handle);
+    const rect = handle.getBoundingClientRect();
+    facts.handlePointerEvents = cs.pointerEvents;
+    facts.handleTouchAction = cs.touchAction;
+    facts.handleDisplay = cs.display;
+    // TEMPORARY ACT 4B device retest: visibility + the applied CSS variable +
+    // the viewport were required by the in-app snapshot contract but were not
+    // reported yet. They are READ-ONLY like the rest of this owner.
+    facts.handleVisibility = cs.visibility;
+    facts.handleClientWidth = Math.round(rect.width);
+    facts.handleHitWidth = Math.round(rect.width);
+    facts.handlePosition = cs.position;
+    facts.handleRight = cs.right;
+    facts.handleZIndex = cs.zIndex;
+  }
+
+  try {
+    // The width owner writes `--workspace-sidebar-width` on <html>; report the
+    // COMPUTED value so the report shows what the layout actually consumes.
+    const rootCs = typeof getComputedStyle === 'function' && document.documentElement
+      ? getComputedStyle(document.documentElement)
+      : null;
+    const variable = rootCs ? String(rootCs.getPropertyValue('--workspace-sidebar-width') || '') : '';
+    facts.cssWidthVariable = variable.trim() || null;
+  } catch {
+    facts.cssWidthVariable = null;
+  }
+
+  try {
+    facts.viewportWidth =
+      typeof window !== 'undefined' && typeof window.innerWidth === 'number'
+        ? Math.round(window.innerWidth)
+        : null;
+  } catch {
+    facts.viewportWidth = null;
+  }
+
+  try {
+    facts.storedWidth = localStorage.getItem(WORKSPACE_SIDEBAR_WIDTH_STORAGE_KEY);
+  } catch {
+    facts.storedWidth = null;
+  }
+
+  try {
+    log?.(
+      `Workspace: sidebar resize diagnostics bound=${facts.boundMarker} ` +
+        `handles=${facts.handleCount} inside=${facts.handleInsideSidebar} ` +
+        `width=${facts.sidebarWidth}px stored=${facts.storedWidth}px`
+    );
+  } catch {}
+
+  return facts;
+}
+
+try {
+  window.__mmeSidebarResizeDiagnostics = collectWorkspaceSidebarResizeDiagnostics;
+  globalThis.__mmeSidebarResizeDiagnostics = collectWorkspaceSidebarResizeDiagnostics;
+} catch {}
+
+// ---- TEMPORARY (ACT 4B device retest) — in-app diagnostic access ----------
+//
+// The owner's console export cannot be reached from a device/session that only
+// has the APPLICATION window (proven on the Codespaces workbench, where the
+// TypeError appeared in the workbench window instead). This Logs-panel action
+// therefore runs the ONE EXISTING owner from inside the application context and
+// writes the result to the ONE EXISTING application log as copyable JSON.
+//
+// It is deliberately NOT a diagnostics framework: one function, one button, one
+// log call. It is READ-ONLY — it never alters the width, storage, listeners,
+// composition, a file handle or dirty state.
+//
+// TEMPORARY: remove this action (and the button in index.html) after the ACT 4B
+// device diagnostic retest is copied and accepted.
+function logAct4bResizeSnapshot() {
+  try {
+    const facts = collectWorkspaceSidebarResizeDiagnostics();
+
+    // ---- §4 — Standalone Workspace-section DOM facts (read-only) ----------
+    // Reported with the same snapshot so one copy explains both reported leaks.
+    const wsSection = document.getElementById('workspaceWorkspaceSection');
+    let computedDisplay = null;
+    let computedVisibility = null;
+    if (wsSection && typeof getComputedStyle === 'function') {
+      try {
+        const cs = getComputedStyle(wsSection);
+        if (cs) {
+          computedDisplay = cs.display;
+          computedVisibility = cs.visibility;
+        }
+      } catch {}
+    }
+
+    // "Matching CSS rules where practical": walk the loaded stylesheets and
+    // report only selectors that address this element's id/class.
+    const matchingCssRules = (() => {
+      const out = [];
+      try {
+        const sheets = document.styleSheets || [];
+        for (let i = 0; i < sheets.length; i += 1) {
+          let rules = null;
+          try { rules = sheets[i].cssRules; } catch { continue; } // cross-origin
+          if (!rules) continue;
+          for (let j = 0; j < rules.length; j += 1) {
+            const selector = rules[j] && rules[j].selectorText;
+            if (!selector) continue;
+            if (/workspaceWorkspaceSection/.test(selector)) out.push(String(selector));
+          }
+        }
+      } catch {}
+      return out;
+    })();
+
+    let workspaceAvailable = false;
+    try {
+      workspaceAvailable = Boolean(
+        typeof getSidebarComposition === 'function'
+          ? getSidebarComposition().workspaceAvailable
+          : false
+      );
+    } catch {}
+
+    let rootHandlePresent = false;
+    try {
+      rootHandlePresent = Boolean(globalThis.WORKSPACE_STATE?.rootHandle);
+    } catch {}
+
+    let appContext = null;
+    try {
+      appContext = String(document.documentElement?.dataset?.appContext || '') || null;
+    } catch {}
+
+    const journalComposition = getJournalComposition();
+
+    const snapshot = {
+      label: 'ACT 4B Resize Snapshot',
+      timestamp: new Date().toISOString(),
+      journalComposition,
+      appContext,
+      // Read-only facts produced by the ONE existing resize diagnostic owner.
+      ...facts,
+      // Alias required by the snapshot contract ("collapsed state").
+      collapsed: Boolean(facts.collapsedClass),
+      workspaceSection: {
+        present: Boolean(wsSection),
+        hidden: wsSection ? Boolean(wsSection.hidden) : null,
+        hiddenAttribute: wsSection ? Boolean(wsSection.hasAttribute?.('hidden')) : null,
+        computedDisplay,
+        computedVisibility,
+        journalComposition,
+        workspaceAvailable,
+        rootHandlePresent,
+        matchingCssRules,
+      },
+    };
+
+    log?.(`ACT 4B Resize Snapshot\n${JSON.stringify(snapshot, null, 2)}`);
+  } catch (e) {
+    log?.(`ACT 4B Resize Snapshot failed: ${e?.message || e}`);
+  }
+}
+
+try {
+  window.logAct4bResizeSnapshot = logAct4bResizeSnapshot;
+  globalThis.logAct4bResizeSnapshot = logAct4bResizeSnapshot;
+} catch {}
 
 const WORKSPACE_SEARCH_MIN_CHARS = 2;
 let __workspaceSearchTimer = null;
@@ -3695,9 +4069,10 @@ function toggleWorkspacePanel(panelId) {
                         ? document.getElementById('workspaceReportPanel')
                         : null;
 
-  if (!panelEl) return;
+  if (!panelEl) return null;
 
-  const nextCollapsed = !panelEl.classList.contains('workspacePanelCollapsed');
+  const previousCollapsed = panelEl.classList.contains('workspacePanelCollapsed');
+  const nextCollapsed = !previousCollapsed;
 
   setWorkspacePanelCollapsedState(panelId, nextCollapsed);
   applyWorkspacePanelCollapsed(panelEl, panelId, nextCollapsed);
@@ -3705,6 +4080,16 @@ function toggleWorkspacePanel(panelId) {
   try {
     log?.(`Workspace Panels: toggled ${panelId} collapsed=${String(nextCollapsed)}`);
   } catch {}
+
+  // TEMPORARY (ACT 4B device retest): the toggle reports what it did so the ONE
+  // delegated collapse owner can log it. Pure return value — no state, no DOM
+  // write and no second collapse owner is introduced here.
+  return {
+    panelId,
+    panelElementId: panelEl.id || '',
+    previousCollapsed: Boolean(previousCollapsed),
+    nextCollapsed: Boolean(nextCollapsed),
+  };
 }
 
 function ensureWorkspaceRelatedPanel() {
@@ -6250,7 +6635,62 @@ function handleWorkspacePanelCollapseClick(event) {
 
   if (!panelId) return;
 
-  toggleWorkspacePanel(panelId);
+  const result = toggleWorkspacePanel(panelId);
+
+  // ---- TEMPORARY (ACT 4B device retest) — collapse evidence ---------------
+  // The owner confirmed that Active, Links Out, Tasks and Tags do not
+  // expand/collapse correctly on device, so ONE delegated click must now report
+  // the full before/after contract. This stays inside the EXISTING delegation
+  // owner: no per-panel listener, no polling, no second collapse owner. Every
+  // value is read from the DOM AFTER the existing toggle has run.
+  try {
+    const panelEl = result?.panelElementId
+      ? document.getElementById(result.panelElementId)
+      : null;
+
+    let bodyDisplay = null;
+    const body = panelEl && panelEl.querySelector
+      ? panelEl.querySelector('.workspacePanelBody')
+      : null;
+    if (body && typeof getComputedStyle === 'function') {
+      const bodyCs = getComputedStyle(body);
+      bodyDisplay = bodyCs ? bodyCs.display : null;
+    }
+
+    const toggleBtn = panelEl && panelEl.querySelector
+      ? panelEl.querySelector('[data-workspace-panel-toggle]')
+      : null;
+
+    const node = event.target;
+    const className = node && typeof node.className === 'string' ? node.className.trim() : '';
+    const target = node && node.tagName
+      ? `${String(node.tagName).toLowerCase()}${node.id ? `#${node.id}` : ''}${
+          className ? `.${className.split(/\s+/).join('.')}` : ''
+        }`
+      : String(node);
+
+    let persisted = null;
+    try {
+      persisted = Boolean(getWorkspacePanelCollapsedState()[panelId]);
+    } catch {}
+
+    const record = {
+      target,
+      closestToggle: btn.dataset.workspacePanelToggle || '',
+      requestedPanelKey: panelId,
+      panelElementId: result?.panelElementId || null,
+      previousCollapsed: result ? result.previousCollapsed : null,
+      nextCollapsed: result ? result.nextCollapsed : null,
+      classAfter: panelEl && typeof panelEl.className === 'string' ? panelEl.className : null,
+      ariaExpandedAfter: toggleBtn && toggleBtn.getAttribute ? toggleBtn.getAttribute('aria-expanded') : null,
+      panelBodyDisplay: bodyDisplay,
+      persistedCollapse: persisted,
+    };
+
+    log?.(`ACT 4B Collapse\n${JSON.stringify(record, null, 2)}`);
+  } catch (e) {
+    log?.(`ACT 4B Collapse evidence failed: ${e?.message || e}`);
+  }
 }
 
 function wireWorkspacePanelCollapses() {
@@ -6327,6 +6767,27 @@ function wireLogsPanelControls() {
     });
 
     btnCloseLogs.__bound = true;
+  }
+
+  // ---- TEMPORARY (ACT 4B device retest): in-app diagnostic access ----------
+  // One temporary command in the EXISTING Logs panel. It calls the ONE EXISTING
+  // read-only resize diagnostic owner and writes the result to the ONE EXISTING
+  // application log as copyable JSON. No diagnostics framework, no second
+  // resize diagnostic owner, no mutation.
+  const btnResizeSnapshot = document.getElementById('btnAct4bResizeSnapshot');
+  if (btnResizeSnapshot && !btnResizeSnapshot.__bound) {
+    btnResizeSnapshot.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (typeof logAct4bResizeSnapshot === 'function') {
+        logAct4bResizeSnapshot();
+      } else {
+        log?.('ACT 4B Resize Snapshot unavailable; diagnostic owner missing');
+      }
+    });
+
+    btnResizeSnapshot.__bound = true;
   }
 
   log?.('Logs panel controls wired');

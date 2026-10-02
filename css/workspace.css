@@ -1508,8 +1508,50 @@ html.journal-sidebar-collapsed #workspaceSidebar {
 html.journal-sidebar-collapsed #workspaceTitle,
 html.journal-sidebar-collapsed .workspaceLabel,
 html.journal-sidebar-collapsed .workspaceEmptyState,
-html.journal-sidebar-collapsed .workspaceFilesSection {
+html.journal-sidebar-collapsed .workspaceFilesSection,
+html.journal-sidebar-collapsed .workspaceActionText,
+html.journal-sidebar-collapsed .workspaceActionHint,
+html.journal-sidebar-collapsed .workspaceCompositionLabel,
+html.journal-sidebar-collapsed .workspaceCompositionName,
+html.journal-sidebar-collapsed .workspaceWorkspaceName,
+html.journal-sidebar-collapsed .workspaceSectionCaption {
   display: none;
+}
+
+/* ACT 4B COLLAPSE — GLOBAL (whole-Sidebar) COMPACT RAIL.
+   DEFECT A (proven from source): the rule above hid only the Sidebar title and
+   the action labels, so every OTHER text node inside `.workspaceHeader` kept
+   rendering inside a 52px rail — the composition label, the physical filename /
+   Workspace root name, the "Open" / "Workspace" section headings, and the
+   action descriptions ("Single Markdown file", "Create inside this Workspace").
+   The rail therefore showed clipped text instead of a clean icon-only column,
+   in BOTH the Standalone Note and the Workspace composition (same header).
+
+   The compact rail is now EXACTLY the accepted action set, using the EXISTING
+   buttons and their EXISTING icons — no cloned button, no compact-mode
+   listener, no new action owner, and no per-panel state change:
+     - always: expand control, Open Note icon, Open Workspace icon;
+     - Workspace composition only: Today icon, New Note icon (they live in
+       #workspaceWorkspaceSection, which the Note composition already hides).
+   Child panel hosts are hidden by the shared scroller rule below and their
+   individual collapsed preferences are untouched. */
+html.journal-sidebar-collapsed .workspaceOpenSection,
+html.journal-sidebar-collapsed .workspaceWorkspaceSection {
+  align-items: center;
+  gap: 4px;
+}
+
+html.journal-sidebar-collapsed .workspaceWorkspaceSection #btnJournalToday,
+html.journal-sidebar-collapsed .workspaceWorkspaceSection #btnNewConcept {
+  margin-left: 0;
+}
+
+/* Keep the rail touch targets usable on a coarse pointer. */
+@media (pointer: coarse) {
+  html.journal-sidebar-collapsed .workspaceHeader button {
+    width: 40px;
+    height: 40px;
+  }
 }
 
 /* S1: hide the entire shared sidebar-content region (all panels + empty state +
@@ -3498,7 +3540,28 @@ html.dark .wsIndexDisclosure:hover {
 #workspaceTaskBoardPanel[hidden],
 #workspaceProjectsPanel[hidden],
 #workspaceIndexPanel[hidden],
+#workspaceWorkspaceSection[hidden],
 #workspaceReportPanel[hidden] {
+  display: none !important;
+}
+
+/* ACT 4B — the Workspace SECTION (Workspace / Today / New Note / "Create inside
+   this Workspace") is the SAME defect class as the panels above, reported on
+   device in the Standalone Note composition: `.workspaceWorkspaceSection` sits
+   in the `.workspaceOpenSection, .workspaceWorkspaceSection { display: flex }`
+   geometry rule, so that AUTHOR rule outranks the UA `[hidden] { display: none }`
+   and the section stayed on screen even though
+   updateJournalSidebarIdentity() had already set `hidden = true`.
+
+   The presentation decision stays with the ONE composition owner — journal
+   composition + workspaceAvailable, NEVER rootHandle. This rule only makes
+   `hidden` mean what it says and states the required contract directly:
+
+     Journal composition = note  ->  #workspaceWorkspaceSection is display:none.
+
+   `.workspaceOpenSection` (Open Note / Open Workspace) is deliberately NOT in
+   this list: the OPEN section must remain visible in every Journal composition. */
+html[data-journal-composition='note'] #workspaceWorkspaceSection {
   display: none !important;
 }
 
@@ -3527,11 +3590,21 @@ html.dark .wsIndexDisclosure:hover {
 
    It cannot re-expose a Workspace-only panel: those keep `hidden` and the rule
    above still wins for them. The class owner itself is untouched, so neutral
-   Journal, Editor and Slides keep their accepted presentation exactly. */
-html[data-journal-composition='note'].workspace-empty #workspaceActivePanel:not([hidden]),
-html[data-journal-composition='note'].workspace-empty #workspaceTagsPanel:not([hidden]),
-html[data-journal-composition='note'].workspace-empty #workspaceTasksPanel:not([hidden]),
-html[data-journal-composition='note'].workspace-empty #workspaceRelatedPanel:not([hidden]) {
+   Journal, Editor and Slides keep their accepted presentation exactly.
+
+   ACT 4B COLLAPSE (Defect A, proven from source): this exception carries an ID
+   selector and `!important`, so it outranked the compact-rail rule
+   (`html.journal-sidebar-collapsed .workspaceNavScroller > :not(.workspaceHeader)`)
+   while the Sidebar was globally collapsed in a Standalone Note. The four local
+   hosts were therefore forced back to `display: flex !important` inside the 52px
+   rail — the exact "panels and content clipped instead of an icon rail" report.
+   The `:not(.journal-sidebar-collapsed)` guard keeps this exception scoped to an
+   EXPANDED Sidebar, so global expansion restores the Note composition unchanged
+   and the rail wins while collapsed. No other selector, value or owner changes. */
+html[data-journal-composition='note']:not(.journal-sidebar-collapsed).workspace-empty #workspaceActivePanel:not([hidden]),
+html[data-journal-composition='note']:not(.journal-sidebar-collapsed).workspace-empty #workspaceTagsPanel:not([hidden]),
+html[data-journal-composition='note']:not(.journal-sidebar-collapsed).workspace-empty #workspaceTasksPanel:not([hidden]),
+html[data-journal-composition='note']:not(.journal-sidebar-collapsed).workspace-empty #workspaceRelatedPanel:not([hidden]) {
   display: flex !important;
 }
 
@@ -4772,4 +4845,93 @@ html.dark {
     width: 40px;
     height: 40px;
   }
+}
+
+/* ---- ACT 4B — Current Document Task Review: read-only chrome ----
+   The one Task Review renderer emits scope-appropriate row markup directly.
+   These rules style the non-interactive read-only presentation ONLY; the
+   Workspace (interactive) markup and its owners are untouched. The Board
+   action is unavailable in a Current Document composition because the Board
+   is a Workspace Index consumer. */
+#workspaceTasksPanel.workspaceTaskReviewReadonly .workspaceTaskBoardButton {
+  display: none;
+}
+
+/* ACT 4B — Standalone (Current Document) Task presentation. In this scope the
+   panel is a READ-ONLY projection of the open Note, so the Workspace-Index
+   consumer surface is WITHDRAWN:
+     - status filters (Open / Backlog / Todo / Ongoing / Done / All),
+     - priority filters,
+     - the search row,
+     - the Task Board action (rule above),
+     - Workspace file grouping (the per-file group heading / active-filename
+       label), so rows read as a flat local list.
+   RETAINED: "Tasks in this Note", the Task count (badge + summary), read-only
+   status, read-only priority, the Task text and the compact `Line N` cue.
+
+   The class is written by the ONE read-only chrome owner and only in the
+   current-document scope, so the Workspace scope never matches these selectors
+   and its interactive surface stays exactly as accepted. */
+#workspaceTasksPanel.workspaceTaskReviewReadonly #workspaceTaskSearchRow,
+#workspaceTasksPanel.workspaceTaskReviewReadonly .workspaceTaskFilterRow,
+#workspaceTasksPanel.workspaceTaskReviewReadonly .workspaceTaskGroupHeading {
+  display: none;
+}
+
+.workspaceTaskRowReadonly {
+  cursor: default;
+}
+
+.workspaceTaskStatusState {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
+  cursor: default;
+  user-select: none;
+}
+
+.workspaceTaskCurrentDocLine {
+  /* A text-level control in the existing row-meta position: no new typography
+     family, no panel-title/H1 scale. It navigates the ACTIVE Current Document
+     only (data-current-document-line); it never opens a Workspace path. */
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.7;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.workspaceTaskCurrentDocLine:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.workspaceTaskGroupHeading {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  cursor: default;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
 }

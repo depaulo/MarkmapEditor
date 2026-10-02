@@ -94,8 +94,29 @@ function makeEl(id) {
     textContent: '',
     dataset: {},
     value: '',
+    disabled: false,
     parentNode: null,
-    addEventListener() {},
+    // ACT 4B — the read-only chrome owner toggles a scope class on the panel, so
+    // the stub element exposes a RECORDING classList: the fixtures assert the
+    // class was really applied, not that a toggle method exists.
+    classList: {
+      __set: new Set(),
+      toggle(cls, force) {
+        const on = force === undefined ? !this.__set.has(cls) : Boolean(force);
+        if (on) this.__set.add(cls);
+        else this.__set.delete(cls);
+        return on;
+      },
+      add(cls) { this.__set.add(cls); },
+      remove(cls) { this.__set.delete(cls); },
+      contains(cls) { return this.__set.has(cls); },
+    },
+    // ACT 4B — the delegated click owner must be CALLABLE by a fixture, so
+    // listeners are recorded and can be dispatched with a synthetic event.
+    listeners: {},
+    addEventListener(type, fn) {
+      (this.listeners[type] = this.listeners[type] || []).push(fn);
+    },
     setAttribute() {},
     appendChild() {},
     removeChild() {},
@@ -125,6 +146,15 @@ function installShims() {
   // The Sidebar scroller hosts the panels (Task Review discovers it this way).
   dom.workspaceSidebar.querySelector = function (sel) {
     return sel === ':scope > .workspaceNavScroller' ? makeEl('workspaceNavScroller') : null;
+  };
+
+  // ACT 4B — the shipped #workspaceTasksPanel carries exactly one static
+  // section title (`.workspaceSectionTitle`), which is the read-only chrome's
+  // title hook. The stub resolves it the same way the browser does.
+  dom.workspaceTasksTitle = makeEl('workspaceTasksTitle');
+  dom.workspaceTasksTitle.textContent = 'Open Tasks';
+  dom.workspaceTasksPanel.querySelector = function (sel) {
+    return sel === '.workspaceSectionTitle' ? dom.workspaceTasksTitle : null;
   };
 
   globalThis.document = {
@@ -907,6 +937,294 @@ function resetTaskDom(status) {
   check('X13', 'fixture restore is exact after the escaping probe',
     JSON.stringify({ files: IDX.files.length, tasks: IDX.tasks.length }) === restoreSnapshot,
     'probe was non-destructive');
+
+  // ---- ACT 4B FINAL POLISH: the RENDERED Current Document panel -------------
+  //
+  // The N/X fixtures above prove the Workspace (saved-Index) consumer is
+  // unchanged. The fixtures below render the REAL Task Review owner in its
+  // CURRENT-DOCUMENT scope and assert what the panel actually RENDERS and what
+  // a real click actually CALLS — the read-only contract, the local line
+  // navigation and the honest zero.
+
+  group('ACT 4B FINAL POLISH — read-only Current Document Task Review (P01-P11)');
+
+  const LOCAL_TASKS = [
+    { id: 't1', text: 'local one #p1', done: false, line: 5, filePath: '', fileName: 'note.md', fileKind: 'notes' },
+    { id: 't2', text: 'local two', done: true, line: 9, filePath: '', fileName: 'note.md', fileKind: 'notes' },
+  ];
+
+  function scopeToLocalCurrentDocument(tasks) {
+    REVIEW.setTaskScope(REVIEW.TASK_REVIEW_SCOPES.CURRENT_DOCUMENT, () => tasks);
+    REVIEW.refresh();
+  }
+
+  function scopeToWorkspace() {
+    REVIEW.setTaskScope(REVIEW.TASK_REVIEW_SCOPES.WORKSPACE, null);
+  }
+
+  resetTaskDom('all');
+  scopeToLocalCurrentDocument(LOCAL_TASKS);
+  const localHtml = taskListHtml();
+
+  check('P01', 'CURRENT-DOCUMENT rows render READ-ONLY: no Workspace path, no mutation control',
+    localHtml.includes('workspaceTaskRowReadonly') &&
+    localHtml.includes('data-readonly="1"') &&
+    !localHtml.includes('data-path=') &&
+    !localHtml.includes('workspaceTaskStatusBtn') &&
+    !localHtml.includes('workspaceTaskPriorityAction') &&
+    !localHtml.includes('workspaceTaskOpenBtn') &&
+    !localHtml.includes('data-kind=') &&
+    localHtml.includes('workspaceTaskStatusState'),
+    'readonly=' + localHtml.includes('workspaceTaskRowReadonly'));
+
+  check('P02', 'CURRENT-DOCUMENT rows keep the priority badge visible (read-only, not hidden)',
+    localHtml.includes('workspaceTaskPriorityBadge priority-p1') &&
+    localHtml.includes('workspaceTaskRowText'),
+    'badge kept');
+
+  check('P03', 'CURRENT-DOCUMENT rows expose a local line control with the exact source line',
+    localHtml.includes('workspaceTaskCurrentDocLine') &&
+    localHtml.includes('data-current-document="1"') &&
+    JSON.stringify(attrValues(localHtml, 'data-current-document-line')) === JSON.stringify(['5', '9']),
+    JSON.stringify(attrValues(localHtml, 'data-current-document-line')));
+
+  check('P04', 'CURRENT-DOCUMENT group heading is NOT a Workspace open control',
+    localHtml.includes('workspaceTaskGroupHeading') &&
+    localHtml.includes('data-workspace-task-group="0"') &&
+    // no interactive group CONTROL is rendered in this scope at all
+    !/<button[^>]*workspaceTaskGroupHeader/.test(localHtml) &&
+    !/data-workspace-task-group="1"/.test(localHtml) &&
+    !localHtml.includes('Open note.md'),
+    'heading=' + localHtml.includes('workspaceTaskGroupHeading') +
+      ' header=' + localHtml.includes('workspaceTaskGroupHeader') +
+      ' groupAttr=' + localHtml.includes('data-workspace-task-group="0"') +
+      ' openTitle=' + localHtml.includes('Open note.md'));
+
+  check('P05', 'READ-ONLY chrome is APPLIED to the real panel: class, flag, title, Board action',
+    dom.workspaceTasksPanel.classList.contains('workspaceTaskReviewReadonly') === true &&
+    dom.workspaceTasksPanel.dataset.taskReviewReadonly === '1' &&
+    dom.workspaceTasksTitle.textContent === 'Tasks in this Note' &&
+    dom.workspaceTaskBoardBtn.disabled === true,
+    'title=' + dom.workspaceTasksTitle.textContent);
+
+  check('P06', 'CURRENT-DOCUMENT summary/badge state the local read-only contract',
+    dom.workspaceTasksBadge.textContent === '2' &&
+    dom.workspaceTasksSummary.textContent === '2 local tasks — read-only',
+    JSON.stringify(dom.workspaceTasksSummary.textContent));
+
+  check('P07', 'an empty Current Document is an AVAILABLE EMPTY, never a failure', (() => {
+    resetTaskDom('all');
+    scopeToLocalCurrentDocument([]);
+    const html = taskListHtml();
+    return dom.workspaceTasksBadge.textContent === '0' &&
+      // ACT 4B (zero-state correction): ONE visible empty-state message only —
+      // the BODY owns the canonical local text, the summary does not repeat it.
+      dom.workspaceTasksSummary.textContent === '' &&
+      html.includes('data-empty-state="tasks"') &&
+      html.includes('No tasks.') &&
+      // the read-only chrome survives the empty render
+      dom.workspaceTasksPanel.classList.contains('workspaceTaskReviewReadonly') === true;
+  })(), 'honest zero');
+
+  check('P08', 'switching scope back to Workspace restores the accepted interactive surface',
+    (() => {
+      resetTaskDom('all');
+      scopeToWorkspace();
+      REVIEW.refresh();
+      const html = taskListHtml();
+      return html.includes('workspaceTaskStatusBtn') &&
+        // the ROW's status control deep-links to the exact Task source (not just
+        // the group header, which also carries a path)
+        /class="workspaceTaskStatusBtn"[\s\S]{0,140}?data-path="notes\/Architecture\.md"/.test(html) &&
+        /class="workspaceTaskOpenBtn"[\s\S]{0,140}?data-path="notes\/Architecture\.md"/.test(html) &&
+        html.includes('workspaceTaskGroupHeader') &&
+        !html.includes('workspaceTaskRowReadonly') &&
+        dom.workspaceTasksPanel.classList.contains('workspaceTaskReviewReadonly') === false &&
+        dom.workspaceTasksTitle.textContent === 'Open Tasks' &&
+        dom.workspaceTaskBoardBtn.disabled === false &&
+        !dom.workspaceTasksSummary.textContent.includes('read-only');
+    })(),
+    'workspace scope intact');
+
+  // ---- ACT 4B FINAL POLISH: the local line-navigation CALL -------------------
+  //
+  // The click owner is the REAL delegated handler wired by wire(). It is
+  // dispatched with a synthetic event whose target claims the local line
+  // control, and the editors' navigation owner is a spy — so the fixture proves
+  // the CALL, not the markup.
+
+  resetTaskDom('all');
+  scopeToLocalCurrentDocument(LOCAL_TASKS);
+
+  const localNav = await (async () => {
+    const handlers = dom.workspaceTasksPanel.listeners.click || [];
+    const handler = handlers[handlers.length - 1];
+    if (typeof handler !== 'function') return { error: 'no click handler wired' };
+
+    const calls = [];
+    const saved = {
+      scroll: globalThis.__cmScrollToLine,
+      focus: globalThis.__cmFocus,
+      open: globalThis.MME_APP.openTextDocument,
+    };
+    let opened = 0;
+    globalThis.__cmScrollToLine = (n) => calls.push(['scroll', n]);
+    globalThis.__cmFocus = () => calls.push(['focus']);
+    globalThis.MME_APP.openTextDocument = () => { opened += 1; };
+
+    const clickOn = (selector, dataset) => {
+      const target = {
+        dataset: dataset || {},
+        closest: (sel) => (sel === selector ? target : null),
+      };
+      return { target, preventDefault() {}, stopPropagation() {} };
+    };
+    const emptyPathLogs = () => harness.logs.filter((l) => l.includes('empty path')).length;
+
+    harness.logs.length = 0;
+    await handler(clickOn('.workspaceTaskCurrentDocLine', { currentDocumentLine: '5' }));
+    const afterLine = calls.slice();
+    const emptyPaths = emptyPathLogs();
+    const pickerCalls = opened;
+
+    // A record with no usable line must NOT navigate anywhere.
+    calls.length = 0;
+    await handler(clickOn('.workspaceTaskCurrentDocLine', {}));
+    const afterNoLine = calls.slice();
+    const skipped = harness.logs.filter((l) => l.includes('no line')).length;
+
+    globalThis.__cmScrollToLine = saved.scroll;
+    globalThis.__cmFocus = saved.focus;
+    globalThis.MME_APP.openTextDocument = saved.open;
+    return { afterLine, afterNoLine, emptyPaths, pickerCalls, skipped };
+  })();
+
+  check('P09', 'a local line click reaches the ACTIVE document through the ONE editor owner',
+    JSON.stringify(localNav.afterLine) === JSON.stringify([['scroll', 4], ['focus']]),
+    JSON.stringify(localNav));
+
+  check('P10', 'a local line click never opens a document, picks a file or logs an empty path',
+    localNav.emptyPaths === 0 && localNav.pickerCalls === 0,
+    'emptyPathLogs=' + localNav.emptyPaths + ' opened=' + localNav.pickerCalls);
+
+  check('P11', 'a local record without a usable line is an honest no-op (no fabricated navigation)',
+    JSON.stringify(localNav.afterNoLine) === JSON.stringify([]) && localNav.skipped === 1,
+    JSON.stringify(localNav));
+
+  scopeToWorkspace();
+  resetTaskDom('all');
+  REVIEW.refresh();
+
+  // ---- ACT 4B DEVICE DIAGNOSTIC RETEST — local presentation + count log -----
+  //
+  // The device review of the isolated Note reported the CURRENT-DOCUMENT panel
+  // still SHOWING the Workspace filter surface (Open/Backlog/Todo/Ongoing/Done/
+  // All + priority), a repeated active-filename group heading and a repeated
+  // filename on every row, while the runtime logged `tasks=0`. These fixtures
+  // assert the corrections as RENDERED or LOGGED behaviour: which controls the
+  // read-only scope withdraws, the compact line cue, the refresh count result
+  // and the single zero-state message.
+  group('ACT 4B DEVICE DIAGNOSTIC RETEST — local Task presentation, refresh count, zero state (P12-P17)');
+
+  const LOCAL_PRESENTATION_CSS = fs.readFileSync(path.join(ROOT, 'css', 'workspace.css'), 'utf8');
+  const READONLY_PREFIX = '#workspaceTasksPanel.workspaceTaskReviewReadonly';
+
+  function lastRefreshLog() {
+    const lines = harness.logs.filter((l) => l.includes('TaskReview: refresh'));
+    return String(lines[lines.length - 1] || '');
+  }
+
+  // NOTE: this suite's `check` coerces its third argument, so every fixture
+  // below is an INVOKED IIFE (not a thunk) — a thunk would coerce to `true` and
+  // silently assert nothing.
+
+  check('P12', 'CURRENT-DOCUMENT presentation withdraws status/priority filters, search, Board and Workspace grouping', (() => {
+    resetTaskDom('all');
+    scopeToLocalCurrentDocument(LOCAL_TASKS);
+
+    // The rule block that withdraws the Workspace surface, selected by the ONE
+    // scope class the read-only chrome owner applies.
+    const start = LOCAL_PRESENTATION_CSS.indexOf(`${READONLY_PREFIX} #workspaceTaskSearchRow`);
+    const end = start === -1 ? -1 : LOCAL_PRESENTATION_CSS.indexOf('}', start);
+    const block = start === -1 ? '' : LOCAL_PRESENTATION_CSS.slice(start, end);
+
+    return dom.workspaceTasksPanel.classList.contains('workspaceTaskReviewReadonly') === true &&
+      block.includes(`${READONLY_PREFIX} .workspaceTaskFilterRow`) &&
+      block.includes(`${READONLY_PREFIX} .workspaceTaskGroupHeading`) &&
+      /display:\s*none;/.test(block) &&
+      LOCAL_PRESENTATION_CSS.includes(`${READONLY_PREFIX} .workspaceTaskBoardButton`) &&
+      // exactly three scope-gated selectors in the block, so the Workspace
+      // scope (which never carries the class) can never match one of them
+      (block.match(/#workspaceTasksPanel\.workspaceTaskReviewReadonly/g) || []).length === 3;
+  })(), () => 'Workspace filter surface still reachable in the read-only scope');
+
+  check('P13', 'CURRENT-DOCUMENT rows carry a compact Line N cue, never a repeated filename label', (() => {
+    resetTaskDom('all');
+    scopeToLocalCurrentDocument(LOCAL_TASKS);
+    const html = taskListHtml();
+    return html.includes('Line 5') &&
+      html.includes('Line 9') &&
+      !/note\.md:/.test(html) &&
+      // in-buffer navigation affordance is retained
+      html.includes('title="Go to line 5 in this Note"') &&
+      JSON.stringify(attrValues(html, 'data-current-document-line')) === JSON.stringify(['5', '9']);
+  })(), 'repeated filename source label still rendered');
+
+  check('P14', 'the refresh result reports scope-correct provider/filtered/rendered counts', (() => {
+    resetTaskDom('all');
+    harness.logs.length = 0;
+    scopeToLocalCurrentDocument(LOCAL_TASKS);
+    const line = lastRefreshLog();
+    return /scope=current-document/.test(line) &&
+      /providerCount=2/.test(line) &&
+      /filteredCount=2/.test(line) &&
+      /renderedCount=2/.test(line) &&
+      /emptyStateVisible=false/.test(line) &&
+      // the old Workspace-index-count log line is gone
+      !/\btasks=/.test(line);
+  })(), lastRefreshLog());
+
+  check('P15', 'a stale Workspace status filter cannot hide Current Document rows', (() => {
+    resetTaskDom('all');
+    // A persisted Workspace preference (one local record is Done) ...
+    REVIEW.setStatusFilter('done');
+    // ... must not decide which local rows a Note shows: the controls that set
+    // it are withdrawn from the read-only scope.
+    scopeToLocalCurrentDocument(LOCAL_TASKS);
+    const badge = String(dom.workspaceTasksBadge.textContent);
+    const rows = (taskListHtml().match(/data-task-id=/g) || []).length;
+    REVIEW.setStatusFilter('all');
+    return badge === '2' && rows === 2;
+  })(), () => 'badge=' + dom.workspaceTasksBadge.textContent);
+
+  check('P16', 'Workspace scope keeps the accepted interactive filter equation', (() => {
+    resetTaskDom('all');
+    scopeToWorkspace();
+    REVIEW.refresh();
+    REVIEW.setStatusFilter('done');
+    const summary = String(dom.workspaceTasksSummary.textContent);
+    const rows = (taskListHtml().match(/data-task-id=/g) || []).length;
+    REVIEW.setStatusFilter('all');
+    return /Showing 1 of 5 tasks/.test(summary) && rows === 1;
+  })(), 'workspace filtering changed');
+
+  check('P17', 'the zero render logs emptyStateVisible=true with renderedCount=0 and ONE message', (() => {
+    resetTaskDom('all');
+    harness.logs.length = 0;
+    scopeToLocalCurrentDocument([]);
+    const line = lastRefreshLog();
+    return /providerCount=0/.test(line) &&
+      /filteredCount=0/.test(line) &&
+      /renderedCount=0/.test(line) &&
+      /emptyStateVisible=true/.test(line) &&
+      dom.workspaceTasksBadge.textContent === '0' &&
+      dom.workspaceTasksSummary.textContent === '' &&
+      taskListHtml().includes('No tasks.');
+  })(), lastRefreshLog());
+
+  scopeToWorkspace();
+  resetTaskDom('all');
+  REVIEW.refresh();
 
   // ---- Report ---------------------------------------------------------------
   const failed = results.filter((e) => !e.group && !e.ok);

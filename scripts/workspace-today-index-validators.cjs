@@ -752,7 +752,7 @@ function todayFileName() {
         runNode('scripts/workspace-discovery-consumers-validators.cjs')
       )],
     ['X28', 'ACT 2B task consumers remain green', () =>
-      /WORKSPACE TASK CONSUMERS VALIDATORS: 62 passed, 0 failed/.test(
+      /WORKSPACE TASK CONSUMERS VALIDATORS: 79 passed, 0 failed/.test(
         runNode('scripts/workspace-task-consumers-validators.cjs')
       )],
     ['X29', 'ACT 2C lifecycle/output consumers remain green', () =>

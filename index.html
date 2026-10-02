@@ -138,7 +138,7 @@
       <span id="saveStatus"></span>
     </div>
     <div id="layout">
-      <aside id="workspaceSidebar" aria-label="Notes workspace">
+      <aside id="workspaceSidebar" aria-label="Journal">
         <div class="workspaceHeader">
           <div class="workspaceHeaderTop">
             <div id="workspaceTitle">Journal</div>
@@ -171,7 +171,7 @@
           <div id="workspaceWorkspaceSection" class="workspaceWorkspaceSection" aria-label="Workspace">
             <div class="workspaceSectionCaption">Workspace</div>
             <div id="workspaceWorkspaceName" class="workspaceWorkspaceName"></div>
-            <button id="btnJournalToday" type="button">
+            <button id="btnJournalToday" type="button" aria-label="Today, open the Journal Today view">
               <span class="workspaceIcon">📅</span>
               <span class="workspaceLabel">Today</span>
             </button>
@@ -865,6 +865,18 @@ $$
         <div id="logsActions">
           <button id="btnCopyLogs" type="button" title="Copy logs" aria-label="Copy logs">
             Copy
+          </button>
+
+          <!-- TEMPORARY (ACT 4B device diagnostic retest): in-app access to the
+               EXISTING read-only Sidebar resize diagnostic owner. Remove with the
+               other temporary ACT 4B diagnostics after acceptance. -->
+          <button
+            id="btnAct4bResizeSnapshot"
+            type="button"
+            title="ACT 4B Resize Snapshot"
+            aria-label="ACT 4B Resize Snapshot"
+          >
+            Resize Snapshot
           </button>
 
           <button id="btnClearLogs" type="button" title="Clear logs" aria-label="Clear logs">

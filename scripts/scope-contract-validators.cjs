@@ -2419,9 +2419,15 @@ group('ACT 4A — live/saved boundary and structural guarantees');
     const wsStart = RELATED_OWNER.indexOf('!linksInResult.available');
     const wsReturn = wsStart === -1 ? -1 : RELATED_OWNER.indexOf('return;', wsStart);
     const ws = wsStart === -1 ? '' : RELATED_OWNER.slice(wsStart, wsReturn);
-    return local.includes("badge.textContent = '—'") &&
+    // ACT 4B FINAL POLISH — the canonical local Links Out wording is the
+    // accepted ACT 4B contract: zero = "No Links Out.", non-zero summary =
+    // "Resolution requires a Workspace." The retired pre-ACT-4B string
+    // ("No outgoing links in this note") is gone. The badge count is written
+    // from the extracted rows, so a confirmed zero badge is never fabricated.
+    return local.includes("badge.textContent = rows.length ? `${rows.length}` : '—'") &&
       !/badge\.textContent = '0'/.test(local) &&
-      local.includes('No outgoing links in this note') &&
+      local.includes("'No Links Out.'") &&
+      local.includes("'Resolution requires a Workspace.'") &&
       ws.includes('Links In unavailable — workspace index not ready') &&
       ws.includes("badge.textContent = '—'");
   }, () => 'a direction reports a zero/unavailable state it cannot prove');
@@ -2653,6 +2659,341 @@ group('ACT 4A — live/saved boundary and structural guarantees');
       return true;
     }
   }, () => 'sw.js/index.html/main.js version markers changed');
+
+  group('ACT 4B FINAL POLISH — read-only Task Review, local navigation, identity, resize diagnostic (S30-S38)');
+
+  // -------------------------------------------------------------
+  // WHY THESE FIXTURES EXIST.
+  //
+  // The device review of the isolated Journal Note experience found four
+  // defects that the earlier ACT 4B fixtures could not see, because they only
+  // proved that the SCOPE was set, never what the CURRENT-DOCUMENT panel then
+  // RENDERED:
+  //   1. the Task Review panel reused the Workspace-shaped chrome and rows, so a
+  //      Note showed Workspace wording and interactive controls that can only
+  //      address a Workspace path (and logged an empty-path refusal);
+  //   2. a task row offered no way to reach the line it came from;
+  //   3. the local scope had no explicit accessibility contract;
+  //   4. the Sidebar shell still advertised its pre-0.6.3 identity.
+  // Each fixture below therefore asserts a RENDERED or CALLED behaviour of the
+  // real owner, not the presence of a string.
+
+  await check('S30', 'READ-ONLY CHROME: ONE panel-level owner, called once per render from the scope', () => {
+    const src = read('js', 'workspace', 'task-review.js');
+    const render = extractFunctionByBraces(src, 'function renderPanel() {');
+    const chrome = extractFunctionByBraces(src, 'function applyTaskReviewReadonlyChrome(enabled) {');
+    return (src.match(/function applyTaskReviewReadonlyChrome\(/g) || []).length === 1 &&
+      (render.match(/applyTaskReviewReadonlyChrome\(/g) || []).length === 1 &&
+      /applyTaskReviewReadonlyChrome\(scopedToCurrentDocument\)/.test(render) &&
+      render.indexOf('const scopedToCurrentDocument =') < render.indexOf('applyTaskReviewReadonlyChrome(') &&
+      /classList\.toggle\('workspaceTaskReviewReadonly'/.test(chrome) &&
+      /dataset\.taskReviewReadonly/.test(chrome) &&
+      // the title hook is a REAL shipped node, and the Workspace wording is
+      // restored from the same shipped shell value
+      /const title = panel\.querySelector\?\.\('\.workspaceSectionTitle'\)/.test(chrome) &&
+      /title\.textContent = on \? 'Tasks in this Note' : 'Open Tasks';/.test(chrome) &&
+      (() => {
+        const panel = read('index.html').slice(read('index.html').indexOf('id="workspaceTasksPanel"'));
+        const body = panel.slice(0, panel.indexOf('</div>\n\n'));
+        return (body.match(/class="workspaceSectionTitle"/g) || []).length === 1 &&
+          /Open Tasks/.test(body);
+      })();
+  }, () => 'the read-only chrome is missing, duplicated, or not scope-driven');
+
+  await check('S31', 'READ-ONLY CHROME is panel-level ONLY: it never builds or repairs row markup', () => {
+    const src = read('js', 'workspace', 'task-review.js');
+    const chrome = extractFunctionByBraces(src, 'function applyTaskReviewReadonlyChrome(enabled) {');
+    return !/innerHTML/.test(chrome) &&
+      !/workspaceTaskRow/.test(chrome) &&
+      !/data-path/.test(chrome) &&
+      !/data-current-document-line/.test(chrome) &&
+      // exactly ONE owner writes the row list, and it is the renderer
+      (src.match(/list\.innerHTML = groups/g) || []).length === 1;
+  }, () => 'chrome writes row markup, or a second row renderer exists');
+
+  await check('S32', 'CURRENT-DOCUMENT rows are rendered READ-ONLY by the ONE renderer (no repair pass)', () => {
+    const src = read('js', 'workspace', 'task-review.js');
+    const render = extractFunctionByBraces(src, 'function renderPanel() {');
+    const branchStart = render.indexOf('if (scopedToCurrentDocument) {');
+    const wsStart = render.indexOf('class="workspaceTaskRow${doneClass}"');
+    const local = branchStart === -1 || wsStart === -1 ? '' : render.slice(branchStart, wsStart);
+    const ws = wsStart === -1 ? '' : render.slice(wsStart);
+    return Boolean(local) &&
+      /data-readonly="1"/.test(local) &&
+      /data-current-document-line="\$\{line\}"/.test(local) &&
+      !/data-path=/.test(local) &&
+      !/workspaceTaskStatusBtn/.test(local) &&
+      !/workspaceTaskPriorityAction/.test(local) &&
+      // the priority badge stays VISIBLE in read-only mode
+      /\$\{priorityBadge\}/.test(local) &&
+      // and the accepted Workspace row contract is untouched
+      /data-path="\$\{filePath\}"/.test(ws) &&
+      /workspaceTaskStatusBtn/.test(ws) &&
+      /workspaceTaskPriorityAction/.test(ws);
+  }, () => 'local rows are interactive, claim a Workspace path, or the Workspace row regressed');
+
+  await check('S33', 'LOCAL group heading is NOT the Workspace open control', () => {
+    const src = read('js', 'workspace', 'task-review.js');
+    const render = extractFunctionByBraces(src, 'function renderPanel() {');
+    return /class="workspaceTaskGroupHeading" data-workspace-task-group="0"/.test(render) &&
+      // only the Workspace branch keeps an interactive header
+      (render.match(/class="workspaceTaskGroupHeader"/g) || []).length === 1 &&
+      /scopedToCurrentDocument\s*\?/.test(render);
+  }, () => 'a local group can still be clicked as a Workspace file open');
+
+  await check('S34', 'LOCAL navigation is handled BEFORE every Workspace branch, with no Workspace path', () => {
+    const src = read('js', 'workspace', 'task-review.js');
+    const handler = src.slice(src.indexOf("panel.addEventListener('click'"));
+    const local = handler.indexOf(".closest?.('.workspaceTaskCurrentDocLine')");
+    const status = handler.indexOf(".closest?.('.workspaceTaskStatusBtn')");
+    const open = handler.indexOf(".closest?.('.workspaceTaskOpenBtn')");
+    if (local === -1 || status === -1 || open === -1) return false;
+    const branch = handler.slice(local, status);
+    return local < status && status < open &&
+      !/data-path/.test(branch) &&
+      !/setTaskCompletion/.test(branch) &&
+      /return;/.test(branch);
+  }, () => 'local clicks fall through to the Workspace owners, or the branch order changed');
+
+  await check('S35', 'LOCAL navigation REUSES the editor owner: no second navigation implementation', () => {
+    const src = read('js', 'workspace', 'task-review.js');
+    const handler = src.slice(src.indexOf("panel.addEventListener('click'"));
+    const branch = handler.slice(handler.indexOf(".closest?.('.workspaceTaskCurrentDocLine')"),
+      handler.indexOf(".closest?.('.workspaceTaskStatusBtn')"));
+    return /window\.__cmScrollToLine/.test(branch) &&
+      // Task records are 1-based; the editor owner is 0-based.
+      /scrollToLine\(line - 1\)/.test(branch) &&
+      /window\.__cmFocus/.test(branch) &&
+      !/scrollIntoView/.test(branch) &&
+      !/view\.dispatch/.test(branch) &&
+      /window\.__cmScrollToLine = \(lineNo\)/.test(read('js', 'editor', 'codemirror-bootstrap.js'));
+  }, () => 'a second navigation owner was created, or the editor owner is gone');
+
+  await check('S36', 'JOURNAL identity: the shell label matches the ONE identity owner, no stale string', () => {
+    const label = (read('index.html').match(/<aside id="workspaceSidebar" aria-label="([^"]*)"/) || [])[1];
+    const shipped = read('index.html') + MAIN_SOURCE + read('js', 'workspace', 'task-review.js') +
+      read('css', 'workspace.css');
+    return label === 'Journal' &&
+      !/Notes workspace/.test(shipped) &&
+      /if \(title\) title\.textContent = 'Journal';/.test(MAIN_SOURCE);
+  }, () => 'the Journal shell advertises an identity the runtime owner does not');
+
+  await check('S37', 'SIDEBAR resize diagnostic is READ-ONLY and single-owner', () => {
+    const main = MAIN_SOURCE;
+    const fn = extractFunctionByBraces(main, 'function collectWorkspaceSidebarResizeDiagnostics() {');
+    return (main.match(/function collectWorkspaceSidebarResizeDiagnostics\(/g) || []).length === 1 &&
+      // ONE binding, and it is the pointerdown listener on the resize handle.
+      (main.match(/handle\.addEventListener\(\s*'pointerdown'/g) || []).length === 1 &&
+      // reads only: no class write, no style write, no persistence, no DOM insert
+      !/classList\.(add|remove|toggle)/.test(fn) && !/\.style\./.test(fn) &&
+      !/setItem/.test(fn) && !/appendChild/.test(fn) &&
+      /getComputedStyle/.test(fn) && /getBoundingClientRect/.test(fn) &&
+      /WORKSPACE_SIDEBAR_WIDTH_STORAGE_KEY/.test(fn) &&
+      /__workspaceSidebarResizeBound/.test(fn) &&
+      // provenance facts are READ, never written: no marker/property is set
+      /handleInsideSidebar/.test(fn) && /handleCount/.test(fn) &&
+      /querySelectorAll\('#workspaceSidebarResizeHandle'\)/.test(fn) &&
+      !/__workspaceSidebarResizeBound\s*=/.test(fn) &&
+      // the accepted clamp is untouched by the polish
+      /const WORKSPACE_SIDEBAR_WIDTH_MIN = 220;/.test(main) &&
+      /const WORKSPACE_SIDEBAR_WIDTH_MAX = 420;/.test(main) &&
+      /window\.__mmeSidebarResizeDiagnostics = collectWorkspaceSidebarResizeDiagnostics/.test(main);
+  }, () => 'the resize diagnostic mutates state, or a second resize owner appeared');
+
+  await check('S38', 'LOCAL read-only presentation adds no mutation reachability', () => {
+    const src = read('js', 'workspace', 'task-review.js');
+    const render = extractFunctionByBraces(src, 'function renderPanel() {');
+    const local = render.slice(render.indexOf('if (scopedToCurrentDocument) {'),
+      render.indexOf('class="workspaceTaskRow${doneClass}"'));
+    return (src.match(/function setTaskPriority\(/g) || []).length === 1 &&
+      (src.match(/function setTaskCompletion\(/g) || []).length === 1 &&
+      (src.match(/async function openSourceFile\(/g) || []).length === 1 &&
+      // the read-only row exposes no mutation affordance at all
+      !/data-action=/.test(local) &&
+      !/workspaceTaskOpenBtn/.test(local) &&
+      !/data-kind=/.test(local);
+  }, () => 'a local read-only row can reach a mutation owner');
+
+  // ---- ACT 4B DEVICE DIAGNOSTIC RETEST -------------------------------------
+  //
+  // The device could not reach the console export from the application window,
+  // and four local defects remained unproven: the Standalone Task panel still
+  // showed Workspace filters/grouping, the refresh logged `tasks=0` for a Note
+  // that renders rows, the zero-state message was duplicated, and the Workspace
+  // section stayed on screen. These fixtures assert the TEMPORARY in-app access,
+  // the bounded event evidence, the presentation corrections and the single
+  // authoritative decisions that own them.
+
+  group('ACT 4B DEVICE DIAGNOSTIC RETEST — in-app access, event evidence, local presentation (S39-S46)');
+
+  const DEVICE_CSS = read('css', 'workspace.css');
+  const DEVICE_INDEX = read('index.html');
+  const DEVICE_REVIEW = read('js', 'workspace', 'task-review.js');
+
+  await check('S39', 'TEMPORARY in-app access: ONE Logs-panel command wired by the existing Logs owner', () => {
+    const logsOwner = extractFunctionByBraces(MAIN_SOURCE, 'function wireLogsPanelControls() {');
+    const actionsStart = DEVICE_INDEX.indexOf('<div id="logsActions">');
+    const logBody = DEVICE_INDEX.indexOf('<pre id="log">');
+    const button = DEVICE_INDEX.indexOf('id="btnAct4bResizeSnapshot"');
+
+    return (MAIN_SOURCE.match(/function logAct4bResizeSnapshot\(/g) || []).length === 1 &&
+      // the button lives INSIDE the existing Logs panel action bar
+      actionsStart !== -1 && button > actionsStart && button < logBody &&
+      (DEVICE_INDEX.match(/id="btnAct4bResizeSnapshot"/g) || []).length === 1 &&
+      /aria-label="ACT 4B Resize Snapshot"/.test(DEVICE_INDEX) &&
+      // and the EXISTING Logs control owner binds it exactly once (idempotent)
+      /getElementById\('btnAct4bResizeSnapshot'\)/.test(logsOwner) &&
+      /if \(btnResizeSnapshot && !btnResizeSnapshot\.__bound\)/.test(logsOwner) &&
+      /logAct4bResizeSnapshot\(\);/.test(logsOwner) &&
+      // no second action bar / no new registry: the Copy/Clear/Close trio is intact
+      /id="btnCopyLogs"/.test(DEVICE_INDEX) &&
+      /id="btnClearLogs"/.test(DEVICE_INDEX) &&
+      /id="btnCloseLogs"/.test(DEVICE_INDEX);
+  }, () => 'the temporary Logs action is missing, duplicated or not wired by the Logs owner');
+
+  await check('S40', 'the snapshot action calls the EXISTING diagnostic owner and only LOGS JSON', () => {
+    const action = extractFunctionByBraces(MAIN_SOURCE, 'function logAct4bResizeSnapshot() {');
+
+    return (action.match(/collectWorkspaceSidebarResizeDiagnostics\(\)/g) || []).length === 1 &&
+      /JSON\.stringify\(snapshot, null, 2\)/.test(action) &&
+      // READ-ONLY: no width write, no storage write, no listener, no DOM insert
+      !/applyWorkspaceSidebarWidth|storeWorkspaceSidebarWidth|restoreWorkspaceSidebarWidth/.test(action) &&
+      !/\.setItem\(|\.style\.|appendChild|addEventListener|classList\.(add|remove|toggle)/.test(action) &&
+      // it never opens a document or touches dirty state
+      !/openWorkspaceFile|openTextDocument|dirty/.test(action);
+  }, () => 'the snapshot action mutates state or stops using the existing owner');
+
+  await check('S41', 'the snapshot output carries the whole required evidence contract', () => {
+    const action = extractFunctionByBraces(MAIN_SOURCE, 'function logAct4bResizeSnapshot() {');
+    const owner = extractFunctionByBraces(MAIN_SOURCE, 'function collectWorkspaceSidebarResizeDiagnostics() {');
+
+    const ownerFacts = [
+      'handleCount', 'handleInsideSidebar', 'boundMarker', 'handlePointerEvents',
+      'handleTouchAction', 'handleDisplay', 'handleVisibility', 'handlePosition',
+      'handleRight', 'handleZIndex', 'handleHitWidth', 'sidebarWidth',
+      'sidebarFlexBasis', 'cssWidthVariable', 'storedWidth', 'collapsedClass',
+      'viewportWidth',
+    ];
+    const snapshotFacts = [
+      'timestamp', 'journalComposition', 'appContext', '...facts', 'collapsed:',
+      'workspaceSection', 'matchingCssRules', 'rootHandlePresent', 'workspaceAvailable',
+      'computedDisplay', 'computedVisibility', 'hiddenAttribute',
+    ];
+
+    // Every required fact is produced by the ONE owner — either assigned on the
+    // `facts` value or declared in its object literal — and the snapshot carries
+    // it through.
+    return ownerFacts.every((f) => new RegExp(`(facts\\.${f}\\b|\\b${f}:)`).test(owner)) &&
+      snapshotFacts.every((f) => action.includes(f));
+  }, () => 'the snapshot contract lost a required fact');
+
+  await check('S42', 'RESIZE event evidence is bounded, inside the ONE resize owner, with no new listener', () => {
+    const owner = extractFunctionByBraces(MAIN_SOURCE, 'function wireWorkspaceSidebarResize() {');
+    const move = extractFunctionByBraces(owner, 'function onPointerMove(event) {');
+    const up = extractFunctionByBraces(owner, 'function onPointerUp(event) {');
+
+    return (MAIN_SOURCE.match(/handle\.addEventListener\(/g) || []).length === 1 &&
+      // exactly the three listeners the owner already had — no new one
+      (owner.match(/addEventListener\(/g) || []).length === 3 &&
+      // no polling anywhere in the owner
+      !/setInterval|setTimeout|requestAnimationFrame/.test(owner) &&
+      // one START, at most one first-move line, at most one final-move line, one END
+      (owner.match(/ACT 4B Resize start pointer=/g) || []).length === 1 &&
+      (owner.match(/ACT 4B Resize end applied=/g) || []).length === 1 &&
+      // a pointermove is RECORDED every time but LOGGED only for the first one
+      /if \(delta !== 0\)/.test(move) &&
+      (move.match(/logAct4bResizeMove\(/g) || []).length === 1 &&
+      /logAct4bResizeMove\('first', move\)/.test(move) &&
+      /act4bResizeEvidence\.final = move;/.test(move) &&
+      /logAct4bResizeMove\('final', move\)/.test(up) &&
+      // the end facts are read AFTER the owner's own persist + apply
+      up.indexOf('storeWorkspaceSidebarWidth(finalWidth)') < up.indexOf("logAct4bResizeMove('final'");
+  }, () => 'the resize evidence is unbounded, or a second listener owner appeared');
+
+  await check('S43', 'COLLAPSE evidence lives in the EXISTING delegation owner, with no per-panel listener', () => {
+    const handler = extractFunctionByBraces(MAIN_SOURCE, 'function handleWorkspacePanelCollapseClick(event) {');
+    const toggle = extractFunctionByBraces(MAIN_SOURCE, 'function toggleWorkspacePanel(panelId) {');
+
+    const required = [
+      'target', 'closestToggle', 'requestedPanelKey', 'panelElementId',
+      'previousCollapsed', 'nextCollapsed', 'classAfter', 'ariaExpandedAfter',
+      'panelBodyDisplay', 'persistedCollapse',
+    ];
+
+    return (MAIN_SOURCE.match(/addEventListener\('click', handleWorkspacePanelCollapseClick\)/g) || []).length === 1 &&
+      // ONE delegated owner: it calls the toggle once and binds nothing itself
+      (handler.match(/toggleWorkspacePanel\(panelId\)/g) || []).length === 1 &&
+      !/addEventListener/.test(handler) &&
+      !/setInterval|setTimeout|requestAnimationFrame/.test(handler) &&
+      /const result = toggleWorkspacePanel\(panelId\);/.test(handler) &&
+      /JSON\.stringify\(record, null, 2\)/.test(handler) &&
+      required.every((k) => handler.includes(k)) &&
+      // the toggle reports both states so "does not expand/collapse" is provable
+      /const previousCollapsed = panelEl\.classList\.contains\('workspacePanelCollapsed'\);/.test(toggle) &&
+      /previousCollapsed: Boolean\(previousCollapsed\)/.test(toggle) &&
+      /nextCollapsed: Boolean\(nextCollapsed\)/.test(toggle) &&
+      /getWorkspacePanelCollapsedState\(\)\[panelId\]/.test(handler);
+  }, () => 'the collapse evidence is missing, or a per-panel listener owner appeared');
+
+  await check('S44', 'WORKSPACE SECTION: `hidden` is authoritative in the Note composition (never rootHandle)', () => {
+    const guardStart = DEVICE_CSS.indexOf('#workspaceActivePanel[hidden],');
+    const guardEnd = guardStart === -1 ? -1 : DEVICE_CSS.indexOf('}', guardStart);
+    const guard = guardStart === -1 ? '' : DEVICE_CSS.slice(guardStart, guardEnd);
+    const identity = extractFunctionByBraces(MAIN_SOURCE, 'function updateJournalSidebarIdentity(composition) {');
+
+    return guard.includes('#workspaceWorkspaceSection[hidden]') &&
+      // the OPEN section must remain visible in every Journal composition
+      !/workspaceOpenSection/.test(guard) &&
+      /html\[data-journal-composition='note'\] #workspaceWorkspaceSection \{\s*display: none !important;/.test(DEVICE_CSS) &&
+      // the presentation decision is the composition owner, not the file handle
+      /const isWorkspace = journal === MME_JOURNAL_COMPOSITION\.WORKSPACE && workspaceAvailable;/.test(identity) &&
+      /wsSection\.hidden = !isWorkspace;/.test(identity) &&
+      !/rootHandle/.test(identity);
+  }, () => 'the Workspace section can still be displayed in the Note composition');
+
+  await check('S45', 'the read-only Task presentation is SCOPE-gated: no unscoped hiding of Workspace controls', () => {
+    // Remove every rule whose selector is scoped by the read-only class, then
+    // require that no remaining rule can hide a Workspace control globally.
+    const unscoped = DEVICE_CSS.replace(
+      /#workspaceTasksPanel\.workspaceTaskReviewReadonly[^{]*\{[^}]*\}/g,
+      ''
+    );
+
+    return /#workspaceTasksPanel\.workspaceTaskReviewReadonly #workspaceTaskSearchRow/.test(DEVICE_CSS) &&
+      /#workspaceTasksPanel\.workspaceTaskReviewReadonly \.workspaceTaskFilterRow/.test(DEVICE_CSS) &&
+      /#workspaceTasksPanel\.workspaceTaskReviewReadonly \.workspaceTaskGroupHeading/.test(DEVICE_CSS) &&
+      /#workspaceTasksPanel\.workspaceTaskReviewReadonly \.workspaceTaskBoardButton/.test(DEVICE_CSS) &&
+      !/#workspaceTaskSearchRow[^{]*\{[^}]*display:\s*none/.test(unscoped) &&
+      !/\.workspaceTaskFilterRow[^{]*\{[^}]*display:\s*none/.test(unscoped) &&
+      !/\.workspaceTaskGroupHeading[^{]*\{[^}]*display:\s*none/.test(unscoped);
+  }, () => 'a Workspace-only control is hidden outside the read-only scope');
+
+  await check('S46', 'refresh REPORTS the render result, and the zero state appears ONCE', () => {
+    const refresh = extractFunctionByBraces(DEVICE_REVIEW, 'function refresh() {');
+    const render = extractFunctionByBraces(DEVICE_REVIEW, 'function renderPanel() {');
+
+    return refresh.indexOf('wire();') < refresh.indexOf('renderPanel()') &&
+      /const result = renderPanel\(\)/.test(refresh) &&
+      /providerCount=/.test(refresh) &&
+      /filteredCount=/.test(refresh) &&
+      /renderedCount=/.test(refresh) &&
+      /emptyStateVisible=/.test(refresh) &&
+      /file=/.test(refresh) &&
+      /scope=/.test(refresh) &&
+      // the misleading Workspace-index count line is gone
+      !/tasks=\$\{index\?\.tasks\?\.length/.test(refresh) &&
+      // the renderer is the single source of the counts it reports
+      /evidence\.providerCount = total;/.test(render) &&
+      /evidence\.filteredCount = filtered\.length;/.test(render) &&
+      (render.match(/return evidence;/g) || []).length >= 6 &&
+      // ONE local empty-state message: the canonical text exists once in the
+      // module, inside the BODY the composition verifier reads
+      (DEVICE_REVIEW.match(/No tasks\./g) || []).length === 1 &&
+      /summary\.textContent = '';/.test(render) &&
+      /data-empty-state="tasks"/.test(render) &&
+      // and the Workspace scope still runs its own filter equation
+      /const filtered = scopedToCurrentDocument \? all : applyTaskFilters\(all, filterState\);/.test(render);
+  }, () => 'the count log or the zero state is still misleading/duplicated');
 
   group('ACT 4B — mode isolation and top-bar ownership (T01-T18)');
 
