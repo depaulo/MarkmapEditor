@@ -85,42 +85,28 @@ Project: <title> [ <value> <currency> ] [ <quarter> ]
 ```
 
 Both bracket groups are optional. When both are present the value group precedes
-the quarter group.
+the quarter group. The title is required.
 
-**Accepted.** The title may itself contain `[` or `]`. The title is therefore
-**not** defined as "the text before the first bracket". Instead the reader
-inspects **trailing** bracket groups from right to left and consumes only exact,
-valid, recognized Project tokens, stopping at the first unrecognized bracket
-group. See §2.4.
+**Project titles may contain brackets.** The parser consumes **only** valid
+recognized trailing Project tokens, working from the end of the declaration.
+Arbitrary bracketed title text remains part of the title, and unsupported tokens
+are never removed.
 
-### 2.4 Bracket title contract (ACCEPTED — resolves former [OPEN] D15)
+Examples:
 
-Rules:
+```md
+Project: Migration [Phase 1]
 
-- titles **may** contain brackets;
-- only exact, valid, recognized **trailing** Project tokens are consumed;
-- arbitrary bracketed title text remains title text;
-- `[[Wiki Link]]` is tokenized as a Wiki Link before any Project bracket;
-- Task lines are never parsed as Projects.
+Project: Migration [Phase 1] [800000 BRL] [27Q3]
 
-Worked examples (accepted by owner):
+Project: Review [[Alibaba]] [27Q3]
+```
 
-| Declaration | title | value | Expected Order |
-| --- | --- | --- | --- |
-| `Project: Migration [Phase 1]` | `Migration [Phase 1]` | none | none |
-| `Project: Migration [Phase 1] [800000 BRL] [27Q3]` | `Migration [Phase 1]` | `800000` `BRL` | `2027-Q3` |
-| `Project: Review [[Alibaba]] [27Q3]` | `Review [[Alibaba]]` | none | `2027-Q3` |
-
-A bracket group that is not an exact valid value/currency pair or quarter
-**stops** consumption; every other bracket group is preserved verbatim as title
-text. The reader is whitespace-tolerant and never throws on malformed candidate
-groups; a malformed recognized-looking candidate produces a bounded diagnostic
-and remains readable Markdown.
-
-**Source note — resolved conflicts.** Wiki Link syntax
-(`js/links/wiki-link-grammar.js`) is handled by tokenizing `[[…]]` first
-(§15.2). Task checkbox lines (`/^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/`,
-`js/main.js:686`) are excluded before Project declaration matching (§15.3).
+In the second example the title is `Migration [Phase 1]` and both tokens are
+consumed. In the third example the `[[Alibaba]]` Wiki Link remains intact inside
+the title while `[27Q3]` is consumed as Expected Order. Project parsing never
+consumes Task lines, so `- [ ] Ship Alibaba [800000 BRL]` remains a Task whose
+text carries a Project-shaped token (§15.3).
 
 ---
 
@@ -628,20 +614,17 @@ lifecycle status enum.
 
 **Source note.** Current `status` is unvalidated free text
 (`js/workspace/workspace-parser.js:408-411`); fixtures use `Quotation`,
-`Proposal`, `Lead` (`js/report/report-dictionary.js:677-680`). The managed key
-here is named `stage`.
+`Proposal`, `Lead` (`js/report/report-dictionary.js:677-680`).
 
-**Accepted legacy-status rule.**
+Legacy stage fallback rules:
 
-- managed `stage` **wins** when it is present in a valid `mme-project`;
-- legacy `Status:` / `Stage:` is a **temporary read fallback** only, filling
-  `stage` on the record when managed `stage` is absent;
-- there is **no automatic legacy-stage migration**: initial reconciliation
-  inserts **only** `id` and `created`, and never copies legacy `Status:` into
-  `mme-project: stage=`;
-- the user's legacy line is never deleted, rewritten or reformatted;
-- commercial stages such as `Lead`, `Proposal` and `Quotation` are preserved
-  verbatim as free text; no vocabulary is imposed.
+- `mme-project: stage=` is authoritative when present;
+- legacy `Status:` / `Stage:` may populate the read model **only** when managed
+  stage is absent;
+- ACT 5A does **not** copy legacy stage into `mme-project` automatically;
+- ACT 5A does **not** delete or rewrite legacy lines;
+- initial reconciliation requires **only** `id` and `created`;
+- stage conversion requires the future Project mutation owner.
 
 ---
 
@@ -760,7 +743,7 @@ are **not** collapsed into one implementation.
 
 ### PACKAGE 6 — PROJECT EXPERIENCE
 
-Includes candidates such as:
+Candidate items:
 
 - complete Expanded Projects View;
 - richer filters;
@@ -770,11 +753,12 @@ Includes candidates such as:
 - Task-to-Project association;
 - Task counts by Project;
 - optional Sidebar quick editing;
-- responsive/mobile refinement;
+- responsive and mobile refinement;
 - Report integration refinements.
 
-This list is complete as transmitted; it is **not** truncated and carries no
-follow-up marker.
+These are **candidates, not commitments**. Every item above requires a new
+Package 6 PLAN, fresh source archaeology, and separate owner authorization
+before any implementation begins.
 
 ---
 
@@ -794,13 +778,13 @@ the bracket form must reject separators while the legacy fallback keeps
 accepting them. ACT 5A must implement both behaviors deliberately and must not
 silently change legacy Report output.
 
-### 15.2 Brackets collide with Wiki Link syntax
+### 15.2 Brackets sit beside Wiki Link syntax
 
 `[[Wiki Link]]` is the accepted Package 3 Wiki Link form
-(`js/links/wiki-link-grammar.js`). A single `[` starts neither a Task checkbox
-nor a Wiki Link, but the parser must tokenize `[[...]]` before Project brackets
-so a Project immediately adjacent to a Wiki Link cannot be mis-tokenized.
-Resolved by the accepted bracket title contract in §2.4.
+(`js/links/wiki-link-grammar.js`). Titles may contain brackets (§2.3), so ACT 5A
+must tokenize `[[...]]` as a unit before considering any single-bracket Project
+token. A Project immediately adjacent to a Wiki Link must leave the Wiki Link
+intact and unmodified.
 
 ### 15.3 Brackets collide with Task checkbox syntax
 
@@ -810,19 +794,30 @@ declaration is not a Task line, but a line such as
 `- [ ] Ship Alibaba [800000 BRL]` must still parse as a Task whose text carries a
 Project bracket. ACT 5A must not make Project parsing consume task lines.
 
-### 15.4 Title-driven identity must be removed
+### 15.4 Title-driven identity: transitional, retired in ACT 5B
 
 `sourceIdentity` (`js/workspace/workspace-parser.js:440-446`) is title- and
-line-derived and is retired per §7.3.
+line-derived and therefore must never become persistent identity (§7.3). It is
+read by no consumer and is dropped by the Report projection `projectProject()`
+(`js/report/report-dictionary.js:478-492`).
 
-**Transition ownership: ACT 5B.** `sourceIdentity` is kept **transitionally** by
-ACT 5A — it is neither promoted to persistent identity nor deleted, because
-current consumers/validators still read it. Its retirement, and Report
-projection `projectProject()` gaining `projectId` instead of keying Report rows
-by `name` (`js/report/report-dictionary.js:479`), belong to **ACT 5B**
-(`projectId` consumer propagation).
+Ownership is split so that ACT 5A never touches a Report consumer:
 
-### 15.5 Two divergent currency/sort implementations exist
+**ACT 5A**
+
+- adds `projectId` to the parser record as a new additive field;
+- does **not** modify Report consumers;
+- does **not** modify `projectProject()`;
+- preserves the transitional `sourceIdentity` field where it is still required
+  so no current consumer or validator breaks.
+
+**ACT 5B**
+
+- propagates `projectId` through the Workspace Index and the Report dictionary;
+- verifies Report Markdown parity;
+- retires `sourceIdentity` only after consumers and validators no longer use it.
+
+### 15.5 Currency and sort convergence belong to ACT 5B
 
 - Currency: `buildProjectTotals()` uppercases
   (`js/workspace/index-document` owner `js/workspace/workspace-index-document.js:101`),
@@ -832,11 +827,20 @@ by `name` (`js/report/report-dictionary.js:479`), belong to **ACT 5B**
   (`js/main.js:1157-1160`); `renderWorkspaceProjectsPanel()` does not
   (`js/main.js:3292-3295`).
 
-**Transition ownership: ACT 5B.** Currency-total convergence and Project-sort
-convergence are **not** ACT 5A work. ACT 5A must not add a third implementation
-and must not silently change Report output; ACT 5B converges both, and the
-convergence must be validator-covered because Report totals can change for
-lowercase-currency input.
+**ACT 5A does not alter currency totals or consumer sorting.** Its parser record
+is a strict superset of the existing shape, so both implementations continue to
+behave exactly as they do in the accepted baseline.
+
+**ACT 5B owns:**
+
+- currency normalization convergence;
+- sorting convergence;
+- Report and Index validation;
+- prevention of a third normalizer or comparator owner.
+
+This matters because Report totals can change for lowercase-currency input, so
+the convergence must be an explicitly validated consumer change rather than a
+side effect of parser work.
 
 ### 15.6 Archived Notes still contribute Projects
 
@@ -936,10 +940,10 @@ persistent identity; retirement is ACT 5B (§15.4).
 | D10 | `stage` / `closed` / `archived` kept separate; no `active`/`on-hold`/`done` | Accepted |
 | D11 | Task association deferred out of Package 5; `#p1` unchanged | Accepted |
 | D12 | Index stays a read model; Report Markdown shape preserved; Draw.io untouched | Accepted |
-| D13 | Final stage vocabulary | **[OPEN]** |
-| D14 | Projects inside archived Notes preserve current Package 3 behavior | **Accepted** — §15.6 |
-| D15 | Title containing brackets | **Accepted** — §2.4 |
-| D16 | Exact `projectId` serialization (`prj_<crypto.randomUUID()>`) | **Accepted** — §7.3 |
+| D13 | Final stage vocabulary | **[OPEN]** — stage stays text in ACT 5A |
+| D14 | Projects inside archived Notes | **[OPEN]** — current Package 3 archive behavior preserved |
+| D15 | Brackets in Project titles are allowed. Only valid recognized trailing Project tokens are consumed | Accepted — §2.3 |
+| D16 | Exact `projectId` serialization | Deferred to ACT 5A after source validation — §7.3 |
 
 ---
 
@@ -960,62 +964,22 @@ persistent identity; retirement is ACT 5B (§15.4).
 
 ## 19. Closure
 
-### 19.1 ACT 5A device acceptance (ACCEPTED)
+Package 5 architecture is recorded. **ACT 5A may begin after this document is
+committed.**
 
-Owner device test, accepted:
+Open-item disposition for ACT 5A:
 
-**First Project Save** — one adjacent `mme-project` comment:
+- **D13 remains open.** `stage` stays unvalidated text in ACT 5A; no vocabulary
+  normalization and no active/on-hold/done replacement.
+- **D14 remains open.** Current Package 3 archive behavior is preserved exactly;
+  ACT 5A introduces no archive filtering change.
+- **D15 is accepted** through trailing-token parsing (§2.3), so titles may contain
+  brackets.
+- **D16 is finalized by ACT 5A** after source validation (§7.3).
 
-```text
-ProjectReconcile: changed=true inserted=1 unchanged=0 ambiguous=0 malformed=0
-```
-
-**Second Save** — idempotency proven:
-
-```text
-ProjectReconcile: changed=false inserted=0 unchanged=1 ambiguous=0 malformed=0
-```
-
-**Second Project** — Workspace Index `projects=1 → projects=2`:
-
-```text
-ProjectReconcile: changed=true inserted=1 unchanged=1 ambiguous=0 malformed=0
-```
-
-**Later Save** — both Projects remain managed and stable:
-
-```text
-ProjectReconcile: changed=false inserted=0 unchanged=2 ambiguous=0 malformed=0
-```
-
-Also accepted on device: one physical Save; Task reconciliation preserved; Index
-rebuild after successful Save; source navigation preserved; HTML Preview
-preserved; project IDs and created dates created; no duplicate comments; no
-Package 4 runtime; version/cache unchanged.
-
-**Quarter normalization (verified statically, ACT 5A):** `27Q1`, `2027Q1` and
-`2027-Q1` all normalize to **`2027-Q1`** through the existing
-`normalizeProjectQuarter()` owner. An earlier ACT 5A report that showed
-`2027-Q3` for Q1 inputs was a **reporting typo, not a runtime result**.
-
-### 19.2 Closure
-
-Package 5 architecture is recorded and is **complete**. Implementation begins
-with **ACT 5A**, which implements §2–§8 and the §15 transition obligations into
-focused validators.
-
-Resolution status of the former **[OPEN]** items:
-
-- **D13** (final stage vocabulary) remains genuinely **[OPEN]** — it does not
-  gate parser, identity, reconciliation or Save work, and no stage vocabulary is
-  imposed by ACT 5A;
-- **D14** (Projects inside archived Notes) is **Accepted** — current Package 3
-  behavior is preserved (§15.6);
-- **D15** (title containing brackets) is **Accepted** — the bracket title
-  contract is §2.4.
-
-No statement in this document requires D13–D15 to be resolved before parser
-work. §14 contains no Package 6 truncation marker, and D17 is retired.
+ACT 5A carries the §15 transition obligations into focused validators, keeps
+consumer changes additive, and leaves the §15.4 and §15.5 consumer work to
+ACT 5B.
 
 No runtime source, CSS, HTML, validator, Help, Release Notes, `productVersion`,
 `APP_VERSION`, or Service Worker was modified to produce this record.
