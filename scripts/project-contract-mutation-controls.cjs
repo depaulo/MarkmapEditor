@@ -58,6 +58,29 @@ function runSuite(script) {
   for (const m of res.output.matchAll(re)) {
     if (!res.findings.includes(m[1])) res.findings.push(m[1]);
   }
+
+  // Infrastructure guard: a non-zero exit that produced NO parsable validator
+  // output means the child process was killed (resource exhaustion), not that a
+  // fixture failed. Retry once after a short settle so the harness is
+  // deterministic instead of timing-dependent. Such a run is reported as infra.
+  if (res.exit !== 0 && res.output.trim() === '') res.infra = true;
+  return res;
+}
+
+function sleepSync(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    // single-threaded synchronous settle
+  }
+}
+
+// Run a suite, retrying once if the child was killed without output.
+function runSuiteStable(script) {
+  let res = runSuite(script);
+  if (res.infra) {
+    sleepSync(400);
+    res = runSuite(script);
+  }
   return res;
 }
 
@@ -320,7 +343,7 @@ const BASELINE_SUITES = [
 console.log('ACT 5A — Managed Project mutation controls');
 console.log('='.repeat(62));
 
-const baselineResults = BASELINE_SUITES.map(runSuite);
+const baselineResults = BASELINE_SUITES.map(runSuiteStable);
 let baselineOk = true;
 for (const b of baselineResults) {
   if (b.exit !== 0 || b.findings.length) {
@@ -354,7 +377,7 @@ for (const mutation of MUTATIONS) {
     continue;
   }
 
-  const runs = mutation.suites.map(runSuite);
+  const runs = mutation.suites.map(runSuiteStable);
   const exitZero = runs.every((r) => r.exit === 0);
   const observed = [];
   for (const r of runs) for (const f of r.findings) if (!observed.includes(f)) observed.push(f);
@@ -365,7 +388,7 @@ for (const mutation of MUTATIONS) {
   restoreFile(abs, original);
   const restoredOk = sha256(abs) === before;
 
-  const post = mutation.suites.map(runSuite);
+  const post = mutation.suites.map(runSuiteStable);
   const postGreen = post.every((r) => r.exit === 0 && r.findings.length === 0);
 
   if (mutation.structural) {
@@ -380,7 +403,13 @@ for (const mutation of MUTATIONS) {
     expected: mutation.expect, observed, bit: bitIt, restoredOk, postGreen,
   });
   if (bitIt) bit.push(mutation.id);
-  else notBit.push({ id: mutation.id, reason: observed.length ? 'red, but not the intended fixtures: ' + observed.join(',') : observed.length ? 'red, but not the intended fixtures: ' + observed.join(',') : (exitZero ? 'no named fixture failed — equivalent under the current fixtures' : 'suite crashed or hung without a named fixture failing') });
+  else {
+    const diag = runs.map((r) => 'exit=' + r.exit + ' outLen=' + r.output.length + ' head=' + JSON.stringify(r.output.slice(0, 200))).join(' ;; ');
+    const why = observed.length
+      ? 'red, but not the intended fixtures: ' + observed.join(',')
+      : (exitZero ? 'no named fixture failed — equivalent under current fixtures' : 'INFRA child produced no parsable fixture output -> ' + diag);
+    notBit.push({ id: mutation.id, reason: why });
+  }
 
   if (!restoredOk) restoreFailures.push({ id: mutation.id, reason: 'restore was NOT byte-identical' });
   if (!postGreen) postRestoreFailures.push({ id: mutation.id, reason: 'baseline did not return to green' });
