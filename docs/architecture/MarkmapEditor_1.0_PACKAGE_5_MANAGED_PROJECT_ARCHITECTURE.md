@@ -85,12 +85,42 @@ Project: <title> [ <value> <currency> ] [ <quarter> ]
 ```
 
 Both bracket groups are optional. When both are present the value group precedes
-the quarter group. The title is required; the title is the text between
-`Project:` and the first bracket.
+the quarter group.
 
-**[OPEN — ACT 5A]** Whether the title may itself contain `[` or `]` requires a
-source-validated decision. See §15.2 (conflict with Wiki Link syntax) and §15.3
-(conflict with Task checkbox syntax).
+**Accepted.** The title may itself contain `[` or `]`. The title is therefore
+**not** defined as "the text before the first bracket". Instead the reader
+inspects **trailing** bracket groups from right to left and consumes only exact,
+valid, recognized Project tokens, stopping at the first unrecognized bracket
+group. See §2.4.
+
+### 2.4 Bracket title contract (ACCEPTED — resolves former [OPEN] D15)
+
+Rules:
+
+- titles **may** contain brackets;
+- only exact, valid, recognized **trailing** Project tokens are consumed;
+- arbitrary bracketed title text remains title text;
+- `[[Wiki Link]]` is tokenized as a Wiki Link before any Project bracket;
+- Task lines are never parsed as Projects.
+
+Worked examples (accepted by owner):
+
+| Declaration | title | value | Expected Order |
+| --- | --- | --- | --- |
+| `Project: Migration [Phase 1]` | `Migration [Phase 1]` | none | none |
+| `Project: Migration [Phase 1] [800000 BRL] [27Q3]` | `Migration [Phase 1]` | `800000` `BRL` | `2027-Q3` |
+| `Project: Review [[Alibaba]] [27Q3]` | `Review [[Alibaba]]` | none | `2027-Q3` |
+
+A bracket group that is not an exact valid value/currency pair or quarter
+**stops** consumption; every other bracket group is preserved verbatim as title
+text. The reader is whitespace-tolerant and never throws on malformed candidate
+groups; a malformed recognized-looking candidate produces a bounded diagnostic
+and remains readable Markdown.
+
+**Source note — resolved conflicts.** Wiki Link syntax
+(`js/links/wiki-link-grammar.js`) is handled by tokenizing `[[…]]` first
+(§15.2). Task checkbox lines (`/^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/`,
+`js/main.js:686`) are excluded before Project declaration matching (§15.3).
 
 ---
 
@@ -117,9 +147,10 @@ Examples:
 - period for decimal fraction;
 - no thousands separators;
 - uppercase currency normalization;
-- zero is distinct from missing;
-- malformed content remains readable Markdown;
-- malformed content must not crash parsing;
+- zero is distinct from missing — `[0 BRL]` is a **present** value of `0`;
+- negative value is **not** canonical in ACT 5A;
+- a malformed candidate remains readable Markdown and never throws;
+- a recognized-but-malformed candidate produces a bounded diagnostic;
 - no hashtag-based money syntax.
 
 ### 3.3 Explicitly rejected as canonical
@@ -129,6 +160,7 @@ Examples:
 [800000BRL]
 [1.200.000 BRL]
 [1,200,000 USD]
+[-50000 BRL]
 ```
 
 Rejected input must still **render as ordinary readable Markdown**. It is not
@@ -238,6 +270,51 @@ deterministically while non-lifecycle entries survive round-trip
 (`js/tasks/task-lifecycle.js:41-46`) — the same discipline applies to `mme-project`
 keys, with a separate key set.
 
+### 5.4 Comment placement (ACCEPTED)
+
+The writer always uses **canonical immediate adjacency**: `mme-project` is the
+**immediate next line** after the Project declaration.
+
+The reader is narrowly tolerant and must define behavior for:
+
+| Situation | Behavior |
+| --- | --- |
+| immediate valid comment | managed; reconcile nothing |
+| one blank line between | tolerated as the Project's comment |
+| ordinary HTML comment between | the Project stays unmanaged; reconciliation inserts **immediately adjacent** |
+| comment **before** the declaration | **not** associated (orphan) |
+| orphan metadata comment | diagnosed; left unchanged |
+| malformed adjacent comment | diagnosed; **no competing comment inserted**; left unchanged |
+| duplicate adjacent comments | diagnosed; **not** auto-repaired; left unchanged |
+| another Project declaration before the comment | **not** associated across Projects |
+| Markdown heading before the comment | **not** associated across a heading |
+
+The reader never searches arbitrarily through the document, never matches by
+title, and never associates across another Project or a heading.
+
+### 5.5 Deterministic serialization (ACCEPTED)
+
+Key order is fixed:
+
+1. `id`;
+2. `created`;
+3. `stage`;
+4. `delivery`;
+5. `billing`;
+6. `closed`;
+7. `archived`;
+8. safely preserved unknown fields, after the owned keys.
+
+- deterministic separator: `; ` between segments, `key=value`, one space after
+  `mme-project:`;
+- exactly one comment per Project; no duplicate serialized keys;
+- the reader is whitespace-tolerant;
+- a valid comment is **not** reformatted by parsing alone;
+- unrelated Markdown and unrelated HTML comments are preserved byte-for-byte;
+- parsing never rewrites;
+- no arbitrary custom Project fields are introduced — specifically **not**
+  `owner`, `customer`, `probability`, `dependency`, `subproject`, `reminder`.
+
 ---
 
 ## 6. Authority and precedence
@@ -254,10 +331,17 @@ Recorded order:
 Rules:
 
 - Legacy fallback must **not** override the new authorities.
+- Legacy never overrides a visible field.
+- Legacy never overrides valid managed metadata.
 - No automatic migration.
 - No deletion of legacy lines.
+- No rewrite of legacy lines.
+- No automatic copy of legacy `Status:`/`Stage:` into `mme-project: stage=`.
+- Legacy lines remain source text.
+- Records expose `legacyFieldsPresent`.
 - No write-on-scan.
 - No write-on-index.
+- Initial reconciliation inserts **only** `id` and `created`.
 
 **Source note.** The legacy fallback is the dictionary-pair grammar
 (`Project: X` / `Value: N` / `Currency: USD` / `Order: 26Q4`, inline or
@@ -302,10 +386,19 @@ Three separate concepts:
 
 ### 7.3 Serialization
 
-A complex general UUID framework is **not** prescribed.
+**Accepted by ACT 5A.** Serialization is exactly:
 
-The exact ID serialization may be finalized by **ACT 5A** after source
-validation. The conceptual shape is `prj_<opaque-id>`.
+```text
+prj_<full-crypto.randomUUID()>
+```
+
+- the **full** UUID is retained; it is never truncated;
+- there is no title/slug/path/line/ordinal fallback of any kind;
+- `crypto.randomUUID()` is the browser primitive; in Node validation
+  environments `globalThis.crypto.randomUUID` is used through the same call;
+- the ID generator is **injected** into the pure reconciler so tests are
+  deterministic;
+- a complex general UUID subsystem is **not** introduced.
 
 **Source note — superseded design.** The accepted Package 3 baseline computes a
 provisional `sourceIdentity = ${sourcePath}::${startLine}::${nameKey}` in
@@ -343,6 +436,25 @@ ACT 5A removes it or marks it as transitional.
 - malformed comments do **not** receive a competing comment;
 - a failed or cancelled Save does not claim successful reconciliation;
 - ordinary Markdown remains preserved.
+
+**Physical-write truthfulness (ACCEPTED).** Reconciliation success, physical-write
+success, physical-write failure and picker cancellation are **distinct** states.
+No saved baseline and no rebuilt Index may claim success before the physical write
+succeeds. After a failed or cancelled write:
+
+- no Task baseline refresh;
+- no saved-content baseline refresh;
+- no Workspace Index rebuild;
+- no clean/clean-marking;
+- no persisted-success log;
+- the reconciled buffer — including generated `id` and `created` — is preserved
+  and stays dirty, so the next Save reuses the same identity instead of minting a
+  replacement.
+
+Cancellation is distinguished from failure: a cancelled picker performs no
+physical write, refreshes no baseline, schedules no Index rebuild and does **not**
+mark the document clean. Existing `currentSaveHandle` policy is preserved
+unchanged.
 
 ### 8.3 Source precedent to follow exactly
 
@@ -471,8 +583,19 @@ lifecycle status enum.
 **Source note.** Current `status` is unvalidated free text
 (`js/workspace/workspace-parser.js:408-411`); fixtures use `Quotation`,
 `Proposal`, `Lead` (`js/report/report-dictionary.js:677-680`). The managed key
-here is named `stage`, so ACT 5A must map legacy `Status:`/`stage:` input onto
-`mme-project: stage=` **without deleting the user's legacy line** (§6).
+here is named `stage`.
+
+**Accepted legacy-status rule.**
+
+- managed `stage` **wins** when it is present in a valid `mme-project`;
+- legacy `Status:` / `Stage:` is a **temporary read fallback** only, filling
+  `stage` on the record when managed `stage` is absent;
+- there is **no automatic legacy-stage migration**: initial reconciliation
+  inserts **only** `id` and `created`, and never copies legacy `Status:` into
+  `mme-project: stage=`;
+- the user's legacy line is never deleted, rewritten or reformatted;
+- commercial stages such as `Lead`, `Proposal` and `Quotation` are preserved
+  verbatim as free text; no vocabulary is imposed.
 
 ---
 
@@ -538,15 +661,43 @@ not a Package 5 transition surface.
 
 Includes:
 
-- visible declaration grammar;
-- `mme-project` schema;
-- Project ID;
-- conservative reconciliation;
+- visible declaration grammar (§2, §2.4);
+- `mme-project` schema (§5);
+- Project ID (§7);
+- conservative reconciliation (§8);
 - single mutation-owner architecture;
 - parser and Index transition;
 - Report compatibility;
 - minimal Expanded View sufficient to validate metadata editing;
 - no broad redesign.
+
+### Transition ownership
+
+**ACT 5A — parser, identity, reconciliation, Save integration**
+
+- visible declaration + trailing-token grammar;
+- `mme-project` parse / validate / deterministic serialize;
+- `projectId` (`prj_<crypto.randomUUID()>`), injected generator;
+- `created` (injected `today`);
+- pure Project reconciliation owner;
+- safe integration into the single existing Save transaction.
+
+**ACT 5B — consumer propagation and convergence**
+
+- `projectId` propagation through the Workspace Index;
+- `projectId` propagation through the Report dictionary;
+- transitional `sourceIdentity` retirement;
+- currency-total convergence;
+- Project-sort convergence;
+- consumer-facing validation.
+
+**ACT 5C — Expanded Projects View (minimal)**
+
+- Value input, Currency selector, Expected Order / Delivery / Billing
+  selectors, Stage selector after vocabulary review;
+- Created display, Closed boundary, Archive boundary.
+
+ACT 5A does **not** begin any ACT 5B or ACT 5C work.
 
 ### PACKAGE 6 — PROJECT EXPERIENCE
 
@@ -556,9 +707,15 @@ Includes candidates such as:
 - richer filters;
 - finalized stage vocabulary;
 - close workflow;
-- **[Package 6 list as transmitted was truncated in the owner instruction — the
-  remaining candidates are not recorded here and must be confirmed before
-  Package 6 planning.]**
+- archive and restore workflow;
+- Task-to-Project association;
+- Task counts by Project;
+- optional Sidebar quick editing;
+- responsive/mobile refinement;
+- Report integration refinements.
+
+This list is complete as transmitted; it is **not** truncated and carries no
+follow-up marker.
 
 ---
 
@@ -584,7 +741,7 @@ silently change legacy Report output.
 (`js/links/wiki-link-grammar.js`). A single `[` starts neither a Task checkbox
 nor a Wiki Link, but the parser must tokenize `[[...]]` before Project brackets
 so a Project immediately adjacent to a Wiki Link cannot be mis-tokenized.
-See §2.3 **[OPEN]**.
+Resolved by the accepted bracket title contract in §2.4.
 
 ### 15.3 Brackets collide with Task checkbox syntax
 
@@ -597,20 +754,28 @@ Project bracket. ACT 5A must not make Project parsing consume task lines.
 ### 15.4 Title-driven identity must be removed
 
 `sourceIdentity` (`js/workspace/workspace-parser.js:440-446`) is title- and
-line-derived and is retired per §7.3. Report projection `projectProject()` must
-gain `projectId` rather than continuing to key Report rows by `name`
-(`js/report/report-dictionary.js:479`).
+line-derived and is retired per §7.3.
+
+**Transition ownership: ACT 5B.** `sourceIdentity` is kept **transitionally** by
+ACT 5A — it is neither promoted to persistent identity nor deleted, because
+current consumers/validators still read it. Its retirement, and Report
+projection `projectProject()` gaining `projectId` instead of keying Report rows
+by `name` (`js/report/report-dictionary.js:479`), belong to **ACT 5B**
+(`projectId` consumer propagation).
 
 ### 15.5 Two divergent currency/sort implementations exist
 
 - Currency: `buildProjectTotals()` uppercases
-  (`js/workspace/workspace-index-document.js:101`), while
-  `calculateProjectTotals()` does not (`js/report/report-dictionary.js:530`).
+  (`js/workspace/index-document` owner `js/workspace/workspace-index-document.js:101`),
+  while `calculateProjectTotals()` does not
+  (`js/report/report-dictionary.js:530`).
 - Sort: `buildWorkspaceIndex()` has a `sourcePath` tiebreaker
   (`js/main.js:1157-1160`); `renderWorkspaceProjectsPanel()` does not
   (`js/main.js:3292-3295`).
 
-ACT 5A must converge these rather than add a third implementation, and the
+**Transition ownership: ACT 5B.** Currency-total convergence and Project-sort
+convergence are **not** ACT 5A work. ACT 5A must not add a third implementation
+and must not silently change Report output; ACT 5B converges both, and the
 convergence must be validator-covered because Report totals can change for
 lowercase-currency input.
 
@@ -620,9 +785,10 @@ lowercase-currency input.
 (`js/main.js:1095-1132`); only the Notes / Pinned / Knowledge panels filter
 archived Notes (`js/main.js:5984`). Today a Project inside an archived Note is
 still indexed and still reaches Reports. Adding a Project-level `archived` flag
-(§11) must not be confused with the Note-level Archive flag. **[OPEN]** — the
-visibility rule for Projects inside archived Notes is a product decision not
-settled by this document.
+(§11) must not be confused with the Note-level Archive flag. **Accepted (D14):
+current Package 3 behavior is preserved** — ACT 5A does not filter Projects out
+of archived Notes, and the managed `archived` flag has **no** filtering effect
+in ACT 5A.
 
 ### 15.7 A new writer is introduced
 
@@ -636,8 +802,44 @@ second `createWritable()` call site.
 `scripts/workspace-lifecycle-output-validators.cjs` contains a check asserting
 that `workspace-parser.js` does **not** contain a line matching `/^## Project:/m`.
 The accepted grammar is `Project:` at line start, not `## Project:`, so the guard
-is not violated by this design; ACT 5A must nonetheless re-verify it and convert
-it to a behavioral check rather than a source-string check.
+is not violated by this design. ACT 5A re-verifies this **behaviorally** in
+`scripts/project-contract-validators.cjs` (a `## Project:` heading is not a
+Project declaration) and does not rely on the source-string check alone.
+
+---
+
+## 15A. Diagnostics and record contract
+
+### 15A.1 Bounded diagnostics
+
+Deterministic diagnostic codes (at minimum):
+
+`missing-name`, `invalid-value-token`, `value-without-currency`,
+`invalid-currency-token`, `invalid-expected-order`, `missing-managed-id`,
+`invalid-managed-id`, `duplicate-managed-id`, `missing-created`,
+`invalid-created`, `duplicate-managed-comment`, `orphan-managed-comment`,
+`malformed-managed-comment`, `authority-conflict`, `invalid-delivery-quarter`,
+`invalid-billing-quarter`, `invalid-closed-date`, `invalid-archived-value`.
+
+Diagnostics are bounded, deduplicated, deterministic, location-aware,
+non-mutating and safe for multiple Projects per file. **No diagnostics UI is
+created in Package 5.**
+
+### 15A.2 Project record
+
+The record is a strict superset of the existing Package 3 record. All existing
+consumer fields are preserved.
+
+- identity/location: `projectId`, `name`, `nameKey`, `sourcePath`, `sourceLine`,
+  `sourceKind`, `sourceName`;
+- visible: `value`, `valueRaw`, `currency`, `expectedOrder`;
+- managed: `created`, `stage`, `expectedDelivery`, `expectedBilling`, `closed`,
+  `archived`;
+- transition state: `metadataManaged`, `metadataValid`, `diagnostics`,
+  `extraFields`, `legacyFieldsPresent`, `needsReconciliation`.
+
+`sourceIdentity` is kept **transitionally** by ACT 5A and is **not** promoted to
+persistent identity; retirement is ACT 5B (§15.4).
 
 ---
 
@@ -676,10 +878,9 @@ it to a behavioral check rather than a source-string check.
 | D11 | Task association deferred out of Package 5; `#p1` unchanged | Accepted |
 | D12 | Index stays a read model; Report Markdown shape preserved; Draw.io untouched | Accepted |
 | D13 | Final stage vocabulary | **[OPEN]** |
-| D14 | Projects inside archived Notes | **[OPEN]** — §15.6 |
-| D15 | Title containing brackets | **[OPEN]** — §2.3, §15.2 |
-| D16 | Exact `projectId` serialization | Deferred to ACT 5A — §7.3 |
-| D17 | Package 6 candidate list beyond "close workflow" | **[OPEN]** — §14 |
+| D14 | Projects inside archived Notes preserve current Package 3 behavior | **Accepted** — §15.6 |
+| D15 | Title containing brackets | **Accepted** — §2.4 |
+| D16 | Exact `projectId` serialization (`prj_<crypto.randomUUID()>`) | **Accepted** — §7.3 |
 
 ---
 
@@ -700,9 +901,22 @@ it to a behavioral check rather than a source-string check.
 
 ## 19. Closure
 
-Package 5 architecture is recorded. Implementation begins with **ACT 5A**, which
-must resolve **[OPEN]** items D13–D15 before parser work, and must carry the
-§15 transition obligations into focused validators.
+Package 5 architecture is recorded and is **complete**. Implementation begins
+with **ACT 5A**, which implements §2–§8 and the §15 transition obligations into
+focused validators.
+
+Resolution status of the former **[OPEN]** items:
+
+- **D13** (final stage vocabulary) remains genuinely **[OPEN]** — it does not
+  gate parser, identity, reconciliation or Save work, and no stage vocabulary is
+  imposed by ACT 5A;
+- **D14** (Projects inside archived Notes) is **Accepted** — current Package 3
+  behavior is preserved (§15.6);
+- **D15** (title containing brackets) is **Accepted** — the bracket title
+  contract is §2.4.
+
+No statement in this document requires D13–D15 to be resolved before parser
+work. §14 contains no Package 6 truncation marker, and D17 is retired.
 
 No runtime source, CSS, HTML, validator, Help, Release Notes, `productVersion`,
 `APP_VERSION`, or Service Worker was modified to produce this record.
