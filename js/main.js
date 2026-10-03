@@ -10650,6 +10650,89 @@ function reconcileTasksBeforeSave() {
   return { changed: true, text: lines.join('\n'), completedAdded, completedRemoved, openedAdded, ambiguous };
 }
 
+// ---- ACT 5A: Managed Project reconciliation (pure owner + narrow orchestration) ----
+
+// ACT 5A: production ID generator. The PURE owner
+// `reconcileManagedProjects()` (js/workspace/workspace-parser.js) receives this
+// as an injected dependency and never reads a clock or mints an ID itself.
+function generateManagedProjectId() {
+  try {
+    const uuid = globalThis.crypto?.randomUUID?.();
+    if (uuid) return `prj_${uuid}`;
+  } catch {}
+  return '';
+}
+
+// ACT 5A: one Project reconciliation orchestration. `today` is computed ONCE per
+// Save attempt by the caller and injected here, so every newly managed Project in
+// one transaction shares a single date and no per-Project date drift is possible.
+// `todayProvider` and `idGenerator` are narrow injection seams used by the
+// Project Save-integration validators; production passes the real owners.
+function reconcileProjectsBeforeSave(taskReconciledText, today, idGenerator) {
+  const currentText = String(taskReconciledText == null ? md.value || '' : taskReconciledText);
+  const owner = globalThis.reconcileManagedProjects;
+
+  // ACT 5A: Report documents are excluded by identity, exactly like Tasks.
+  if (__virtualReportSession?.kind === 'report') {
+    log('ProjectReconcile: skipped (report-document); changed=false inserted=0 unchanged=0 ambiguous=0 malformed=0');
+    return {
+      changed: false,
+      text: currentText,
+      skippedReason: 'report-document',
+      inserted: 0,
+      unchanged: 0,
+      ambiguous: 0,
+      malformed: 0,
+      diagnostics: [],
+      projects: [],
+    };
+  }
+
+  if (!owner || typeof owner !== 'function') {
+    return {
+      changed: false,
+      text: currentText,
+      skippedReason: 'no-project-owner',
+      inserted: 0,
+      unchanged: 0,
+      ambiguous: 0,
+      malformed: 0,
+      diagnostics: [],
+      projects: [],
+    };
+  }
+
+  try {
+    return owner(currentText, {
+      today: String(today || ''),
+      generateId: typeof idGenerator === 'function' ? idGenerator : generateManagedProjectId,
+    });
+  } catch (e) {
+    log(`ProjectReconcile: skipped (error: ${e?.message || e})`);
+    return {
+      changed: false,
+      text: currentText,
+      skippedReason: 'error',
+      inserted: 0,
+      unchanged: 0,
+      ambiguous: 0,
+      malformed: 0,
+      diagnostics: [],
+      projects: [],
+    };
+  }
+}
+
+// ACT 5A: one bounded, privacy-safe summary — emitted ONLY after a successful
+// physical write. Never logs Project titles, values, currencies or IDs.
+function logProjectReconcileSuccess(result) {
+  log(
+    `ProjectReconcile: changed=${result?.changed === true} inserted=${result?.inserted || 0}` +
+      ` unchanged=${result?.unchanged || 0} ambiguous=${result?.ambiguous || 0}` +
+      ` malformed=${result?.malformed || 0}`
+  );
+}
+
 function newDocument() {
   try {
     globalThis.__creatingNewDocument = true;
@@ -10909,22 +10992,25 @@ async function saveSmart() {
 
   // ACT D: Conservative pre-save Task reconciliation.
   const reconciled = reconcileTasksBeforeSave();
-  let text = md.value;
+
+  // ACT 5A: ONE local date value per Save attempt, injected into the pure
+  // Project reconciler so every newly managed Project in this transaction shares
+  // one date and there is no per-Project date drift. The pure owner never reads
+  // the clock itself. A retry reuses the buffered comment, so no date is
+  // regenerated.
+  const saveToday = getLocalIsoDate();
+
+  // ACT 5A: Project reconciliation consumes the TASK-reconciled Markdown, so
+  // both reconciliations compose in one pass and produce ONE final buffer.
+  const taskReconciledText = reconciled.changed ? reconciled.text : String(md.value || '');
+  const projectReconciled = reconcileProjectsBeforeSave(taskReconciledText, saveToday);
+  let text = projectReconciled.changed ? projectReconciled.text : taskReconciledText;
+
   if (reconciled.skippedReason) {
     log(
       `TaskReconcile: skipped (${reconciled.skippedReason}); changed=false opened=0 completed=0 reopened=0 ambiguous=${reconciled.ambiguous || 0}`
     );
   } else if (reconciled.changed) {
-    __programmaticTextChange++;
-    try {
-      md.value = reconciled.text;
-      if (typeof window.__cmSetText === 'function') {
-        window.__cmSetText(reconciled.text);
-      }
-      text = reconciled.text;
-    } finally {
-      __programmaticTextChange--;
-    }
     log(
       `TaskReconcile: result changed=true opened=${reconciled.openedAdded || 0} completed=${reconciled.completedAdded} reopened=${reconciled.completedRemoved} ambiguous=${reconciled.ambiguous}` +
         (reconciled.ambiguous > 0
@@ -10942,6 +11028,21 @@ async function saveSmart() {
     );
   }
 
+  // ACT 5A: EXACTLY ONE programmatic editor-buffer update owns BOTH
+  // reconciliations. Task and Project never write the buffer separately, and the
+  // accepted __programmaticTextChange guard remains authoritative.
+  if (reconciled.changed || projectReconciled.changed) {
+    __programmaticTextChange++;
+    try {
+      md.value = text;
+      if (typeof window.__cmSetText === 'function') {
+        window.__cmSetText(text);
+      }
+    } finally {
+      __programmaticTextChange--;
+    }
+  }
+
   if (currentSaveHandle) {
     internalSaveInProgress = true;
     try {
@@ -10957,6 +11058,9 @@ async function saveSmart() {
         log('TaskReconcile: baseline refreshed after successful save');
       }
       log('saveSmart(): overwrite OK');
+      // ACT 5A: the Project summary is emitted ONLY here — after the physical
+      // write has actually succeeded.
+      logProjectReconcileSuccess(projectReconciled);
       return { ok: true };
     } catch (e) {
       log(`saveSmart(): overwrite failed -> ${e?.message || e}`);
@@ -10968,6 +11072,13 @@ async function saveSmart() {
     log('saveSmart(): no writable handle -> using Save As');
   }
   const result = await saveAsSmart(text, reconciled.ambiguous || 0);
+
+  // ACT 5A: Save As / download reached a real write. The Project summary is
+  // emitted only for a genuinely successful physical write, never for a
+  // cancellation (`ok:false, reason:'canceled'`).
+  if (result && result.ok === true) {
+    logProjectReconcileSuccess(projectReconciled);
+  }
 
   // ACT G: After a successful Save As, mark the Report as saved.
   if (

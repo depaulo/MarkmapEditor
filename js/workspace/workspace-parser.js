@@ -353,10 +353,332 @@
     return pairs;
   }
 
-  function buildProjectFromBlock(blockLines, { startLine, sourcePath, sourceKind, sourceName }) {
+  // ==============================
+  // ACT 5A — Managed Project foundation
+  // ==============================
+
+  // Visible trailing-token grammar. Only exact, valid, recognized trailing
+  // bracket groups are consumed; every other bracket stays in the title.
+  const PROJECT_VALUE_TOKEN_RE = /^(\d+(?:\.\d+)?)[ \t]+([A-Za-z]{3})$/;
+  const PROJECT_VALUE_LOOKALIKE_RE = /^-?\d[\d.,]*[ \t]*[A-Za-z]{0,6}$/;
+  const PROJECT_BARE_NUMBER_RE = /^-?\d[\d.,]*$/;
+  const PROJECT_QUARTER_LOOKALIKE_RE = /^(\d{2}|\d{4})[/-]?[qQ]\d$/i;
+
+  const MME_PROJECT_COMMENT_RE = /^<!--\s*mme-project:\s*([\s\S]*?)\s*-->$/i;
+  const MME_PROJECT_COMMENT_LOOKALIKE_RE = /^<!--[\s\S]*?mme-project\s*:/i;
+  const PROJECT_ID_RE = /^prj_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const MME_PROJECT_KEY_ORDER = ['id', 'created', 'stage', 'delivery', 'billing', 'closed', 'archived'];
+  const MME_PROJECT_OWNED_KEYS = new Set(MME_PROJECT_KEY_ORDER);
+
+  function pushProjectDiagnostic(list, code, detail, line) {
+    list.push({
+      code: String(code || ''),
+      detail: String(detail == null ? '' : detail),
+      line: Number(line) || 0,
+    });
+  }
+
+  function isValidProjectIsoDate(value) {
+    const m = String(value == null ? '' : value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return false;
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return false;
+    const probe = new Date(Date.UTC(y, mo - 1, d));
+    return (
+      probe.getUTCFullYear() === y && probe.getUTCMonth() === mo - 1 && probe.getUTCDate() === d
+    );
+  }
+
+  function isProjectIdValue(raw) {
+    return PROJECT_ID_RE.test(normalizeProjectIdValue(raw));
+  }
+
+  function normalizeProjectIdValue(raw) {
+    return String(raw == null ? '' : raw).trim();
+  }
+
+  // Pure and non-mutating: reads a declaration value and reports the title plus
+  // any exact recognized trailing tokens. Malformed candidates are diagnosed and
+  // left as readable title text.
+  function parseProjectDeclarationValue(rawValue) {
+    const raw = String(rawValue == null ? '' : rawValue);
+    let rest = raw.replace(/\s+$/, '');
+    const diagnostics = [];
+    let value = null;
+    let valueRaw = '';
+    let currency = '';
+    let expectedOrder = null;
+
+    // Bounded: a token can only be consumed from the tail, so a small fixed
+    // budget is sufficient and guarantees termination on any input.
+    for (let budget = 0; budget < 16; budget += 1) {
+      if (rest.charAt(rest.length - 1) !== ']') break;
+      const open = rest.lastIndexOf('[');
+      if (open <= 0) break;
+      const inner = rest.slice(open + 1, rest.length - 1);
+      // Nested brackets (including Wiki Links) are never Project tokens.
+      if (inner.indexOf('[') !== -1 || inner.indexOf(']') !== -1) break;
+      const token = inner.trim();
+
+      if (token) {
+        const valueMatch = token.match(PROJECT_VALUE_TOKEN_RE);
+        if (valueMatch) {
+          const num = Number(valueMatch[1]);
+          if (Number.isFinite(num)) {
+            value = num;
+            valueRaw = valueMatch[1];
+            currency = valueMatch[2].toUpperCase();
+            rest = rest.slice(0, open).replace(/\s+$/, '');
+            continue;
+          }
+        }
+
+        const quarter = normalizeProjectQuarter(token);
+        if (quarter.valid) {
+          expectedOrder = quarter;
+          rest = rest.slice(0, open).replace(/\s+$/, '');
+          continue;
+        }
+      }
+
+      // Not consumed. Distinguish a malformed recognized-looking attempt
+      // (bounded diagnostic) from ordinary bracketed title text (silent).
+      if (PROJECT_QUARTER_LOOKALIKE_RE.test(token)) {
+        pushProjectDiagnostic(diagnostics, 'invalid-expected-order', token);
+        break;
+      }
+      if (PROJECT_BARE_NUMBER_RE.test(token)) {
+        pushProjectDiagnostic(diagnostics, 'value-without-currency', token);
+        break;
+      }
+      if (PROJECT_VALUE_LOOKALIKE_RE.test(token)) {
+        pushProjectDiagnostic(diagnostics, 'invalid-value-token', token);
+        break;
+      }
+      break;
+    }
+
+    return { title: rest.trim(), value, valueRaw, currency, expectedOrder, diagnostics };
+  }
+
+  // Pure reader for one managed metadata comment line. Returns null when the
+  // line is not an mme-project comment at all.
+  function parseManagedProjectComment(rawLine) {
+    const raw = String(rawLine == null ? '' : rawLine).trim();
+    if (!MME_PROJECT_COMMENT_LOOKALIKE_RE.test(raw)) return null;
+
+    const matched = raw.match(MME_PROJECT_COMMENT_RE);
+    if (!matched) {
+      return {
+        present: true,
+        valid: false,
+        raw,
+        fields: {},
+        extraFields: {},
+        diagnostics: [{ code: 'malformed-managed-comment', detail: raw, line: 0 }],
+      };
+    }
+
     const fields = {};
     const extraFields = {};
+    const diagnostics = [];
+    let structurallyMalformed = false;
+
+    for (const segment of String(matched[1] || '').split(';')) {
+      const piece = segment.trim();
+      if (!piece) continue;
+      const eq = piece.indexOf('=');
+      if (eq <= 0) {
+        structurallyMalformed = true;
+        continue;
+      }
+      const key = piece.slice(0, eq).trim().toLowerCase();
+      const value = piece.slice(eq + 1).trim();
+      if (MME_PROJECT_OWNED_KEYS.has(key)) {
+        if (Object.prototype.hasOwnProperty.call(fields, key)) {
+          structurallyMalformed = true; // duplicate serialized key
+          continue;
+        }
+        fields[key] = value;
+      } else {
+        extraFields[key] = value;
+      }
+    }
+
+    if (structurallyMalformed) {
+      pushProjectDiagnostic(diagnostics, 'malformed-managed-comment', raw);
+    }
+
+    if (!fields.id) {
+      pushProjectDiagnostic(diagnostics, 'missing-managed-id', raw);
+    } else if (!PROJECT_ID_RE.test(fields.id)) {
+      pushProjectDiagnostic(diagnostics, 'invalid-managed-id', fields.id);
+    }
+
+    if (!fields.created) {
+      pushProjectDiagnostic(diagnostics, 'missing-created', raw);
+    } else if (!isValidProjectIsoDate(fields.created)) {
+      pushProjectDiagnostic(diagnostics, 'invalid-created', fields.created);
+    }
+
+    if (fields.stage && /[\r\n;]/.test(fields.stage)) {
+      pushProjectDiagnostic(diagnostics, 'malformed-managed-comment', fields.stage);
+      structurallyMalformed = true;
+    }
+
+    for (const key of ['delivery', 'billing']) {
+      const value = fields[key];
+      if (value === undefined || value === '') continue;
+      if (!normalizeProjectQuarter(value).valid) {
+        pushProjectDiagnostic(diagnostics, 'invalid-' + key + '-quarter', value);
+      }
+    }
+
+    if (fields.closed && !isValidProjectIsoDate(fields.closed)) {
+      pushProjectDiagnostic(diagnostics, 'invalid-closed-date', fields.closed);
+    }
+
+    if (
+      fields.archived !== undefined &&
+      fields.archived !== '' &&
+      !/^(true|false)$/i.test(fields.archived)
+    ) {
+      pushProjectDiagnostic(diagnostics, 'invalid-archived-value', fields.archived);
+    }
+
+    return {
+      present: true,
+      valid: diagnostics.length === 0 && !structurallyMalformed,
+      raw,
+      fields,
+      extraFields,
+      diagnostics,
+    };
+  }
+
+  // Deterministic serialization. Owned key order is fixed; unknown fields are
+  // preserved and appended after the owned keys.
+  function serializeManagedProjectComment(fields, extraFields) {
+    const src = fields || {};
+    const parts = [];
+
+    for (const key of MME_PROJECT_KEY_ORDER) {
+      const value = src[key];
+      if (value === undefined || value === null || value === '') continue;
+      parts.push(key + '=' + String(value));
+    }
+
+    for (const key of Object.keys(extraFields || {})) {
+      if (MME_PROJECT_OWNED_KEYS.has(key)) continue;
+      const value = extraFields[key];
+      if (value === undefined || value === null || value === '') continue;
+      parts.push(key + '=' + String(value));
+    }
+
+    return parts.length ? '<!-- mme-project: ' + parts.join('; ') + ' -->' : '';
+  }
+
+  function computeFencedLineRanges(lines) {
+    const ranges = [];
+    let open = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const marker = lines[i].match(/^\s{0,3}(`{3,}|~{3,})/);
+      if (!marker) continue;
+      const token = marker[1];
+      const rest = lines[i].slice(marker[0].length);
+
+      if (!open) {
+        open = { ch: token.charAt(0), len: token.length, start: i };
+        continue;
+      }
+      if (token.charAt(0) === open.ch && token.length >= open.len && !/[`~]/.test(rest)) {
+        ranges.push([open.start, i]);
+        open = null;
+      }
+    }
+
+    if (open) ranges.push([open.start, lines.length - 1]);
+    return ranges;
+  }
+
+  function isTaskCheckboxLine(rawLine) {
+    return /^(\s*)[-*+]\s+\[[ xX]\]/.test(String(rawLine == null ? '' : rawLine));
+  }
+
+  // Canonical writer placement is the immediate next line. The reader tolerates
+  // exactly one blank line and never associates across another Project or a
+  // Markdown heading.
+  function associateManagedProjectComment(lines, declIndex, fencedSet, consumed) {
+    const candidates = [];
+    const probe = (idx) => {
+      if (idx < 0 || idx >= lines.length) return;
+      if (fencedSet.has(idx)) return;
+      if (candidates.includes(idx)) return;
+      const parsed = parseManagedProjectComment(lines[idx]);
+      if (parsed && parsed.present) candidates.push(idx);
+    };
+
+    probe(declIndex + 1);
+    // Scan forward from the declaration. The comment may be the immediate next
+    // line, or follow this Project's own legacy dictionary lines. The scan stops
+    // at a blank line, a heading, a fence, or another Project declaration — it
+    // never searches arbitrarily and never crosses Projects.
+    let cursor = declIndex + 1;
+    let blanks = 0;
+
+    while (cursor < lines.length) {
+      const raw = lines[cursor];
+      const trimmed = String(raw == null ? '' : raw).trim();
+
+      if (!trimmed) {
+        // Exactly one blank line is tolerated; more ends association.
+        blanks += 1;
+        if (blanks > 1) break;
+        cursor += 1;
+        continue;
+      }
+
+      if (fencedSet.has(cursor)) break;
+      if (/^#{1,6}\s/.test(trimmed)) break;
+
+      const parsed = parseManagedProjectComment(raw);
+      if (parsed && parsed.present) {
+        // Two comment lines inside one window are DUPLICATES, never two
+        // different Projects' comments.
+        probe(cursor);
+        probe(cursor + 1);
+        break;
+      }
+
+      // Skip a legacy dictionary line belonging to this same Project block.
+      const nextFirst = parseInlinePairs(stripListPrefix(raw))[0];
+      if (!nextFirst || normalizeProjectKey(nextFirst.key) === 'project') break;
+
+      cursor += 1;
+    }
+
+    if (!candidates.length) return { comment: null, duplicate: false, indexes: [] };
+
+    const indexes = candidates.slice();
+    for (const idx of indexes) consumed.add(idx);
+
+    return {
+      comment: parseManagedProjectComment(lines[indexes[0]]),
+      duplicate: indexes.length > 1,
+      indexes,
+    };
+  }
+
+  function buildProjectFromBlock(blockLines, { startLine, sourcePath, sourceKind, sourceName, managed }) {
+    const fields = {};
+    const extraFields = {};
+    const diagnostics = [];
     let name = '';
+    let declaration = null;
+    let legacyFieldsPresent = false;
 
     for (let idx = 0; idx < blockLines.length; idx++) {
       const stripped = stripListPrefix(blockLines[idx]);
@@ -371,27 +693,37 @@
         const canonical = resolveProjectKeyAlias(normalizedKey);
         const value = String(pair.value || '').trim();
 
-        // The first pair on the starter line is the authoritative Project name.
+        // The first pair on the starter line is the authoritative Project name
+        // and carries the visible trailing-token grammar.
         if (idx === 0 && pIdx === 0 && canonical === 'name') {
-          name = value;
+          declaration = parseProjectDeclarationValue(value);
+          name = declaration.title;
+          for (const d of declaration.diagnostics) {
+            pushProjectDiagnostic(diagnostics, d.code, d.detail, startLine);
+          }
           continue;
         }
 
-        // A later Name: pair must NOT rename the Project in MVP.
+        // A later Name: pair must NOT rename the Project.
         // Preserve it as an extra field.
         if (canonical === 'name') {
           extraFields[normalizedKey] = value;
           continue;
         }
 
+        // Legacy dictionary fallback fills ABSENT values only. It never
+        // overrides a visible token and never overrides managed metadata.
         if (canonical === 'value') {
+          legacyFieldsPresent = true;
+          if (declaration && declaration.value !== null) continue;
           const parsed = parseProjectValue(value);
           fields.value = parsed.value;
           fields.valueRaw = parsed.valueRaw;
-          continue;
         }
 
         if (canonical === 'currency') {
+          legacyFieldsPresent = true;
+          if (declaration && declaration.currency) continue;
           fields.currency = value ? value.toUpperCase() : value;
           continue;
         }
@@ -401,11 +733,14 @@
           canonical === 'expectedDelivery' ||
           canonical === 'expectedBilling'
         ) {
+          legacyFieldsPresent = true;
+          if (canonical === 'expectedOrder' && declaration && declaration.expectedOrder) continue;
           fields[canonical] = normalizeProjectQuarter(value);
           continue;
         }
 
         if (canonical === 'status') {
+          legacyFieldsPresent = true;
           fields.status = value;
           continue;
         }
@@ -420,30 +755,116 @@
       }
     }
 
-    const project = {
-      name,
-      value: fields.value !== undefined ? fields.value : null,
-      valueRaw: fields.valueRaw !== undefined ? fields.valueRaw : '',
-      currency: fields.currency !== undefined ? fields.currency : '',
-      status: fields.status !== undefined ? fields.status : '',
-      expectedOrder: fields.expectedOrder || normalizeProjectQuarter(''),
-      expectedDelivery: fields.expectedDelivery || normalizeProjectQuarter(''),
-      expectedBilling: fields.expectedBilling || normalizeProjectQuarter(''),
-      description: fields.description !== undefined ? fields.description : '',
-      extraFields,
-      sourcePath,
-      sourceKind,
-      sourceName,
-      sourceLine: startLine,
-    };
+    const managedInfo = managed && managed.comment ? managed.comment : null;
+    const managedFields = managedInfo ? managedInfo.fields : {};
+    const managedExtra = managedInfo ? managedInfo.extraFields : {};
 
-    // Provisional sourceIdentity — NOT a permanent ID.
+    if (managed && managed.duplicate) {
+      pushProjectDiagnostic(
+        diagnostics,
+        'duplicate-managed-comment',
+        managedInfo ? managedInfo.raw : '',
+        startLine
+      );
+    }
+    if (managedInfo) {
+      for (const d of managedInfo.diagnostics) {
+        pushProjectDiagnostic(diagnostics, d.code, d.detail, startLine);
+      }
+    }
+
+    const managedIdRaw = normalizeProjectIdValue(managedFields.id);
+    const managedId = PROJECT_ID_RE.test(managedIdRaw) ? managedIdRaw : '';
+    const managedCreated =
+      managedFields.created && isValidProjectIsoDate(managedFields.created) ? managedFields.created : '';
+    const managedStage = String(managedFields.stage || '').trim();
+
+    const managedDelivery =
+      managedFields.delivery !== undefined && managedFields.delivery !== ''
+        ? normalizeProjectQuarter(managedFields.delivery)
+        : null;
+    const managedBilling =
+      managedFields.billing !== undefined && managedFields.billing !== ''
+        ? normalizeProjectQuarter(managedFields.billing)
+        : null;
+
+    // Managed stage wins; legacy Status:/Stage: is a temporary read fallback
+    // only. There is no automatic legacy-stage migration.
+    const stage = managedStage || (fields.status !== undefined ? fields.status : '');
+
+    const visibleValue =
+      declaration && declaration.value !== null
+        ? declaration.value
+        : fields.value !== undefined
+          ? fields.value
+          : null;
+    const visibleValueRaw =
+      declaration && declaration.value !== null
+        ? declaration.valueRaw
+        : fields.valueRaw !== undefined
+          ? fields.valueRaw
+          : '';
+    const visibleCurrency =
+      declaration && declaration.currency
+        ? declaration.currency
+        : fields.currency !== undefined
+          ? fields.currency
+          : '';
+    const visibleOrder =
+      declaration && declaration.expectedOrder
+        ? declaration.expectedOrder
+        : fields.expectedOrder || normalizeProjectQuarter('');
+
     const nameKey = String(name || '')
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
-    project.sourceIdentity = `${sourcePath}::${startLine}::${nameKey}`;
+
+    const metadataValid = Boolean(managedInfo && managedInfo.valid && !managed.duplicate);
+
+    const project = {
+      // Persistent managed identity (ACT 5A). Empty when unmanaged.
+      projectId: managedId,
+      name,
+      nameKey,
+      value: visibleValue,
+      valueRaw: visibleValueRaw,
+      currency: visibleCurrency,
+      // `status` is retained for existing consumers; managed stage wins.
+      status: stage,
+      stage,
+      created: managedCreated,
+      closed:
+        managedFields.closed && isValidProjectIsoDate(managedFields.closed) ? managedFields.closed : '',
+      archived: /^(true|false)$/i.test(String(managedFields.archived || ''))
+        ? /^true$/i.test(String(managedFields.archived))
+        : null,
+      expectedOrder: visibleOrder,
+      expectedDelivery:
+        managedDelivery && managedDelivery.valid
+          ? managedDelivery
+          : fields.expectedDelivery || normalizeProjectQuarter(''),
+      expectedBilling:
+        managedBilling && managedBilling.valid
+          ? managedBilling
+          : fields.expectedBilling || normalizeProjectQuarter(''),
+      description: fields.description !== undefined ? fields.description : '',
+      extraFields: Object.assign({}, extraFields, managedExtra),
+      legacyFieldsPresent,
+      metadataManaged: metadataValid,
+      metadataValid,
+      // A Project with no adjacent comment needs reconciliation. A malformed or
+      // duplicated comment is left unchanged and must NOT receive a new comment.
+      needsReconciliation: !managedInfo,
+      diagnostics,
+      sourcePath,
+      sourceKind,
+      sourceName,
+      sourceLine: startLine,
+      // Transitional only — NOT persistent identity. Retirement is ACT 5B.
+      sourceIdentity: `${sourcePath}::${startLine}::${nameKey}`,
+    };
 
     return project;
   }
@@ -457,9 +878,29 @@
     const sourceName = context.name || '';
     const lineOffset = Number(context.lineOffset) || 0;
     const n = lines.length;
+
+    // ACT 5A: fenced-code exclusion. Project-like text inside a fence is
+    // ordinary Markdown and is never a Project declaration.
+    const fencedSet = new Set();
+    for (const [from, to] of computeFencedLineRanges(lines)) {
+      for (let k = from; k <= to; k++) fencedSet.add(k);
+    }
+    const consumedManagedCommentLines = new Set();
     let i = 0;
 
     while (i < n) {
+      if (fencedSet.has(i)) {
+        i++;
+        continue;
+      }
+
+      // ACT 5A: a Task checkbox line is never parsed as a Project declaration,
+      // even when it carries Project-looking bracket text.
+      if (isTaskCheckboxLine(lines[i])) {
+        i++;
+        continue;
+      }
+
       const stripped = stripListPrefix(lines[i]);
       const pairs = parseInlinePairs(stripped);
       const first = pairs[0];
@@ -469,17 +910,31 @@
 
         if (name) {
           const startLine = i + 1 + lineOffset;
+          const managed = associateManagedProjectComment(
+            lines,
+            i,
+            fencedSet,
+            consumedManagedCommentLines
+          );
           const blockLines = [lines[i]];
           let j = i + 1;
 
           // Collect block until: another Project:, a heading, or EOF.
           while (j < n) {
+            if (fencedSet.has(j)) break;
+            if (isTaskCheckboxLine(lines[j])) break;
             const nextStripped = stripListPrefix(lines[j]);
             const nextPairs = parseInlinePairs(nextStripped);
             const nextFirst = nextPairs[0];
 
             if (nextFirst && normalizeProjectKey(nextFirst.key) === 'project') break;
             if (/^#{1,6}\s/.test(lines[j].trim())) break;
+
+            // The managed comment is metadata, never legacy dictionary content.
+            // Stopping here also prevents the block from swallowing the NEXT
+            // Project's comment when two declarations are adjacent.
+            const managedCommentLine = parseManagedProjectComment(lines[j]);
+            if (managedCommentLine && managedCommentLine.present) break;
 
             blockLines.push(lines[j]);
             j++;
@@ -490,6 +945,7 @@
             sourcePath,
             sourceKind,
             sourceName,
+            managed,
           });
           projects.push(project);
           i = j;
@@ -498,6 +954,44 @@
       }
 
       i++;
+    }
+
+    // ACT 5A: duplicate managed identity diagnosis is document-wide; a comment
+    // never associated with a Project is an orphan and is left unchanged.
+    const seenIds = new Map();
+    for (const p of projects) {
+      const id = p.projectId;
+      if (!id) continue;
+      if (seenIds.has(id)) {
+        pushProjectDiagnostic(p.diagnostics, 'duplicate-managed-id', '', p.sourceLine);
+        seenIds.get(id).diagnostics.push({
+          code: 'duplicate-managed-id',
+          detail: '',
+          line: p.sourceLine,
+        });
+      } else {
+        seenIds.set(id, p);
+      }
+    }
+
+    for (let k = 0; k < n; k++) {
+      if (consumedManagedCommentLines.has(k)) continue;
+      const parsed = parseManagedProjectComment(lines[k]);
+      if (!parsed || !parsed.present) continue;
+      projects.push({
+        projectId: '',
+        name: '',
+        orphan: true,
+        metadataManaged: false,
+        metadataValid: false,
+        needsReconciliation: false,
+        diagnostics: [{ code: 'orphan-managed-comment', detail: '', line: k + 1 + lineOffset }],
+        sourcePath,
+        sourceKind,
+        sourceName,
+        sourceLine: k + 1 + lineOffset,
+        orphanOnly: true,
+      });
     }
 
     return projects;
@@ -824,6 +1318,116 @@
     };
   }
 
+  // ==============================
+  // ACT 5A — Pure Project reconciliation owner
+  // ==============================
+
+  // The ID generator and `today` are INJECTED. This owner never reads the wall
+  // clock, never writes a file, never opens a handle and never mutates the
+  // Workspace Index. It only proposes Markdown.
+  function reconcileManagedProjects(markdownText, options) {
+    const opts = options || {};
+    const text = String(markdownText == null ? '' : markdownText);
+    const today = String(opts.today == null ? '' : opts.today);
+    const generateId =
+      typeof opts.generateId === 'function' ? opts.generateId : () => '';
+
+    const result = {
+      text,
+      changed: false,
+      inserted: 0,
+      unchanged: 0,
+      ambiguous: 0,
+      malformed: 0,
+      diagnostics: [],
+      projects: [],
+      skippedReason: '',
+    };
+
+    if (!isValidProjectIsoDate(today)) {
+      result.skippedReason = 'invalid-today';
+      return result;
+    }
+
+    const lines = text.split(/\r?\n/);
+    const projects = parseProjects(text, {});
+
+    // Rebuild bottom-up so earlier insertions cannot shift later line indexes.
+    const insertions = [];
+    const generatedIds = new Set();
+
+    for (const project of projects) {
+      if (project.orphanOnly) {
+        result.diagnostics.push(...project.diagnostics);
+        continue;
+      }
+
+      const hasManagedComment = !project.needsReconciliation;
+
+      if (!hasManagedComment) {
+        const raw = generateId();
+        const id = normalizeProjectIdValue(raw);
+        const comment = serializeManagedProjectComment({ id, created: today });
+
+        if (!PROJECT_ID_RE.test(id) || generatedIds.has(id)) {
+          // Ambiguous identity: refuse to write rather than mint a fallback ID.
+          result.ambiguous++;
+          pushProjectDiagnostic(result.diagnostics, 'invalid-managed-id', '', project.sourceLine);
+          continue;
+        }
+
+        generatedIds.add(id);
+        insertions.push({ afterLine: project.sourceLine, comment, id, sourceLine: project.sourceLine });
+        result.inserted++;
+        result.projects.push({
+          sourceLine: project.sourceLine,
+          projectId: id,
+          created: today,
+          action: 'inserted',
+        });
+        continue;
+      }
+
+      // A comment is present. A malformed or duplicated one is left unchanged
+      // and never receives a competing comment.
+      const malformedCodes = project.diagnostics.filter((d) =>
+        /^(malformed-managed-comment|duplicate-managed-comment|missing-managed-id|invalid-managed-id|missing-created|invalid-created|duplicate-managed-id|invalid-delivery-quarter|invalid-billing-quarter|invalid-closed-date|invalid-archived-value)$/.test(
+          d.code
+        )
+      );
+
+      if (!project.metadataValid || malformedCodes.length) {
+        result.malformed++;
+        result.diagnostics.push(...project.diagnostics);
+        result.projects.push({
+          sourceLine: project.sourceLine,
+          projectId: project.projectId || '',
+          action: 'malformed',
+        });
+        continue;
+      }
+
+      result.unchanged++;
+      result.diagnostics.push(...project.diagnostics);
+      result.projects.push({
+        sourceLine: project.sourceLine,
+        projectId: project.projectId || '',
+        created: project.created || '',
+        action: 'unchanged',
+      });
+    }
+
+    if (!insertions.length) return result;
+
+    for (const insertion of insertions.slice().reverse()) {
+      lines.splice(insertion.afterLine, 0, insertion.comment);
+    }
+
+    result.text = lines.join('\n');
+    result.changed = true;
+    return result;
+  }
+
   // Expose the parser API.
   const WORKSPACE_PARSER = {
     parseSimpleYamlFrontmatter,
@@ -839,6 +1443,15 @@
     parseDictionaryPairs,
     parseProjects,
     validateProjectFixtures,
+    // ACT 5A — Managed Project foundation.
+    parseProjectDeclarationValue,
+    parseManagedProjectComment,
+    serializeManagedProjectComment,
+    reconcileManagedProjects,
+    isValidProjectIsoDate,
+    isProjectIdValue,
+    computeFencedLineRanges,
+    isTaskCheckboxLine,
   };
 
   // Expose module-level API for direct use.
@@ -877,5 +1490,14 @@
     globalThis.parseDictionaryPairs = parseDictionaryPairs;
     globalThis.parseProjects = parseProjects;
     globalThis.validateProjectFixtures = validateProjectFixtures;
+
+    // ACT 5A — Managed Project foundation (module-level globals so the Save
+    // owner can reach the pure reconciliation without a new import graph).
+    globalThis.parseProjectDeclarationValue = parseProjectDeclarationValue;
+    globalThis.parseManagedProjectComment = parseManagedProjectComment;
+    globalThis.serializeManagedProjectComment = serializeManagedProjectComment;
+    globalThis.reconcileManagedProjects = reconcileManagedProjects;
+    globalThis.isValidProjectIsoDate = isValidProjectIsoDate;
+    globalThis.isProjectIdValue = isProjectIdValue;
   } catch {}
 })();

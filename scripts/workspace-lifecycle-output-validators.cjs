@@ -226,6 +226,13 @@ const OWNER_EXTRACTS = [
   'async function saveToHandle(handle, text) {',
   'async function saveAsSmart(text, taskAmbiguous = 0) {',
   'async function saveSmart() {',
+  // ACT 5A: the real date owner and the real Project reconciliation
+  // orchestration that saveSmart() now composes with. Extracted verbatim so the
+  // Save fixtures below run the shipped Save transaction, not a shim.
+  'function getLocalIsoDate() {',
+  'function generateManagedProjectId() {',
+  'function reconcileProjectsBeforeSave(taskReconciledText, today, idGenerator) {',
+  'function logProjectReconcileSuccess(result) {',
 ].map((m) => extractBlockFrom(MAIN_SOURCE, m));
 
 // The lifecycle/output owners, evaluated together with the module-level `let`
