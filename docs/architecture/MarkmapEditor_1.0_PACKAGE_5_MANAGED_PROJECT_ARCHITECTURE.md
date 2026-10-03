@@ -512,7 +512,31 @@ authoritative for this document.
 
 ## 10. Expanded Projects View
 
-The Expanded Projects View is the primary Project-management surface.
+The Expanded Projects View is a **dedicated Project-management experience, separate
+from the Workspace Index**. It is the primary Project-management surface.
+
+### 10.0 Projects-open routing — ACCEPTED DEFECT, ACT 5B WORK
+
+Owner device evidence (ACT 5A acceptance, 2026-10):
+
+```text
+Workspace Projects: open requested
+WorkspaceIndex: container created
+Workspace Projects: open success
+```
+
+This proves the current **Projects action opens the general Workspace Index**
+rather than a dedicated Projects view.
+
+**Classification (accepted):**
+
+- **not** an ACT 5A parser or reconciliation defect — reconciliation, identity
+  and Save integration are unaffected and remain accepted;
+- **not** a reason to reject ACT 5A;
+- a **Projects experience routing/design issue** owned by **ACT 5B** (routing +
+  container/registration foundation) and **ACT 5C** (the view itself).
+
+It is deliberately **not** patched during ACT 5A closure.
 
 ### 10.1 Target columns
 
@@ -543,6 +567,28 @@ The Expanded Projects View is the primary Project-management surface.
 | Source | file and line navigation |
 
 All edits must use **one Project mutation owner**.
+
+### 10.3 Workspace Index boundary (ACCEPTED)
+
+The **Workspace Index remains a general, read-only Workspace overview**. It is
+**not** the primary Project editing surface.
+
+Its Projects section may present a simple table:
+
+- Project; Value; Currency; Expected Order; Expected Delivery; Expected Billing;
+  Stage; Source.
+
+Allowed Index features:
+
+- navigation;
+- basic search / filtering;
+- With Value / Without Value;
+- year and quarter filters;
+- totals by currency;
+- Project count.
+
+The Workspace Index must **not** gain: editable inputs, per-cell dropdowns,
+close actions, archive actions, or any multiple editing writer.
 
 ### 10.3 Prohibited writers
 
@@ -682,22 +728,35 @@ Includes:
 - pure Project reconciliation owner;
 - safe integration into the single existing Save transaction.
 
-**ACT 5B — consumer propagation and convergence**
+**ACT 5B — consumer propagation, convergence and Projects routing**
 
 - `projectId` propagation through the Workspace Index;
 - `projectId` propagation through the Report dictionary;
 - transitional `sourceIdentity` retirement;
-- currency-total convergence;
+- currency-normalization convergence;
 - Project-sort convergence;
-- consumer-facing validation.
+- one Project metadata mutation owner;
+- **separate Projects-open routing from the Workspace Index** (§10.0);
+- dedicated Projects view container / registration foundation;
+- consumer-facing validation;
+- no complete editing table unless needed to prove owner wiring.
 
-**ACT 5C — Expanded Projects View (minimal)**
+**ACT 5C — dedicated Projects Expanded View**
 
-- Value input, Currency selector, Expected Order / Delivery / Billing
-  selectors, Stage selector after vocabulary review;
-- Created display, Closed boundary, Archive boundary.
+- dedicated Projects Expanded View container;
+- column-based interface;
+- Value input;
+- Currency selector;
+- Expected Order / Delivery / Billing selectors;
+- Stage selector **after owner vocabulary approval**;
+- filters and totals;
+- Created display;
+- Closed boundary; Archive boundary;
+- source navigation;
+- broad device acceptance.
 
-ACT 5A does **not** begin any ACT 5B or ACT 5C work.
+ACT 5A does **not** begin any ACT 5B or ACT 5C work. ACT 5B, ACT 5C and Package 6
+are **not** collapsed into one implementation.
 
 ### PACKAGE 6 — PROJECT EXPERIENCE
 
@@ -900,6 +959,46 @@ persistent identity; retirement is ACT 5B (§15.4).
 ---
 
 ## 19. Closure
+
+### 19.1 ACT 5A device acceptance (ACCEPTED)
+
+Owner device test, accepted:
+
+**First Project Save** — one adjacent `mme-project` comment:
+
+```text
+ProjectReconcile: changed=true inserted=1 unchanged=0 ambiguous=0 malformed=0
+```
+
+**Second Save** — idempotency proven:
+
+```text
+ProjectReconcile: changed=false inserted=0 unchanged=1 ambiguous=0 malformed=0
+```
+
+**Second Project** — Workspace Index `projects=1 → projects=2`:
+
+```text
+ProjectReconcile: changed=true inserted=1 unchanged=1 ambiguous=0 malformed=0
+```
+
+**Later Save** — both Projects remain managed and stable:
+
+```text
+ProjectReconcile: changed=false inserted=0 unchanged=2 ambiguous=0 malformed=0
+```
+
+Also accepted on device: one physical Save; Task reconciliation preserved; Index
+rebuild after successful Save; source navigation preserved; HTML Preview
+preserved; project IDs and created dates created; no duplicate comments; no
+Package 4 runtime; version/cache unchanged.
+
+**Quarter normalization (verified statically, ACT 5A):** `27Q1`, `2027Q1` and
+`2027-Q1` all normalize to **`2027-Q1`** through the existing
+`normalizeProjectQuarter()` owner. An earlier ACT 5A report that showed
+`2027-Q3` for Q1 inputs was a **reporting typo, not a runtime result**.
+
+### 19.2 Closure
 
 Package 5 architecture is recorded and is **complete**. Implementation begins
 with **ACT 5A**, which implements §2–§8 and the §15 transition obligations into
