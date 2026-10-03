@@ -543,12 +543,17 @@ group('Q. Report compatibility');
   check('Q05', 'description preserved', P.parseProjects('Project: CCTV Upgrade; Description: CCTV, access control, and monitoring; Value: 75000; Currency: USD', {})[0].description === 'CCTV, access control, and monitoring');
   check('Q06', 'status field still present for Reports', 'status' in p);
   check('Q07', 'extraFields still present for Reports', 'extraFields' in p);
-  check('Q08', 'sourceIdentity kept transitionally', 'sourceIdentity' in p);
+  // ACT 5B-1: Project sourceIdentity is RETIRED. projectId is the only
+  // persistent managed identity; sourcePath/sourceLine remain for navigation.
+  check('Q08', 'Project sourceIdentity retired', !('sourceIdentity' in p));
+  check('Q08b', 'sourcePath/sourceLine preserved for navigation', 'sourcePath' in p && 'sourceLine' in p);
   check('Q09', 'description default preserved', P.parseProjects('Project: X', {})[0].description === '');
   check('Q10', 'unknown legacy fields preserved', P.parseProjects('Project: X\nProbability: 70', {})[0].extraFields.probability === '70');
   check('Q11', 'zero value still present for Report filtering', P.parseProjects('Project: Zero\nValue: 0\nCurrency: USD', {})[0].value === 0);
   const reportSrc = fs.readFileSync(path.join(ROOT, 'js', 'report', 'report-dictionary.js'), 'utf8');
-  check('Q12', 'Report dictionary has no projectId dependency added', !/projectId/.test(reportSrc));
+  // ACT 5B-1: the Report dictionary now carries projectId INTERNALLY.
+  check('Q12', 'Report dictionary carries projectId internally', /projectId/.test(reportSrc));
+  check('Q12b', 'Report dictionary never renders projectId', !/\\$\\{[^}]*projectId/.test(reportSrc) && !/projectId[^\n]*\\$\\{/.test(reportSrc));
   check('Q13', 'Report zero-vs-missing semantics still intact', reportSrc.includes('Number.isFinite'));
 }
 

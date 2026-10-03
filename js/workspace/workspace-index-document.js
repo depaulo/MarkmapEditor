@@ -98,7 +98,10 @@
     for (const project of visibleProjects || []) {
       if (!Number.isFinite(project.value)) continue;
 
-      const currency = String(project.currency || '').trim().toUpperCase();
+      // ACT 5B-2: shared currency owner (same one the Report totals use).
+      const currency = globalThis.MME_PROJECT_RECORD_UTILS
+        ? globalThis.MME_PROJECT_RECORD_UTILS.normalizeProjectCurrencyCode(project.currency)
+        : String(project.currency || '').trim().toUpperCase();
 
       if (!currency) {
         valuedWithoutCurrency += 1;

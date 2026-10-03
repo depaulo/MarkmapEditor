@@ -1131,37 +1131,53 @@ async function buildWorkspaceIndex() {
     }
   }
 
-  // Deterministic sort for projects
-  projects.sort(function (a, b) {
-    const orderA = a.expectedOrder;
-    const orderB = b.expectedOrder;
-    const validA = orderA && orderA.valid === true;
-    const validB = orderB && orderB.valid === true;
-
-    // Scheduled before unscheduled
-    if (validA && !validB) return -1;
-    if (!validA && validB) return 1;
-
-    // Valid canonical ascending
-    if (validA && validB) {
-      const canA = orderA.canonical || '';
-      const canB = orderB.canonical || '';
-      if (canA !== canB) return canA < canB ? -1 : 1;
+  // ACT 5B-2: ONE canonical Project comparator (MME_PROJECT_RECORD_UTILS).
+  // It preserves the accepted Index order exactly and appends projectId as the
+  // final stable tiebreaker. The Sidebar and the dedicated Projects route share
+  // it, so they can no longer diverge.
+  //
+  // ACT 5B-1: each record also gets a stable key — projectId for managed
+  // Projects, `legacy:<sourcePath>:<sourceLine>` for Projects that have not been
+  // reconciled yet. The title is never used as identity and duplicate titles are
+  // never merged.
+  const __projectUtils = globalThis.MME_PROJECT_RECORD_UTILS;
+  for (const project of projects) {
+    if (__projectUtils) {
+      project.recordKey = __projectUtils.projectRecordKey(project);
+      project.managed = __projectUtils.isManagedProjectRecord(project);
+    } else {
+      project.recordKey = project.projectId
+        ? project.projectId
+        : `legacy:${project.sourcePath || ''}:${project.sourceLine || 0}`;
+      project.managed = Boolean(project.projectId);
     }
+  }
 
-    // Name tiebreaker (case-insensitive, stable)
-    const nameA = String(a.name || '').toLowerCase();
-    const nameB = String(b.name || '').toLowerCase();
-    if (nameA !== nameB) return nameA < nameB ? -1 : 1;
-
-    // Source path tiebreaker
-    const pathA = String(a.sourcePath || '');
-    const pathB = String(b.sourcePath || '');
-    if (pathA !== pathB) return pathA < pathB ? -1 : 1;
-
-    // Source line tiebreaker (numeric)
-    return (a.sourceLine || 0) - (b.sourceLine || 0);
-  });
+  if (__projectUtils && typeof __projectUtils.compareProjects === 'function') {
+    projects.sort(__projectUtils.compareProjects);
+  } else {
+    // Fallback preserves the historical comparator if the utils module is absent.
+    projects.sort(function (a, b) {
+      const orderA = a.expectedOrder;
+      const orderB = b.expectedOrder;
+      const validA = orderA && orderA.valid === true;
+      const validB = orderB && orderB.valid === true;
+      if (validA && !validB) return -1;
+      if (!validA && validB) return 1;
+      if (validA && validB) {
+        const canA = orderA.canonical || '';
+        const canB = orderB.canonical || '';
+        if (canA !== canB) return canA < canB ? -1 : 1;
+      }
+      const nameA = String(a.name || '').toLowerCase();
+      const nameB = String(b.name || '').toLowerCase();
+      if (nameA !== nameB) return nameA < nameB ? -1 : 1;
+      const pathA = String(a.sourcePath || '');
+      const pathB = String(b.sourcePath || '');
+      if (pathA !== pathB) return pathA < pathB ? -1 : 1;
+      return (a.sourceLine || 0) - (b.sourceLine || 0);
+    });
+  }
 
   // Single controlled assignment boundary: the snapshot is fully built
   // locally before any field becomes visible, `ready` flips only after every
@@ -3282,18 +3298,14 @@ function renderWorkspaceProjectsPanel() {
     if (!group) continue;
     const groupCount = group.projects.length;
 
-    // Sort projects within year by canonical order, then name
-    const sortedProjects = group.projects.slice().sort((a, b) => {
-      const orderA = a.expectedOrder;
-      const orderB = b.expectedOrder;
-      const canA = orderA?.canonical || '';
-      const canB = orderB?.canonical || '';
-      if (canA !== canB) return canA < canB ? -1 : 1;
-      const nameA = String(a.name || '').toLowerCase();
-      const nameB = String(b.name || '').toLowerCase();
-      if (nameA !== nameB) return nameA < nameB ? -1 : 1;
-      return (a.sourceLine || 0) - (b.sourceLine || 0);
-    });
+    // ACT 5B-2: within a year group the Sidebar uses the SAME canonical
+    // comparator as the Workspace Index and the dedicated Projects route. The
+    // previous Sidebar-local comparator lacked the sourcePath tiebreaker and
+    // therefore disagreed with the Index for same-named Projects in different
+    // files. Year grouping and the Unscheduled group are unchanged.
+    const sortedProjects = globalThis.MME_PROJECT_RECORD_UTILS
+      ? globalThis.MME_PROJECT_RECORD_UTILS.sortProjects(group.projects)
+      : group.projects.slice().sort((a, b) => (a.sourceLine || 0) - (b.sourceLine || 0));
 
     const items = sortedProjects
       .map((p) => {
@@ -3447,17 +3459,14 @@ function wireWorkspaceProjectsPanel() {
           return;
         }
 
-        const result = await globalThis.MME_WORKSPACE_HOST.switchTo('workspace-index', {
+        // ACT 5B-4: the Projects action opens the DEDICATED Projects route.
+        // The Workspace Index remains separately accessible; its container is
+        // not reused and not retitled.
+        const result = await globalThis.MME_WORKSPACE_HOST.switchTo('projects', {
           reason: 'open projects view',
         });
 
         if (result && result.status === globalThis.MME_WORKSPACE_HOST.RESULT_STATUS.ACTIVATED) {
-          if (typeof globalThis.MME_NAVIGATION === 'object') {
-            globalThis.MME_NAVIGATION.recordSuccessfulNavigation({
-              type: 'virtual-workspace-index',
-              id: 'mme://workspace/index',
-            });
-          }
           log?.('Workspace Projects: open success');
         } else {
           log?.(`Workspace Projects: open unexpected result: ${result?.status || 'unknown'}`);

@@ -412,7 +412,13 @@ function guard(id, name, ok, detail) { guardResults.push({ id, name, ok: ok === 
   guard('G05', 'pure owner never touches Tasks', !/task/i.test(pure));
   guard('G06', 'exactly one Save entrypoint', (mainSrc.match(/^async function saveSmart\(\) \{/gm) || []).length === 1);
   guard('G07', 'exactly one currentSaveHandle owner', (mainSrc.match(/^let currentSaveHandle = null;$/gm) || []).length === 1);
-  guard('G08', 'no Project consumer reads projectId yet (ACT 5B)', !/projectId/.test(fs.readFileSync(path.join(ROOT, 'js', 'report', 'report-dictionary.js'), 'utf8')));
+  // ACT 5B-1 completed consumer propagation: the Report dictionary now carries
+  // projectId INTERNALLY. This guard previously asserted the opposite ("not yet"),
+  // which expired the moment ACT 5B landed. It now asserts the accepted ACT 5B
+  // contract instead: carried internally, never rendered.
+  const reportDictSrc = fs.readFileSync(path.join(ROOT, 'js', 'report', 'report-dictionary.js'), 'utf8');
+  guard('G08', 'Report dictionary carries projectId internally (ACT 5B)', /projectId/.test(reportDictSrc));
+  guard('G08b', 'Report dictionary never renders projectId', !/\$\{[^}]*projectId/.test(reportDictSrc));
   guard('G09', 'no Project sidecar runtime module introduced', !fs.existsSync(path.join(ROOT, 'js', 'standalone')) && !fs.existsSync(path.join(ROOT, 'js', 'workspace', 'project-managed.js')));
   guard('G10', 'no Package 4 runtime restored', !/standalone-note|StandaloneNote/i.test(mainSrc));
   guard('G11', 'Service Worker untouched', fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8').includes("const APP_VERSION = 'markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation';"));

@@ -71,6 +71,12 @@ function appendStylesheet(href) {
   appendScript('./js/workspace/workspace-index-workspace.js');
   appendScript('./js/workspace/workspace-index-document.js');
 
+  // ACT 5B — Project record utilities (single currency + ordering owner) and
+  // the pure Project metadata mutation owner. Both are pure and must load
+  // before any Project consumer (Index build, Sidebar, Reports, Projects route).
+  appendScript('./js/workspace/project-record-utils.js');
+  appendScript('./js/workspace/project-metadata-mutation.js');
+
   // Screen Layout S2 — pane registry and edge restore. Loaded before main.js
   // so MME_VIEW_LAYOUT exists when main.js registers pane adapters.
   appendStylesheet('./css/view-layout.css');
@@ -153,5 +159,11 @@ function appendStylesheet(href) {
   appendScript('./js/report/report-dictionary.js');
   appendScript('./js/report/quick-report-generator.js');
   appendScript('./js/report/report-panel.js');
+
+  // ACT 5B-4 — Dedicated Projects route + container foundation. Loaded last so
+  // the Host, capabilities and Project utils are already available. Registers a
+  // third Host workspace (`projects`); it does NOT reuse the Workspace Index
+  // container.
+  appendScript('./js/workspace/projects-view.js');
 })();
 

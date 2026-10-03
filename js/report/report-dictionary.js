@@ -476,6 +476,12 @@
       };
     };
     return {
+      // ACT 5B-1: managed identity and record key are carried INTERNALLY only.
+      // projectId is never rendered and never changes Report Markdown output.
+      projectId: pr.projectId || '',
+      recordKey: pr.recordKey || pr.projectId || `legacy:${pr.sourcePath || ''}:${pr.sourceLine || 0}`,
+      managed: Boolean(pr.projectId),
+      state: pr.state || 'open',
       name: pr.name || '',
       status: pr.status || '',
       value: pr.value != null ? pr.value : null,
@@ -527,7 +533,12 @@
     let valuedWithoutCurrencyCount = 0;
     for (const p of projects || []) {
       if (!Number.isFinite(p.value)) continue;
-      const c = String(p.currency || '').trim();
+      // ACT 5B-2: one shared currency normalizer. The parser already
+      // uppercases, but this owner is what guarantees the Report totals and the
+      // Workspace Index totals can never diverge once a writer exists.
+      const c = globalThis.MME_PROJECT_RECORD_UTILS
+        ? globalThis.MME_PROJECT_RECORD_UTILS.normalizeProjectCurrencyCode(p.currency)
+        : String(p.currency || '').trim().toUpperCase();
       if (!c) {
         valuedWithoutCurrencyCount += 1;
         continue;

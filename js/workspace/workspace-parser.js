@@ -367,8 +367,50 @@
   const MME_PROJECT_COMMENT_RE = /^<!--\s*mme-project:\s*([\s\S]*?)\s*-->$/i;
   const MME_PROJECT_COMMENT_LOOKALIKE_RE = /^<!--[\s\S]*?mme-project\s*:/i;
   const PROJECT_ID_RE = /^prj_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const MME_PROJECT_KEY_ORDER = ['id', 'created', 'stage', 'delivery', 'billing', 'closed', 'archived'];
+  const MME_PROJECT_KEY_ORDER = ['id', 'created', 'stage', 'state', 'delivery', 'billing', 'closed', 'archived'];
   const MME_PROJECT_OWNED_KEYS = new Set(MME_PROJECT_KEY_ORDER);
+
+  // ACT 5B-3 — canonical managed vocabularies.
+  //
+  // STAGE and STATE are separate concepts. `closed` remains a DATE and is never
+  // a State value, and State is never synchronized with it in either direction.
+  // Unknown legacy text is PRESERVED and classified conservatively: it never
+  // blocks read-only display and is never rewritten by parsing.
+  const PROJECT_STAGE_CANONICAL = Object.freeze({
+    funnel: 'Funnel',
+    pipeline: 'Pipeline',
+    quoted: 'Quoted',
+    'on-delivery': 'On Delivery',
+    delivered: 'Delivered',
+  });
+  const PROJECT_STATE_CANONICAL = Object.freeze({
+    open: 'Open',
+    'on-hold': 'On Hold',
+    completed: 'Completed',
+    lost: 'Lost',
+    canceled: 'Canceled',
+  });
+  const PROJECT_STATE_DEFAULT = 'open';
+
+  function canonicalProjectStage(raw) {
+    const key = String(raw == null ? '' : raw).trim().toLowerCase();
+    if (!key) return '';
+    return Object.prototype.hasOwnProperty.call(PROJECT_STAGE_CANONICAL, key) ? key : '';
+  }
+
+  function projectStageLabel(raw) {
+    return PROJECT_STAGE_CANONICAL[canonicalProjectStage(raw)] || String(raw == null ? '' : raw).trim();
+  }
+
+  function canonicalProjectState(raw) {
+    const key = String(raw == null ? '' : raw).trim().toLowerCase();
+    if (!key) return '';
+    return Object.prototype.hasOwnProperty.call(PROJECT_STATE_CANONICAL, key) ? key : '';
+  }
+
+  function projectStateLabel(raw) {
+    return PROJECT_STATE_CANONICAL[canonicalProjectState(raw)] || String(raw == null ? '' : raw).trim();
+  }
 
   function pushProjectDiagnostic(list, code, detail, line) {
     list.push({
@@ -478,12 +520,14 @@
         fields: {},
         extraFields: {},
         diagnostics: [{ code: 'malformed-managed-comment', detail: raw, line: 0 }],
+        warnings: [],
       };
     }
 
     const fields = {};
     const extraFields = {};
     const diagnostics = [];
+    const warnings = [];
     let structurallyMalformed = false;
 
     for (const segment of String(matched[1] || '').split(';')) {
@@ -528,6 +572,18 @@
       structurallyMalformed = true;
     }
 
+    // ACT 5B-3: non-canonical stage/state text is preserved and reported, but
+    // it never invalidates the whole comment and never blocks read-only
+    // display. It is never rewritten by parsing. These are WARNINGS, not
+    // validity diagnostics: an unknown legacy stage must not stop the Project
+    // from being recognised as managed.
+    if (fields.stage && !canonicalProjectStage(fields.stage)) {
+      warnings.push({ code: 'non-canonical-stage', detail: fields.stage, line: 0 });
+    }
+    if (fields.state && !canonicalProjectState(fields.state)) {
+      warnings.push({ code: 'non-canonical-state', detail: fields.state, line: 0 });
+    }
+
     for (const key of ['delivery', 'billing']) {
       const value = fields[key];
       if (value === undefined || value === '') continue;
@@ -555,6 +611,7 @@
       fields,
       extraFields,
       diagnostics,
+      warnings,
     };
   }
 
@@ -834,6 +891,14 @@
       // `status` is retained for existing consumers; managed stage wins.
       status: stage,
       stage,
+      // ACT 5B-3: State is a separate concept from Stage and from `closed`.
+      // When absent, the READ MODEL derives `open`; parsing never writes it and
+      // ACT 5A reconciliation never adds it. `stateRaw` keeps the exact stored
+      // text (which may be non-canonical legacy text, preserved verbatim).
+      state: canonicalProjectState(managedFields.state) || PROJECT_STATE_DEFAULT,
+      stateRaw: String(managedFields.state || ''),
+      stageCanonical: canonicalProjectStage(managedStage),
+      stateCanonical: canonicalProjectState(managedFields.state),
       created: managedCreated,
       closed:
         managedFields.closed && isValidProjectIsoDate(managedFields.closed) ? managedFields.closed : '',
@@ -858,12 +923,13 @@
       // duplicated comment is left unchanged and must NOT receive a new comment.
       needsReconciliation: !managedInfo,
       diagnostics,
+      // Non-canonical managed text is reported separately so it can never make
+      // a valid comment invalid.
+      warnings: managedInfo && managedInfo.warnings ? managedInfo.warnings.slice() : [],
       sourcePath,
       sourceKind,
       sourceName,
       sourceLine: startLine,
-      // Transitional only — NOT persistent identity. Retirement is ACT 5B.
-      sourceIdentity: `${sourcePath}::${startLine}::${nameKey}`,
     };
 
     return project;
@@ -1447,6 +1513,13 @@
     parseProjectDeclarationValue,
     parseManagedProjectComment,
     serializeManagedProjectComment,
+    canonicalProjectStage,
+    projectStageLabel,
+    canonicalProjectState,
+    projectStateLabel,
+    PROJECT_STAGE_CANONICAL,
+    PROJECT_STATE_CANONICAL,
+    PROJECT_STATE_DEFAULT,
     reconcileManagedProjects,
     isValidProjectIsoDate,
     isProjectIdValue,
@@ -1496,6 +1569,13 @@
     globalThis.parseProjectDeclarationValue = parseProjectDeclarationValue;
     globalThis.parseManagedProjectComment = parseManagedProjectComment;
     globalThis.serializeManagedProjectComment = serializeManagedProjectComment;
+    globalThis.canonicalProjectStage = canonicalProjectStage;
+    globalThis.projectStageLabel = projectStageLabel;
+    globalThis.canonicalProjectState = canonicalProjectState;
+    globalThis.projectStateLabel = projectStateLabel;
+    globalThis.PROJECT_STAGE_CANONICAL = PROJECT_STAGE_CANONICAL;
+    globalThis.PROJECT_STATE_CANONICAL = PROJECT_STATE_CANONICAL;
+    globalThis.PROJECT_STATE_DEFAULT = PROJECT_STATE_DEFAULT;
     globalThis.reconcileManagedProjects = reconcileManagedProjects;
     globalThis.isValidProjectIsoDate = isValidProjectIsoDate;
     globalThis.isProjectIdValue = isProjectIdValue;

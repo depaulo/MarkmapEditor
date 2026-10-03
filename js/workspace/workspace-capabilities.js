@@ -80,9 +80,26 @@
     exportSlides: true,
   });
 
+  // ACT 5B-4: the dedicated Projects route is read-only foundation, exactly like
+  // the Workspace Index. It is registered explicitly so `canActive('save')`
+  // is a deliberate false instead of an accidental `undefined`.
+  const PROJECTS_CAPABILITIES = Object.freeze({
+    edit: false,
+    open: false,
+    save: false,
+    saveAs: false,
+    draft: false,
+    htmlPreview: false,
+    markmap: false,
+    archive: false,
+    workspaceFiles: true,
+    exportSlides: false,
+  });
+
   const REGISTRY = Object.freeze({
     journal: JOURNAL_CAPABILITIES,
     'workspace-index': WORKSPACE_INDEX_CAPABILITIES,
+    projects: PROJECTS_CAPABILITIES,
     editor: EDITOR_CAPABILITIES,
     slides: SLIDES_CAPABILITIES,
   });
