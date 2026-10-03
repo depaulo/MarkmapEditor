@@ -50,7 +50,7 @@
   // Module-local only. Never written to WORKSPACE_INDEX_STATE,
   // WORKSPACE_STATE / Host / Navigation / localStorage / sessionStorage /
   // globalThis / URL.
-  let taskFilter = 'open';
+  let taskFilter = 'all';
 
   function resetProjectFilters() {
     projectFilters = { ...DEFAULT_PROJECT_FILTERS };
@@ -286,7 +286,7 @@
     if (filterBtn && container.contains(filterBtn)) {
       event.preventDefault();
       event.stopPropagation();
-      const value = filterBtn.dataset.indexTaskFilter || 'open';
+      const value = filterBtn.dataset.indexTaskFilter || 'all';
       if (value === 'open' || value === 'completed' || value === 'all') {
         taskFilter = value;
         // Clear only Task-card expansion state; preserve Tag and Relationship expansion.
@@ -363,7 +363,7 @@
     // 2. Build projection while hidden
     // ACT E: reset filter state at the start of a fresh Index session.
     resetProjectFilters();
-    taskFilter = 'open';
+    taskFilter = 'all';
 
     let projectionHtml;
     try {

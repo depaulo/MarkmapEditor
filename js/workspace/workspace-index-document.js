@@ -510,16 +510,10 @@
       tasks = tasks.filter((t) => t.done);
     }
     // 'all' — no filter
-
-    if (!tasks.length) {
-      const label = filter === 'completed' ? 'Completed Tasks' : filter === 'all' ? 'All Tasks' : 'Open Tasks';
-      return `
-        <section class="wsIndexSection" id="workspaceIndexTasksSection" aria-label="Tasks">
-          <h2 class="wsIndexSectionTitle">${label}</h2>
-          <div class="wsIndexEmpty">No ${filter === 'completed' ? 'completed' : filter === 'all' ? '' : 'open'} tasks</div>
-        </section>
-      `;
-    }
+    //
+    // NOTE: there is deliberately NO early return for an empty result here. The
+    // filter controls are rendered below in EVERY state, so a Workspace with no
+    // completed Tasks can still select All and recover.
 
     // Sort by filePath ascending, then line ascending (preserve source-line order)
     const sorted = tasks.slice().sort((a, b) => {
@@ -587,18 +581,33 @@
     const label = filter === 'completed' ? 'Completed Tasks' : filter === 'all' ? 'All Tasks' : 'Open Tasks';
     const sectionId = 'workspaceIndexTasksSection';
 
-    // Build filter controls
+    // Status filter controls. Built BEFORE the empty-state branch so All / Open /
+    // Completed are ALWAYS rendered. Previously a zero-result status returned an
+    // empty section with NO filter controls, which made the selected filter
+    // irreversible: a Workspace with no completed Tasks could enter "Completed"
+    // and never get back. The controls must remain reachable in every state.
     const openCount = (index.tasks || []).filter((t) => !t.done).length;
     const completedCount = (index.tasks || []).filter((t) => t.done).length;
     const totalCount = (index.tasks || []).length;
 
     const filterHtml = `
-      <div class="wsIndexTaskFilters">
-        <button type="button" class="wsIndexTaskFilterBtn${filter === 'open' ? ' __active' : ''}" data-index-task-filter="open" aria-pressed="${filter === 'open' ? 'true' : 'false'}">Open ${openCount}</button>
-        <button type="button" class="wsIndexTaskFilterBtn${filter === 'completed' ? ' __active' : ''}" data-index-task-filter="completed" aria-pressed="${filter === 'completed' ? 'true' : 'false'}">Completed ${completedCount}</button>
-        <button type="button" class="wsIndexTaskFilterBtn${filter === 'all' ? ' __active' : ''}" data-index-task-filter="all" aria-pressed="${filter === 'all' ? 'true' : 'false'}">All ${totalCount}</button>
+      <div class="wsIndexTaskFilters" role="group" aria-label="Task status filter">
+        <button type="button" class="wsIndexTaskFilterBtn${filter === 'all' ? ' __active' : ''}" data-index-task-filter="all" aria-pressed="${filter === 'all' ? 'true' : 'false'}" aria-label="All tasks">All ${totalCount}</button>
+        <button type="button" class="wsIndexTaskFilterBtn${filter === 'open' ? ' __active' : ''}" data-index-task-filter="open" aria-pressed="${filter === 'open' ? 'true' : 'false'}" aria-label="Open tasks">Open ${openCount}</button>
+        <button type="button" class="wsIndexTaskFilterBtn${filter === 'completed' ? ' __active' : ''}" data-index-task-filter="completed" aria-pressed="${filter === 'completed' ? 'true' : 'false'}" aria-label="Completed tasks">Completed ${completedCount}</button>
       </div>
     `;
+
+    if (!tasks.length) {
+      const emptyLabel = filter === 'completed' ? 'completed' : filter === 'all' ? '' : 'open';
+      return `
+        <section class="wsIndexSection" id="${sectionId}" aria-label="Tasks">
+          <h2 class="wsIndexSectionTitle">${label} (${totalCount})</h2>
+          ${filterHtml}
+          <div class="wsIndexEmpty">No ${emptyLabel} tasks</div>
+        </section>
+      `;
+    }
 
     return `
       <section class="wsIndexSection" id="${sectionId}" aria-label="Tasks">
@@ -727,7 +736,7 @@
     const wsState = safeWorkspaceState();
     const hasWorkspace = Boolean(wsState?.rootHandle);
     const expandedSet = expanded instanceof Set ? expanded : new Set();
-    const filter = taskFilterValue || 'open';
+    const filter = taskFilterValue || 'all';
 
     if (!index || !index.ready) {
       return buildNotReadyHtml(hasWorkspace);
