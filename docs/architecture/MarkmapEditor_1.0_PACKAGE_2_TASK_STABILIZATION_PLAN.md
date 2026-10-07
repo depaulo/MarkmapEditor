@@ -238,3 +238,39 @@ authorized step that performs: Help update, documentation update, Release Notes,
 
 **STOP after this PLAN.** ACT 2A requires explicit owner authorization before any
 runtime change is made. Do not begin ACT 2A automatically.
+u0_a343@DeX:~/storage/downloads/Mme/MarkmapEditor ${vcs_info_msg_0_}
+❯ cd /data/data/com.termux/files/home/storage/downloads/Mme/MarkmapEditor && git branch --show-c
+urrent; git rev-parse HEAD; git rev-parse origin/development; git status --short | head -n 60; e
+cho ---STAGED---; git diff --cached --name-only; echo ---DIFFSTAT---; git diff --stat | tail -n 
+20
+development
+9646c6e80afeb92d24105af16fdb22a1657edf60
+9646c6e80afeb92d24105af16fdb22a1657edf60
+ M css/workspace.css
+ M js/app/script-loader.js
+ M js/main.js
+ M js/workspace/projects-view.js
+ M scripts/dom-shim.cjs
+ M scripts/project-consumer-mutation-controls.cjs
+ M scripts/project-consumer-validators.cjs
+ M scripts/project-device-acceptance.cjs
+ M scripts/workspace-index-task-filter-mutation-controls.cjs
+?? .out
+?? js/workspace/project-visual-adapter.js
+?? scripts/mutation-anchor-audit.cjs
+?? scripts/project-view-mutation-controls.cjs
+?? scripts/project-view-validators.cjs
+---STAGED---
+---DIFFSTAT---
+ css/workspace.css                                  |  191 +++
+ js/app/script-loader.js                            |    6 +
+ js/main.js                                         |   37 +
+ js/workspace/projects-view.js                      | 1366 ++++++++++++++++----
+ scripts/dom-shim.cjs                               |   33 +-
+ scripts/project-consumer-mutation-controls.cjs     |   32 +-
+ scripts/project-consumer-validators.cjs            |   20 +-
+ scripts/project-device-acceptance.cjs              |   66 +-
+ ...rkspace-index-task-filter-mutation-controls.cjs |   27 +-
+ 9 files changed, 1510 insertions(+), 268 deletions(-)
+u0_a343@DeX:~/storage/downloads/Mme/MarkmapEditor ${vcs_info_msg_0_}
+❯ 

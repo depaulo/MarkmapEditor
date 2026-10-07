@@ -4269,7 +4269,12 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
       sameLocation: globalThis.MME_NAVIGATION.sameLocation?.(current, target),
     })) {
       log?.(`Workspace: noop — ${filePath} is already current`);
-      return file;
+      // ACT 5C: navigation state alone is NOT a completed activation. The
+      // caller gets an explicit result whose `ready` flag stays false so a
+      // source-ready consumer never mistakes "already current" for a proven
+      // freshly-activated buffer (the editor may still hold old/intermediate
+      // Markdown when navigation and buffer have diverged).
+      return Object.assign({}, file, { ok: true, ready: false, sourcePath: filePath, sourceKind: fileKind });
     }
   }
 
@@ -4289,8 +4294,15 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
   }
 
   // ACT B: Use the shared suppression helper (lexical counter) instead of globalThis.
+  // ACT 5C source-ready: capture THIS document's activation completion. The
+  // render() pipeline (transform -> assets -> mm.setData -> end) used to run
+  // as a fire-and-forget IIFE, so `await openWorkspaceFile(...)` could resolve
+  // while the editor was still activating — the batch then verified projectId
+  // against not-yet-ready buffer state. The promise below is awaited just
+  // before returning, with no timeout and no polling.
+  let activation = null;
   runProgrammaticTextChange(() => {
-    openTextDocument({
+    activation = openTextDocument({
       text,
       fileName,
       fileHandle: file.handle,
@@ -4343,7 +4355,20 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
     });
   }
 
-  return file;
+  // ACT 5C source-ready barrier: resolve ONLY after the accepted activation
+  // sequence for this document completes (`<reason>: end`). render() catches
+  // its own failures, so this await always settles — never a timeout.
+  if (activation && typeof activation.then === 'function') {
+    try {
+      await activation;
+    } catch (e) {
+      log?.('Workspace: activation completion wait failed (render owns its errors)');
+    }
+  }
+
+  // Explicit source-open result for readiness-aware callers; the file
+  // properties are preserved for every existing consumer.
+  return Object.assign({}, file, { ok: true, ready: true, sourcePath: filePath, sourceKind: fileKind });
 }
 
 try {
@@ -4818,7 +4843,9 @@ function openTextDocument({ text, fileName, fileHandle = null, lastModified = 0,
   updateDocumentTitle();
 
   hasAutoFitted = false;
-  render(reason);
+  // ACT 5C source-ready: hand the activation completion promise to the open
+  // path (ignored by every other caller of openTextDocument).
+  return render(reason);
 }
 
 // ACT G: Open a virtual unsaved Report document.
@@ -8343,7 +8370,11 @@ async function updateMindmap(source) {
 }
 
 function render(source = 'render()') {
-  (async () => {
+  // ACT 5C source-ready: render() now RETURNS its completion promise so the
+  // accepted open path can await the activation sequence (transform, asset
+  // load, mm.setData, end) instead of resolving mid-flight. Existing callers
+  // ignore the return value — behaviour is unchanged for them.
+  return (async () => {
     try {
       log(`${source}: begin`);
       await updateMindmap(source);
@@ -10741,6 +10772,43 @@ function logProjectReconcileSuccess(result) {
       ` malformed=${result?.malformed || 0}`
   );
 }
+
+// ---- ACT 5C: Projects visual-edit owner bridge ----
+//
+// The Projects visual adapter must never become a second editor-buffer, dirty
+// or Save owner. main.js remains the single owner of all three and publishes
+// exactly ONE narrow bridge so the adapter can orchestrate through accepted
+// owners instead of duplicating them.
+try {
+  globalThis.MME_PROJECT_EDIT_HOST = Object.freeze({
+    // --- read ---
+    isDirty: () => Boolean(dirty),
+    getMarkdown: () => String(md.value || ''),
+    currentFileName: () => String(currentFileName || ''),
+    currentSourcePath: () => String(currentSaveHandle?.__workspacePath || ''),
+    // --- write: the ONLY programmatic Project buffer update owner ---
+    applyMarkdown: (text) => {
+      const next = String(text == null ? '' : text);
+      __programmaticTextChange++;
+      try {
+        md.value = next;
+        if (typeof window.__cmSetText === 'function') window.__cmSetText(next);
+      } finally {
+        __programmaticTextChange--;
+      }
+      dirty = true;
+      updateDocumentTitle();
+      return true;
+    },
+    // --- Save: the ONLY Save owner ---
+    save: () => saveSmart(),
+    // --- Index: rebuilt only AFTER a successful physical Save ---
+    rebuildIndex: async () => {
+      if (typeof buildWorkspaceIndex === 'function') return buildWorkspaceIndex();
+      return null;
+    },
+  });
+} catch {}
 
 function newDocument() {
   try {

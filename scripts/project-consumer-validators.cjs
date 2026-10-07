@@ -130,7 +130,9 @@ group('sort convergence');
   check('O09', 'Sidebar uses the shared comparator', /MME_PROJECT_RECORD_UTILS\.sortProjects\(group\.projects\)/.test(mainSrc));
   check('O10', 'Index build uses the shared comparator', /projects\.sort\(__projectUtils\.compareProjects\)/.test(mainSrc));
   const viewSrc = fs.readFileSync(path.join(ROOT, 'js', 'workspace', 'projects-view.js'), 'utf8');
-  check('O11', 'dedicated route uses the shared comparator', /utils\.sortProjects\(readProjects\(\)\)/.test(viewSrc));
+  // ACT 5C: the route decorates records first, then sorts with the SAME shared
+  // comparator; the invariant (one owner) is unchanged.
+  check('O11', 'dedicated route uses the shared comparator', /sortProjects\(/.test(viewSrc) && /MME_PROJECT_RECORD_UTILS/.test(viewSrc));
   check('O12', 'archived metadata does not affect order', U.compareProjects(Object.assign({}, iA, { archived: true }), Object.assign({}, iB, { archived: true })) < 0);
 }
 
@@ -311,8 +313,10 @@ group('route registration and capabilities');
   for (const fn of ['activate', 'deactivate', 'refresh', 'detach', 'getState', 'restoreState']) {
     check('T08-' + fn, 'lifecycle exposes ' + fn, new RegExp('function ' + fn + '\\(').test(view));
   }
-  check('T09', 'registers with the Host', /host\.register\(buildDescriptor\(\)\)/.test(view));
-  const returnHandler = view.slice(view.indexOf('function handleReturnToWorkspace'), view.indexOf('function findWorkspaceFileByPath'));
+  check('T09', 'registers with the Host', /\.register\(buildDescriptor\(\)\)/.test(view));
+  const retStart = view.indexOf('function handleReturnToWorkspace');
+  const retEnd = retStart === -1 ? -1 : view.indexOf('\n  function ', retStart + 10);
+  const returnHandler = retStart === -1 ? '' : view.slice(retStart, retEnd === -1 ? undefined : retEnd);
   check('T10', 'return-to-workspace switches to journal', /switchTo\('journal'/.test(returnHandler));
   check('T11', 'source navigation present', /openProjectSource/.test(view));
   const viewCode = view.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
@@ -320,8 +324,14 @@ group('route registration and capabilities');
   check('T13', 'no Save call site', !/saveToHandle|saveSmart|createWritable/.test(viewCode));
   check('T14', 'no Index mutation', !/WORKSPACE_INDEX_STATE\s*\.\s*\w+\s*=/.test(viewCode));
   check('T15', 'no Report coupling', !/MME_REPORT_DICTIONARY|quick-report/.test(view));
-  check('T16', 'no inputs or dropdowns', !/<input|<select/.test(view));
-  check('T17', 'no filters or totals UI', !/filter|total/i.test(view.replace(/\/\/[^\n]*/g, '').replace(/totalsByCurrency/g, '')));
+  // ACT 5C supersedes the read-only minimal list in the dedicated Projects route:
+  // editing controls, filters and totals are now IN SCOPE there. The invariants
+  // that MUST still hold are that the Sidebar and the Workspace Index stay
+  // read-only and never call the Project adapter.
+  const mainForT16 = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+  const sidebarForT16 = mainForT16.slice(mainForT16.indexOf('function renderWorkspaceProjectsPanel'), mainForT16.indexOf('function renderWorkspaceProjectsPanel') + 9000);
+  check('T16', 'Sidebar and Workspace Index stay read-only', !/<input|<select/.test(sidebarForT16) && !/MME_PROJECT_VISUAL_ADAPTER/.test(fs.readFileSync(path.join(ROOT, 'js', 'workspace', 'workspace-index-document.js'), 'utf8')));
+  check('T17', 'no totals leak into Report identity', !/\$\{[^}]*projectId/.test(fs.readFileSync(path.join(ROOT, 'js', 'report', 'quick-report-generator.js'), 'utf8')));
   check('T18', 'no coming-soon user copy', !/coming soon/i.test(view));
   check('T19', 'no task or group UI', !/Task|Group/.test(view.replace(/\/\/[^\n]*/g, '')));
   const mainSrc = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');

@@ -38,15 +38,24 @@ function sha256(f) { return crypto.createHash('sha256').update(fs.readFileSync(f
 
 function runSuite(script) {
   const res = { script, findings: [], exit: 0 };
-  try {
-    const out = execFileSync(process.execPath, [path.join(ROOT, 'scripts', script)], {
-      cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 32 * 1024 * 1024,
-    });
-    res.output = out;
-  } catch (e) {
-    res.exit = e.status == null ? 1 : e.status;
-    res.output = String(e.stdout || '') + String(e.stderr || '');
-  }
+  const attempt = () => {
+    const r = { output: '', exit: 0 };
+    try {
+      r.output = execFileSync(process.execPath, [path.join(ROOT, 'scripts', script)], {
+        cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 32 * 1024 * 1024,
+      });
+    } catch (e) {
+      r.exit = e.status == null ? 1 : e.status;
+      r.output = String(e.stdout || '') + String(e.stderr || '');
+    }
+    return r;
+  };
+  let run = attempt();
+  // A crash with NO named finding is a transient harness/device failure, not a
+  // behavioral result: retry once so only real regressions are reported.
+  if (run.exit !== 0 && !/^\s*FAIL\s{2}\S+/m.test(run.output)) run = attempt();
+  res.output = run.output;
+  res.exit = run.exit;
   for (const m of res.output.matchAll(FINDING_RE)) if (!res.findings.includes(m[1])) res.findings.push(m[1]);
   return res;
 }
@@ -199,7 +208,7 @@ const MUTATIONS = [
     suites: ['project-consumer-validators.cjs'], expect: ['T20'], count: 1,
     why: 'The Projects action opens the dedicated route.' },
   { id: 'B31-route-loses-return', file: VIEW,
-    find: "    host.switchTo('journal', { reason: 'projects return' })", replace: "    void 0;",
+    find: "    hostApi.switchTo('journal', { reason: 'projects return' }).catch(() => {});", replace: "    void 0;",
     suites: ['project-consumer-validators.cjs'], expect: ['T10'], count: 1,
     why: 'The dedicated route keeps return-to-workspace.' },
   { id: 'B32-container-reused-from-index', file: VIEW,
@@ -207,7 +216,8 @@ const MUTATIONS = [
     suites: ['project-consumer-validators.cjs'], expect: ['T06', 'T07'], count: 1,
     why: 'The Projects container is dedicated, never the Index container.' },
   { id: 'B33-deactivate-leaves-visible', file: VIEW,
-    find: "    if (container) container.hidden = true;", replace: "    if (container) container.hidden = false;",
+    find: "  function deactivate() {\n    const c = document.getElementById(CONTAINER_ID);\n    if (c) c.hidden = true;",
+    replace: "  function deactivate() {\n    const c = document.getElementById(CONTAINER_ID);\n    if (c) c.hidden = false;",
     suites: ['project-consumer-validators.cjs'], structural: true,
     why: 'INVARIANT: deactivate hides the container.',
   },

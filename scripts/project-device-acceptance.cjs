@@ -46,13 +46,27 @@ const journal = {
   restoreState() {},
 };
 
+// ACT 5C source navigation uses the ACCEPTED signature
+// openWorkspaceFile(file, kind, reason, options). The harness records every
+// positional argument so a record object in the KIND position would be visible.
 const openCalls = [];
-global.openWorkspaceFile = async (rec, opts) => { openCalls.push({ path: rec && rec.path, line: opts && opts.focusLine }); return { ok: true }; };
-global.findWorkspaceFileByPath = (p) => (WORKSPACE_STATE.files || []).find((f) => f.path === p) || null;
+global.openWorkspaceFile = async (rec, kind, reason, opts) => {
+  openCalls.push({ path: rec && rec.path, kind, line: opts && opts.focusLine, opts, args: Array.from(arguments) });
+  return { ok: true };
+};
+global.findWorkspaceFileByPath = (p) => (WORKSPACE_STATE.files.notes || []).find((f) => f.path === p) || null;
 global.MME_APP = { log: () => {}, showToast: () => {} };
 global.MME_NAVIGATION = { recordSuccessfulNavigation: (e) => { journalCalls.push({ nav: e }); } };
 
-const WORKSPACE_STATE = { activeWorkspace: { id: 'ws-1' }, files: [{ path: 'notes/a.md' }, { path: 'notes/b.md' }, { path: 'notes/c.md' }] };
+// Mirrors production js/workspace/workspace-state.js exactly:
+// { rootHandle, rootName, folders:{notes}, files:{notes}, activeFile }.
+const WORKSPACE_STATE = {
+  rootHandle: { kind: 'directory', name: 'ws-1' },
+  rootName: 'ws-1',
+  folders: { notes: {} },
+  files: { notes: [{ path: 'notes/a.md' }, { path: 'notes/b.md' }, { path: 'notes/c.md' }] },
+  activeFile: null,
+};
 global.WORKSPACE_STATE = WORKSPACE_STATE;
 
 function q(raw, can, valid, y) { return { raw, canonical: can, display: raw, year: y, quarter: valid ? Number(String(can).slice(-1)) : null, valid }; }
@@ -83,7 +97,12 @@ const P = global.WORKSPACE_PARSER;
 if (!HOST || !VIEW || !CAPS || !U || !M) { console.error('FATAL: runtime owners unavailable'); process.exit(1); }
 
 function container() { return document.getElementById(VIEW.CONTAINER_ID); }
+function serialize(el) { return el && typeof el.innerHTML === 'string' ? el.innerHTML : ''; }
 function rows() { return container() ? container().querySelectorAll('[data-projects-key]') : []; }
+// ACT 5C: the faithful shim returns a real NodeList (no Array methods), so the
+// harness iterates browser-compatibly instead of rows().map/filter/find.
+function rowList() { const n = rows(); const out = []; for (let i = 0; i < n.length; i += 1) out.push(n[i]); return out; }
+function rowByKey(key) { const list = rowList(); for (let i = 0; i < list.length; i += 1) { if (list[i] && typeof list[i].getAttribute === 'function' && list[i].getAttribute('data-projects-key') === key) return list[i]; } return null; }
 function text() { return container() ? container().textContent : ''; }
 
 /* ===================== D1. dedicated route opens ========================== */
@@ -134,35 +153,49 @@ group('D1 — Projects action opens the dedicated route');
   group('D3 — count, duplicate titles and legacy Projects');
   check('D18', 'Project count is correct', /3 Projects/.test(text()), text().slice(0, 80));
   check('D19', 'two Projects share one title', (text().match(/Same Title/g) || []).length === 2);
-  const keys = rows().map((r) => r.getAttribute('data-projects-key'));
+  const keys = rowList().map((r) => r.getAttribute('data-projects-key'));
   check('D20', 'duplicate titles are distinct records', new Set(keys).size === 3, keys.join('|'));
   check('D21', 'managed rows key by projectId', keys.includes(ID_A) && keys.includes(ID_C));
   check('D22', 'legacy row uses the transitional key', keys.includes('legacy:notes/b.md:20'));
-  const managedFlags = rows().map((r) => r.getAttribute('data-projects-managed'));
+  const managedFlags = rowList().map((r) => r.getAttribute('data-projects-managed'));
   check('D23', 'legacy row is marked unmanaged', managedFlags.filter((v) => v === 'false').length === 1);
   check('D24', 'legacy Project stays visible', text().includes('Same Title'));
   check('D25', 'projectId is never rendered', !text().includes('prj_'));
-  check('D26', 'no editing controls anywhere', container().querySelectorAll('input').length === 0 && container().querySelectorAll('select').length === 0);
+  // ACT 5C: the dedicated Projects route IS the editing surface for MANAGED
+  // Projects. The invariant that must still hold is that an UNMANAGED row never
+  // receives editing controls.
+  const legacyRowEl = rowByKey('legacy:notes/b.md:20');
+  const legacyHtml = legacyRowEl ? serialize(legacyRowEl) : '';
+  check('D26', 'unmanaged row receives NO editing controls', !/data-field=|data-action="apply"/.test(legacyHtml), legacyHtml.slice(0, 120));
   check('D27', 'no close/archive/task/group UI', !/Archive|Close|Task|Group/i.test(text()));
 
   /* ===================== D4. source navigation ============================ */
   group('D4 — source navigation picks the right Project');
-  check('D28', 'every row has a source control', rows().filter((r) => r.querySelectorAll('button').length === 1).length === 3);
+  // ACT 5C rows carry more than one control; the invariant is that EVERY row
+  // still exposes source navigation.
+  check('D28', 'every row has a source control', rowList().filter((r) => r.querySelectorAll('[data-action="open-source"]').length === 1).length === 3);
   // Select the SAME-TITLE rows by identity, never by display position: the
   // legacy row (notes/b.md) and the managed row (notes/a.md) share a title.
-  const legacyRow = rows().find((r) => r.getAttribute('data-projects-key') === 'legacy:notes/b.md:20');
-  const managedRow = rows().find((r) => r.getAttribute('data-projects-key') === ID_A);
+  const legacyRow = rowByKey('legacy:notes/b.md:20');
+  const managedRow = rowByKey(ID_A);
   check('D28b', 'both same-title rows are addressable by key', Boolean(legacyRow) && Boolean(managedRow));
-  await legacyRow.querySelectorAll('button')[0].dispatchEvent({ type: 'click', preventDefault() {}, stopPropagation() {} });
-  await new Promise((r) => setImmediate(r));
-  check('D29', 'same-title legacy navigation opened the correct file', openCalls.length >= 1 && openCalls[0].path === 'notes/b.md', JSON.stringify(openCalls));
-  check('D30', 'navigation carries the Project line', openCalls[0] && openCalls[0].line === 20, JSON.stringify(openCalls));
+  // ACT 5C: the collapsed row is compact, so the SOURCE control is addressed by
+  // its action, never by button position.
+  const clickSource = async (row) => {
+    const btn = row.querySelectorAll('[data-action="open-source"]')[0];
+    await btn.dispatchEvent({ type: 'click', target: btn, preventDefault() {}, stopPropagation() {} });
+    await new Promise((r) => setImmediate(r));
+  };
+  await clickSource(legacyRow);
+  check('D29', 'same-title legacy navigation opened the correct file', openCalls.length >= 1 && openCalls[0].path === 'notes/b.md', JSON.stringify(openCalls.map((c) => c.path)));
+  check('D30', 'navigation carries the Project line', openCalls[0] && openCalls[0].line === 20, JSON.stringify(openCalls.map((c) => c.line)));
+  check('D30d', 'kind is a valid string, never a record object', typeof openCalls[0].kind === 'string' && openCalls[0].kind.length > 0, JSON.stringify(openCalls[0].kind));
+  check('D30e', 'focusLine arrives in the OPTIONS position', Boolean(openCalls[0].opts) && typeof openCalls[0].opts.focusLine === 'number');
   await HOST.switchTo('projects', { reason: 'back' });
-  const managedRow2 = rows().find((r) => r.getAttribute('data-projects-key') === ID_A);
-  await managedRow2.querySelectorAll('button')[0].dispatchEvent({ type: 'click', preventDefault() {}, stopPropagation() {} });
-  await new Promise((r) => setImmediate(r));
-  check('D29b', 'same-title managed navigation opened its own file', openCalls[1] && openCalls[1].path === 'notes/a.md', JSON.stringify(openCalls));
-  check('D30b', 'managed navigation carries its own line', openCalls[1] && openCalls[1].line === 10, JSON.stringify(openCalls));
+  const managedRow2 = rowByKey(ID_A);
+  await clickSource(managedRow2);
+  check('D29b', 'same-title managed navigation opened its own file', openCalls[1] && openCalls[1].path === 'notes/a.md', JSON.stringify(openCalls.map((c) => c.path)));
+  check('D30b', 'managed navigation carries its own line', openCalls[1] && openCalls[1].line === 10, JSON.stringify(openCalls.map((c) => c.line)));
   check('D30c', 'same-title Projects never cross-navigate', openCalls[0].path !== openCalls[1].path);
   check('D31', 'navigation switched to the Journal workspace first', HOST.getActiveId() === 'journal', HOST.getActiveId());
   check('D32', 'projects container hidden after navigating away', container().hidden === true);
@@ -195,18 +228,21 @@ group('D1 — Projects action opens the dedicated route');
   global.WORKSPACE_INDEX_STATE.projects = [];
   window.dispatchEvent({ type: 'mme-workspace-index-ready' });
   check('D40', 'empty state renders', /No Projects yet/.test(text()));
-  const savedWs = WORKSPACE_STATE.activeWorkspace;
-  WORKSPACE_STATE.activeWorkspace = null;
+  const savedWs = WORKSPACE_STATE.rootHandle;
+  WORKSPACE_STATE.rootHandle = null;
   window.dispatchEvent({ type: 'mme-workspace-index-ready' });
   check('D41', 'unavailable-workspace state renders', /No Workspace is open/.test(text()));
-  WORKSPACE_STATE.activeWorkspace = savedWs;
+  WORKSPACE_STATE.rootHandle = savedWs;
   global.WORKSPACE_INDEX_STATE.projects = PROJECTS;
   window.dispatchEvent({ type: 'mme-workspace-index-ready' });
 
   /* ===================== D8. ordering agreement ========================== */
   group('D8 — ordering agrees across Index, Sidebar and route');
   const idxOrder = U.sortProjects(PROJECTS).map((p) => p.projectId || p.recordKey);
-  check('D42', 'route/index share one comparator', rows().map((r) => r.getAttribute('data-projects-key')).join(',') === idxOrder.join(','), idxOrder.join(','));
+  // ACT 5C: the route decorates records before sorting, so compare against the
+  // SAME decorated set the route sorts. The invariant is one comparator.
+  const decoratedOrder = U.sortProjects(PROJECTS.map(VIEW.decorate)).map((r) => r.key);
+  check('D42', 'route/index share one comparator', rowList().map((r) => r.getAttribute('data-projects-key')).join(',') === decoratedOrder.join(','), decoratedOrder.join(','));
   const sidebarOrder = U.sortProjects(PROJECTS.filter((p) => p.sourcePath === 'notes/a.md').concat(PROJECTS.filter((p) => p.sourcePath !== 'notes/a.md'))).map((p) => p.projectId || p.recordKey);
   check('D43', 'sidebar grouping input sorts identically', sidebarOrder.join(',') === idxOrder.join(','));
   check('D44', 'scheduled Projects precede Unscheduled', idxOrder.indexOf('legacy:notes/b.md:20') === 2);
@@ -288,7 +324,7 @@ group('D1 — Projects action opens the dedicated route');
     }
   }
   check('D63', '12 open/close cycles complete without corruption', lifecycleOk, lifecycleErr);
-  check('D64', 'exactly one Projects container is ever created', document.querySelectorAll('*').filter((e) => e.id === 'projectsView').length === 1);
+  check('D64', 'exactly one Projects container is ever created', Array.from(document.querySelectorAll('*')).filter((e) => e.id === 'projectsView').length === 1);
   check('D65', 'no stray duplicate rows after cycles', rows().length === 3, String(rows().length));
 
   /* ===================== D14. Tasks untouched ============================= */

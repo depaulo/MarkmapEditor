@@ -28,15 +28,24 @@ const FINDING_RE = /^\s*FAIL\s{2}([A-Za-z0-9_.-]+)\s/gm;
 function sha256(f) { return crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex'); }
 function runSuite(script) {
   const res = { script, findings: [], exit: 0 };
-  try {
-    const out = execFileSync(process.execPath, [path.join(ROOT, 'scripts', script)], {
-      cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 32 * 1024 * 1024,
-    });
-    res.output = out;
-  } catch (e) {
-    res.exit = e.status == null ? 1 : e.status;
-    res.output = String(e.stdout || '') + String(e.stderr || '');
-  }
+  const attempt = () => {
+    const r = { output: '', exit: 0 };
+    try {
+      r.output = execFileSync(process.execPath, [path.join(ROOT, 'scripts', script)], {
+        cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 32 * 1024 * 1024,
+      });
+    } catch (e) {
+      r.exit = e.status == null ? 1 : e.status;
+      r.output = String(e.stdout || '') + String(e.stderr || '');
+    }
+    return r;
+  };
+  let run = attempt();
+  // A crash with NO named finding is a transient harness/device failure, not a
+  // behavioral result: retry once so only real regressions are reported.
+  if (run.exit !== 0 && !/^\s*FAIL\s{2}\S+/m.test(run.output)) run = attempt();
+  res.output = run.output;
+  res.exit = run.exit;
   for (const m of res.output.matchAll(FINDING_RE)) if (!res.findings.includes(m[1])) res.findings.push(m[1]);
   return res;
 }

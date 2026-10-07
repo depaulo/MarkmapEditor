@@ -77,6 +77,12 @@ function appendStylesheet(href) {
   appendScript('./js/workspace/project-record-utils.js');
   appendScript('./js/workspace/project-metadata-mutation.js');
 
+  // ACT 5C — Projects visual mutation adapter. PURE orchestration only: it
+  // never writes files, never owns currentSaveHandle and never calls
+  // createWritable. It reaches the editor/Save owners only through the
+  // MME_PROJECT_EDIT_HOST bridge published by main.js.
+  appendScript('./js/workspace/project-visual-adapter.js');
+
   // Screen Layout S2 — pane registry and edge restore. Loaded before main.js
   // so MME_VIEW_LAYOUT exists when main.js registers pane adapters.
   appendStylesheet('./css/view-layout.css');

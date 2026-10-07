@@ -19,6 +19,28 @@ class ClassList {
   toString() { return Array.from(this.el._classes).join(' '); }
 }
 
+// ACT 5C browser-faithful collection: querySelectorAll() must NOT return an
+// Array. A real NodeList offers length, indexed access, item(), forEach and
+// iteration — and NONE of the Array-only methods (no find/map/filter/some/
+// every/reduce/indexOf). The previous Array return is exactly what let the
+// shipped `querySelectorAll(...).find()` crash reach the device.
+class NodeList {
+  constructor(items) {
+    this._items = items;
+    this.length = items.length;
+    for (let i = 0; i < items.length; i += 1) this[i] = items[i];
+  }
+  item(i) { return i >= 0 && i < this._items.length ? this._items[i] : null; }
+  forEach(cb, thisArg) {
+    if (typeof cb !== 'function') throw new TypeError('NodeList.forEach: callback is not a function');
+    for (let i = 0; i < this._items.length; i += 1) cb.call(thisArg, this._items[i], i, this);
+  }
+  keys() { return this._items.keys(); }
+  values() { return this._items.values(); }
+  entries() { return this._items.entries(); }
+  [Symbol.iterator]() { return this._items[Symbol.iterator](); }
+}
+
 class El {
   constructor(tag) {
     this.tagName = String(tag || 'div').toUpperCase();
@@ -42,6 +64,11 @@ class El {
   get classAttribute() { return this.className; }
   getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attributes, k) ? this.attributes[k] : null; }
   hasAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attributes, k); }
+  // ACT 5C device correction: the view toggles `disabled` on the global Apply /
+  // Discard controls while patching locally, so removal must be representable.
+  removeAttribute(k) { delete this.attributes[k]; }
+  focus() { if (globalThis.document) globalThis.document.activeElement = this; }
+  blur() { if (globalThis.document) globalThis.document.activeElement = null; }
   appendChild(c) { c.parentNode = this; this.children.push(c); return c; }
   remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter((x) => x !== this); }
   addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); }
@@ -80,15 +107,52 @@ class El {
       }
     };
     walk(this);
-    return out;
+    // Browser-faithful: a NodeList, not an Array (see class NodeList above).
+    return new NodeList(out);
   }
+  querySelector(sel) {
+    const all = this.querySelectorAll(sel);
+    return all.length ? all[0] : null;
+  }
+  // Minimal <select> value semantics: value follows the option marked
+  // `selected`, exactly as a browser reports control state.
+  get value() {
+    if (this.tagName === 'SELECT') {
+      if (this._value !== undefined && this._value !== null) return this._value;
+      const sel = this.children.find((c) => c.getAttribute && c.getAttribute('selected') === 'selected');
+      if (sel) return sel.getAttribute('value') || '';
+      const first = this.children[0];
+      return first ? (first.getAttribute('value') || '') : '';
+    }
+    return this._value === undefined || this._value === null ? '' : this._value;
+  }
+  // ACT 5C focus fixtures: a browser places the caret at the end of a text
+  // input when its value is assigned, and exposes selection state.
+  set value(v) {
+    this._value = v === null || v === undefined ? '' : String(v);
+    this._selStart = this._value.length;
+    this._selEnd = this._value.length;
+  }
+  get selectionStart() {
+    const len = String(this.value == null ? '' : this.value).length;
+    return this._selStart == null ? len : Math.min(this._selStart, len);
+  }
+  get selectionEnd() {
+    const len = String(this.value == null ? '' : this.value).length;
+    return this._selEnd == null ? len : Math.min(this._selEnd, len);
+  }
+  setSelectionRange(start, end) {
+    this._selStart = Number(start) || 0;
+    this._selEnd = end === undefined || end === null ? this._selStart : Number(end) || 0;
+  }
+
   get textContent() {
     if (this.children.length === 0) return this._text;
     return this.children.map((c) => c.textContent).join('');
   }
   set textContent(v) { this.children = []; this._text = String(v == null ? '' : v); }
   get innerHTML() { return serialize(this); }
-  set innerHTML(html) { this.children = []; parseInto(this, String(html || '')); }
+  set innerHTML(html) { this.children = []; this._value = undefined; parseInto(this, String(html || '')); }
   insertAdjacentHTML(pos, html) {
     const holder = new El('div');
     parseInto(holder, String(html || ''));
@@ -108,7 +172,8 @@ function serialize(el) {
 // text nodes. Enough to read back rows/buttons; not a spec-compliant parser.
 function parseInto(root, html) {
   const stack = [root];
-  const re = /<\/?([a-zA-Z][a-zA-Z0-9-]*)((?:\s+[a-zA-Z-]+="[^"]*")*)\s*\/?>|([^<]+)/g;
+  // Allows both key="value" and bare boolean attributes (e.g. `selected`).
+  const re = /<\/?([a-zA-Z][a-zA-Z0-9-]*)((?:\s+[a-zA-Z-]+(?:="[^"]*")?)*)\s*\/?>|([^<]+)/g;
   let m;
   while ((m = re.exec(html)) !== null) {
     const [full, tag, attrStr, text] = m;
@@ -119,11 +184,11 @@ function parseInto(root, html) {
     }
     if (full.startsWith('</')) { if (stack.length > 1) stack.pop(); continue; }
     const el = new El(tag);
-    const ar = /([a-zA-Z-]+)="([^"]*)"/g;
+    const ar = /([a-zA-Z-]+)="([^"]*)"|\s([a-zA-Z-]+)(?=\s|$)/g;
     let a;
     while ((a = ar.exec(attrStr || '')) !== null) {
-      const key = a[1];
-      const val = a[2];
+      const key = a[1] || a[3];
+      const val = a[1] !== undefined ? a[2] : '';
       if (key === 'class') { el.className = val; el.attributes.class = el.className; }
       else el.attributes[key] = val;
     }
@@ -139,6 +204,9 @@ function createDocument() {
   const doc = new El('#document');
   doc.documentElement = new El('html');
   doc.body = new El('body');
+  // Real focus tracking: the ACT 5C focus-stability fixtures assert that the
+  // focused node is never replaced while typing.
+  doc.activeElement = null;
   // The real page always has #layout; view containers append into it.
   const layout = new El('div');
   layout.id = 'layout';

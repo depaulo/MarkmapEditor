@@ -4540,3 +4540,194 @@ html.dark {
     height: 40px;
   }
 }
+
+/* ---- ACT 5C: Projects COMPACT TABLE + expandable details + global change bar ----
+
+   ROUTE SCROLL CONTRACT (device correction)
+   #layout is a flex row; .projectsView is the route ROOT and is height-bound
+   by the Host. The single vertical scroll owner is .projectsBody, so the header,
+   filters, totals and the global Apply bar stay reachable while the table
+   scrolls. min-height:0 on the flex chain is what allows overflow to happen at
+   all inside a flex ancestor. */
+html.projects-view-active #workspaceSidebar,
+html.projects-view-active #editor,
+html.projects-view-active #splitEditor,
+html.projects-view-active #viewer {
+  display: none !important;
+}
+
+/* Splitter dot isolation: the ONLY reason the six-dot artifact appeared inside
+   the Projects route is that the Journal/editor presentation panes were never
+   suspended. These are the same two elements Workspace Index owns; this rule is
+   route-specific and restores nothing permanently. */
+html.projects-view-active .splitter::before { content: none; }
+
+.projectsView {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 12px 0;
+  overflow: hidden;
+  color: var(--text);
+}
+
+.projectsFilters {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  flex: 0 0 auto;
+  padding: 0 0 10px; border-bottom: 1px solid var(--menu-border); margin-bottom: 10px;
+}
+.projectsFilterSearch,
+.projectsFilterSelect {
+  height: 30px; padding: 0 8px; font-size: 12px;
+  border: 1px solid var(--menu-border); border-radius: 6px;
+  background: var(--toolbar-bg); color: var(--text);
+}
+.projectsClearFilters {
+  height: 30px; padding: 0 10px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--menu-border); border-radius: 6px;
+  background: var(--toolbar-bg); color: var(--text);
+}
+
+.projectsTotals {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  flex: 0 0 auto;
+  font-size: 12px; color: var(--text); padding: 0 0 10px;
+}
+
+/* THE single vertical scroll owner of the Projects route. */
+.projectsBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+}
+.projectsBody:focus { outline: 1px solid var(--menu-border); outline-offset: -1px; }
+
+.projectsTable { display: block; min-width: 0; overflow-x: visible; }
+
+/* FLEXIBLE COLUMN CONTRACT (device correction)
+   One shared template for the header and every collapsed row. Business columns
+   use minmax() with proportional fr: each has a real minimum, grows within the
+   available width, and Project grows most. No rigid pixel width, no
+   user-resizable column. Details span the complete row. */
+.projectsHeadRow, .projectsRow {
+  display: grid;
+  grid-template-columns:
+    minmax(2rem, 2.5rem)       /* expand  */
+    minmax(10rem, 2.2fr)       /* Project  */
+    minmax(7rem, 1fr)          /* Stage    */
+    minmax(7rem, 1fr)          /* State    */
+    minmax(9rem, 1.2fr)        /* Value    */
+    minmax(6rem, 0.8fr)        /* Order    */
+    minmax(8rem, 1.1fr);       /* Source   */
+  gap: 8px; align-items: center;
+}
+.projectsHeadRow {
+  font-weight: 650; font-size: 12px; color: var(--text);
+  border-bottom: 1px solid var(--menu-border); padding: 6px 0;
+}
+.projectsVisuallyHidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+.projectsRow {
+  padding: 6px 0; border-bottom: 1px solid var(--menu-border);
+}
+.projectsRow[data-row-state="saving"] { opacity: 0.6; }
+.projectsCell { font-size: 12px; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.projectsCellTitle { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.projectsRowName { font-weight: 600; word-break: break-word; }
+.projectsUnmanagedTag { font-size: 10px; opacity: 0.7; }
+.projectsCellToggle { display: flex; justify-content: center; }
+
+/* Changed cells: a subtle indicator, never a warning colour. */
+.projectsCellChanged {
+  background: color-mix(in srgb, var(--toolbar-bg) 70%, #2563eb 30%);
+  border-radius: 4px; padding-left: 4px;
+}
+.projectsRowChanged { background: rgba(37, 99, 235, 0.05); }
+.projectsDraftBadge {
+  font-size: 10px; border: 1px solid var(--menu-border); border-radius: 999px;
+  padding: 0 6px; opacity: 0.85; align-self: flex-start;
+}
+
+.projectsExpandBtn, .projectsRowSource, .projectsDetailSource, .projectsReturnAction,
+.projectsDiscardBtn, .projectsApplyAllBtn {
+  min-height: 30px; padding: 0 10px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--menu-border); border-radius: 6px;
+  background: var(--toolbar-bg); color: var(--text);
+  text-align: left;
+}
+.projectsExpandBtn { padding: 0 6px; min-width: 28px; text-align: center; }
+.projectsRowSource, .projectsDetailSource { max-width: 100%; overflow-wrap: anywhere; }
+
+/* Exactly ONE details region per row, spanning the complete grid width. */
+.projectsRowDetails {
+  border-bottom: 1px solid var(--menu-border);
+  padding: 0 0 8px;
+  min-width: 0;
+}
+.projectsDetailsInner { min-width: 0; max-width: 100%; }
+.projectsDetailsFields {
+  display: grid; gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  align-items: end;
+}
+.projectsDetailsReadOnly {
+  display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text);
+}
+.projectsField { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.projectsFieldLabel { font-size: 11px; opacity: 0.75; }
+.projectsFieldError { font-size: 11px; color: #b91c1c; }
+.projectsCellInput, .projectsCellSelect {
+  height: 30px; padding: 0 6px; font-size: 12px; width: 100%;
+  border: 1px solid var(--menu-border); border-radius: 6px;
+  background: var(--toolbar-bg); color: var(--text);
+}
+.projectsDetailItem { font-size: 12px; color: var(--text); overflow-wrap: anywhere; }
+
+/* ONE global change bar (no per-row Apply / Cancel anywhere).
+   It sits OUTSIDE the scroll owner, so it is continuously reachable and can
+   never cover the last Project row. */
+.projectsChangeBar {
+  flex: 0 0 auto;
+  position: sticky; bottom: 0; z-index: 2;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-top: 10px; padding: 8px 0 10px;
+  border-top: 1px solid var(--menu-border);
+  background: var(--toolbar-bg);
+}
+.projectsChangeSummary { font-size: 12px; color: var(--text); margin-right: auto; }
+.projectsChangeBarBusy { opacity: 0.85; }
+.projectsDiscardBtn[disabled], .projectsApplyAllBtn[disabled] { opacity: 0.5; cursor: default; }
+.projectsBatchResult {
+  display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px;
+  color: var(--text); padding: 6px 0;
+}
+.projectsError { color: #b91c1c; font-size: 12px; padding: 8px 0; }
+.projectsEmpty, .projectsViewEmpty { font-size: 12px; padding: 10px 0; }
+
+/* ACT 5C narrow / mobile: compact collapsed row plus expandable details.
+   The desktop grid is REPLACED here, never merely narrowed, so no destructive
+   horizontal overflow is possible. */
+@media (max-width: 767px) {
+  .projectsHeadRow, .projectsRow {
+    grid-template-columns: 28px minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .projectsHeadRow .projectsHeadCell:nth-child(3) { display: none; }
+  .projectsRow .projectsCell[data-col="stage"] { display: none; }
+  .projectsRow .projectsCell[data-col="source"] { grid-column: 2 / -1; }
+  .projectsHeadRow .projectsHeadCell:nth-child(7) { grid-column: 2 / -1; }
+  .projectsRowDetails { padding-left: 0; }
+  .projectsDetailsFields { grid-template-columns: minmax(0, 1fr); }
+  .projectsDetailsReadOnly { flex-direction: column; gap: 4px; }
+  .projectsChangeBar { position: sticky; bottom: 0; }
+}
