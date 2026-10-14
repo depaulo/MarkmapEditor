@@ -2,10 +2,11 @@
 
 ## Status
 
-- **Package 5 — MANAGED PROJECT FOUNDATION: architecture DECIDED, not implemented.**
+- **Package 5 — MANAGED PROJECTS: ACT 5D statically accepted; ACT 5D follow-up
+  (quarter 2020–2100 controls, short sequential workspace IDs, roadmap
+  alignment) in progress — not device-accepted, not closed.**
 - This document is the authoritative architecture contract for Package 5.
-- No runtime implementation accompanies this record. `ACT 5A` has not begun.
-- Baseline at time of writing: `development` @ `e8e7264`, `productVersion 0.6.3`,
+- Baseline at last amendment: `development` @ `9f39851`, `productVersion 0.6.3`,
   cache identity `markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation`.
   Package 4 (Standalone Note experiment) is archived and absent from active runtime.
 
@@ -168,7 +169,12 @@ counted as *with-value* (`js/report/report-dictionary.js:509-511`, fixture
 27Q1
 2027Q1
 2027-Q1
+2027 Q1
 ```
+
+Aliases are case-insensitive. Two-digit years always mean 2000–2099; year
+2100 is only reachable through the full four-digit form, so no alias is
+ambiguous. `29Q3`, `2029Q3`, `2029-Q3` and `2029 Q3` normalize identically.
 
 ### 4.2 Normalized internal form
 
@@ -182,6 +188,9 @@ counted as *with-value* (`js/report/report-dictionary.js:509-511`, fixture
 27Q1
 ```
 
+Year 2100 keeps the full representation in display too (`2100Q4`, never the
+ambiguous `00Q4`).
+
 ### 4.4 Valid quarters
 
 ```text
@@ -191,7 +200,20 @@ Q3
 Q4
 ```
 
+Years are fixed product range **2020–2100 inclusive** (a fixed floor, never
+derived from the current year). New structured values below 2020 or above
+2100 are rejected; existing out-of-range values stay visible as
+legacy/custom — never silently rewritten, never erased.
+
 ### 4.5 Scope
+
+Expected Order, Expected Delivery and Expected Billing share ONE structured
+control contract: label on the first line, compact Year + Quarter side by
+side on the second line. The empty option `—` is the ONLY Clear affordance —
+there is no separate Clear button; selecting `—` explicitly clears the
+complete field. Partial drafts (Year without Quarter, or Quarter without
+Year) stay visible but are NOT persistable and block Apply; Cancel restores
+persisted values.
 
 The visible line contains **only** Expected Order.
 
@@ -199,12 +221,20 @@ Expected Delivery and Expected Billing belong to managed metadata (§5).
 
 Package 5 does **not** introduce an exact target date.
 
-**Source note.** This contract is already satisfied by the existing
-`normalizeProjectQuarter()` (`js/workspace/workspace-parser.js:244-273`), which
-accepts `^(\d{2}|\d{4})[/-]?[qQ]([1-4])$`, emits `canonical: "2027-Q1"` and
-`display: "27Q1"`, and produces `{ valid: false }` rather than throwing on
-malformed input. ACT 5A reuses this owner; it does not create a second quarter
-normalizer.
+**Source note.** This contract is satisfied by the shared owner
+`normalizeProjectQuarter()` (`js/workspace/workspace-parser.js:244+`), which
+accepts `^(\d{2}|\d{4})[-/ ]?[qQ]([1-4])$` (case-insensitive), emits
+`canonical: "2027-Q1"` and `display: "27Q1"` (full `2100Q4` for year 2100),
+enforces the fixed 2020–2100 range, and produces `{ valid: false }` rather
+than throwing on malformed input. Parser recognition, Projects View
+recognition, draft validation, mutation validation and persisted output ALL
+read this one function; no second quarter normalizer exists.
+
+### 4.6 ID-adjacent note (ACT 5D-FU)
+
+The quarter range floor moved from 2025 to 2020 by owner decision. Existing
+2020–2024 legacy/custom values are NOT mass-rewritten; they become
+replaceable through the structured controls.
 
 ---
 
@@ -366,25 +396,63 @@ Three separate concepts:
 - ID preserved through title rename;
 - ID preserved through line movement;
 - ID preserved through Project reorder;
-- duplicate-ID diagnostics;
-- malformed-comment behavior defined;
-- conservative creation during Save reconciliation (§8).
+- ID preserved through refresh, repeated Save, failed Save and retry (the
+  reconciled buffer is reused — no replacement ID is ever minted);
+- duplicate-ID diagnostics (including copied/imported IDs across files —
+  never silently renumbered);
+- malformed-comment behavior defined (malformed or duplicated existing
+  identity is never overwritten as a repair);
+- conservative creation during Save reconciliation (§8);
+- short IDs are unique within ONE workspace (see §7.3); uniqueness is NOT
+  claimed across independent workspaces or concurrent independent sessions —
+  conservative duplicate detection covers those cases.
 
 ### 7.3 Serialization
 
-**Accepted by ACT 5A.** Serialization is exactly:
+**Accepted by ACT 5D follow-up (supersedes the ACT 5A UUID decision, kept as
+history below).** New workspace IDs serialize exactly as:
 
 ```text
-prj_<full-crypto.randomUUID()>
+prj_0001
+prj_0002
+...
 ```
 
-- the **full** UUID is retained; it is never truncated;
+- `prj_` prefix + decimal sequence, **minimum 4 digits**, zero-padded;
+- the sequence grows without truncation or wraparound (`…9999`, `10000`, …);
+- allocation is against the COMPLETE workspace inventory: every managed ID
+  in the current workspace inventory (all indexed files, **including
+  archived Notes**), every managed ID in the live current buffer (stale-Index
+  protection), and every ID allocated earlier in the same operation/batch
+  (operation reservations persist across Saves within one batch);
+- the inventory is obtained through the existing mechanisms
+  (`buildWorkspaceIndex` → `WORKSPACE_INDEX_STATE.projects`, live buffer via
+  the accepted CodeMirror-first owner). If the inventory cannot be proven
+  complete (no workspace open, Index not ready), allocation STOPS with the
+  bounded diagnostic `inventory-incomplete` — it never restarts from the
+  current document alone, and never mints a standalone sequence;
+- IDs are minted ONLY for genuinely missing managed identity. Malformed or
+  duplicated existing identity is diagnosed, never overwritten;
+- once minted, an ID is permanent: never regenerated after rename, movement,
+  reorder, refresh, repeated Save, failed Save or retry;
+- existing `prj_<full-UUID>` IDs remain VALID and unchanged — no migration,
+  no mass rewrite;
+- copied/imported Projects keep their existing identity; duplicate IDs across
+  the workspace are diagnosed, never silently renumbered;
 - there is no title/slug/path/line/ordinal fallback of any kind;
-- `crypto.randomUUID()` is the browser primitive; in Node validation
-  environments `globalThis.crypto.randomUUID` is used through the same call;
-- the ID generator is **injected** into the pure reconciler so tests are
-  deterministic;
+- no global counter service and no generic identity framework: the
+  orchestrator (`generateManagedProjectId()` in `js/main.js`) is the single
+  allocation owner, the pure helpers (`nextWorkspaceProjectId()` /
+  `collectReservedProjectIds()` in `js/workspace/workspace-parser.js`) take
+  the reservation set as input, and the injected-generator/pure-owner
+  separation is preserved so tests stay deterministic;
 - a complex general UUID subsystem is **not** introduced.
+
+**Superseded history — ACT 5A UUID decision.** ACT 5A accepted
+`prj_<full-crypto.randomUUID()>` (full UUID retained, never truncated;
+`crypto.randomUUID()` as the browser primitive; injected generator for
+deterministic tests). That grammar remains RECOGNIZED (every UUID issued
+stays valid) but is no longer MINTED for workspace Projects.
 
 **Source note — superseded design.** The accepted Package 3 baseline computes a
 provisional `sourceIdentity = ${sourcePath}::${startLine}::${nameKey}` in
@@ -882,7 +950,13 @@ Deterministic diagnostic codes (at minimum):
 `invalid-managed-id`, `duplicate-managed-id`, `missing-created`,
 `invalid-created`, `duplicate-managed-comment`, `orphan-managed-comment`,
 `malformed-managed-comment`, `authority-conflict`, `invalid-delivery-quarter`,
-`invalid-billing-quarter`, `invalid-closed-date`, `invalid-archived-value`.
+`invalid-billing-quarter`, `invalid-closed-date`, `invalid-archived-value`,
+`inventory-incomplete`.
+
+`inventory-incomplete` (ACT 5D-FU): the workspace inventory cannot be proven
+complete (no workspace open, Index not ready). Allocation stops and mints
+nothing — it never restarts from the current document alone and never mints a
+standalone sequence.
 
 Diagnostics are bounded, deduplicated, deterministic, location-aware,
 non-mutating and safe for multiple Projects per file. **No diagnostics UI is
@@ -930,7 +1004,7 @@ persistent identity; retirement is ACT 5B (§15.4).
 | --- | --- | --- |
 | D1 | Visible declaration owns title/value/currency/Expected Order | Accepted |
 | D2 | `[<value> <currency>]` bracket contract; no hashtag money | Accepted |
-| D3 | `27Q1` / `2027Q1` / `2027-Q1` accepted; canonical `2027-Q1` | Accepted |
+| D3 | `27Q1` / `2027Q1` / `2027-Q1` accepted; canonical `2027-Q1`; ACT 5D-FU: `2027 Q1` alias, 2020–2100 range, shared Order/Delivery/Billing contract, empty-option Clear | Accepted — §4 |
 | D4 | `mme-project` owns id/created/stage/delivery/billing/closed/archived | Accepted |
 | D5 | Precedence: visible > managed > legacy fallback > ordinary Markdown | Accepted |
 | D6 | Identity persisted in `mme-project`; title/path/line/ordinal excluded | Accepted |
@@ -943,7 +1017,7 @@ persistent identity; retirement is ACT 5B (§15.4).
 | D13 | Final stage vocabulary | **[OPEN]** — stage stays text in ACT 5A |
 | D14 | Projects inside archived Notes | **[OPEN]** — current Package 3 archive behavior preserved |
 | D15 | Brackets in Project titles are allowed. Only valid recognized trailing Project tokens are consumed | Accepted — §2.3 |
-| D16 | Exact `projectId` serialization | Deferred to ACT 5A after source validation — §7.3 |
+| D16 | Exact `projectId` serialization | ACT 5A finalized UUID after source validation (§7.3); ACT 5D-FU supersedes with workspace short sequential IDs, UUIDs preserved as valid history — §7.3 |
 
 ---
 
@@ -959,6 +1033,27 @@ persistent identity; retirement is ACT 5B (§15.4).
 - `MarkmapEditor_1.0_PRODUCT_ARCHITECTURE_AND_IMPLEMENTATION_PROGRAM.md` §11
   describes Package 5 as normalizing an "accepted managed model". No managed
   model existed at that time; this document supplies it.
+
+### 18.1 Roadmap mapping (ACT 5D-FU — explicit, no silent deletion)
+
+Historical §11 numbering is PRESERVED as history; owner decisions re-scope it
+as follows:
+
+- Package 4 (Standalone Notes) remains archived, not restored.
+- Projects Expanded View (historical Package 6) is ABSORBED into Package 5 —
+  ACT 5B/5C/5D implement it. Historical Package 6 is not deleted; it is
+  recorded here as merged into Package 5 by owner decision.
+- Package 6 is the NEXT Reports direction (historical Packages 7/8): Reports
+  preserves the existing Markdown/marker/Draw.io flow, adds bidirectional
+  marker reconciliation, edits text directly in generated Report Markdown,
+  validates against the real presentation template/workflow, and treats
+  Report Notes removal as an accepted simplification direction.
+- Expanded-View behavioral and visual consistency across Projects, Tasks and
+  Reports remains due before 1.0 (historical Package 10); Sidebar grouping by
+  behavior belongs to that later evaluation — not to Package 5 closure.
+- Task redesign, Reminders and Highlights remain outside this ACT (recorded
+  future ideas / post-Package-5 evaluation).
+- New numbering for the remaining packages is NOT decided here.
 
 ---
 

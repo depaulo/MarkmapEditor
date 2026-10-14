@@ -208,7 +208,8 @@ const MUTATIONS = [
     suites: ['project-consumer-validators.cjs'], expect: ['T20'], count: 1,
     why: 'The Projects action opens the dedicated route.' },
   { id: 'B31-route-loses-return', file: VIEW,
-    find: "    hostApi.switchTo('journal', { reason: 'projects return' }).catch(() => {});", replace: "    void 0;",
+    find: '      try { await hostApi.switchTo(\'journal\', { reason: \'projects return\' }); } catch {}',
+    replace: '      try { /* mutated: return never switches to journal */ } catch {}',
     suites: ['project-consumer-validators.cjs'], expect: ['T10'], count: 1,
     why: 'The dedicated route keeps return-to-workspace.' },
   { id: 'B32-container-reused-from-index', file: VIEW,
@@ -241,6 +242,23 @@ const MUTATIONS = [
 /* ------------------------------ baseline ---------------------------------- */
 console.log('ACT 5B — Project consumer mutation controls');
 console.log('='.repeat(62));
+// ---- Leak guard (ACT 5D corrective) -------------------------------------
+const LEAK_MARKER = '// mutated:';
+function scanForLeaks() {
+  const targets = [...new Set(MUTATIONS.map((m) => path.join(ROOT, m.file)))];
+  const dirty = [];
+  for (const abs of targets) {
+    try { if (fs.readFileSync(abs, 'utf8').includes(LEAK_MARKER)) dirty.push(path.relative(ROOT, abs)); } catch {}
+  }
+  return dirty;
+}
+const preRunLeaks = scanForLeaks();
+if (preRunLeaks.length) {
+  console.log('ABORT: working tree already contains injected mutation markers from a prior interrupted run:');
+  for (const d of preRunLeaks) console.log('  LEAKED: ' + d);
+  console.log('Restore these files (e.g. `git checkout -- <file>`) before running controls. Refusing to run on a contaminated tree.');
+  process.exit(3);
+}
 const base = BASELINE.map(runSuite);
 if (!base.every((b) => b.exit === 0 && b.findings.length === 0)) {
   console.log('BASELINE RED — controls are not meaningful.');
@@ -315,5 +333,7 @@ for (const s of structural) console.log('  ' + s.id + ' — restored=' + (s.rest
 console.log('\nHONEST TOTALS: ' + bit.length + ' mutation controls passed of ' + applied + ' applied; ' + notBit.length + ' non-biting; ' + structural.length + ' structural guards.');
 
 if (restoreFailures.length) { console.log('\nRESTORE FAILURES:'); for (const r of restoreFailures) console.log('  ' + r.id + ' — ' + r.reason); process.exit(1); }
+const postRunLeaks = scanForLeaks();
+if (postRunLeaks.length) { console.log('\nLEAK DETECTED after restore (byte-identical restore missed an injected marker):'); for (const d of postRunLeaks) console.log('  LEAKED: ' + d); process.exit(1); }
 if (notBit.length) process.exit(1);
 process.exit(0);

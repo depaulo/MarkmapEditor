@@ -99,6 +99,10 @@
     DIRTY_NOTE_CANCELED: 'dirty-note-canceled',
     INDEX_REBUILD_FAILED: 'index-rebuild-failed',
     RETURN_FAILED: 'return-failed',
+    ACTIVE_DOCUMENT_MISMATCH: 'active-document-mismatch',
+    LIVE_BUFFER_UNAVAILABLE: 'live-buffer-unavailable',
+    IDENTITY_CHANGED_DURING_TRANSITION: 'identity-changed-during-transition',
+    NO_CHANGE: 'no-change',
     UNKNOWN: 'unknown-failure',
   });
 
@@ -152,6 +156,134 @@
   function host() { return globalThis.MME_PROJECT_EDIT_HOST || null; }
   function owner() { return globalThis.MME_PROJECT_METADATA_MUTATION || null; }
   function utils() { return globalThis.MME_PROJECT_RECORD_UTILS || null; }
+  function canonicalParser() { return globalThis.WORKSPACE_PARSER || globalThis.window?.WORKSPACE_PARSER || null; }
+
+  // ACT 5C direct correction: privacy-safe active-document identity.
+  // Prefers the narrow host owner; never exposes handles, Markdown or ids.
+  function getHostIdentity(h) {
+    try {
+      if (h && typeof h.getActiveDocumentIdentity === 'function') {
+        const v = h.getActiveDocumentIdentity();
+        if (v && typeof v === 'object') {
+          return {
+            sourcePath: String(v.sourcePath || ''),
+            sourceKind: String(v.sourceKind || ''),
+            fileName: String(v.fileName || ''),
+            hasWritableHandle: Boolean(v.hasWritableHandle),
+          };
+        }
+      }
+    } catch {}
+    try {
+      const st = globalThis.WORKSPACE_STATE || globalThis.window?.WORKSPACE_STATE || null;
+      const af = st ? st.activeFile : null;
+      return {
+        sourcePath: String((af && af.path) || (h && typeof h.currentSourcePath === 'function' ? h.currentSourcePath() : '')),
+        sourceKind: String((af && af.kind) || 'notes'),
+        fileName: String((af && af.name) || (h && typeof h.currentFileName === 'function' ? h.currentFileName() : '')),
+        hasWritableHandle: Boolean((function () { try { return Boolean(h && typeof h.currentSourcePath === 'function' && h.currentSourcePath()); } catch { return false; } })()),
+      };
+    } catch { return { sourcePath: '', sourceKind: '', fileName: '', hasWritableHandle: false }; }
+  }
+
+  function normalizeKind(v) { return String(v || '').trim().toLowerCase() || 'notes'; }
+
+  // ACT 5C direct correction: canonical Project parser is the authoritative
+  // existence decision on LIVE Markdown. The private regex is a malformed
+  // fallback only, never the authority.
+  function canonicalVerify(liveMarkdown, projectId) {
+    const text = String(liveMarkdown == null ? '' : liveMarkdown);
+    const want = String(projectId || '');
+    let parsedProjects = 0;
+    let managedProjects = 0;
+    let found = 0;
+    let malformedHit = false;
+    try {
+      const P = canonicalParser();
+      if (P && typeof P.parseProjects === 'function') {
+        const list = P.parseProjects(text, {}) || [];
+        parsedProjects = Array.isArray(list) ? list.length : 0;
+        for (const p of list) {
+          const id = String((p && p.projectId) || '');
+          if (id) managedProjects += 1;
+          if (want && id === want) found += 1;
+        }
+        if (want && found === 0) {
+          // Comment literal present but not recognised as managed => malformed.
+          try { malformedHit = projectIdPresentIn(text, want) > 0; } catch { malformedHit = false; }
+        }
+      } else {
+        const hits = projectIdPresentIn(text, want);
+        parsedProjects = hits; managedProjects = hits; found = hits;
+      }
+    } catch {
+      try { const hits = projectIdPresentIn(text, want); parsedProjects = hits; managedProjects = hits; found = hits; } catch {}
+    }
+    return {
+      liveMarkdownLength: text.length,
+      parsedProjects,
+      managedProjects,
+      requestedIdFound: found === 1,
+      requestedIdUnique: found <= 1,
+      hits: found,
+      malformedHit: Boolean(malformedHit),
+    };
+  }
+
+  // ACT 5C direct correction: source identity + live content, with distinct
+  // bounded reasons. Never reports project-not-found on identity mismatch.
+  // Produces only bounded diagnostics (booleans + counts).
+  function verifyLiveProject(h, requestedPath, requestedKind, projectId) {
+    const identity = getHostIdentity(h);
+    const wantPath = String(requestedPath || '');
+    const wantKind = normalizeKind(requestedKind);
+    const gotKind = normalizeKind(identity.sourceKind);
+    const activeDocumentMatches = Boolean(wantPath && identity.sourcePath === wantPath && gotKind === wantKind);
+    if (!activeDocumentMatches) {
+      return {
+        ok: false, reason: BOUNDED.ACTIVE_DOCUMENT_MISMATCH,
+        diagnostics: { activeDocumentMatches: false, liveMarkdownLength: 0, parsedProjects: 0, managedProjects: 0, requestedIdFound: false, requestedIdUnique: true },
+      };
+    }
+    let live = null;
+    try { live = h.getMarkdown(); } catch { live = null; }
+    if (typeof live !== 'string') {
+      return {
+        ok: false, reason: BOUNDED.LIVE_BUFFER_UNAVAILABLE,
+        diagnostics: { activeDocumentMatches: true, liveMarkdownLength: 0, parsedProjects: 0, managedProjects: 0, requestedIdFound: false, requestedIdUnique: true },
+      };
+    }
+    const cv = canonicalVerify(live, projectId);
+    const diagnostics = {
+      activeDocumentMatches: true,
+      liveMarkdownLength: cv.liveMarkdownLength,
+      parsedProjects: cv.parsedProjects,
+      managedProjects: cv.managedProjects,
+      requestedIdFound: cv.requestedIdFound,
+      requestedIdUnique: cv.requestedIdUnique,
+    };
+    if (cv.hits > 1) return { ok: false, reason: BOUNDED.DUPLICATE_PROJECT_ID, diagnostics, live };
+    if (cv.hits === 0 && cv.malformedHit) return { ok: false, reason: BOUNDED.MALFORMED_PROJECT_COMMENT, diagnostics, live };
+    if (cv.hits === 0) return { ok: false, reason: BOUNDED.PROJECT_NOT_FOUND, diagnostics, live };
+    return { ok: true, reason: '', diagnostics, live };
+  }
+
+  // Bounded read of the Workspace Index projection: returns the record whose
+  // projectId equals the request, or null. Never mutates, never regenerates
+  // identity, never falls back to title/path/line. Used only to detect a
+  // post-transition identity divergence (identity-changed-during-transition).
+  function findIndexProjectById(projectId) {
+    const want = String(projectId == null ? '' : projectId).trim();
+    if (!want) return null;
+    try {
+      const st = globalThis.WORKSPACE_INDEX_STATE || globalThis.window?.WORKSPACE_INDEX_STATE || null;
+      const list = st && Array.isArray(st.projects) ? st.projects : [];
+      for (const rec of list) {
+        if (rec && String(rec.projectId || '').trim() === want) return rec;
+      }
+    } catch {}
+    return null;
+  }
 
   function outcome(over) {
     return Object.assign(
@@ -220,26 +352,47 @@
     const operation = String(req.operation || '');
     const field = normalizePhaseOf(operation);
 
-    // ---- 1. RESOLVE: is the target already the active document? ----
+    // ---- 1. RESOLVE: live identity check when a source is requested ----
     let phase = PHASES.RESOLVE;
-    let active = h.getMarkdown();
+    let active = null;
+    try { active = h.getMarkdown(); } catch { active = null; }
+    const wantsSource = Boolean(req.sourcePath);
 
-    if (projectIdPresentIn(active, projectId) === 0) {
+    if (wantsSource && projectIdPresentIn(active == null ? '' : active, projectId) === 0) {
       // Not in the live buffer. Resolve it through the accepted Workspace owner.
       const resolved = await resolveSourceDocument(req);
       if (!resolved.ok) {
         return outcome({ reason: resolved.reason, projectId, field, phase: PHASES.RESOLVE, diagnostics: resolved.diagnostics || [] });
       }
-      active = h.getMarkdown();
+      // ACT 5C: after openWorkspaceFile resolves, require BOTH source identity
+      // AND live content through getMarkdown + canonical parser.
+      const verified = verifyLiveProject(h, resolved.sourcePath, resolved.sourceKind, projectId);
+      try {
+        safeLog(`ProjectVerify: activeDocumentMatches=${verified.diagnostics.activeDocumentMatches} liveMarkdownLength=${verified.diagnostics.liveMarkdownLength} parsedProjects=${verified.diagnostics.parsedProjects} managedProjects=${verified.diagnostics.managedProjects} requestedIdFound=${verified.diagnostics.requestedIdFound} requestedIdUnique=${verified.diagnostics.requestedIdUnique}`);
+      } catch {}
+      if (!verified.ok) {
+        return outcome({ reason: verified.reason, projectId, field, phase: PHASES.VERIFY, diagnostics: [verified.diagnostics] });
+      }
+      active = verified.live;
     }
 
-    // ---- 2. VERIFY: projectId is the authority ----
+    // ---- 2. VERIFY: canonical parser on LIVE Markdown is the authority ----
     phase = PHASES.VERIFY;
-    const hits = projectIdPresentIn(active, projectId);
-    if (hits === 0) {
+    if (typeof active !== 'string') { try { active = h.getMarkdown(); } catch { active = null; } }
+    if (typeof active !== 'string') {
+      return outcome({ reason: BOUNDED.LIVE_BUFFER_UNAVAILABLE, projectId, field, phase });
+    }
+    const cvSingle = canonicalVerify(active, projectId);
+    try {
+      safeLog(`ProjectVerify: activeDocumentMatches=true liveMarkdownLength=${cvSingle.liveMarkdownLength} parsedProjects=${cvSingle.parsedProjects} managedProjects=${cvSingle.managedProjects} requestedIdFound=${cvSingle.requestedIdFound} requestedIdUnique=${cvSingle.requestedIdUnique}`);
+    } catch {}
+    if (cvSingle.hits === 0 && cvSingle.malformedHit) {
+      return outcome({ reason: REASONS.MALFORMED_PROJECT_COMMENT, projectId, field, phase });
+    }
+    if (cvSingle.hits === 0) {
       return outcome({ reason: REASONS.PROJECT_NOT_FOUND, projectId, field, phase });
     }
-    if (hits > 1) {
+    if (cvSingle.hits > 1) {
       // Refuse to guess which duplicate-title Project is meant.
       return outcome({ reason: REASONS.DUPLICATE_PROJECT_ID, projectId, field, phase });
     }
@@ -513,6 +666,131 @@
     }, extra || {}));
   }
 
+  // ACT 5D diagnostic delivery gate: revision marker proving the SERVED and
+  // browser-executed adapter contains this diagnostic revision. Emitted once
+  // at adapter registration and once per Apply batch entry, on the SAME
+  // safeLog channel as the phase=failed line, so absence of the marker in
+  // owner logs proves a stale served file rather than a silent logger.
+  const ADAPTER_DIAG_REV = 'act5d-diag-rev-2';
+  function logDiagRev(where) {
+    try { safeLog(`ProjectsApplyBatch: diag-rev=${ADAPTER_DIAG_REV} where=${where}`); } catch {}
+  }
+
+  // ACT 5D corrective §4: bounded, privacy-safe diagnostics emitted ONLY at a
+  // project-not-found boundary. Reports the ACTUAL identity values needed to
+  // locate the divergence — requested id(s), Index match count and the
+  // matching (projectId, sourcePath) records, the ids recognized in the exact
+  // live mutation source, the expected group sourcePath, the active sourcePath,
+  // the source-text provider, and a per-request live match count. NEVER logs
+  // titles, field values or full Markdown. Lists are capped and truncation is
+  // reported explicitly. Collecting diagnostics never mutates data or clears
+  // drafts.
+  function boundedNotFoundDiagnostics(liveMarkdown, groupProjects, h, groupSourcePath) {
+    const CAP = 8;
+    try {
+    const liveText = String(liveMarkdown == null ? '' : liveMarkdown);
+
+    // --- requested ids (from the draft/plan, never reconstructed) ---
+    const requested = [];
+    for (const p of (groupProjects || [])) {
+      const id = String((p && p.projectId) || '').trim();
+      if (id) requested.push(id);
+    }
+
+    // --- Index projection: match count + matching (id, sourcePath) records ---
+    let indexMatchCount = 0;
+    const indexMatches = [];
+    try {
+      const st = globalThis.WORKSPACE_INDEX_STATE || globalThis.window?.WORKSPACE_INDEX_STATE || null;
+      const list = st && Array.isArray(st.projects) ? st.projects : [];
+      const wanted = new Set(requested);
+      for (const rec of list) {
+        const id = String((rec && rec.projectId) || '').trim();
+        if (id && wanted.has(id)) {
+          indexMatchCount += 1;
+          if (indexMatches.length < CAP) indexMatches.push({ projectId: id, sourcePath: String((rec && rec.sourcePath) || '') });
+        }
+      }
+    } catch {}
+
+    // --- ids recognized in the exact live mutation source (canonical parser) ---
+    const recognizedInLive = [];
+    try {
+      const P = canonicalParser();
+      const list = (P && typeof P.parseProjects === 'function') ? (P.parseProjects(liveText, {}) || []) : [];
+      for (const p of list) {
+        const id = String((p && p.projectId) || '').trim();
+        if (id) recognizedInLive.push(id);
+      }
+    } catch {}
+
+    // --- per-request live match count (canonicalVerify is the authority) ---
+    const perRequest = requested.map((id) => {
+      let hits = -1;
+      try { hits = canonicalVerify(liveText, id).hits; } catch {}
+      return { projectId: id, liveHits: hits };
+    });
+
+    // --- active source identity + source-text provider ---
+    // Provider is detected at runtime, not assumed: getCurrentMarkdownText()
+    // prefers window.__cmGetText (CodeMirror live text) and falls back to
+    // the md textarea. The bridge the adapter reads is h.getMarkdown().
+    let activePath = '';
+    let provider = 'getMarkdown';
+    try {
+      const idn = (h && typeof h.getActiveDocumentIdentity === 'function') ? h.getActiveDocumentIdentity() : null;
+      activePath = String((idn && idn.sourcePath) || '');
+    } catch {}
+    try {
+      const w = (typeof globalThis.window !== 'undefined' && globalThis.window) ? globalThis.window : globalThis;
+      provider = (typeof w.__cmGetText === 'function')
+        ? 'getMarkdown/CodeMirror-live'
+        : 'getMarkdown/textarea-fallback';
+    } catch {}
+
+    const expectedPath = String(groupSourcePath || '');
+    const reqShown = requested.slice(0, CAP);
+    const recShown = recognizedInLive.slice(0, CAP);
+    const truncated =
+      (requested.length > reqShown.length ? 1 : 0) +
+      (recognizedInLive.length > recShown.length ? 1 : 0) +
+      (indexMatches.length >= CAP ? 1 : 0);
+
+    safeLog(
+      `ProjectsApplyBatch: not-found diag` +
+        ` requested=[${reqShown.join('|')}]${requested.length > reqShown.length ? '…' : ''}` +
+        ` expectedSource=${expectedPath || 'unknown'}` +
+        ` activeSource=${activePath || 'unknown'}` +
+        ` provider=${provider}` +
+        ` indexMatchCount=${indexMatchCount}` +
+        ` indexMatches=[${indexMatches.map((r) => r.projectId + '@' + (r.sourcePath || '?')).join('|')}]` +
+        ` recognizedInLiveCount=${recognizedInLive.length}` +
+        ` recognizedInLive=[${recShown.join('|')}]${recognizedInLive.length > recShown.length ? '…' : ''}` +
+        ` perRequestLiveHits=[${perRequest.map((r) => r.projectId + ':' + r.liveHits).join('|')}]` +
+        ` liveLength=${liveText.length}` +
+        ` truncatedLists=${truncated}`
+    );
+
+    return {
+      requestedCount: requested.length,
+      expectedSource: expectedPath,
+      activeSource: activePath,
+      provider,
+      indexMatchCount,
+      indexMatches,
+      recognizedInLiveCount: recognizedInLive.length,
+      recognizedInLive: recShown,
+      perRequest,
+      truncatedLists: truncated,
+    };
+    } catch (err) {
+      // If diagnostic collection itself throws, say so on the SAME channel —
+      // a silent helper must never be mistaken for "no divergence found".
+      try { safeLog(`ProjectsApplyBatch: diagnostic-failed rev=${ADAPTER_DIAG_REV} detail=${String((err && err.message) || err || 'unknown').slice(0, 120)}`); } catch {}
+      return { diagnosticFailed: true, diagRev: ADAPTER_DIAG_REV };
+    }
+  }
+
   // ACT 5C device correction: the source file record is resolved through the
   // ACCEPTED Workspace owner (findWorkspaceFileByPath). The hand-rolled scan is
   // ONLY a fallback for a host that does not expose the owner at all, so a
@@ -562,6 +840,7 @@
    * @param {{projects:Array, sources:Array, fieldCount:number}} plan
    */
   async function applyProjectBatch(plan) {
+    logDiagRev('batch-entry');
     const h = host();
     const m = owner();
     const projects = Array.isArray(plan && plan.projects) ? plan.projects : [];
@@ -599,36 +878,53 @@
     let processed = 0;
     const counts = () => ({ projects: projects.length, sources: groups.length, applied: appliedIds.length, failed, pending: projects.length - processed - failed });
 
-    // ---- 0. ACT 5C device correction: reach the Save-capable route FIRST ----
-    // Every Save below (the dirty Note guard, resolveSourceDocument's guard and
-    // the per-source Save) is refused while the Projects route is active. ONE
-    // transition to Journal — the route that owns Save — satisfies the accepted
-    // capability policy; it is not a second Save path and it touches no file.
-    if (saveCapabilityBlocked()) {
-      const capHost = globalThis.MME_WORKSPACE_HOST;
-      if (capHost && typeof capHost.switchTo === 'function') {
-        let status = '';
-        try {
-          const r = await capHost.switchTo('journal', { reason: 'projects apply: needs Save capability' });
-          status = String((r && r.status) || '') || 'unknown';
-        } catch (e) { status = 'failed'; }
-        safeLog(`ProjectsApplyBatch: route=journal status=${status}`);
-      }
-    }
+    // ACT 5C direct correction §4: entering the Save-capable Journal route is
+    // paired with a guaranteed restoration owner. One outer try/finally (single
+    // exit): no direct return from inside the source loop before the finally.
+    // Every failure becomes a stored finalResult; finally always runs.
+    let enteredJournal = false;
+    let finalResult = null;
 
-    // ---- 1. dirty Note guard, ONCE, before ANY transition ----
-    if (h.isDirty()) {
-      const transition = await resolveDirtyNote();
-      if (!transition.ok) {
-        const code = boundedReason(transition.reason, BOUNDED.DIRTY_NOTE_CANCELED);
-        logBatch(BATCH_PHASES.FAILED, { projects: projects.length, sources: groups.length, pending: projects.length }, code, sourceReady);
-        return batchResult({ outcome: 'aborted', reason: code, reasonCode: code, pendingProjects: projects.length, sources: groups.length, diagnostics: transition.diagnostics || [] });
+    try {
+      // ---- 0. ACT 5C device correction: reach the Save-capable route FIRST ----
+      // Every Save below (the dirty Note guard, resolveSourceDocument's guard and
+      // the per-source Save) is refused while the Projects route is active. ONE
+      // transition to Journal — the route that owns Save — satisfies the accepted
+      // capability policy; it is not a second Save path and it touches no file.
+      if (saveCapabilityBlocked()) {
+        const capHost = globalThis.MME_WORKSPACE_HOST;
+        if (capHost && typeof capHost.switchTo === 'function') {
+          let status = '';
+          try {
+            const r = await capHost.switchTo('journal', { reason: 'projects apply: needs Save capability' });
+            status = String((r && r.status) || '') || 'unknown';
+          } catch (e) { status = 'failed'; }
+          safeLog(`ProjectsApplyBatch: route=journal status=${status}`);
+        }
+        enteredJournal = true;
       }
-    }
 
-    for (let gi = 0; gi < groups.length; gi += 1) {
+      // ---- 1. dirty Note guard, ONCE, before ANY transition ----
+      if (!finalResult && h.isDirty()) {
+        const transition = await resolveDirtyNote();
+        if (!transition.ok) {
+          const code = boundedReason(transition.reason, BOUNDED.DIRTY_NOTE_CANCELED);
+          logBatch(BATCH_PHASES.FAILED, { projects: projects.length, sources: groups.length, pending: projects.length }, code, sourceReady);
+          finalResult = batchResult({ outcome: 'aborted', reason: code, reasonCode: code, pendingProjects: projects.length, sources: groups.length, diagnostics: transition.diagnostics || [] });
+        }
+      }
+
+      for (let gi = 0; gi < groups.length && !finalResult; gi += 1) {
       const group = groups[gi];
       const groupProjects = Array.isArray(group.projects) ? group.projects : [];
+      // ACT 5C direct correction §5: snapshot the batch request identity BEFORE
+      // the source transition. The rebuild that is part of source-open must not
+      // replace the draft/Index record or the requested ID before verification.
+      const batchSnapshot = groupProjects.map((p) => ({
+        projectId: String((p && p.projectId) || ''),
+        sourcePath: String((p && (p.sourcePath || group.sourcePath)) || group.sourcePath || ''),
+        sourceKind: String((p && (p.sourceKind || group.sourceKind)) || group.sourceKind || 'notes'),
+      }));
       // 3. Content-proven fast path: when the live buffer already holds every
       // target projectId, the active document IS the target — no navigation is
       // needed. Re-resolution would manufacture an open the owner does not
@@ -649,7 +945,8 @@
           failed += groupProjects.length;
           const code = boundedReason(resolved.reason, BOUNDED.SOURCE_OPEN_FAILED);
           logBatch(BATCH_PHASES.FAILED, counts(), code, false);
-          return partialOutcome(code, appliedIds, appliedFields, failed, projects, groups, processed, { diagnostics: resolved.diagnostics || [] });
+          finalResult = partialOutcome(code, appliedIds, appliedFields, failed, projects, groups, processed, { diagnostics: resolved.diagnostics || [] });
+          continue;
         }
         // The source-open owner completed its accepted activation sequence
         // (production: buffer installed during openTextDocument, then render()
@@ -657,16 +954,39 @@
         sourceReady = resolved.ready === true;
         logBatch(BATCH_PHASES.SOURCE_READY, counts(), '', sourceReady);
         live = h.getMarkdown();
+        // ACT 5C direct correction §2+§5: after openWorkspaceFile resolves,
+        // require BOTH source identity AND live content. Verify the ORIGINAL
+        // immutable projectId snapshot against the live source — never
+        // reconstruct it from the refreshed Index. A rebuilt Index that reports
+        // a different ID for the same declaration is identity-changed, not a
+        // silent substitution.
+        let identityChanged = false;
+        for (const snap of batchSnapshot) {
+          if (!snap.projectId) continue;
+          const rec = findIndexProjectById(snap.projectId);
+          if (rec && String(rec.sourcePath || '') === snap.sourcePath && String(rec.projectId || '') !== snap.projectId) {
+            identityChanged = true;
+            break;
+          }
+        }
+        if (identityChanged) {
+          failed += groupProjects.length;
+          logBatch(BATCH_PHASES.FAILED, counts(), BOUNDED.IDENTITY_CHANGED_DURING_TRANSITION, sourceReady);
+          finalResult = partialOutcome(BOUNDED.IDENTITY_CHANGED_DURING_TRANSITION, appliedIds, appliedFields, failed, projects, groups, processed);
+          continue;
+        }
         // After the confirmed source-ready barrier the projectId MUST be
-        // present in LIVE text. Presence (not uniqueness) is judged here: a
-        // duplicate is reported precisely by the identity step below. Only a
-        // GENUINELY absent id reaches 'project-not-found' — a readiness
-        // refusal already returned above with 'source-not-ready'.
-        const afterOpen = groupProjects.every((p) => projectIdPresentIn(live, String(p.projectId || '')) >= 1);
+        // present in LIVE text (canonical parser is the authority; the regex is
+        // only a malformed fallback inside canonicalVerify). Only a GENUINELY
+        // absent id reaches 'project-not-found' — a readiness refusal already
+        // returned above with 'source-not-ready'.
+        const afterOpen = groupProjects.every((p) => canonicalVerify(live, String(p.projectId || '')).hits >= 1);
         if (!afterOpen) {
           failed += groupProjects.length;
+          boundedNotFoundDiagnostics(live, groupProjects, h, group.sourcePath || (groupProjects[0] && groupProjects[0].sourcePath));
           logBatch(BATCH_PHASES.FAILED, counts(), BOUNDED.PROJECT_NOT_FOUND, sourceReady);
-          return partialOutcome(BOUNDED.PROJECT_NOT_FOUND, appliedIds, appliedFields, failed, projects, groups, processed);
+          finalResult = partialOutcome(BOUNDED.PROJECT_NOT_FOUND, appliedIds, appliedFields, failed, projects, groups, processed);
+          continue;
         }
       } else {
         // The live buffer already IS the target document: content proof is the
@@ -676,23 +996,31 @@
         logBatch(BATCH_PHASES.SOURCE_READY, counts(), '', true);
       }
 
-      // 4+5. verify identity and compose ALL mutations for this source
+      // 4+5. verify identity (canonical parser on LIVE Markdown is the authority)
+      // and compose ALL mutations for this source. §3: the private regex is a
+      // malformed fallback only.
       logBatch(BATCH_PHASES.MUTATE, counts());
       let proposed = live;
       const groupOk = [];
       for (const p of groupProjects) {
         const id = String(p.projectId || '');
+        if (finalResult) break;
         if (!id) {
           failed += 1;
           logBatch(BATCH_PHASES.FAILED, counts(), BOUNDED.PROJECT_ID_MISSING, sourceReady);
-          return partialOutcome(BOUNDED.PROJECT_ID_MISSING, appliedIds, appliedFields, failed, projects, groups, processed);
+          finalResult = partialOutcome(BOUNDED.PROJECT_ID_MISSING, appliedIds, appliedFields, failed, projects, groups, processed);
+          break;
         }
-        const hits = projectIdPresentIn(proposed, id);
-        if (hits !== 1) {
+        const cvBatch = canonicalVerify(proposed, id);
+        if (cvBatch.hits !== 1) {
           failed += 1;
-          const code = hits === 0 ? BOUNDED.PROJECT_NOT_FOUND : BOUNDED.DUPLICATE_PROJECT_ID;
+          let code = BOUNDED.PROJECT_NOT_FOUND;
+          if (cvBatch.hits > 1) code = BOUNDED.DUPLICATE_PROJECT_ID;
+          else if (cvBatch.malformedHit) code = BOUNDED.MALFORMED_PROJECT_COMMENT;
+          if (code === BOUNDED.PROJECT_NOT_FOUND) boundedNotFoundDiagnostics(proposed, groupProjects, h, group.sourcePath || (groupProjects[0] && groupProjects[0].sourcePath));
           logBatch(BATCH_PHASES.FAILED, counts(), code, sourceReady);
-          return partialOutcome(code, appliedIds, appliedFields, failed, projects, groups, processed);
+          finalResult = partialOutcome(code, appliedIds, appliedFields, failed, projects, groups, processed);
+          break;
         }
         let refused = null;
         for (const op of (p.operations || [])) {
@@ -718,10 +1046,12 @@
           failed += 1;
           const code = boundedReason(refused.reason, BOUNDED.MUTATION_FAILED);
           logBatch(BATCH_PHASES.FAILED, counts(), code, sourceReady);
-          return partialOutcome(code, appliedIds, appliedFields, failed, projects, groups, processed, { diagnostics: refused.diagnostics || [] });
+          finalResult = partialOutcome(code, appliedIds, appliedFields, failed, projects, groups, processed, { diagnostics: refused.diagnostics || [] });
+          break;
         }
         groupOk.push({ id, fields: Number(p.fieldCount) || fieldCountOf(p.operations) });
       }
+      if (finalResult) continue;
       if (proposed === live) {
         // Nothing to persist for this group: processed, not failed.
         for (const g of groupOk) appliedIds.push(g.id);
@@ -735,7 +1065,8 @@
       if (!buffered) {
         failed += groupProjects.length;
         logBatch(BATCH_PHASES.FAILED, counts(), BOUNDED.BUFFER_UPDATE_FAILED, sourceReady);
-        return partialOutcome(BOUNDED.BUFFER_UPDATE_FAILED, appliedIds, appliedFields, failed, projects, groups, processed);
+        finalResult = partialOutcome(BOUNDED.BUFFER_UPDATE_FAILED, appliedIds, appliedFields, failed, projects, groups, processed);
+        continue;
       }
       logBatch(BATCH_PHASES.SAVE, counts());
       let saveResult = null;
@@ -746,7 +1077,8 @@
         logBatch(BATCH_PHASES.FAILED, counts(), code, sourceReady);
         // The reconciled buffer stays dirty and understandable; no Index rebuild,
         // no rollback of previously saved independent files, and the run stops.
-        return partialOutcome(code, appliedIds, appliedFields, failed, projects, groups, processed, { saveResult });
+        finalResult = partialOutcome(code, appliedIds, appliedFields, failed, projects, groups, processed, { saveResult });
+        continue;
       }
 
       for (const g of groupOk) { appliedIds.push(g.id); appliedFields += g.fields; }
@@ -755,37 +1087,56 @@
       // 7. Index rebuild only after Save success
       logBatch(BATCH_PHASES.REFRESH, counts());
       try { await h.rebuildIndex(); } catch { /* a failed rebuild never rolls back a real write */ }
-    }
+      } // end source loop (finalResult short-circuits remaining groups)
 
-    // 10. Return to the Projects route through the accepted Host owner.
-    let returned = true;
-    try {
-      const hostApi = globalThis.MME_WORKSPACE_HOST;
-      if (hostApi && typeof hostApi.switchTo === 'function') {
-        await hostApi.switchTo('projects', { reason: 'projects apply: return' });
+      if (!finalResult) {
+        logBatch(BATCH_PHASES.COMPLETE, counts());
+        finalResult = batchResult({
+          ok: failed === 0 && appliedIds.length > 0,
+          outcome: failed ? 'partial' : 'complete',
+          reason: failed ? BOUNDED.SAVE_FAILED : '',
+          reasonCode: failed ? BOUNDED.SAVE_FAILED : '',
+          appliedProjectIds: appliedIds.slice(),
+          appliedProjects: appliedIds.length,
+          appliedFields,
+          failedProjects: failed,
+          pendingProjects: 0,
+          sources: groups.length,
+        });
       }
-    } catch (e) { returned = false; }
-    try {
-      if (typeof globalThis.MME_PROJECTS_VIEW?.refreshRoute === 'function') globalThis.MME_PROJECTS_VIEW.refreshRoute();
-    } catch {}
-
-    if (!returned) {
-      logBatch(BATCH_PHASES.FAILED, counts(), BOUNDED.RETURN_FAILED, sourceReady);
-      return partialOutcome(BOUNDED.RETURN_FAILED, appliedIds, appliedFields, failed, projects, groups, processed);
+    } finally {
+      // ACT 5C direct correction §4: guaranteed restoration owner. Runs on
+      // EVERY exit (success, failure, cancel): restores the dedicated Projects
+      // View, verifies it became active and refreshes the route. Failed drafts
+      // remain; successful drafts are reported; a failed return overrides the
+      // stored result with return-failed — never strands the UI in Journal.
+      // The return attempt is UNCONDITIONAL (a no-op when already on Projects)
+      // so every early exit restores Projects; only a failed return after an
+      // actual Journal entry overrides the stored result.
+      let returned = true;
+      try {
+        const hostApi = globalThis.MME_WORKSPACE_HOST;
+        if (hostApi && typeof hostApi.switchTo === 'function') {
+          await hostApi.switchTo('projects', { reason: 'projects apply: return' });
+        }
+      } catch { returned = false; }
+      try {
+        if (returned && globalThis.MME_WORKSPACE_HOST && typeof globalThis.MME_WORKSPACE_HOST.getActiveId === 'function') {
+          returned = String(globalThis.MME_WORKSPACE_HOST.getActiveId()) === 'projects';
+        } else if (returned && globalThis.MME_WORKSPACE_HOST && typeof globalThis.MME_WORKSPACE_HOST.getActive === 'function') {
+          const av = globalThis.MME_WORKSPACE_HOST.getActive();
+          if (av && typeof av === 'object' && av.id) returned = String(av.id) === 'projects';
+        }
+      } catch { returned = false; }
+      try {
+        if (typeof globalThis.MME_PROJECTS_VIEW?.refreshRoute === 'function') globalThis.MME_PROJECTS_VIEW.refreshRoute();
+      } catch {}
+      if (!returned && enteredJournal) {
+        logBatch(BATCH_PHASES.FAILED, counts(), BOUNDED.RETURN_FAILED, sourceReady);
+        finalResult = partialOutcome(BOUNDED.RETURN_FAILED, appliedIds, appliedFields, failed, projects, groups, processed);
+      }
     }
-    logBatch(BATCH_PHASES.COMPLETE, counts());
-    return batchResult({
-      ok: failed === 0 && appliedIds.length > 0,
-      outcome: failed ? 'partial' : 'complete',
-      reason: failed ? BOUNDED.SAVE_FAILED : '',
-      reasonCode: failed ? BOUNDED.SAVE_FAILED : '',
-      appliedProjectIds: appliedIds.slice(),
-      appliedProjects: appliedIds.length,
-      appliedFields,
-      failedProjects: failed,
-      pendingProjects: 0,
-      sources: groups.length,
-    });
+    return finalResult;
   }
 
   globalThis.MME_PROJECT_VISUAL_ADAPTER = Object.freeze({
@@ -799,5 +1150,7 @@
     resolveSourceDocument,
     resolveDirtyNote,
     projectIdPresentIn,
+    ADAPTER_DIAG_REV,
   });
+  logDiagRev('adapter-registration');
 })();

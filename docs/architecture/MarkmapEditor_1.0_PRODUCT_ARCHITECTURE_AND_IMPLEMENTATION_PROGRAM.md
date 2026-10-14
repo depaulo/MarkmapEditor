@@ -872,13 +872,11 @@ Stabilize resolution, ambiguity, missing targets, Related/backlinks, and exact s
 
 Classify consumers, implement the application entry choice, adapt existing UI composition, and connect only useful Current Document consumers.
 
-### Package 5: Projects data foundation
+### Package 5: Projects data foundation + Expanded View (ACT 5D-FU mapping)
 
-Implement the accepted managed model, date/status semantics, parser/index normalization, archive rule, and Current Document/Workspace provider contract.
+Implement the accepted managed model, date/status semantics, parser/index normalization, archive rule, and Current Document/Workspace provider contract — AND the Projects Expanded View (historical Package 6, absorbed into Package 5 by owner decision): virtual view, Return, safe metadata editing, source navigation, filtering, and browser acceptance. Historical numbering is preserved; see the Package 5 architecture §18.1 for the explicit mapping.
 
-### Package 6: Projects Expanded View
-
-Implement virtual view, Return, modal/dropdowns, safe metadata editing, source navigation, filtering, and browser acceptance.
+> Historical Package 6 is not deleted. It is recorded as merged into Package 5. Package 6 is the NEXT Reports direction (historical Packages 7/8).
 
 ### Package 7: Quick Report Markdown
 

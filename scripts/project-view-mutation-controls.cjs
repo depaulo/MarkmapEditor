@@ -59,15 +59,15 @@ const MUTATIONS = [
   { id: 'C01-title-based-targeting', file: ADAPTER,
     find: "  const re = /<!--\\s*mme-project:([\\s\\S]*?)-->/gi;",
     replace: "  const re = /Project:[^\\n]*\\n/gi; // mutated: resolve by title instead of identity",
-    suites: S, expect: ['A01', 'A50', 'A56'], count: 1,
-    why: 'The adapter targets by projectId only, never by title/position.' },
+    suites: S, expect: ['A44', 'G-d', 'CAP01'], count: 1,
+    why: 'The adapter targets by projectId only, never by title/position. The canonical parser now protects identity end-to-end; the fallback regex must still never resolve by title (A44 id-presence contract, G-d source targeting, CAP01 capability gate).' },
   { id: 'C02-skip-projectId-verification', file: ADAPTER,
-    find: '    if (hits === 0) {',
+    find: '    if (cvSingle.hits === 0) {',
     replace: '    if (false) {',
     suites: S, structural: true,
     why: 'INVARIANT: the adapter re-verifies projectId before mutating (the pure owner also refuses, so this is defence-in-depth).' },
   { id: 'C03-allow-duplicate-projectId', file: ADAPTER,
-    find: '    if (hits > 1) {',
+    find: '    if (cvSingle.hits > 1) {',
     replace: '    if (false) {',
     suites: S, structural: true,
     why: 'INVARIANT: duplicated identity is blocked at the adapter AND again in the pure owner (defence-in-depth).' },
@@ -97,8 +97,8 @@ const MUTATIONS = [
     suites: S, expect: ['A58', 'A60'], count: 1,
     why: 'A dirty Note must be protected before transitioning away.' },
   { id: 'C09-hidden-direct-file-write', file: ADAPTER,
-    find: '    const hits = projectIdPresentIn(active, projectId);',
-    replace: "    try { require('fs'); } catch {}\n    const hits = projectIdPresentIn(active, projectId);",
+    find: '    const cvSingle = canonicalVerify(active, projectId);',
+    replace: "    try { require('fs'); } catch {}\n    const cvSingle = canonicalVerify(active, projectId);",
     suites: S, expect: ['R11'], count: 1,
     why: 'The adapter never writes files directly.' },
 
@@ -166,8 +166,8 @@ const MUTATIONS = [
     suites: S, expect: ['F11', 'FT11a'], count: 1,
     why: 'A zero-result state must still explain itself.' },
   { id: 'C23-clear-filters-is-a-noop', file: VIEW,
-    find: "      viewState.search = '';\n      viewState.filters = { stage: ALL, state: ALL, value: ALL, year: ALL, quarter: ALL, currency: ALL };\n      renderInto(ensureContainer());\n      return;\n    }\n    if (action === 'discard-drafts') {",
-    replace: "      // mutated: the Clear filters action no longer resets any dimension\n      renderInto(ensureContainer());\n      return;\n    }\n    if (action === 'discard-drafts') {",
+    find: "      viewState.search = '';\n      viewState.filters = { stage: ALL, state: ALL, value: ALL, year: ALL, quarter: ALL, currency: ALL };\n      renderInto(ensureContainer());\n      return;\n    }\n    // ACT 5D-FU: the clear-quarter action is retired",
+    replace: "      // mutated: the Clear filters action no longer resets any dimension\n      renderInto(ensureContainer());\n      return;\n    }\n    // ACT 5D-FU: the clear-quarter action is retired",
     suites: S, expect: ['CF08', 'CF09', 'CF10', 'CF11', 'CF12', 'CF13'], count: 1,
     why: 'Clear filters really clears every dimension.' },
   { id: 'C24-currency-filter-case-sensitive', file: VIEW,
@@ -242,7 +242,7 @@ const MUTATIONS = [
 
   // ---- mobile ----
   { id: 'C29-return-unreachable-on-mobile', file: VIEW,
-    find: '      `<div class="projectsReturnRow"><button type="button" data-action="return-to-workspace" class="projectsReturnAction">← Return to Workspace</button></div>`);',
+    find: '      `<div class="projectsReturnRow"><button type="button" data-action="return-to-workspace" class="projectsReturnAction" aria-label="Back to Workspace">← Back to Workspace</button></div>`);',
     replace: '      `<div class="projectsReturnRow"></div>`); // mutated: Return removed',
     suites: ['project-device-acceptance.cjs'], expect: ['D33'], structural: true,
     why: 'INVARIANT: Return stays reachable on every layout.' },
@@ -354,13 +354,13 @@ const MUTATIONS = [
     suites: S, expect: ['B27'], count: 1,
     why: 'ONE buffer update per source, never one per field.' },
   { id: 'D22-skip-dirty-note-guard', file: ADAPTER,
-    find: '    if (h.isDirty()) {\n      const transition = await resolveDirtyNote();',
-    replace: '    if (false) {\n      const transition = await resolveDirtyNote();',
+    find: '      if (!finalResult && h.isDirty()) {\n        const transition = await resolveDirtyNote();',
+    replace: '      if (false) {\n        const transition = await resolveDirtyNote();',
     suites: S, expect: ['B38'], count: 1,
     why: 'A dirty Note is protected through Save/Discard/Cancel before any transition.' },
   { id: 'D23-continue-after-save-failure', file: ADAPTER,
-    find: "        return partialOutcome(code, appliedIds, appliedFields, failed, projects, groups, processed, { saveResult });",
-    replace: '        failed += groupProjects.length;\n        continue; // mutated: the run keeps going after a failed Save',
+    find: "        finalResult = partialOutcome(code, appliedIds, appliedFields, failed, projects, groups, processed, { saveResult });",
+    replace: '        failed += 0; // mutated: the run keeps going after a failed Save',
     suites: S, expect: ['B34', 'G-h'], count: 1,
     why: 'The run stops before later sources when a Save fails.' },
   { id: 'D24-second-buffer-update-per-source', file: ADAPTER,
@@ -369,8 +369,8 @@ const MUTATIONS = [
     suites: S, expect: ['B27'], count: 1,
     why: 'Exactly ONE programmatic buffer update per source.' },
   { id: 'D25-trust-stale-source-line', file: ADAPTER,
-    find: '        const hits = projectIdPresentIn(proposed, id);',
-    replace: '        const staleLine = String((proposed.split(\'\\n\')[Number(p.sourceLine) - 1] || \'\'));\n        const hits = staleLine.includes(id) ? 1 : 0; // mutated: identity taken from the stale index line',
+    find: "        const cvBatch = canonicalVerify(proposed, id);",
+    replace: '        const staleLine = String((proposed.split(\'\\n\')[Number(p.sourceLine) - 1] || \'\'));\n        const cvBatch = { hits: staleLine.includes(id) ? 1 : 0, malformedHit: false }; // mutated: identity taken from the stale index line',
     suites: S, expect: ['B43'], count: 1,
     why: 'projectId is re-verified against LIVE Markdown, never from the indexed line.' },
   { id: 'D26-second-save-per-source', file: ADAPTER,
@@ -457,8 +457,8 @@ const MUTATIONS = [
     suites: S, expect: ['AP03', 'AP13'], count: 1,
     why: 'The source record comes from the accepted Workspace file owner.' },
   { id: 'AC4-skip-projectid-reverify', file: ADAPTER,
-    find: "        const hits = projectIdPresentIn(proposed, id);",
-    replace: "        const hits = 1; // mutated: identity is assumed",
+    find: "        const cvBatch = canonicalVerify(proposed, id);",
+    replace: "        const cvBatch = { hits: 1, malformedHit: false }; // mutated: identity is assumed",
     suites: S, structural: true,
     why: 'INVARIANT (defence in depth): the adapter re-verifies projectId, and the pure owner independently refuses an unresolvable or duplicated identity (AP15/AP17 stay green).' },
   { id: 'AC5-wrong-operation-payload', file: ADAPTER,
@@ -537,8 +537,33 @@ const MUTATIONS = [
     why: 'INVARIANT: the bridge delegates to the single Save owner.' },
 ];
 
+// ---- Leak guard (ACT 5D corrective) -------------------------------------
+// A prior run killed by an UNcatchable signal (SIGKILL) can leave an injected
+// '// mutated:' line on disk between the write and the per-mutation restore.
+// Because each iteration snapshots `original` fresh from disk, the NEXT run
+// would read the leaked file as its baseline and never repair it — a silent,
+// permanent contamination. Refuse to run on a contaminated tree, and assert no
+// marker survives after restore. This is the canonical injected-marker contract
+// shared by every mutation in every harness below.
+const LEAK_MARKER = '// mutated:';
+function scanForLeaks() {
+  const targets = [...new Set(MUTATIONS.map((m) => path.join(ROOT, m.file)))];
+  const dirty = [];
+  for (const abs of targets) {
+    try { if (fs.readFileSync(abs, 'utf8').includes(LEAK_MARKER)) dirty.push(path.relative(ROOT, abs)); } catch {}
+  }
+  return dirty;
+}
+
 console.log('ACT 5C - Projects view / adapter mutation controls');
 console.log('='.repeat(62));
+const preRunLeaks = scanForLeaks();
+if (preRunLeaks.length) {
+  console.log('ABORT: working tree already contains injected mutation markers from a prior interrupted run:');
+  for (const d of preRunLeaks) console.log('  LEAKED: ' + d);
+  console.log('Restore these files (e.g. `git checkout -- <file>`) before running controls. Refusing to run on a contaminated tree.');
+  process.exit(3);
+}
 const base = BASELINE.map(runSuite);
 if (!base.every((b) => b.exit === 0 && b.findings.length === 0)) {
   console.log('BASELINE RED - controls are not meaningful.');
@@ -613,5 +638,7 @@ for (const s of structural) console.log('  ' + s.id + ' - restored=' + (s.restor
 console.log('\nHONEST TOTALS: ' + bit.length + ' mutation controls passed of ' + applied + ' applied; ' + notBit.length + ' non-biting; ' + structural.length + ' structural guards.');
 
 if (restoreFailures.length) { console.log('\nRESTORE FAILURES:'); for (const r of restoreFailures) console.log('  ' + r.id + ' - ' + r.reason); process.exit(1); }
+const postRunLeaks = scanForLeaks();
+if (postRunLeaks.length) { console.log('\nLEAK DETECTED after restore (byte-identical restore missed an injected marker):'); for (const d of postRunLeaks) console.log('  LEAKED: ' + d); process.exit(1); }
 if (notBit.length) process.exit(1);
 process.exit(0);

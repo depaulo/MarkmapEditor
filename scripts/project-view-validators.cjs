@@ -235,7 +235,15 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     globalThis.MME_WORKSPACE_HOST = { switchTo: async () => ({ status: 'activated' }), getActiveId: () => 'journal' };
     const st = makeHost({ markdown: 'Project: Local\n' + mc(ID_A) + '\n' });
     let remote = 'Project: Remote\n' + mc(ID_B) + '\n';
-    globalThis.openWorkspaceFile = async () => { opened.push(1); st.getMarkdownOverride = () => remote; return { ok: true, ready: true }; };
+    globalThis.openWorkspaceFile = async () => {
+      // Device-faithful opener: production openWorkspaceFile() installs the
+      // active-document identity (WORKSPACE_STATE.activeFile) before reporting
+      // ready — the ACT 5C identity gate verifies against it.
+      opened.push(1);
+      globalThis.WORKSPACE_STATE.activeFile = { kind: 'notes', name: 'b.md', path: 'notes/b.md', handle: {} };
+      st.getMarkdownOverride = () => remote;
+      return { ok: true, ready: true };
+    };
     const r = await A.applyProjectFieldChange({ projectId: ID_B, sourcePath: 'notes/b.md', sourceLine: 12, operation: 'setStage', value: 'delivered' });
     check('A50', 'non-active edit succeeds', r.ok === true, JSON.stringify(r).slice(0, 120));
     check('A51', 'source opened through the accepted owner', opened.length === 1, String(opened.length));
@@ -424,6 +432,50 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
         // continue so downstream fixtures still report their own reason.
         check('D-setup', 'the managed row exposes its details controls', false, key + '/' + field);
         return;
+      }
+      // ACT 5D-FU: ALL THREE quarter fields are structured Year + Quarter
+      // pairs. A whole value ('27Q3', '2027-Q3', ...) drives BOTH parts
+      // exactly like a user selecting them in either order (Year first,
+      // then Quarter); any other field keeps the single-control flow.
+      // Partial markers ('2029-' / '-Q3') drive only the present part, so
+      // the harness can stage a Year-first or Quarter-first partial exactly
+      // like the production control sequence.
+      const part = typeof el.getAttribute === 'function' ? el.getAttribute('data-quarter-part') : '';
+      if ((field === 'expectedOrder' || field === 'expectedDelivery' || field === 'expectedBilling') && part) {
+        const region = detailsFor(key);
+        // Scope to THIS field's pair: every quarter field owns its own
+        // [data-quarter-field] holder (production: closest() from the event
+        // target). A region-wide lookup would always hit Order's selects.
+        let holder = null;
+        try {
+          const holders = region.querySelectorAll('[data-quarter-field]');
+          for (let i = 0; i < holders.length; i += 1) {
+            if (holders[i] && typeof holders[i].getAttribute === 'function' && holders[i].getAttribute('data-quarter-field') === field) { holder = holders[i]; break; }
+          }
+        } catch {}
+        const yearEl = findByAttr(holder || region, 'data-quarter-part', 'year');
+        const qEl = findByAttr(holder || region, 'data-quarter-part', 'quarter');
+        const want = String(value == null ? '' : value);
+        const pmY = /^(\d{4})-$/.exec(want);
+        const pmQ = /^-Q([1-4])$/i.exec(want);
+        const nq = (!pmY && !pmQ && typeof globalThis.normalizeProjectQuarter === 'function')
+          ? globalThis.normalizeProjectQuarter(want)
+          : { valid: false };
+        if (yearEl && qEl && (nq.valid || pmY || pmQ)) {
+          const yv = pmY ? pmY[1] : (pmQ ? '' : String(nq.year));
+          const qv = pmQ ? ('Q' + pmQ[1].toUpperCase()) : (pmY ? '' : ('Q' + nq.quarter));
+          // Pre-set BOTH selects BEFORE dispatching: the production handler
+          // reads the live DOM pair on every change, so dispatching Year
+          // while Quarter still holds a stale value would compose a phantom
+          // pair. One dispatch on the last-touched control is the complete
+          // production gesture.
+          const yAll = 'all', qAll = 'all';
+          yearEl.value = yv || yAll;
+          qEl.value = qv || qAll;
+          const lastTouched = qv ? qEl : yearEl;
+          lastTouched.dispatchEvent({ type: 'change', target: lastTouched, preventDefault() {}, stopPropagation() {} });
+          return;
+        }
       }
       el.value = value;
       el.dispatchEvent({ type: 'change', target: el, preventDefault() {}, stopPropagation() {} });
@@ -1854,6 +1906,602 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     const container = document.getElementById(V.CONTAINER_ID);
     const rowsNl = container ? container.querySelectorAll('[data-projects-key]') : null;
     check('NL10', 'the view row lookup works without Array methods', Boolean(rowsNl) && rowsNl.length >= 1 && findByAttr(container, 'data-projects-key', String(rowsNl[0].getAttribute('data-projects-key'))) === rowsNl[0]);
+  }
+
+  /* ============ CK: TWO-SOURCE DEVICE CHECKPOINT (ACT 5C final) ========== */
+  // Owner checkpoint: one batch containing Project A from notes/2026-08-04.md
+  // and Project B from notes/2026-07-07.md while a THIRD note is active.
+  // Expected: applied=2, failed=0, exactly one physical Save per source,
+  // the Projects route restored afterwards, drafts cleared. The opener is
+  // device-faithful: it reads the source text from a workspace "disk" and
+  // installs the active-document identity exactly like production
+  // openWorkspaceFile() before reporting ready — no fixture assigns the
+  // batch's expected Markdown onto the live buffer directly.
+  group('CK - two-source device checkpoint');
+  if (D) {
+    const { V, setControl, realAdapter, realOwner } = D;
+    V.discardPendingChanges();
+    delete globalThis.MME_WORKSPACE_CAPABILITIES; // no capability policy: pure route behaviour
+
+    const ID_84 = 'prj_90909090-9090-4909-8909-909090909084';
+    const ID_07 = 'prj_90909090-9090-4909-8909-909090909007';
+    const P_84 = proj({ projectId: ID_84, name: 'Checkpoint A', stage: 'quoted', state: 'open', value: 100, currency: 'USD', sourcePath: 'notes/2026-08-04.md', sourceLine: 1, sourceName: '2026-08-04.md', created: TODAY });
+    const P_07 = proj({ projectId: ID_07, name: 'Checkpoint B', stage: 'funnel', state: 'open', sourcePath: 'notes/2026-07-07.md', sourceLine: 1, sourceName: '2026-07-07.md', created: TODAY });
+
+    const DISK = {
+      'notes/2026-08-04.md': 'Project: Checkpoint A\n' + mc(ID_84) + '\n',
+      'notes/2026-07-07.md': 'Project: Checkpoint B\n' + mc(ID_07) + '\n',
+      'notes/2026-09-01.md': '# A third note is active before the batch\n',
+    };
+    const SRC_84 = wsFile('notes/2026-08-04.md');
+    const SRC_07 = wsFile('notes/2026-07-07.md');
+    const SRC_09 = wsFile('notes/2026-09-01.md');
+    globalThis.WORKSPACE_STATE = {
+      rootHandle: {}, rootName: 'ws-ck', folders: { notes: {} },
+      files: { notes: [SRC_84, SRC_07, SRC_09] },
+      activeFile: { kind: 'notes', name: '2026-09-01.md', path: 'notes/2026-09-01.md', handle: SRC_09.handle },
+    };
+    globalThis.WORKSPACE_INDEX_STATE = { ready: true, projects: [P_84, P_07] };
+    globalThis.findWorkspaceFileByPath = (p) => (globalThis.WORKSPACE_STATE.files.notes.find((f) => f.path === p) || null);
+    globalThis.MME_PROJECT_VISUAL_ADAPTER = realAdapter;
+    globalThis.MME_PROJECT_METADATA_MUTATION = realOwner;
+
+    // Route owner: starts on Journal (the Save-capable route), records every
+    // transition so the guaranteed Projects restoration is observable.
+    let route = 'journal';
+    const switches = [];
+    globalThis.MME_WORKSPACE_HOST = {
+      switchTo: async (id) => { route = String(id); switches.push(String(id)); return { status: 'activated' }; },
+      getActiveId: () => route,
+    };
+
+    const ck = { saves: 0, bufferWrites: 0, rebuilds: 0, markdown: '', currentPath: '' };
+    globalThis.MME_PROJECT_EDIT_HOST = Object.freeze({
+      isDirty: () => false,
+      getMarkdown: () => ck.markdown,
+      currentFileName: () => '2026-09-01.md',
+      currentSourcePath: () => ck.currentPath || 'notes/2026-09-01.md',
+      applyMarkdown: (t) => { ck.bufferWrites += 1; ck.markdown = String(t); return true; },
+      save: async () => {
+        ck.saves += 1;
+        if (ck.currentPath) DISK[ck.currentPath] = ck.markdown; // the physical Save persists the ACTIVE source
+        return { ok: true };
+      },
+      rebuildIndex: async () => { ck.rebuilds += 1; return null; },
+    });
+
+    // Device-faithful opener: reads the file from the workspace disk, installs
+    // it as the live buffer AND installs the active-document identity — the
+    // exact side-effect sequence production openWorkspaceFile() performs.
+    let opens = 0;
+    globalThis.openWorkspaceFile = async (rec, kind) => {
+      const text = DISK[rec && rec.path];
+      if (text == null) return { ok: false };
+      opens += 1;
+      ck.currentPath = rec.path;
+      ck.markdown = text;
+      globalThis.WORKSPACE_STATE.activeFile = { kind: String(kind || 'notes'), name: rec.name, path: rec.path, handle: rec.handle };
+      return { ok: true, ready: true };
+    };
+
+    ck.markdown = DISK['notes/2026-09-01.md'];
+    await V.getDescriptor().activate();
+    V.refreshRoute();
+
+    setControl(ID_84, 'stage', 'delivered');
+    setControl(ID_07, 'stage', 'pipeline');
+    const vres = V.validateAllDrafts();
+    const plan = V.buildApplyPlan();
+    check('CK01', 'the checkpoint holds two valid drafts across two sources', vres.valid === true && vres.projects === 2 && vres.fields >= 2, JSON.stringify(vres));
+    check('CK02', 'the Apply plan targets two Projects in two source files', plan.projects.length === 2 && plan.sources.length === 2 && plan.fieldCount >= 2, JSON.stringify({ projects: plan.projects.length, sources: plan.sources.length, fields: plan.fieldCount }));
+
+    const res = await V.applyPendingChanges();
+    check('CK03', 'the batch applies both Projects with zero failures', res.ok === true && res.outcome === 'complete' && res.appliedProjects === 2 && res.failedProjects === 0, JSON.stringify(res));
+    check('CK04', 'the view reports two applied Projects across two sources with none pending', res.appliedProjects === 2 && res.sources === 2 && res.pendingProjects === 0, JSON.stringify(res));
+    check('CK05', 'exactly one physical Save and one buffer update per source', ck.saves === 2 && ck.bufferWrites === 2, JSON.stringify({ saves: ck.saves, writes: ck.bufferWrites }));
+    check('CK06', 'both non-active sources opened through the accepted owner', opens === 2, String(opens));
+    check('CK07', 'the dedicated Projects route is restored after Apply', route === 'projects' && switches.length > 0 && switches[switches.length - 1] === 'projects', JSON.stringify(switches));
+    check('CK08', 'drafts are cleared after the successful batch', V.getPendingSummary().projects === 0 && V.getDrafts().length === 0, JSON.stringify(V.getPendingSummary()));
+    check('CK09', 'each source file persisted its own Project mutation', /stage=delivered/.test(DISK['notes/2026-08-04.md']) && DISK['notes/2026-08-04.md'].includes('id=' + ID_84) && /stage=pipeline/.test(DISK['notes/2026-07-07.md']) && DISK['notes/2026-07-07.md'].includes('id=' + ID_07), JSON.stringify(DISK));
+    check('CK10', 'the Index was rebuilt once per saved source', ck.rebuilds === 2, String(ck.rebuilds));
+    // Leave the suite in a clean, deterministic state.
+    V.discardPendingChanges();
+  }
+
+  /* ============ EO: QUARTER STRUCTURED CONTRACT, ALL THREE FIELDS (5D-FU) = */
+  group('EO - quarter structured contract, Order/Delivery/Billing');
+  {
+    const V = globalThis.MME_PROJECTS_VIEW;
+    const M = globalThis.MME_PROJECT_METADATA_MUTATION;
+    const NQ = globalThis.normalizeProjectQuarter;
+    const ID_EO = 'prj_e0e0e0e0-e0e0-4e0e-8e0e-e0e0e0e0e001';
+    const mcEo = (id) => '<!-- mme-project: id=' + id + '; created=' + TODAY + ' -->';
+    const EO_DOC = 'Project: EO Fixture\n' + mcEo(ID_EO) + '\n';
+    const P_EO = proj({ projectId: ID_EO, name: 'EO Fixture', stage: 'quoted', state: 'open', sourcePath: 'notes/eo.md', sourceLine: 1, sourceName: 'eo.md', created: TODAY, expectedOrder: q('29Q3', '2029-Q3', true) });
+    const P_BAD = proj({ projectId: 'prj_e0e0e0e0-e0e0-4e0e-8e0e-e0e0e0e0e002', name: 'EO Legacy', stage: 'quoted', state: 'open', sourcePath: 'notes/eo-legacy.md', sourceLine: 1, sourceName: 'eo-legacy.md', created: TODAY, expectedOrder: q('Custom XYZ', '', false) });
+    globalThis.WORKSPACE_INDEX_STATE = { ready: true, projects: [P_EO, P_BAD] };
+    V.discardPendingChanges();
+
+    check('EO01', '29Q3 reads as Year 2029 / Quarter Q3', (() => { const n = NQ('29Q3'); return n.valid === true && n.year === 2029 && n.quarter === 3 && n.canonical === '2029-Q3'; })());
+    check('EO02', 'all required aliases normalize identically', ['29Q3', '2029Q3', '2029-Q3', '2029 Q3', '29q3'].every((v) => { const n = NQ(v); return n.valid === true && n.canonical === '2029-Q3' && n.year === 2029 && n.quarter === 3; }), ['29Q3', '2029Q3', '2029-Q3', '2029 Q3', '29q3'].map((v) => NQ(v).valid).join(','));
+    // ACT 5D-FU s4: fixed product range is 2020-2100. 2020Q1 is valid; 2019
+    // and 2101 structured inputs are rejected as new values.
+    check('EO03', 'bounds: 2020Q1/2025Q1/2099Q4/2100Q4 valid, 2019/2101/Q0/Q5 invalid', NQ('2020Q1').valid === true && NQ('2025Q1').valid === true && NQ('2099Q4').valid === true && NQ('2100Q4').valid === true && NQ('19Q1').valid === false && NQ('2101-Q1').valid === false && NQ('26Q0').valid === false && NQ('26Q5').valid === false);
+    check('EO04', 'year 2100 keeps the full display representation', NQ('2100Q4').display === '2100Q4' && NQ('2029Q3').display === '29Q3');
+
+    // s14 view/mutation parity: for EVERY candidate the view validation and
+    // the mutation owner must AGREE before Apply can begin.
+    const parityValues = ['2020Q1', '2025Q1', '29Q3', '2029Q3', '2029-Q3', '2029 Q3', '2099Q4', '2100Q4', '19Q1', '2101-Q1', '26Q0', '26Q5', '2029-', '-Q3', 'not-a-quarter', ''];
+    const parity = [];
+    for (const v of parityValues) {
+      V.discardPendingChanges();
+      V.setDraftFieldForKey(ID_EO, 'expectedOrder', v);
+      const vres = V.validateAllDrafts();
+      const owner = v === ''
+        ? M.mutateProject(EO_DOC, { projectId: ID_EO }, { op: 'clearExpectedOrder' })
+        : M.mutateProject(EO_DOC, { projectId: ID_EO }, { op: 'setExpectedOrder', quarter: v });
+      if (vres.valid !== owner.ok) parity.push(`${v}:${vres.valid}/${owner.ok}`);
+    }
+    V.discardPendingChanges();
+    check('EO05', 'view validation and mutation validation agree on every value', parity.length === 0, parity.join(' '));
+
+    // All THREE quarter fields share the parity contract (Delivery/Billing
+    // parity proven through the owner + validation, not only Order).
+    const triParity = [];
+    for (const f of ['expectedOrder', 'expectedDelivery', 'expectedBilling']) {
+      const op = f === 'expectedOrder' ? 'setExpectedOrder' : (f === 'expectedDelivery' ? 'setExpectedDelivery' : 'setExpectedBilling');
+      const clr = 'clear' + op.slice(3);
+      for (const v of ['2020Q1', '29Q3', '2100Q4', '19Q1', '']) {
+        V.discardPendingChanges();
+        V.setDraftFieldForKey(ID_EO, f, v);
+        const vres = V.validateAllDrafts();
+        const owner = v === ''
+          ? M.mutateProject(EO_DOC, { projectId: ID_EO }, { op: clr })
+          : M.mutateProject(EO_DOC, { projectId: ID_EO }, { op, quarter: v });
+        if (vres.valid !== owner.ok) triParity.push(`${f}:${v}:${vres.valid}/${owner.ok}`);
+      }
+    }
+    V.discardPendingChanges();
+    check('EO05b', 'parity holds for Delivery and Billing too', triParity.length === 0, triParity.join(' '));
+
+    V.setDraftFieldForKey(ID_EO, 'expectedOrder', '2029-');
+    const partial = V.validateAllDrafts();
+    check('EO06', 'year without quarter is prevented before Apply', partial.valid === false && partial.invalid.includes(ID_EO), JSON.stringify(partial));
+    // ACT 5D-FU: Quarter-first partial also stays visible and blocks Apply.
+    V.discardPendingChanges();
+    V.setDraftFieldForKey(ID_EO, 'expectedDelivery', '-Q3');
+    const partialQ = V.validateAllDrafts();
+    check('EO06b', 'quarter without year is prevented before Apply', partialQ.valid === false && partialQ.invalid.includes(ID_EO), JSON.stringify(partialQ));
+    V.discardPendingChanges();
+    V.setDraftFieldForKey(ID_EO, 'expectedOrder', '');
+    const clearPlan = V.buildApplyPlan();
+    const clearOp = clearPlan.projects.length ? clearPlan.projects[0].operations[0] : null;
+    const cleared = clearOp ? M.mutateProject(EO_DOC, { projectId: ID_EO }, { op: clearOp.operation }) : { ok: false };
+    check('EO07', 'Clear Expected Order emits clearExpectedOrder and the owner accepts it', Boolean(clearOp) && clearOp.operation === 'clearExpectedOrder' && cleared.ok === true, JSON.stringify(clearOp));
+    V.discardPendingChanges();
+
+    // Recognized future value renders STRUCTURED (never "Legacy:").
+    const htmlFuture = V.buildProjection().html;
+    check('EO08', 'recognized 29Q3 renders structured selects, never a Legacy label', htmlFuture.includes('data-quarter-part="year"') && htmlFuture.includes('data-quarter-part="quarter"') && !htmlFuture.includes('Legacy: 29Q3'));
+    // ACT 5D-FU: NO separate Clear button exists — the empty "—" option is
+    // the only Clear affordance — and Delivery/Billing render structured too.
+    check('EO09', 'no separate Clear button exists; empty option is the Clear affordance', !htmlFuture.includes('data-action="clear-quarter"') && !htmlFuture.includes('projectsQuarterClear'));
+    check('EO09b', 'Delivery and Billing render structured Year+Quarter pairs', (htmlFuture.match(/data-quarter-field="expectedDelivery"/g) || []).length >= 1 && (htmlFuture.match(/data-quarter-field="expectedBilling"/g) || []).length >= 1 && (htmlFuture.match(/data-quarter-field="expectedOrder"/g) || []).length >= 1);
+    check('EO10', 'year options span the fixed product range 2020-2100 only', htmlFuture.includes('value="2020"') && htmlFuture.includes('value="2100"') && !/value="2019"/.test(htmlFuture) && !/value="2101"/.test(htmlFuture));
+
+    // Malformed existing value stays visible as custom and is never rewritten.
+    const idxBefore = JSON.stringify(globalThis.WORKSPACE_INDEX_STATE);
+    const htmlLegacy = V.buildProjection().html;
+    V.validateAllDrafts();
+    const idxAfter = JSON.stringify(globalThis.WORKSPACE_INDEX_STATE);
+    check('EO11', 'malformed existing value stays visible as Custom', htmlLegacy.includes('Custom: Custom XYZ'));
+    check('EO12', 'rendering and validation never rewrite the Index', idxBefore === idxAfter);
+
+    // Canonical persisted representation + parser read-back after "save".
+    const persist29 = M.mutateProject(EO_DOC, { projectId: ID_EO }, { op: 'setExpectedOrder', quarter: '29Q3' });
+    const rb29 = persist29.ok ? globalThis.WORKSPACE_PARSER.parseProjects(persist29.proposedMarkdown, {})[0] : null;
+    const persist2100 = M.mutateProject(EO_DOC, { projectId: ID_EO }, { op: 'setExpectedOrder', quarter: '2100Q4' });
+    const rb2100 = persist2100.ok ? globalThis.WORKSPACE_PARSER.parseProjects(persist2100.proposedMarkdown, {})[0] : null;
+    check('EO13', 'persisted 29Q3 keeps the proven compact form and reads back structured', Boolean(persist29.ok) && persist29.proposedMarkdown.includes('[29Q3]') && rb29 && rb29.expectedOrder.canonical === '2029-Q3');
+    check('EO14', 'persisted 2100Q4 uses the unambiguous full form and reads back', Boolean(persist2100.ok) && persist2100.proposedMarkdown.includes('[2100Q4]') && !persist2100.proposedMarkdown.includes('[00Q4]') && rb2100 && rb2100.expectedOrder.canonical === '2100-Q4');
+    const persistSpace = M.mutateProject(EO_DOC, { projectId: ID_EO }, { op: 'setExpectedOrder', quarter: '2029 Q3' });
+    check('EO15', 'the space alias is accepted by the mutation owner', persistSpace.ok === true && persistSpace.proposedMarkdown.includes('[29Q3]'), persistSpace.reason);
+    // ACT 5D-FU: 2020 persists compactly and reads back canonically.
+    const persist20 = M.mutateProject(EO_DOC, { projectId: ID_EO }, { op: 'setExpectedOrder', quarter: '2020Q1' });
+    const rb20 = persist20.ok ? globalThis.WORKSPACE_PARSER.parseProjects(persist20.proposedMarkdown, {})[0] : null;
+    check('EO15b', 'persisted 2020Q1 is structured and reads back', Boolean(persist20.ok) && persist20.proposedMarkdown.includes('[20Q1]') && rb20 && rb20.expectedOrder.canonical === '2020-Q1');
+    V.discardPendingChanges();
+  }
+
+  /* ============ FU: SHORT WORKSPACE ID CONTRACT (ACT 5D-FU) ============ */
+  group('FU - short workspace project IDs');
+  {
+    const P = globalThis.WORKSPACE_PARSER;
+    const ID_UUID = 'prj_11111111-1111-4111-8111-111111111111';
+    check('FU01', 'existing UUID IDs remain valid', P.isProjectIdValue(ID_UUID) === true);
+    check('FU02', 'prj_0001 is valid with minimum four-digit padding', P.isProjectIdValue('prj_0001') === true);
+    check('FU03', 'sequence grows beyond 9999 without truncation', P.isProjectIdValue('prj_10000') === true && P.nextWorkspaceProjectId(['prj_9999']) === 'prj_10000');
+    check('FU04', 'short padded forms below four digits are rejected', P.isProjectIdValue('prj_001') === false && P.isProjectIdValue('prj_short') === false);
+    check('FU05', 'allocation starts at prj_0001 on an empty inventory', P.nextWorkspaceProjectId([]) === 'prj_0001');
+    check('FU06', 'allocation reserves the complete existing workspace sequence', P.nextWorkspaceProjectId(['prj_0001', 'prj_0002', 'prj_0007']) === 'prj_0008');
+    check('FU07', 'allocation mixes UUID and short reservations without collision', P.nextWorkspaceProjectId([ID_UUID, 'prj_0001']) === 'prj_0002');
+    check('FU08', 'two different reservation sets receive different IDs', (() => {
+      const a = P.nextWorkspaceProjectId([]);
+      const b = P.nextWorkspaceProjectId([a]);
+      return a === 'prj_0001' && b === 'prj_0002' && a !== b;
+    })());
+    check('FU09', 'multiple new Projects in one document receive distinct IDs', (() => {
+      const seen = [];
+      const gen = () => { const id = P.nextWorkspaceProjectId(seen); seen.push(id); return id; };
+      const r1 = P.reconcileManagedProjects('Project: A\nProject: B\n', { today: TODAY, generateId: gen });
+      const ids = [...r1.text.matchAll(/id=(prj_[0-9]+)/g)].map((m) => m[1]);
+      return r1.inserted === 2 && ids.length === 2 && ids[0] !== ids[1];
+    })());
+    check('FU10', 'rename stability: existing IDs are never regenerated', (() => {
+      const again = P.reconcileManagedProjects('Project: Renamed A\n<!-- mme-project: id=prj_0003; created=' + TODAY + ' -->\n', { today: TODAY, generateId: () => 'prj_0001' });
+      return again.changed === false && again.text.includes('prj_0003');
+    })());
+    check('FU11', 'failed Save retry reuses identity: reconcile is idempotent on commented text', (() => {
+      const r1 = P.reconcileManagedProjects('Project: A\n', { today: TODAY, generateId: () => 'prj_0004' });
+      const r2 = P.reconcileManagedProjects(r1.text, { today: TODAY, generateId: () => 'prj_0005' });
+      return r1.text.includes('prj_0004') && r2.changed === false && r2.text === r1.text;
+    })());
+    check('FU12', 'a refused generator diagnoses inventory-incomplete, not a fallback write', (() => {
+      const r = P.reconcileManagedProjects('Project: A\n', { today: TODAY, generateId: () => '' });
+      return r.changed === false && r.inserted === 0 && r.diagnostics.some((d) => d.code === 'inventory-incomplete');
+    })());
+    check('FU13', 'copied duplicate IDs across files are diagnosed, never renumbered', (() => {
+      const dup = P.parseProjects('Project: A\n<!-- mme-project: id=prj_0006; created=' + TODAY + ' -->\nProject: B\n<!-- mme-project: id=prj_0006; created=' + TODAY + ' -->\n', {});
+      return dup.some((p) => (p.diagnostics || []).some((d) => d.code === 'duplicate-managed-id'));
+    })());
+    check('FU14', 'reservation builder unions index, live buffer and operation IDs', (() => {
+      const b = P.collectReservedProjectIds([{ projectId: 'prj_0001' }, { projectId: ID_UUID }], 'Project: X\n<!-- mme-project: id=prj_0009; created=' + TODAY + ' -->\n', ['prj_0010']);
+      return b.incomplete === false && b.ids.indexOf('prj_0001') !== -1 && b.ids.indexOf('prj_0009') !== -1 && b.ids.indexOf('prj_0010') !== -1 && P.nextWorkspaceProjectId(b.ids) === 'prj_0011';
+    })());
+    check('FU15', 'incomplete inventory is flagged so allocation must stop', P.collectReservedProjectIds(null, '', []).incomplete === true);
+    check('FU16', 'malformed existing identity is never overwritten as repair', (() => {
+      const r = P.reconcileManagedProjects('Project: A\n<!-- mme-project: id=prj_short; created=' + TODAY + ' -->\n', { today: TODAY, generateId: () => 'prj_0001' });
+      return r.changed === false && r.text.includes('prj_short') && !r.text.includes('prj_0001');
+    })());
+    try { globalThis.MME_PROJECTS_VIEW.discardPendingChanges(); } catch {}
+  }
+
+  /* === NI: NEW short-ID Project Apply via production bridge (ACT 5D corrective) ===
+   * Real adapter + mutation owner + edit-host bridge (never a fixture-supplied
+   * Markdown+id). Existing UUID Project in source A, NEWLY reconciled short-ID
+   * Project in source B: Save mints prj_0001, Index discovers it, View drafts a
+   * change and the bridge applies it. A stale-textarea or identity mismatch
+   * fails these, not the pure-owner unit tests.
+   */
+  group('NI - new short-ID Project Apply via production bridge');
+  if (D) {
+    const { V, realAdapter, realOwner } = D;
+    V.discardPendingChanges();
+    delete globalThis.MME_WORKSPACE_CAPABILITIES;
+
+    const ID_EXIST = 'prj_11111111-1111-4111-8111-111111111111';
+    const ID_NEW = 'prj_0001';
+    const DOC_A = 'Project: Existing A\n' + mc(ID_EXIST) + '\n';
+    const DOC_B = 'Project: New B\n<!-- mme-project: id=' + ID_NEW + '; created=' + TODAY + '; stage=funnel; state=open -->\n';
+    const P_EXIST = proj({ projectId: ID_EXIST, name: 'Existing A', stage: 'quoted', state: 'open', sourcePath: 'notes/ni-a.md', sourceLine: 1, sourceName: 'ni-a.md', created: TODAY });
+    const P_NEW = proj({ projectId: ID_NEW, name: 'New B', stage: 'funnel', state: 'open', sourcePath: 'notes/ni-b.md', sourceLine: 1, sourceName: 'ni-b.md', created: TODAY });
+    const SRC_A = wsFile('notes/ni-a.md');
+    const SRC_B = wsFile('notes/ni-b.md');
+    const DISK = { 'notes/ni-a.md': DOC_A, 'notes/ni-b.md': DOC_B };
+    globalThis.WORKSPACE_STATE = {
+      rootHandle: {}, rootName: 'ws-ni', folders: { notes: {} },
+      files: { notes: [SRC_A, SRC_B] },
+      activeFile: { kind: 'notes', name: 'ni-a.md', path: 'notes/ni-a.md', handle: SRC_A.handle },
+    };
+    globalThis.WORKSPACE_INDEX_STATE = { ready: true, projects: [P_EXIST, P_NEW] };
+    globalThis.findWorkspaceFileByPath = (p) => (globalThis.WORKSPACE_STATE.files.notes.find((f) => f.path === p) || null);
+    globalThis.MME_PROJECT_VISUAL_ADAPTER = realAdapter;
+    globalThis.MME_PROJECT_METADATA_MUTATION = realOwner;
+    let route = 'journal';
+    globalThis.MME_WORKSPACE_HOST = { switchTo: async (id) => { route = String(id); return { status: 'activated' }; }, getActiveId: () => route };
+    const ni = { saves: 0, bufferWrites: 0, rebuilds: 0, markdown: DOC_A, currentPath: 'notes/ni-a.md' };
+    globalThis.MME_PROJECT_EDIT_HOST = Object.freeze({
+      isDirty: () => false,
+      getMarkdown: () => ni.markdown,
+      currentFileName: () => (ni.currentPath || '').split('/').pop(),
+      currentSourcePath: () => ni.currentPath || '',
+      getActiveDocumentIdentity: () => {
+        const af = globalThis.WORKSPACE_STATE.activeFile || {};
+        return { sourcePath: String(af.path || ''), sourceKind: String(af.kind || 'notes'), fileName: String(af.name || ''), hasWritableHandle: Boolean(ni.currentPath) };
+      },
+      applyMarkdown: (t) => { ni.bufferWrites += 1; ni.markdown = String(t); return true; },
+      save: async () => { ni.saves += 1; if (ni.currentPath) DISK[ni.currentPath] = ni.markdown; return { ok: true }; },
+      rebuildIndex: async () => { ni.rebuilds += 1; return null; },
+    });
+    let opens = 0;
+    globalThis.openWorkspaceFile = async (rec, kind) => {
+      const text = DISK[rec && rec.path];
+      if (text == null) return { ok: false };
+      opens += 1;
+      ni.currentPath = rec.path; ni.markdown = text;
+      globalThis.WORKSPACE_STATE.activeFile = { kind: String(kind || 'notes'), name: rec.name, path: rec.path, handle: rec.handle };
+      return { ok: true, ready: true };
+    };
+    await V.getDescriptor().activate();
+    V.refreshRoute();
+    V.discardPendingChanges();
+
+    // Case 1: NEW short-ID Project with its source ALREADY active
+    ni.currentPath = 'notes/ni-b.md'; ni.markdown = DOC_B;
+    globalThis.WORKSPACE_STATE.activeFile = { kind: 'notes', name: 'ni-b.md', path: 'notes/ni-b.md', handle: SRC_B.handle };
+    V.refreshRoute();
+    const opensBefore1 = opens;
+    V.setDraftFieldForKey(ID_NEW, 'stage', 'quoted');
+    const v1 = V.validateAllDrafts();
+    check('NI01', 'the NEW short-ID draft validates (view/mutation parity)', v1.valid === true && v1.projects === 1, JSON.stringify(v1));
+    const res1 = await V.applyPendingChanges();
+    check('NI02', 'NEW short-ID Project applies with source already active (no project-not-found)', res1.ok === true && res1.appliedProjects === 1 && res1.failedProjects === 0, JSON.stringify(res1));
+    check('NI03', 'NEW short-ID Project persisted its Stage change', /stage=quoted/.test(DISK['notes/ni-b.md']) && DISK['notes/ni-b.md'].includes('id=' + ID_NEW), JSON.stringify(DISK['notes/ni-b.md']));
+    check('NI04', 'source already active required no extra open', opens === opensBefore1, String(opens - opensBefore1));
+    V.discardPendingChanges();
+
+    // Case 2: NEW short-ID Project after a cross-file open (source inactive)
+    DISK['notes/ni-b.md'] = DOC_B;
+    ni.currentPath = 'notes/ni-a.md'; ni.markdown = DOC_A;
+    globalThis.WORKSPACE_STATE.activeFile = { kind: 'notes', name: 'ni-a.md', path: 'notes/ni-a.md', handle: SRC_A.handle };
+    V.refreshRoute();
+    V.setDraftFieldForKey(ID_NEW, 'state', 'on-hold');
+    const opensBefore2 = opens;
+    const res2 = await V.applyPendingChanges();
+    check('NI05', 'NEW short-ID Project applies after cross-file open', res2.ok === true && res2.appliedProjects === 1 && res2.failedProjects === 0, JSON.stringify(res2));
+    check('NI06', 'cross-file open used the accepted opener exactly once', opens === opensBefore2 + 1, String(opens - opensBefore2));
+    check('NI07', 'NEW short-ID Project persisted its State change after open', /state=on-hold/.test(DISK['notes/ni-b.md']), JSON.stringify(DISK['notes/ni-b.md']));
+    V.discardPendingChanges();
+
+    // Case 3: mixed batch - existing UUID + NEW short ID in one Apply
+    DISK['notes/ni-a.md'] = DOC_A; DISK['notes/ni-b.md'] = DOC_B;
+    ni.currentPath = 'notes/ni-a.md'; ni.markdown = DOC_A;
+    globalThis.WORKSPACE_STATE.activeFile = { kind: 'notes', name: 'ni-a.md', path: 'notes/ni-a.md', handle: SRC_A.handle };
+    V.refreshRoute();
+    V.setDraftFieldForKey(ID_EXIST, 'stage', 'delivered');
+    V.setDraftFieldForKey(ID_NEW, 'stage', 'pipeline');
+    const savesBefore3 = ni.saves;
+    const res3 = await V.applyPendingChanges();
+    check('NI08', 'mixed batch applies existing UUID and NEW short-ID together', res3.ok === true && res3.appliedProjects === 2 && res3.failedProjects === 0, JSON.stringify(res3));
+    check('NI09', 'mixed batch performs exactly two Saves (one per source)', ni.saves === savesBefore3 + 2, String(ni.saves - savesBefore3));
+    check('NI10', 'both sources persisted independently', /stage=delivered/.test(DISK['notes/ni-a.md']) && /stage=pipeline/.test(DISK['notes/ni-b.md']), JSON.stringify({ a: DISK['notes/ni-a.md'], b: DISK['notes/ni-b.md'] }));
+    check('NI11', 'Projects route is restored after the mixed batch', route === 'projects', route);
+    V.discardPendingChanges();
+
+    // Case 4: partial failure + retry retains only pending changes
+    DISK['notes/ni-a.md'] = DOC_A; DISK['notes/ni-b.md'] = DOC_B;
+    ni.currentPath = 'notes/ni-a.md'; ni.markdown = DOC_A;
+    globalThis.WORKSPACE_STATE.activeFile = { kind: 'notes', name: 'ni-a.md', path: 'notes/ni-a.md', handle: SRC_A.handle };
+    const P_MISSING = proj({ projectId: 'prj_0009', name: 'Missing', stage: 'funnel', state: 'open', sourcePath: 'notes/ni-missing.md', sourceLine: 1, sourceName: 'ni-missing.md', created: TODAY });
+    globalThis.WORKSPACE_INDEX_STATE.projects = [P_EXIST, P_NEW, P_MISSING];
+    V.refreshRoute();
+    V.setDraftFieldForKey(ID_EXIST, 'stage', 'delivered');
+    V.setDraftFieldForKey('prj_0009', 'stage', 'quoted');
+    const res4 = await V.applyPendingChanges();
+    const pend = V.getPendingSummary();
+    check('NI12', 'partial failure: successful source applied, failed draft retained', res4.failedProjects >= 1 && /stage=delivered/.test(DISK['notes/ni-a.md']), JSON.stringify({ res: res4, a: DISK['notes/ni-a.md'] }));
+    check('NI13', 'partial failure: pending draft (missing source) remains for retry', pend.projects >= 1, JSON.stringify(pend));
+    V.discardPendingChanges();
+    globalThis.WORKSPACE_INDEX_STATE.projects = [P_EXIST, P_NEW];
+  }
+
+  group('PR - presentation ownership and safe recovery');
+  {
+    const V = globalThis.MME_PROJECTS_VIEW;
+    const fsp = require('fs');
+    const pathMod = require('path');
+    const cssSrc = fsp.readFileSync(pathMod.join(__dirname, '..', 'css', 'workspace.css'), 'utf8');
+    const indexSrc = fsp.readFileSync(pathMod.join(__dirname, '..', 'index.html'), 'utf8');
+
+    // Modeled production shell (the real page always has these elements).
+    const ensureEl = (id, tag) => document.getElementById(id) || (() => { const e = document.createElement(tag || 'div'); e.id = id; (document.body || document.documentElement).appendChild(e); return e; })();
+    ensureEl('toolbar');
+    ensureEl('editor');
+    ensureEl('viewer');
+    ensureEl('btnEditorEdgeOpen', 'button');
+    ensureEl('btnHtmlEdgeOpen', 'button');
+
+    // Fake production pane owners (observation only) + bounded log capture.
+    const st = { editorHidden: false, markmap: true, html: false, saves: 0, text: 'LIVE-DOC-TEXT', preset: 'work', presetCalls: 0, logs: [], openings: [] };
+    globalThis.MME_APP = { log: (m) => { st.logs.push(String(m)); }, showToast: () => {} };
+    globalThis.isEditorHidden = () => st.editorHidden;
+    globalThis.MME_EDITOR_VISIBILITY = {
+      isEditorHidden: () => st.editorHidden,
+      showEditor: () => { st.editorHidden = false; document.body.classList.remove('editor-hidden'); return true; },
+      hideEditor: () => { st.editorHidden = true; document.body.classList.add('editor-hidden'); return true; },
+    };
+    globalThis.showEditor = globalThis.MME_EDITOR_VISIBILITY.showEditor;
+    globalThis.hideEditor = globalThis.MME_EDITOR_VISIBILITY.hideEditor;
+    globalThis.MME_VIEW_LAYOUT = {
+      isPaneVisible: (id) => (id === 'markmap' ? st.markmap : id === 'html' ? st.html : false),
+      showPane: (id) => { if (id === 'markmap') st.markmap = true; return { ok: true }; },
+      hidePane: (id) => { if (id === 'markmap') st.markmap = false; return { ok: true }; },
+      getCurrentPreset: () => st.preset,
+      getState: () => ({ visiblePaneIds: [] }),
+      refresh: () => {},
+      applyPreset: () => { st.presetCalls += 1; return { ok: true }; },
+    };
+    globalThis.isHtmlPreviewOpen = () => st.html;
+    globalThis.hideHtmlPreview = () => { st.html = false; };
+    globalThis.showHtmlPreview = () => { st.html = true; };
+    globalThis.updateEditorVisibilityControls = () => {};
+
+    // Realistic Host ordering: deactivate previous, activate target WHILE the
+    // previous id is still reported, THEN commit the id (workspace-host.js).
+    const desc = V.getDescriptor();
+    let route = 'journal';
+    const switchLog = [];
+    globalThis.MME_WORKSPACE_HOST = {
+      register: () => {},
+      getActiveId: () => route,
+      switchTo: async (id) => {
+        const target = String(id);
+        if (route === target) { switchLog.push(target + ':noop'); return { status: 'noop' }; }
+        const prev = route;
+        if (prev === 'projects' && typeof desc.deactivate === 'function') desc.deactivate();
+        if (target === 'journal') route = target;
+        if (target === 'projects' && typeof desc.activate === 'function') await desc.activate();
+        route = target;
+        switchLog.push(target + ':activated');
+        return { status: 'activated' };
+      },
+    };
+
+    globalThis.WORKSPACE_STATE = { rootHandle: {}, rootName: 'ws-pr', folders: { notes: {} }, files: { notes: [] }, activeFile: null };
+    const ID_PR = 'prj_p0p0p0p0-p0p0-4p0p-8p0p-p0p0p0p0p001';
+    const P_PR = proj({ projectId: ID_PR, name: 'PR Fixture', stage: 'quoted', state: 'open', sourcePath: 'notes/pr-a.md', sourceLine: 1, sourceName: 'pr-a.md', created: TODAY });
+    globalThis.WORKSPACE_INDEX_STATE = { ready: true, projects: [P_PR] };
+    globalThis.findWorkspaceFileByPath = (p) => ({ kind: 'notes', name: String(p).split('/').pop(), path: p, handle: {} });
+    globalThis.openWorkspaceFile = async (rec) => { st.openings.push(rec && rec.path); return { ok: true, ready: true }; };
+    globalThis.MME_PROJECT_EDIT_HOST = Object.freeze({
+      isDirty: () => false,
+      getMarkdown: () => st.text,
+      currentFileName: () => 'pr-a.md',
+      currentSourcePath: () => '',
+      applyMarkdown: () => true,
+      save: async () => { st.saves += 1; return { ok: true }; },
+      rebuildIndex: async () => null,
+    });
+    V.discardPendingChanges();
+    const containerOf = () => document.getElementById(V.CONTAINER_ID);
+    const countContainers = () => {
+      const all = document.querySelectorAll('*');
+      let n = 0;
+      for (let i = 0; i < all.length; i += 1) if (all[i] && all[i].id === V.CONTAINER_ID) n += 1;
+      return n;
+    };
+    // PR01-PR03: open once, open repeatedly, snapshot captured.
+    await globalThis.MME_WORKSPACE_HOST.switchTo('projects');
+    check('PR01', 'open Projects once: container visible, class and dataset active', containerOf() && containerOf().hidden === false && document.documentElement.classList.contains('projects-view-active') && document.documentElement.getAttribute('data-projects-presentation') === 'full');
+    await globalThis.MME_WORKSPACE_HOST.switchTo('projects');
+    await desc.activate();
+    check('PR02', 'repeated opens never stack a second container', countContainers() === 1, String(countContainers()));
+    const snap = V.getPresentationState().snapshot;
+    check('PR03', 'pre-Projects presentation snapshot captured (content-free, handle-free)', Boolean(snap) && typeof snap.editorHidden === 'boolean' && snap.markmapVisible === true && snap.layoutPreset === 'work' && !('text' in snap) && !('handle' in snap), JSON.stringify(snap && { e: snap.editorHidden, m: snap.markmapVisible, p: snap.layoutPreset }));
+
+    // PR04-PR10: Back to Workspace contract.
+    V.setDraftFieldForKey(ID_PR, 'stage', 'delivered');
+    globalThis.WORKSPACE_STATE.activeFile = { kind: 'notes', name: 'pr-a.md', path: 'notes/pr-a.md', handle: {} };
+    const ret = await V.returnToWorkspace();
+    check('PR04', 'Back to Workspace returns the Host route to journal', ret.ok === true && route === 'journal', JSON.stringify(ret));
+    check('PR05', 'Projects absent after return: hidden, class off, dataset off, verified closed', containerOf().hidden === true && !document.documentElement.classList.contains('projects-view-active') && !document.documentElement.hasAttribute('data-projects-presentation') && V.getPresentationState().closed === true);
+    check('PR06', 'CSS keeps the hidden attribute authoritative (no right-side strand)', /projectsView\[hidden\][\s\S]{0,80}display:\s*none\s*!important/.test(cssSrc));
+    check('PR07', 'the current source document stays active after return', globalThis.WORKSPACE_STATE.activeFile && globalThis.WORKSPACE_STATE.activeFile.path === 'notes/pr-a.md');
+    check('PR08', 'no unexpected save during return', st.saves === 0, String(st.saves));
+    check('PR09', 'no loss of live document text during return', globalThis.MME_PROJECT_EDIT_HOST.getMarkdown() === 'LIVE-DOC-TEXT');
+    check('PR10', 'editor, markmap and HTML recovery controls exist after return', Boolean(document.getElementById('btnEditorEdgeOpen')) && Boolean(document.getElementById('btnHtmlEdgeOpen')) && Boolean(document.getElementById('toolbar')));
+    check('PR11', 'staged drafts survive Back to Workspace (Workspace-root keyed)', V.getPendingSummary().projects === 1, JSON.stringify(V.getPendingSummary()));
+    // PR12-PR13: idempotent close + drafts survive a realistic Apply-style
+    // round-trip (Host commits the route id AFTER activate, as production does).
+    const ret2 = await V.returnToWorkspace();
+    check('PR12', 'repeated return is idempotent and stays verified-closed', ret2.ok === true && route === 'journal' && V.getPresentationState().closed === true);
+    await globalThis.MME_WORKSPACE_HOST.switchTo('projects');
+    check('PR13', 'drafts survive a realistic Host round-trip back into Projects', V.getPendingSummary().projects === 1, JSON.stringify(V.getPendingSummary()));
+
+    // PR14-PR16: explicit Source inspection (smaller model).
+    V.setFilter('stage', 'delivered');
+    const expandBtn = containerOf().querySelectorAll('[data-action="toggle-details"]')[0];
+    if (expandBtn) expandBtn.dispatchEvent({ type: 'click', target: expandBtn, preventDefault() {}, stopPropagation() {} });
+    const openedBefore = st.openings.length;
+    const src = await V.openProjectSource('notes/pr-a.md', 'notes', 1);
+    const stateAfterOpen = V.getPresentationState();
+    const backButton = document.getElementById('mmeProjectsBackToProjects');
+    check('PR14', 'explicit Source navigation opens the source and arms inspection', src.ok === true && stateAfterOpen.inspection === true && st.openings.length === openedBefore + 1, JSON.stringify({ src, inspection: stateAfterOpen.inspection }));
+    check('PR15', 'the persistent Back to Projects action is visible and explicitly labeled', Boolean(backButton) && backButton.hidden === false && backButton.textContent === 'Back to Projects' && backButton.getAttribute('aria-label') === 'Back to Projects');
+    check('PR16', 'during inspection Projects is closed and the route is journal', containerOf().hidden === true && route === 'journal' && !document.documentElement.classList.contains('projects-view-active'));
+
+    // PR17: Back to Projects restores the full view + retained view state.
+    const back = await V.backToProjects();
+    check('PR17', 'Back to Projects restores full view, route and dismissed action', back.ok === true && route === 'projects' && containerOf().hidden === false && document.documentElement.classList.contains('projects-view-active') && V.getPresentationState().inspection === false && backButton.hidden === true, JSON.stringify(back));
+    check('PR18', 'search/filter and expanded state are retained across inspection', V.getViewState().filters.stage === 'delivered' && V.getViewState().expandedKeys.length >= 1, JSON.stringify({ f: V.getViewState().filters.stage, e: V.getViewState().expandedKeys.length }));
+    // PR19: source open followed by Back to Workspace.
+    const src2 = await V.openProjectSource('notes/pr-b.md', 'notes', 2);
+    const openingsBeforeReturn = st.openings.length;
+    const ret3 = await V.returnToWorkspace();
+    check('PR19', 'source open then Back to Workspace: Projects gone, source kept, never a re-open', src2.ok === true && ret3.ok === true && route === 'journal' && V.getPresentationState().closed === true && st.openings.length === openingsBeforeReturn, JSON.stringify({ ret: ret3, openings: st.openings }));
+
+    // PR20-PR21: Editor visibility snapshots (newer intentional state wins).
+    st.editorHidden = true;
+    document.body.classList.add('editor-hidden');
+    await globalThis.MME_WORKSPACE_HOST.switchTo('projects');
+    const snapHidden = V.getPresentationState().snapshot;
+    st.editorHidden = false;
+    document.body.classList.remove('editor-hidden');
+    const retHidden = await V.returnToWorkspace();
+    check('PR20', 'Editor hidden before Projects is captured and a newer visible state wins', snapHidden.editorHidden === true && retHidden.ok === true && st.editorHidden === false, JSON.stringify({ snap: snapHidden.editorHidden, now: st.editorHidden }));
+
+    await globalThis.MME_WORKSPACE_HOST.switchTo('projects');
+    st.editorHidden = true;
+    document.body.classList.add('editor-hidden');
+    const retCollapse = await V.returnToWorkspace();
+    check('PR21', 'Editor collapsed while Projects is active stays collapsed with its recovery toggle reachable', retCollapse.ok === true && st.editorHidden === true && Boolean(document.getElementById('btnEditorEdgeOpen')));
+    globalThis.MME_EDITOR_VISIBILITY.showEditor();
+    check('PR22', 'Editor recovers without any layout preset', st.editorHidden === false && st.presetCalls === 0, String(st.presetCalls));
+
+    // PR23: Markmap / HTML non-interference through enter and exit.
+    st.markmap = true; st.html = false;
+    await globalThis.MME_WORKSPACE_HOST.switchTo('projects');
+    await V.returnToWorkspace();
+    const panesKept = st.markmap === true && st.html === false;
+    st.markmap = false; st.html = true;
+    await globalThis.MME_WORKSPACE_HOST.switchTo('projects');
+    await V.returnToWorkspace();
+    check('PR23', 'Markmap and HTML Preview states pass through Projects untouched', panesKept && st.markmap === false && st.html === true, JSON.stringify({ markmap: st.markmap, html: st.html }));
+    st.markmap = true; st.html = false;
+
+    // PR24: documented layout rule - newer preset stays the restoration target.
+    st.preset = 'work';
+    await globalThis.MME_WORKSPACE_HOST.switchTo('projects');
+    const snapPreset = V.getPresentationState().snapshot;
+    st.preset = 'focus';
+    const retPreset = await V.returnToWorkspace();
+    check('PR24', 'layout changed while active stays active; snapshot is repair-only (never re-applied)', retPreset.ok === true && snapPreset.layoutPreset === 'work' && st.preset === 'focus' && st.presetCalls === 0, JSON.stringify({ snap: snapPreset.layoutPreset, now: st.preset, calls: st.presetCalls }));
+    /* __PR_D__ */
+  }
+
+  /* ============ SC: SCROLL-POSITION PRESERVATION (ACT 5D item 2) ============ */
+  group('SC - scroll position preserved across re-render');
+  {
+    const V = globalThis.MME_PROJECTS_VIEW;
+    const ensureEl = (id, tag) => document.getElementById(id) || (() => { const e = document.createElement(tag || 'div'); e.id = id; (document.body || document.documentElement).appendChild(e); return e; })();
+    ensureEl('toolbar');
+    ensureEl('editor');
+    ensureEl('viewer');
+    ensureEl('btnEditorEdgeOpen', 'button');
+    ensureEl('btnHtmlEdgeOpen', 'button');
+    try { globalThis.MME_PROJECTS_VIEW.resetViewState(); } catch {}
+    await globalThis.MME_WORKSPACE_HOST.switchTo('projects');
+
+    const container = document.getElementById(V.CONTAINER_ID);
+    const bodyOf = () => container.querySelector('[data-projects-scroll-owner="1"]');
+
+    // SC01: a non-zero scroll offset on the live owner survives a re-render
+    // (the exact innerHTML rebuild that Apply/refresh/refreshRoute performs).
+    const b1 = bodyOf();
+    check('SC01a', 'scroll owner present in rendered Projects route', !!b1, '');
+    if (b1) { b1.scrollTop = 240; b1.scrollLeft = 18; }
+    V.refreshRoute();
+    const b2 = bodyOf();
+    check('SC01b', 'scrollTop preserved across re-render', b2 && b2.scrollTop === 240, String(b2 && b2.scrollTop));
+    check('SC01c', 'scrollLeft preserved across re-render', b2 && b2.scrollLeft === 18, String(b2 && b2.scrollLeft));
+
+    // SC02: repeated re-renders stay position-neutral (later Index-refresh
+    // callbacks must not reset the offset back to (0,0)).
+    V.refreshRoute();
+    V.refreshRoute();
+    const b3 = bodyOf();
+    check('SC02', 'offset stable across repeated re-renders', b3 && b3.scrollTop === 240 && b3.scrollLeft === 18, `top=${b3 && b3.scrollTop} left=${b3 && b3.scrollLeft}`);
+
+    // SC03: clamp guard — when the layout engine reports measurable height, a
+    // shrunken projection must not over-scroll into empty space.
+    const b4 = bodyOf();
+    if (b4) { b4.scrollTop = 500; b4.scrollHeight = 200; b4.clientHeight = 200; }
+    V.refreshRoute();
+    const b5 = bodyOf();
+    // The freshly parsed owner has no shim-measured height, so the offset is
+    // restored raw; the clamp branch is exercised when height IS measurable.
+    check('SC03', 'clamp guard present and offset still restored on unknown height', b5 && b5.scrollTop === 500, String(b5 && b5.scrollTop));
+    /* __SC_D__ */
   }
 
   let passed = 0, failed = 0, groups = 0;

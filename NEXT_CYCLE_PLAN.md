@@ -170,9 +170,11 @@ PACKAGE 4   Standalone Notes and scope composition
                then archived by owner decision on 2026-10-02. ACT 4C and ACT 4D
                were cancelled. Preserved on archive/package4-standalone-experiment
                at tag package4-standalone-experiment-final.
-PACKAGE 5   Projects data foundation          -> PLANNING NEXT; scope requires
-                                                reassessment. Not started.
-PACKAGE 6   Projects Expanded View and modal
+PACKAGE 5   Projects data foundation + Expanded View (historical P6 absorbed
+                by owner decision; see Package 5 architecture §18.1) -> ACT 5D
+                statically accepted; ACT 5D follow-up in progress
+PACKAGE 6   NEXT: Reports direction (historical P7/P8) — NOT STARTED; no
+                Package 6 implementation in this ACT
 PACKAGE 7   Quick Report Markdown
 PACKAGE 8   Enriched Reports
 PACKAGE 9   HTML and Draw.io workflow completion

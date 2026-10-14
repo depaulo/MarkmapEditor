@@ -176,7 +176,7 @@ const MUTATIONS = [
   },
   {
     id: 'M11-truncated-uuid-accepted', file: PARSER_LABEL,
-    find: 'const PROJECT_ID_RE = /^prj_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;',
+    find: 'const PROJECT_ID_RE = /^(?:prj_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|prj_[0-9]{4,})$/i;',
     replace: 'const PROJECT_ID_RE = /^prj_[0-9a-f-]+$/i;',
     suites: ['project-contract-validators.cjs'],
     expect: ['E02', 'E03'],
@@ -340,8 +340,29 @@ const BASELINE_SUITES = [
   'project-save-integration-validators.cjs',
 ];
 
+// ---- Leak guard (ACT 5D corrective) -------------------------------------
+// Refuse to run on a tree already contaminated by an injected '// mutated:'
+// marker from a prior SIGKILL-interrupted run, and assert none survives
+// restore. Shared canonical-marker contract with the other two harnesses.
+const LEAK_MARKER = '// mutated:';
+function scanForLeaks() {
+  const targets = [...new Set(MUTATIONS.map((m) => path.join(ROOT, m.file)))];
+  const dirty = [];
+  for (const abs of targets) {
+    try { if (fs.readFileSync(abs, 'utf8').includes(LEAK_MARKER)) dirty.push(path.relative(ROOT, abs)); } catch {}
+  }
+  return dirty;
+}
+
 console.log('ACT 5A — Managed Project mutation controls');
 console.log('='.repeat(62));
+const preRunLeaks = scanForLeaks();
+if (preRunLeaks.length) {
+  console.log('ABORT: working tree already contains injected mutation markers from a prior interrupted run:');
+  for (const d of preRunLeaks) console.log('  LEAKED: ' + d);
+  console.log('Restore these files (e.g. `git checkout -- <file>`) before running controls. Refusing to run on a contaminated tree.');
+  process.exit(3);
+}
 
 const baselineResults = BASELINE_SUITES.map(runSuiteStable);
 let baselineOk = true;
@@ -480,6 +501,12 @@ console.log('HONEST TOTALS: ' + bit.length + ' mutation controls passed of ' + a
 if (restoreFailures.length) {
   console.log('\nRESTORE FAILURES:');
   for (const r of restoreFailures) console.log('  ' + r.id + ' — ' + r.reason);
+  process.exit(1);
+}
+const postRunLeaks = scanForLeaks();
+if (postRunLeaks.length) {
+  console.log('\nLEAK DETECTED after restore (byte-identical restore missed an injected marker):');
+  for (const d of postRunLeaks) console.log('  LEAKED: ' + d);
   process.exit(1);
 }
 if (notBit.length) process.exit(1);

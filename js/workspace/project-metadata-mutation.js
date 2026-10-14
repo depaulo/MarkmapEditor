@@ -165,7 +165,12 @@
   function compactQuarter(canonical) {
     const m = String(canonical || '').match(/^(\d{4})-Q([1-4])$/);
     if (!m) return '';
-    return String(m[1]).slice(-2) + 'Q' + m[2];
+    // ACT 5D: years 2000-2099 keep the proven compact persisted form
+    // ('29Q3' — pinned by the parser/mutation contract). Year 2100 must use
+    // the full representation: the compact slice would be the ambiguous
+    // '00Q4' (2000 vs 2100). No existing file can contain 2100, so this
+    // changes no stored data.
+    return (Number(m[1]) >= 2100 ? m[1] : String(m[1]).slice(-2)) + 'Q' + m[2];
   }
 
   // ---- managed-comment rewriting ------------------------------------------

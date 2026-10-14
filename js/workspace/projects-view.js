@@ -62,7 +62,15 @@
 
   let registered = false;
   let refreshListenerBound = false;
-  let previousWorkspace = null;
+
+  // ---- ACT 5D presentation state (ONE narrow owner) -----------------------
+  // presentationSnapshot: the pre-Projects REPAIR source (§10). Presentation
+  // fields only — never document content, never file handles.
+  let presentationSnapshot = null;
+  // inspectionActive: explicit Projects source inspection under the smaller
+  // model (§5): the source is open in the normal Workspace and exactly one
+  // persistent `Back to Projects` recovery action is armed.
+  let inspectionActive = false;
 
   // ---- view state (module-local; never persisted) ----
   const viewState = {
@@ -80,7 +88,7 @@
 
   // ---- global draft owner: keyed by projectId, NEVER by title ----
   const draftsByProjectId = new Map();
-  let draftsWorkspaceId = null;
+  let draftsWorkspaceKey = null;
 
   // Drafts are never persisted, so a page reload starts from a clean slate.
   let deferredRefresh = false;
@@ -88,6 +96,13 @@
   function safeLog(m) { try { if (typeof globalThis.MME_APP?.log === 'function') globalThis.MME_APP.log(m); } catch {} }
   function getHost() { return typeof globalThis.MME_WORKSPACE_HOST === 'object' ? globalThis.MME_WORKSPACE_HOST : null; }
   function getWorkspaceState() { return globalThis.WORKSPACE_STATE || globalThis.window?.WORKSPACE_STATE || null; }
+  // ACT 5D: drafts belong to the WORKSPACE root, never to a host route id.
+  // The route-id comparison previously cleared staged drafts on every Apply
+  // round-trip under real Host ordering (id committed AFTER activate).
+  function currentWorkspaceKey() {
+    const st = getWorkspaceState();
+    return st && st.rootHandle ? String(st.rootName || '') : '';
+  }
   function utils() { return globalThis.MME_PROJECT_RECORD_UTILS || null; }
   function adapter() { return globalThis.MME_PROJECT_VISUAL_ADAPTER || null; }
 
@@ -120,7 +135,7 @@
       currency: u ? u.normalizeProjectCurrencyCode(p.currency) : String(p.currency || '').toUpperCase(),
       orderValid: Boolean(p.expectedOrder && p.expectedOrder.valid),
       orderCanonical: p.expectedOrder && p.expectedOrder.valid ? p.expectedOrder.canonical : '',
-      orderDisplay: p.expectedOrder && p.expectedOrder.valid ? (p.expectedOrder.display || '') : '',
+      orderDisplay: p.expectedOrder ? (p.expectedOrder.valid ? (p.expectedOrder.display || '') : (p.expectedOrder.raw || '')) : '',
       delivery: p.expectedDelivery && p.expectedDelivery.valid ? (p.expectedDelivery.display || '') : '',
       billing: p.expectedBilling && p.expectedBilling.valid ? (p.expectedBilling.display || '') : '',
       stage: p.stage || '',
@@ -198,8 +213,7 @@
     const id = String(record.projectId || '');
     if (!id) return null;
     if (!draftsByProjectId.has(id)) {
-      const h = getHost();
-      draftsWorkspaceId = h && typeof h.getActiveId === 'function' ? String(h.getActiveId() || '') : '';
+      draftsWorkspaceKey = currentWorkspaceKey();
       draftsByProjectId.set(id, {
         projectId: id,
         original: fieldsOfRecord(record),
@@ -254,7 +268,7 @@
   function discardAllDrafts() {
     const n = draftsByProjectId.size;
     draftsByProjectId.clear();
-    draftsWorkspaceId = null;
+    draftsWorkspaceKey = null;
     viewState.firstInvalidProjectId = '';
     logDrafts('discard');
     return n;
@@ -263,7 +277,7 @@
   function resetDraftsForWorkspaceChange() {
     if (!draftsByProjectId.size) return;
     draftsByProjectId.clear();
-    draftsWorkspaceId = null;
+    draftsWorkspaceKey = null;
     viewState.firstInvalidProjectId = '';
   }
 
@@ -303,9 +317,22 @@
       if (!String(p.currency || '')) errors.currency = 'A value requires a currency';
       else if (!CURRENCY_RE.test(String(p.currency))) errors.currency = 'Currency must be a three-letter code';
     }
-    for (const f of QUARTER_FIELDS) {
-      const v = String(p[f] || '');
-      if (v && !QUARTER_RE.test(v)) errors[f] = 'Quarter must look like 27Q3';
+    // ACT 5D-FU s4/s14: view/mutation parity through the ONE shared
+    // normalizer, applied to ALL THREE quarter fields (Order, Delivery,
+    // Billing). Only a CHANGED structured value can be invalid: an unchanged
+    // legacy/custom value is PRESERVED (never an error), partial markers
+    // ("2029-"/"-Q3") block Apply with guidance, and an explicit Clear
+    // (empty) is a valid structured state.
+    for (const f of ['expectedOrder', 'expectedDelivery', 'expectedBilling']) {
+      if (d.changedFields.indexOf(f) === -1) continue;
+      const orderVal = String(p[f] || '');
+      if (!orderVal) continue;
+      const nq = normalizeQuarterValue(orderVal);
+      if (!nq.valid) {
+        if (/^\d{4}-$/.test(orderVal)) errors[f] = `Select a quarter for ${orderVal.slice(0, 4)}, or Clear`;
+        else if (/^-Q[1-4]$/i.test(orderVal)) errors[f] = `Select a year for ${orderVal.slice(1).toUpperCase()}, or Clear`;
+        else errors[f] = 'Choose a year 2020-2100 and a quarter Q1-Q4, or Clear';
+      }
     }
     if (!legacyPreserved(d, 'stage', STAGE_OPTIONS.map((o) => o.value))) errors.stage = 'Unknown stage';
     if (!legacyPreserved(d, 'state', STATE_OPTIONS.map((o) => o.value))) errors.state = 'Unknown state';
@@ -341,7 +368,10 @@
       if (f === 'value') {
         const v = String(p.value || '');
         const c = String(p.currency || '');
-        if (!v && !c) ops.push({ operation: 'clearValueCurrency' });
+        // ACT 5D s14 parity: the Value + Currency pair is atomic. An empty
+        // value ALWAYS clears the pair, so a view-valid plan can never reach
+        // the mutation owner as setValueCurrency('', code) -> invalid-value.
+        if (!v) ops.push({ operation: 'clearValueCurrency' });
         else ops.push({ operation: 'setValueCurrency', value: v, currency: c });
       } else if (f === 'stage') {
         ops.push(p.stage ? { operation: 'setStage', value: p.stage } : { operation: 'clearStage' });
@@ -409,14 +439,8 @@
     }
     return '';
   }
-  function quarterList() {
-    const out = [];
-    const now = new Date().getFullYear();
-    for (let y = now + 1; y >= now - 3; y -= 1) {
-      for (let q = 1; q <= 4; q += 1) out.push({ value: `${String(y).slice(-2)}Q${q}`, label: `${String(y).slice(-2)}Q${q}` });
-    }
-    return out;
-  }
+  // ACT 5D-FU: quarterList()/quarterSel()/__custom__ retired — all three
+  // quarter fields use the ONE structured contract above.
 
   // The displayed cell prefers the DRAFT when one exists, so a pending edit is
   // visible. Filters and totals keep using the persisted record.
@@ -426,6 +450,18 @@
       stage: r.stage, state: r.state, value: Number.isFinite(r.value) ? String(r.value) : '',
       currency: r.currency, expectedOrder: r.orderDisplay, expectedDelivery: r.delivery, expectedBilling: r.billing,
     };
+  }
+
+  // ACT 5D shared normalizer facade: the ONE production owner is
+  // normalizeProjectQuarter() (workspace-parser.js). A missing owner is
+  // invalid here exactly as in the mutation owner - view/mutation parity.
+  function normalizeQuarterValue(v) {
+    try {
+      if (typeof globalThis.normalizeProjectQuarter === 'function') {
+        return globalThis.normalizeProjectQuarter(String(v == null ? '' : v));
+      }
+    } catch {}
+    return { raw: String(v == null ? '' : v), canonical: null, display: String(v == null ? '' : v), year: null, quarter: null, valid: false };
   }
 
   function detailsControls(r, d, expanded) {
@@ -442,12 +478,43 @@
         ${errHtml(field)}
       </label>`;
     const currencies = currencyOptions(readProjects().map(decorate)).map((c) => ({ value: c, label: c }));
-    const qs = quarterList();
+    // ACT 5D-FU s4: ONE structured Year + Quarter control contract shared by
+    // Expected Order, Expected Delivery and Expected Billing. Label renders on
+    // the first line, compact Year + Quarter sit side by side on the second
+    // line. The empty option "—" is the ONLY Clear affordance (no Clear
+    // button): selecting "—" in EITHER select clears the COMPLETE field and
+    // both controls. Partial states stay visible but block Apply; Cancel
+    // restores persisted values. Legacy values stay visible until explicit
+    // replacement or clearing. Year range: fixed product floor 2020 to 2100
+    // (never derived from the current year).
+    const yearOptions = (() => {
+      const out = [];
+      for (let y = 2020; y <= 2100; y += 1) out.push({ value: String(y), label: String(y) });
+      return out;
+    })();
+    const quarterOptions = [
+      { value: 'Q1', label: 'Q1' }, { value: 'Q2', label: 'Q2' },
+      { value: 'Q3', label: 'Q3' }, { value: 'Q4', label: 'Q4' },
+    ];
+    const quarterStructured = (field, current) => {
+      const parsed = normalizeQuarterValue(current);
+      const legacy = Boolean(current) && !parsed.valid && !/^(\d{4}-|-Q[1-4])$/i.test(String(current));
+      // ACT 5D-FU: partial markers (year-only "2029-" / quarter-only "-Q3")
+      // keep the FIRST selection visible while the companion is still empty;
+      // they are not valid values and block Apply until completed or cleared.
+      const partialYear = /^(\d{4})-$/.exec(String(current || ''));
+      const partialQ = /^-Q([1-4])$/i.exec(String(current || ''));
+      const yearVal = parsed.valid && !legacy ? String(parsed.year || '') : (partialYear ? partialYear[1] : '');
+      const qVal = parsed.valid && !legacy ? `Q${parsed.quarter}` : (partialQ ? `Q${partialQ[1].toUpperCase()}` : '');
+      const yearSel = `<select class="projectsCellSelect projectsQuarterYear" data-field="${field}" data-quarter-part="year" aria-label="${escapeHtml(field)} Year">${opts(yearOptions, yearVal, '—')}</select>`;
+      const qSel = `<select class="projectsCellSelect projectsQuarterQuarter" data-field="${field}" data-quarter-part="quarter" aria-label="${escapeHtml(field)} Quarter">${opts(quarterOptions, qVal, '—')}</select>`;
+      const legacyNote = legacy ? `<span class="projectsQuarterLegacy" data-quarter-legacy="1">Custom: ${escapeHtml(current)}</span>` : '';
+      return `<span class="projectsQuarterPair" data-quarter-field="${field}">${yearSel}${qSel}${legacyNote}</span>`;
+    };
     const stageSel = `<select class="projectsCellSelect" data-field="stage" aria-label="Stage">${opts(STAGE_OPTIONS, f.stage, '—')}${legacyOption(STAGE_OPTIONS, f.stage)}</select>`;
     const stateSel = `<select class="projectsCellSelect" data-field="state" aria-label="State">${opts(STATE_OPTIONS, f.state, '—')}${legacyOption(STATE_OPTIONS, f.state)}</select>`;
     const valueInput = `<input class="projectsCellInput" type="text" inputmode="decimal" data-field="value" value="${escapeHtml(f.value)}" aria-label="Value" />`;
     const currencySel = `<select class="projectsCellSelect" data-field="currency" aria-label="Currency">${opts(currencies, f.currency, '—')}${legacyOption(currencies, f.currency)}<option value="__other__">Other…</option></select>`;
-    const quarterSel = (field, current) => `<select class="projectsCellSelect" data-field="${field}" aria-label="${escapeHtml(field)}">${opts(qs, current, '—')}${legacyOption(qs, current)}<option value="__custom__">Custom…</option></select>`;
     const createdCell = r.created
       ? `<time datetime="${escapeHtml(r.created)}">${escapeHtml(r.created)}</time>`
       : '<span aria-label="No created date">—</span>';
@@ -461,9 +528,9 @@
         ${fieldWrap('State', stateSel, 'state')}
         ${fieldWrap('Value', valueInput, 'value')}
         ${fieldWrap('Currency', currencySel, 'currency')}
-        ${fieldWrap('Expected Order', quarterSel('expectedOrder', f.expectedOrder), 'expectedOrder')}
-        ${fieldWrap('Expected Delivery', quarterSel('expectedDelivery', f.expectedDelivery), 'expectedDelivery')}
-        ${fieldWrap('Expected Billing', quarterSel('expectedBilling', f.expectedBilling), 'expectedBilling')}
+        ${fieldWrap('Expected Order', quarterStructured('expectedOrder', f.expectedOrder), 'expectedOrder')}
+        ${fieldWrap('Expected Delivery', quarterStructured('expectedDelivery', f.expectedDelivery), 'expectedDelivery')}
+        ${fieldWrap('Expected Billing', quarterStructured('expectedBilling', f.expectedBilling), 'expectedBilling')}
         <span class="projectsDetailItem projectsDetailCreated">Created: ${createdCell}</span>
         <span class="projectsDetailItem">Source: ${sourceBtn}</span>
       </div>`;
@@ -684,13 +751,64 @@
     return c;
   }
 
+  // ---- ACT 5D corrective item 2: scroll-position preservation -------------
+  // .projectsBody (data-projects-scroll-owner="1") is the single vertical
+  // scroll owner of the Projects route. Replacing container.innerHTML during
+  // every post-Apply renderInto, refresh, refreshRoute and later Index-refresh
+  // callback rebuilt the DOM subtree from scratch and reset the scroll owner
+  // to (0,0): the user scrolled the Project list to row N, pressed Apply, and
+  // the list jumped back to the top. Capture the LIVE scroll owner's offsets
+  // BEFORE the destructive rebuild and restore them AFTER the final layout, so
+  // a re-render is visually position-neutral. Clamped to [0, max] so a shrunken
+  // projection (fewer rows after Apply) can never over-scroll into empty space.
+  function restoreScrollOwner(container) {
+    let body = null;
+    try {
+      body = container ? container.querySelector('[data-projects-scroll-owner="1"]') : null;
+    } catch { body = null; }
+    if (!body) return () => {};
+    const top = Number(body.scrollTop) || 0;
+    const left = Number(body.scrollLeft) || 0;
+    if (!top && !left) return () => {};
+    return () => {
+      try {
+        // innerHTML already replaced the subtree; address the NEW owner node so
+        // the restored offsets land on the element the user is actually viewing.
+        const next = container.querySelector('[data-projects-scroll-owner="1"]') || body;
+        // Measurable layout requires a POSITIVE client box. Zero is finite but
+        // means "not laid out / hidden" (e.g. Projects is briefly unmounted
+        // during the Workspace transition), NOT "shrunken to empty". Clamping
+        // against a zero client box would silently reset a saved nonzero offset
+        // to 0. So:
+        //   - clientHeight > 0  → genuinely laid out → clamp (a shrunken
+        //     projection must never over-scroll into empty space);
+        //   - clientHeight === 0 → hidden / unknown → assign the RAW saved
+        //     offset and let the browser clamp at paint time once visible.
+        const scrollHeight = Number(next.scrollHeight);
+        const clientHeight = Number(next.clientHeight);
+        const scrollWidth = Number(next.scrollWidth);
+        const clientWidth = Number(next.clientWidth);
+        const measurableV = Number.isFinite(scrollHeight) && Number.isFinite(clientHeight) && clientHeight > 0;
+        const measurableH = Number.isFinite(scrollWidth) && Number.isFinite(clientWidth) && clientWidth > 0;
+        next.scrollTop = measurableV
+          ? Math.min(Math.max(0, top), Math.max(0, scrollHeight - clientHeight))
+          : Math.max(0, top);
+        next.scrollLeft = measurableH
+          ? Math.min(Math.max(0, left), Math.max(0, scrollWidth - clientWidth))
+          : Math.max(0, left);
+      } catch {}
+    };
+  }
+
   function renderInto(container) {
     const p = buildProjection();
     // Bounded diagnostic only: counts and lifecycle state, never content.
     safeLog(`ProjectsView: workspaceAvailable=${p.state !== 'unavailable'} indexReady=${p.ready} projects=${p.total != null ? p.total : (p.state === 'unavailable' || p.state === 'loading' ? 0 : p.count)} state=${p.state}`);
+    const restoreScroll = restoreScrollOwner(container);
     container.innerHTML = p.html;
     container.insertAdjacentHTML('afterbegin',
-      `<div class="projectsReturnRow"><button type="button" data-action="return-to-workspace" class="projectsReturnAction">← Return to Workspace</button></div>`);
+      `<div class="projectsReturnRow"><button type="button" data-action="return-to-workspace" class="projectsReturnAction" aria-label="Back to Workspace">← Back to Workspace</button></div>`);
+    restoreScroll();
     return p;
   }
 
@@ -720,6 +838,10 @@
       });
       if (opened && opened.cancelled) return { ok: false, reason: 'canceled' };
       focusSourceLine(Number(line) || 0);
+      // ACT 5D smaller model (§5): explicit Source navigation from Projects
+      // opens the source in the normal Workspace and arms the ONE persistent
+      // recovery action (`Back to Projects`).
+      setInspection(true);
       return { ok: true };
     } catch (e) {
       safeLog(`ProjectsView: source open failed reason=${String(e && e.message ? e.message : e)}`);
@@ -826,11 +948,206 @@
     return Object.freeze(Object.assign({ ok: Boolean(result && result.ok) }, viewState.lastBatchResult));
   }
 
-  function handleReturnToWorkspace() {
-    const hostApi = getHost();
-    if (!hostApi) return;
-    hostApi.switchTo('journal', { reason: 'projects return' }).catch(() => {});
+  // ---- ACT 5D: ONE authoritative Projects presentation owner --------------
+  // open Projects full view -> host switchTo('projects') -> activate()
+  // close / Back to Workspace -> handleReturnToWorkspace()
+  // Back to Projects -> backToProjects(); safe recovery -> recoverPresentation()
+  // Operations are idempotent: repeated opens never stack (ensureContainer),
+  // repeated closes leave one clean closed state, returns are NOOP-safe.
+  // Snapshot rule (documented): pane visibility the user changes WHILE Projects
+  // is active is the NEWER restoration target; the captured pre-Projects
+  // snapshot is ONLY a REPAIR source when the returned state cannot be verified.
+  function capturePresentationSnapshot(reason) {
+    try {
+      const vl = globalThis.MME_VIEW_LAYOUT;
+      const editorEl = document.getElementById('editor');
+      const snap = {
+        contextId: String(globalThis.currentAppContextId || ''),
+        hostActiveId: (function () { const h = getHost(); return h && typeof h.getActiveId === 'function' ? String(h.getActiveId() || '') : ''; })(),
+        editorHidden: (function () { try { if (typeof globalThis.isEditorHidden === 'function') return Boolean(globalThis.isEditorHidden()); } catch {} return document.body.classList.contains('editor-hidden'); })(),
+        editorWidth: (editorEl && editorEl.style && editorEl.style.width) ? String(editorEl.style.width) : '',
+        markmapVisible: (vl && typeof vl.isPaneVisible === 'function') ? Boolean(vl.isPaneVisible('markmap')) : null,
+        htmlVisible: (typeof globalThis.isHtmlPreviewOpen === 'function') ? Boolean(globalThis.isHtmlPreviewOpen()) : null,
+        layoutPreset: (vl && typeof vl.getCurrentPreset === 'function') ? String(vl.getCurrentPreset() || '') : '',
+        paneVisibleIds: (vl && vl.getState && Array.isArray(vl.getState().visiblePaneIds)) ? Array.prototype.slice.call(vl.getState().visiblePaneIds) : [],
+        timestamp: Date.now(),
+        reason: String(reason || ''),
+      };
+      // Presentation state ONLY - never document content, never file handles.
+      presentationSnapshot = Object.freeze(snap);
+    } catch { /* capture failure leaves any previous snapshot in place */ }
+    return presentationSnapshot;
   }
+  function closeProjectsPresentation() {
+    try {
+      const c = document.getElementById(CONTAINER_ID);
+      if (c) c.hidden = true;
+      document.documentElement.classList.remove('projects-view-active');
+      document.documentElement.removeAttribute('data-projects-presentation');
+    } catch {}
+    return verifyProjectsClosed().ok;
+  }
+
+  function verifyProjectsClosed() {
+    let classOff = true;
+    let dsOff = true;
+    let hiddenOn = true;
+    let displayOff = true;
+    try { classOff = !document.documentElement.classList.contains('projects-view-active'); } catch {}
+    try { dsOff = typeof document.documentElement.hasAttribute === 'function' ? !document.documentElement.hasAttribute('data-projects-presentation') : true; } catch {}
+    try { const c = document.getElementById(CONTAINER_ID); hiddenOn = !c || c.hidden === true; } catch {}
+    try {
+      const gcs = typeof globalThis.getComputedStyle === 'function' ? globalThis.getComputedStyle : (globalThis.window && globalThis.window.getComputedStyle);
+      const c = document.getElementById(CONTAINER_ID);
+      if (c && typeof gcs === 'function') displayOff = gcs.call(globalThis.window || globalThis, c).display === 'none';
+    } catch {}
+    return { ok: Boolean(classOff && dsOff && hiddenOn && displayOff), classOff, dsOff, hiddenOn, displayOff };
+  }
+
+  function shellModeled() {
+    try { return Boolean(document.getElementById('toolbar') || document.getElementById('editor') || document.getElementById('btnEditorEdgeOpen') || document.getElementById('viewer')); } catch { return false; }
+  }
+  function verifyShellReachable(snapshot) {
+    if (!shellModeled()) return { ok: true };
+    const problems = [];
+    let editorHidden = document.body.classList.contains('editor-hidden');
+    try { if (typeof globalThis.isEditorHidden === 'function') editorHidden = Boolean(globalThis.isEditorHidden()); } catch {}
+    const edge = document.getElementById('btnEditorEdgeOpen');
+    const ed = document.getElementById('editor');
+    const incoherent = (editorHidden && !edge) || (!editorHidden && ed && ed.style && ed.style.display === 'none');
+    if (incoherent) {
+      // Repair ONLY from the snapshot: deliberate, reachable user changes made
+      // while Projects was active are the NEWER restoration target.
+      if (snapshot && typeof snapshot.editorHidden === 'boolean') {
+        try {
+          const ev = globalThis.MME_EDITOR_VISIBILITY;
+          if (ev && typeof ev.showEditor === 'function' && typeof ev.hideEditor === 'function') { if (snapshot.editorHidden) ev.hideEditor(); else ev.showEditor(); }
+          else if (typeof globalThis.showEditor === 'function' && typeof globalThis.hideEditor === 'function') { if (snapshot.editorHidden) globalThis.hideEditor(); else globalThis.showEditor(); }
+        } catch {}
+      }
+      let after = editorHidden;
+      try { if (typeof globalThis.isEditorHidden === 'function') after = Boolean(globalThis.isEditorHidden()); else after = document.body.classList.contains('editor-hidden'); } catch {}
+      const edgeAfter = document.getElementById('btnEditorEdgeOpen');
+      const edAfter = document.getElementById('editor');
+      if ((after && !edgeAfter) || (!after && edAfter && edAfter.style && edAfter.style.display === 'none')) problems.push('editor-controls');
+    }
+    return { ok: problems.length === 0 };
+  }
+  function ensureBackButton() {
+    try {
+      const existing = document.getElementById('mmeProjectsBackToProjects');
+      if (existing) return existing;
+      const toolbar = document.getElementById('toolbar');
+      if (!toolbar || typeof document.createElement !== 'function') return null;
+      const b = document.createElement('button');
+      b.id = 'mmeProjectsBackToProjects';
+      b.type = 'button';
+      b.className = 'projectsBackToProjects';
+      b.textContent = 'Back to Projects';
+      b.setAttribute('aria-label', 'Back to Projects');
+      b.title = 'Back to Projects';
+      b.hidden = !inspectionActive;
+      b.addEventListener('click', function () { void backToProjects(); });
+      toolbar.appendChild(b);
+      return b;
+    } catch { return null; }
+  }
+
+  function setInspection(on) {
+    inspectionActive = Boolean(on);
+    try { inspectionActive ? document.documentElement.setAttribute('data-projects-inspection', 'true') : document.documentElement.removeAttribute('data-projects-inspection'); } catch {}
+    try { const b = ensureBackButton(); if (b) b.hidden = !inspectionActive; } catch {}
+    return inspectionActive;
+  }
+
+  async function backToProjects() {
+    const hostApi = getHost();
+    setInspection(false);
+    let status = 'no-host';
+    try {
+      if (hostApi && typeof hostApi.switchTo === 'function') {
+        const r = await hostApi.switchTo('projects', { reason: 'projects back to projects' });
+        status = String((r && r.status) || 'unknown');
+      }
+    } catch (e) { status = 'failed'; }
+    // Idempotent DOM guarantee: a Host NOOP (already on Projects) must still
+    // leave the full presentation mounted exactly once.
+    try {
+      const c = ensureContainer();
+      c.hidden = false;
+      document.documentElement.classList.add('projects-view-active');
+      document.documentElement.setAttribute('data-projects-presentation', 'full');
+    } catch {}
+    const hostApi2 = getHost();
+    const active = hostApi2 && typeof hostApi2.getActiveId === 'function' ? String(hostApi2.getActiveId() || '') : 'projects';
+    const c2 = document.getElementById(CONTAINER_ID);
+    const ok = active === 'projects' && Boolean(c2) && c2.hidden === false && document.documentElement.classList.contains('projects-view-active');
+    safeLog(`ProjectsPresentation: back-to-projects status=${status} ok=${ok}`);
+    return Object.freeze({ ok, reason: ok ? '' : 'back-to-projects-failed' });
+  }
+  async function recoverPresentation(reason) {
+    // ACT 5D s9 safe recovery: a Projects-specific boundary, never a generic
+    // app reset. No Save, no Markdown write, no Project draft clearing.
+    const code = String(reason || 'unspecified');
+    safeLog(`ProjectsPresentation: recovery reason=${code}`);
+    const hostApi = getHost();
+    setInspection(false);
+    closeProjectsPresentation();
+    try {
+      const active = hostApi && typeof hostApi.getActiveId === 'function' ? String(hostApi.getActiveId() || '') : '';
+      if (active !== 'journal' && hostApi && typeof hostApi.switchTo === 'function') {
+        await hostApi.switchTo('journal', { reason: 'projects recovery' });
+      }
+    } catch {}
+    closeProjectsPresentation();
+    try {
+      const ev = globalThis.MME_EDITOR_VISIBILITY;
+      if (ev && typeof ev.showEditor === 'function' && (typeof ev.isEditorHidden !== 'function' || ev.isEditorHidden())) ev.showEditor();
+      else if (typeof globalThis.showEditor === 'function' && typeof globalThis.isEditorHidden === 'function' && globalThis.isEditorHidden()) globalThis.showEditor();
+    } catch {}
+    try {
+      const vl = globalThis.MME_VIEW_LAYOUT;
+      if (vl && typeof vl.isPaneVisible === 'function' && typeof vl.showPane === 'function' && !vl.isPaneVisible('markmap')) vl.showPane('markmap');
+      else if (!vl && typeof globalThis.showMapPane === 'function' && typeof globalThis.isMapPaneVisible === 'function' && !globalThis.isMapPaneVisible()) globalThis.showMapPane();
+    } catch {}
+    try {
+      if (typeof globalThis.isHtmlPreviewOpen === 'function' && globalThis.isHtmlPreviewOpen() && typeof globalThis.hideHtmlPreview === 'function') globalThis.hideHtmlPreview();
+    } catch {}
+    try { if (typeof globalThis.updateEditorVisibilityControls === 'function') globalThis.updateEditorVisibilityControls(); } catch {}
+    try { const vl2 = globalThis.MME_VIEW_LAYOUT; if (vl2 && typeof vl2.refresh === 'function') vl2.refresh(); } catch {}
+    return Object.freeze({ ok: true, reason: code });
+  }
+  // The accepted Back to Workspace contract (ACT 5D s6). Verified against the
+  // real DOM state, never against context ids or log messages alone.
+  async function handleReturnToWorkspace() {
+    const hostApi = getHost();
+    // 1. Accepted restoration through the Host owner. NOOP-safe: in the
+    //    stranded case the route is already Journal, so this may legitimately
+    //    do nothing - step 2 still closes the presentation.
+    if (hostApi && typeof hostApi.switchTo === 'function') {
+      try { await hostApi.switchTo('journal', { reason: 'projects return' }); } catch {}
+    }
+    // 2. Explicit close, independent of the Host result (stranded-proof).
+    const closed = closeProjectsPresentation();
+    // 3. The inspection recovery action leaves with the presentation.
+    setInspection(false);
+    // 4. Verify with actual DOM visibility; recover when the normal closure
+    //    cannot be confirmed.
+    if (!closed) await recoverPresentation('projects-close-verification-failed');
+    // 5. Verify the shell is reachable and coherent; repair from the snapshot
+    //    only when the state cannot be confirmed (newer user changes win).
+    const shell = verifyShellReachable(presentationSnapshot);
+    if (!shell.ok) await recoverPresentation('workspace-reachability-failed');
+    const finalCheck = verifyProjectsClosed().ok && verifyShellReachable(presentationSnapshot).ok;
+    if (!finalCheck) {
+      safeLog('ProjectsPresentation: return-failed');
+      return Object.freeze({ ok: false, reason: 'return-failed' });
+    }
+    safeLog('ProjectsPresentation: return-to-workspace ok');
+    return Object.freeze({ ok: true, reason: '' });
+  }
+
+
 
   function rowRecordByKey(key) {
     return readProjects().map(decorate).find((x) => x.key === key) || null;
@@ -863,6 +1180,8 @@
       renderInto(ensureContainer());
       return;
     }
+    // ACT 5D-FU: the clear-quarter action is retired — the empty "—" option
+    // in either Year/Quarter select is the ONLY Clear affordance.
     if (action === 'discard-drafts') {
       event.preventDefault();
       // Discards VIEW drafts only. It never touches the active Note, never
@@ -892,15 +1211,45 @@
     const record = rowRecordByKey(key);
     if (!record || !record.managed) return false;
 
+    // ACT 5D s11: no draft edits while Apply is running.
+    if (viewState.applying) return false;
     let raw = String(el.value == null ? '' : el.value);
-    if (raw === '__custom__') {
-      const entered = typeof globalThis.prompt === 'function' ? globalThis.prompt('Quarter, for example 27Q3') : null;
-      raw = entered == null ? String(recordKeyedOriginal(record, field)) : String(entered).trim().toUpperCase();
-    } else if (raw === '__other__') {
+    if (raw === '__other__') {
       const entered = typeof globalThis.prompt === 'function' ? globalThis.prompt('Currency code, for example BRL') : null;
       raw = entered == null ? String(recordKeyedOriginal(record, 'currency')) : String(entered).trim().toUpperCase();
     } else if (raw === ALL) {
+      // ACT 5D-FU: the empty "—" option is the per-field explicit Clear
+      // state. For a structured quarter pair the composed block below
+      // reduces to '' (complete field cleared); for a plain field this is
+      // the ordinary empty state. The untouched companion select keeps its
+      // own "—" default, so initial selection works in either order.
       raw = '';
+    }
+
+    // ACT 5D-FU s4: compose the structured Year + Quarter selection into
+    // the ONE draft field. Clearing EITHER select (to "—") clears the
+    // COMPLETE field (raw='') — the explicit Clear state. A first selection
+    // whose companion is still empty persists as a partial marker
+    // ("2029-" / "-Q3") so the UI keeps it visible; validateDraft blocks
+    // Apply until the pair is completed or cleared. Year-first and
+    // Quarter-first selection both work — the first selection is never
+    // erased because the companion is still empty.
+    const QUARTER_FIELDS = ['expectedOrder', 'expectedDelivery', 'expectedBilling'];
+    const part = typeof el.getAttribute === 'function' ? el.getAttribute('data-quarter-part') : '';
+    if (part && QUARTER_FIELDS.indexOf(field) !== -1) {
+      const elCleared = String(el.value == null ? '' : el.value) === ALL || String(el.value || '') === '';
+      const holder = el.closest('[data-quarter-field]');
+      const yearEl = holder ? childByAttr(holder, 'data-quarter-part', 'year') : null;
+      const qEl = holder ? childByAttr(holder, 'data-quarter-part', 'quarter') : null;
+      const yv = yearEl ? String(yearEl.value || '') : '';
+      const qv = qEl ? String(qEl.value || '') : '';
+      const year = (yv === ALL || yv === '') ? '' : yv;
+      const quarter = (qv === ALL || qv === '') ? '' : qv.toUpperCase();
+      if (elCleared) raw = '';
+      else if (year && quarter) raw = normalizeQuarterValue(year + quarter).display || (year + quarter);
+      else if (year && !quarter) raw = year + '-';
+      else if (!year && quarter) raw = '-' + quarter;
+      else raw = '';
     }
 
     setDraftField(record, field, raw);
@@ -1108,12 +1457,19 @@
 
   // ---- lifecycle ----
   async function activate() {
-    const hostApi = getHost();
-    const activeId = hostApi ? String(hostApi.getActiveId() || '') : '';
-    // Drafts never cross a Workspace boundary.
-    if (draftsByProjectId.size && draftsWorkspaceId && activeId && activeId !== draftsWorkspaceId) resetDraftsForWorkspaceChange();
-    if (previousWorkspace !== null && activeId !== previousWorkspace) resetDraftsForWorkspaceChange();
-    previousWorkspace = activeId;
+    // ACT 5D §10: capture the pre-Projects presentation snapshot BEFORE the
+    // route class is applied. An Apply return (viewState.applying) must NOT
+    // overwrite the original restoration source with mid-apply state.
+    if (!viewState.applying) capturePresentationSnapshot('projects-enter');
+
+    // ACT 5D: drafts belong to the WORKSPACE root — they always survive route
+    // deactivate/reactivate inside the SAME Workspace, and are cleared only
+    // when the Workspace root itself changes.
+    const wk = currentWorkspaceKey();
+    if (draftsByProjectId.size && draftsWorkspaceKey && wk && wk !== draftsWorkspaceKey) resetDraftsForWorkspaceChange();
+
+    // Entering full Projects always dismisses the inspection recovery action.
+    setInspection(false);
 
     let container;
     try { container = ensureContainer(); } catch (e) { throw new Error(`ProjectsView.activate: ${e?.message || e}`); }
@@ -1123,6 +1479,7 @@
     renderInto(container);
     container.hidden = false;
     document.documentElement.classList.add('projects-view-active');
+    document.documentElement.setAttribute('data-projects-presentation', 'full');
 
     if (typeof globalThis.MME_NAVIGATION === 'object') {
       globalThis.MME_NAVIGATION.recordSuccessfulNavigation({ type: VIRTUAL_LOCATION_TYPE, id: VIRTUAL_LOCATION_ID });
@@ -1135,6 +1492,7 @@
     const c = document.getElementById(CONTAINER_ID);
     if (c) c.hidden = true;
     document.documentElement.classList.remove('projects-view-active');
+    document.documentElement.removeAttribute('data-projects-presentation');
     // Drafts intentionally SURVIVE deactivate/reactivate in the same Workspace.
     return Object.freeze({ status: 'deactivated' });
   }
@@ -1190,7 +1548,7 @@
   function restoreState(state) {
     if (!state || !state.visible) return;
     const c = document.getElementById(CONTAINER_ID);
-    if (c) { c.hidden = false; document.documentElement.classList.add('projects-view-active'); }
+    if (c) { c.hidden = false; document.documentElement.classList.add('projects-view-active'); document.documentElement.setAttribute('data-projects-presentation', 'full'); }
   }
 
   function onWorkspaceIndexReady() {
@@ -1212,7 +1570,7 @@
     viewState.lastError = '';
     viewState.lastBatchResult = null;
     draftsByProjectId.clear();
-    draftsWorkspaceId = null;
+    draftsWorkspaceKey = null;
   }
 
   function buildDescriptor() {
@@ -1263,6 +1621,11 @@
     decorate,
     readWorkspaceState,
     readProjectSource,
+    // ACT 5D presentation owner (single transition authority)
+    returnToWorkspace: handleReturnToWorkspace,
+    backToProjects,
+    recoverPresentation,
+    getPresentationState: () => Object.freeze({ inspection: inspectionActive, snapshot: presentationSnapshot, closed: verifyProjectsClosed().ok }),
     // draft owner (test/inspection surface; still view-only state)
     getDrafts: () => JSON.parse(JSON.stringify(Array.from(draftsByProjectId.values()))),
     getPendingSummary: pendingSummary,

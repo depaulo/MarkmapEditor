@@ -4575,6 +4575,53 @@ html.projects-view-active .splitter::before { content: none; }
   color: var(--text);
 }
 
+/* ACT 5D: the `hidden` attribute is the AUTHORITATIVE close state for the
+   Projects container. The author `display:flex` above would otherwise defeat
+   the UA [hidden] rule and strand a deactivated Projects container on the
+   right side of #layout while the Journal shell is active. */
+.projectsView[hidden] {
+  display: none !important;
+}
+
+/* ACT 5D-FU: structured quarter pair (Year + Quarter). Label renders on the
+   first line; the pair sits compactly side by side on the second line — the
+   normal valid state NEVER needs three lines. The empty "—" option is the
+   only Clear affordance (no Clear button). Error text and the legacy note may
+   use additional space when necessary. Selects stay compact but usable: fixed
+   flex basis, no shrinking below touch/focus legibility, wrap once at narrow
+   widths instead of overflowing. */
+.projectsQuarterPair {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+.projectsQuarterYear,
+.projectsQuarterQuarter {
+  flex: 0 1 5.5rem;
+  min-width: 4.5rem;
+  max-width: 7rem;
+}
+.projectsQuarterLegacy {
+  display: inline-block;
+  font-size: 11px;
+  opacity: 0.85;
+  padding-top: 2px;
+}
+.projectsBackToProjects {
+  height: 30px;
+  padding: 0 10px;
+  cursor: pointer;
+  border: 1px solid var(--menu-border);
+  border-radius: 6px;
+  background: var(--toolbar-bg);
+  color: var(--text);
+  font-size: 12px;
+}
+.projectsBackToProjects[hidden] {
+  display: none !important;
+}
+
 .projectsFilters {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
   flex: 0 0 auto;

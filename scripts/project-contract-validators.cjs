@@ -242,6 +242,10 @@ check('E03', 'short uuid rejected', P.isProjectIdValue('prj_11111111-1111-4111-8
 check('E04', 'non-prj prefix rejected', P.isProjectIdValue('proj_11111111-1111-4111-8111-111111111111') === false);
 check('E05', 'bare uuid rejected', P.isProjectIdValue('11111111-1111-4111-8111-111111111111') === false);
 check('E06', 'full uuid retained, not truncated', P.isProjectIdValue('prj_12345678-1234-4234-8234-123456789abc') === true);
+// ACT 5D-FU: short sequential workspace IDs share the same grammar gate.
+check('E06b', 'prj_0001 accepted with minimum four-digit padding', P.isProjectIdValue('prj_0001') === true);
+check('E06c', 'sequence grows beyond 9999 without truncation', P.isProjectIdValue('prj_10000') === true);
+check('E06d', 'below-minimum padding rejected', P.isProjectIdValue('prj_001') === false);
 {
   const base = `Project: Alibaba [800000 BRL] [27Q3]\n${managedComment(ID_A, FIXED_TODAY)}\n`;
   check('E07', 'title is not identity', P.parseProjects(base, {})[0].projectId === ID_A);

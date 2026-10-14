@@ -10692,16 +10692,63 @@ function reconcileTasksBeforeSave() {
 
 // ---- ACT 5A: Managed Project reconciliation (pure owner + narrow orchestration) ----
 
-// ACT 5A: production ID generator. The PURE owner
-// `reconcileManagedProjects()` (js/workspace/workspace-parser.js) receives this
-// as an injected dependency and never reads a clock or mints an ID itself.
+// ACT 5D-FU: production short-ID generator, workspace-scoped. New IDs are
+// prj_0001 … (minimum 4 digits, unbounded growth). Allocation ALWAYS
+// reserves against the COMPLETE workspace inventory through the existing
+// owners — never the current document alone:
+//   1. every managed ID in WORKSPACE_INDEX_STATE.projects (all indexed
+//      files, including archived Notes — buildWorkspaceIndex parses every
+//      Note record, never filtering by archive flag);
+//   2. every managed ID in the live current buffer (covers IDs minted and
+//      saved since the last Index rebuild — stale-Index protection);
+//   3. every ID allocated earlier in the same operation (operation
+//      reservations persist across Saves within one batch so a second Save
+//      sees the first Save's IDs even before a rebuild).
+// When no workspace is open the generator refuses (returns ''): standalone
+// Projects do not exist, so no standalone sequence is ever minted.
+// When the inventory cannot be proven complete, reconcileManagedProjects
+// diagnoses `inventory-incomplete` and mints nothing.
 function generateManagedProjectId() {
   try {
-    const uuid = globalThis.crypto?.randomUUID?.();
-    if (uuid) return `prj_${uuid}`;
-  } catch {}
-  return '';
+    if (typeof globalThis.collectReservedProjectIds !== 'function'
+      || typeof globalThis.nextWorkspaceProjectId !== 'function') {
+      return '';
+    }
+    const st = (typeof WORKSPACE_STATE !== 'undefined' && WORKSPACE_STATE)
+      ? WORKSPACE_STATE
+      : (globalThis.WORKSPACE_STATE || null);
+    const idx = (typeof WORKSPACE_INDEX_STATE !== 'undefined' && WORKSPACE_INDEX_STATE)
+      ? WORKSPACE_INDEX_STATE
+      : (globalThis.WORKSPACE_INDEX_STATE || null);
+    // No workspace open: refuse. Allocation requires an inventory.
+    if (!st || !st.rootHandle) return '';
+    // Inventory must be current and complete: a non-ready Index means the
+    // full file set has not been parsed, so allocation stops.
+    if (!idx || idx.ready !== true || !Array.isArray(idx.projects)) return '';
+    let liveText = '';
+    try {
+      liveText = (typeof getCurrentMarkdownText === 'function')
+        ? String(getCurrentMarkdownText() || '')
+        : String((typeof md !== 'undefined' && md && md.value) || '');
+    } catch { liveText = ''; }
+    const reservations = Array.isArray(generateManagedProjectId.__reserved)
+      ? generateManagedProjectId.__reserved
+      : (generateManagedProjectId.__reserved = []);
+    const bundle = globalThis.collectReservedProjectIds(idx.projects, liveText, reservations);
+    if (bundle.incomplete) return '';
+    const id = globalThis.nextWorkspaceProjectId(bundle.ids.concat(reservations));
+    if (id) reservations.push(id);
+    return id || '';
+  } catch { return ''; }
 }
+// Per-operation reservation reset: the batch adapter calls this before a
+// multi-source Apply so the first Save's IDs are visible to later Saves in
+// the same operation even before the Index rebuilds.
+try {
+  globalThis.resetWorkspaceProjectIdReservations = function resetWorkspaceProjectIdReservations() {
+    try { generateManagedProjectId.__reserved = []; } catch {}
+  };
+} catch {}
 
 // ACT 5A: one Project reconciliation orchestration. `today` is computed ONCE per
 // Save attempt by the caller and injected here, so every newly managed Project in
@@ -10781,11 +10828,25 @@ function logProjectReconcileSuccess(result) {
 // owners instead of duplicating them.
 try {
   globalThis.MME_PROJECT_EDIT_HOST = Object.freeze({
-    // --- read ---
+    // --- read: the accepted live Markdown owner (CodeMirror first) ---
     isDirty: () => Boolean(dirty),
-    getMarkdown: () => String(md.value || ''),
+    getMarkdown: () => getCurrentMarkdownText(),
     currentFileName: () => String(currentFileName || ''),
     currentSourcePath: () => String(currentSaveHandle?.__workspacePath || ''),
+    // --- active-document identity (privacy-safe: no handle, no content) ---
+    getActiveDocumentIdentity: () => {
+      try {
+        const st = (typeof WORKSPACE_STATE !== 'undefined' && WORKSPACE_STATE)
+          ? WORKSPACE_STATE
+          : (globalThis.WORKSPACE_STATE || null);
+        const af = st ? st.activeFile : null;
+        const fileName = String((typeof currentFileName !== 'undefined' && currentFileName) || (af && af.name) || '');
+        const sourcePath = String((af && af.path) || (currentSaveHandle && currentSaveHandle.__workspacePath) || '');
+        const sourceKind = String((af && af.kind) || 'notes');
+        const hasWritableHandle = Boolean(currentSaveHandle);
+        return { sourcePath, sourceKind, fileName, hasWritableHandle };
+      } catch { return { sourcePath: '', sourceKind: '', fileName: '', hasWritableHandle: false }; }
+    },
     // --- write: the ONLY programmatic Project buffer update owner ---
     applyMarkdown: (text) => {
       const next = String(text == null ? '' : text);

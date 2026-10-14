@@ -243,7 +243,13 @@
 
   function normalizeProjectQuarter(rawValue) {
     const raw = String(rawValue == null ? '' : rawValue).trim();
-    const match = raw.match(/^(\d{2}|\d{4})[/-]?[qQ]([1-4])$/);
+    // ACT 5D shared normalization owner: parser recognition, Projects View
+    // recognition, draft validation, mutation validation and persisted output
+    // ALL read this one function. Accepted, case-insensitive and unambiguous:
+    // 29Q3 / 2029Q3 / 2029-Q3 / 2029 Q3 (plus the historical '/' and '-'
+    // separators). Two-digit years always mean 2000-2099; year 2100 is only
+    // reachable through the full four-digit form, so no alias is ambiguous.
+    const match = raw.match(/^(\d{2}|\d{4})[-/ ]?[qQ]([1-4])$/i);
 
     if (!match) {
       return {
@@ -259,8 +265,18 @@
     const yearPart = match[1];
     const quarter = Number(match[2]);
     const year = yearPart.length === 2 ? 2000 + Number(yearPart) : Number(yearPart);
+
+    // ACT 5D-FU product bounds: the structured range is 2020-2100 (a fixed
+    // floor, never derived from the current year). Anything outside stays
+    // visible as legacy/custom — never silently rewritten, never erased.
+    if (year < 2020 || year > 2100) {
+      return { raw, canonical: null, display: raw, year: null, quarter: null, valid: false };
+    }
+
     const canonical = `${year}-Q${quarter}`;
-    const display = `${String(year).slice(-2)}Q${quarter}`;
+    // Year 2100 keeps the full representation in display too ('2100Q4'
+    // instead of the ambiguous '00Q4').
+    const display = year >= 2100 ? `${year}Q${quarter}` : `${String(year).slice(-2)}Q${quarter}`;
 
     return {
       raw,
@@ -366,7 +382,12 @@
 
   const MME_PROJECT_COMMENT_RE = /^<!--\s*mme-project:\s*([\s\S]*?)\s*-->$/i;
   const MME_PROJECT_COMMENT_LOOKALIKE_RE = /^<!--[\s\S]*?mme-project\s*:/i;
-  const PROJECT_ID_RE = /^prj_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  // ACT 5D-FU: short sequential IDs (prj_0001 …; minimum 4 digits, unbounded
+  // growth) are workspace-unique by allocation contract; existing full-UUID
+  // IDs remain valid and unchanged. No global counter exists — the
+  // orchestrator (main.js) allocates against the complete workspace
+  // inventory, never the current document alone.
+  const PROJECT_ID_RE = /^(?:prj_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|prj_[0-9]{4,})$/i;
   const MME_PROJECT_KEY_ORDER = ['id', 'created', 'stage', 'state', 'delivery', 'billing', 'closed', 'archived'];
   const MME_PROJECT_OWNED_KEYS = new Set(MME_PROJECT_KEY_ORDER);
 
@@ -435,6 +456,74 @@
 
   function isProjectIdValue(raw) {
     return PROJECT_ID_RE.test(normalizeProjectIdValue(raw));
+  }
+
+  // ACT 5D-FU — workspace-scoped short-ID allocation (pure, non-mutating).
+  //
+  // Grammar: prj_<decimal sequence>, minimum 4 digits (prj_0001), unbounded
+  // growth (…9999, 10000, …) — never truncated, never wrapped. Uniqueness is
+  // WORKSPACE-scoped, not document-local and not global: the caller reserves
+  // the COMPLETE inventory before allocating. `reserved` must union:
+  //   - every managed ID in the current workspace inventory (all indexed
+  //     files, including archived Notes);
+  //   - every managed ID in the live current buffer;
+  //   - every ID allocated earlier in the same operation/batch.
+  // Existing valid IDs (UUID or short) are never regenerated or migrated.
+  function nextWorkspaceProjectId(reserved) {
+    const taken = new Set();
+    try {
+      for (const v of (reserved || [])) {
+        const id = normalizeProjectIdValue(v);
+        if (id) taken.add(id);
+      }
+    } catch {}
+    let n = 1;
+    for (const id of taken) {
+      const m = /^prj_([0-9]{4,})$/i.exec(String(id));
+      if (m) {
+        const k = Number(m[1]);
+        if (Number.isFinite(k) && k >= n) n = k + 1;
+      }
+    }
+    while (taken.has('prj_' + String(n).padStart(4, '0'))) n += 1;
+    return 'prj_' + String(n).padStart(4, '0');
+  }
+
+  // ACT 5D-FU — inventory reservation builder (pure). Collects every managed
+  // ID from parsed Index records plus the live buffer text plus prior
+  // operation reservations. Returns { ids, incomplete }: when the inventory
+  // cannot be proven complete the caller must stop allocation with the
+  // bounded `inventory-incomplete` diagnostic — never restart from the
+  // current document alone.
+  function collectReservedProjectIds(indexProjects, liveBufferText, operationReservations) {
+    const ids = new Set();
+    let incomplete = false;
+    try {
+      if (!Array.isArray(indexProjects)) {
+        incomplete = true;
+      } else {
+        for (const p of indexProjects) {
+          const id = p && normalizeProjectIdValue(p.projectId);
+          if (id && PROJECT_ID_RE.test(id)) ids.add(id);
+        }
+      }
+      const live = String(liveBufferText == null ? '' : liveBufferText);
+      if (live) {
+        const found = live.match(/id\s*=\s*(prj_[0-9a-zA-Z-]+)/g) || [];
+        for (const piece of found) {
+          const m = /id\s*=\s*(prj_[0-9a-zA-Z-]+)/.exec(piece);
+          const id = m && normalizeProjectIdValue(m[1]);
+          if (id && PROJECT_ID_RE.test(id)) ids.add(id);
+        }
+      }
+      for (const v of (operationReservations || [])) {
+        const id = normalizeProjectIdValue(v);
+        if (id && PROJECT_ID_RE.test(id)) ids.add(id);
+      }
+    } catch {
+      incomplete = true;
+    }
+    return { ids: Array.from(ids), incomplete };
   }
 
   function normalizeProjectIdValue(raw) {
@@ -1435,6 +1524,16 @@
         const id = normalizeProjectIdValue(raw);
         const comment = serializeManagedProjectComment({ id, created: today });
 
+        // ACT 5D-FU: a refused generator (empty ID — no workspace, incomplete
+        // inventory, no available owner) is a BOUNDED allocation stop, not an
+        // ambiguous identity. Diagnose `inventory-incomplete` and mint
+        // nothing — never restart from the current document alone.
+        if (!id) {
+          result.ambiguous++;
+          pushProjectDiagnostic(result.diagnostics, 'inventory-incomplete', '', project.sourceLine);
+          continue;
+        }
+
         if (!PROJECT_ID_RE.test(id) || generatedIds.has(id)) {
           // Ambiguous identity: refuse to write rather than mint a fallback ID.
           result.ambiguous++;
@@ -1523,6 +1622,8 @@
     reconcileManagedProjects,
     isValidProjectIsoDate,
     isProjectIdValue,
+    nextWorkspaceProjectId,
+    collectReservedProjectIds,
     computeFencedLineRanges,
     isTaskCheckboxLine,
   };
@@ -1579,5 +1680,7 @@
     globalThis.reconcileManagedProjects = reconcileManagedProjects;
     globalThis.isValidProjectIsoDate = isValidProjectIsoDate;
     globalThis.isProjectIdValue = isProjectIdValue;
+    globalThis.nextWorkspaceProjectId = nextWorkspaceProjectId;
+    globalThis.collectReservedProjectIds = collectReservedProjectIds;
   } catch {}
 })();
