@@ -38,6 +38,7 @@
     DIRTY_NOTE_CANCELED: 'dirty-note-canceled',
     NO_CHANGE: 'no-change',
     NO_OWNER: 'no-owner',
+    MUTATION_FAILED: 'mutation-failed',
   });
 
   const PHASES = Object.freeze({
@@ -390,7 +391,9 @@
       return outcome({ reason: REASONS.MALFORMED_PROJECT_COMMENT, projectId, field, phase });
     }
     if (cvSingle.hits === 0) {
-      return outcome({ reason: REASONS.PROJECT_NOT_FOUND, projectId, field, phase });
+      // §5 origin: canonical-verification, NOT the mutation owner. The request
+      // never reaches the owner, so this is a proven absence from LIVE Markdown.
+      return outcome({ reason: REASONS.PROJECT_NOT_FOUND, projectId, field, phase, diagnostics: [{ code: 'not-found-origin', detail: 'canonical-verification' }] });
     }
     if (cvSingle.hits > 1) {
       // Refuse to guess which duplicate-title Project is meant.
@@ -399,21 +402,43 @@
 
     // ---- 3. MUTATE: the PURE owner, once ----
     phase = PHASES.MUTATE;
-    const mutation = m.mutateProject(active, { projectId }, {
-      op: operation,
-      value: req.value,
-      currency: req.currency,
-      quarter: req.quarter,
-    });
+    let mutation = null;
+    try {
+      mutation = m.mutateProject(active, { projectId }, {
+        op: operation,
+        value: req.value,
+        currency: req.currency,
+        quarter: req.quarter,
+      });
+    } catch (e) {
+      // An OWNER EXCEPTION is never a proven missing Project. It stays a
+      // distinct, conservative failure origin and never touches the buffer.
+      return outcome({
+        reason: REASONS.MUTATION_FAILED,
+        projectId,
+        field,
+        phase,
+        diagnostics: [{ code: 'owner-exception-origin', detail: 'owner-exception', threw: String(e && e.message ? e.message : e) }],
+      });
+    }
 
     if (!mutation.ok) {
-      // A refused mutation never touches the buffer.
+      // A refused mutation never touches the buffer. §5: classify the origin of
+      // a project-not-found refusal (mutation-owner vs owner-exception). An
+      // owner exception is never a proven missing Project.
+      const refusedOrigin = mutation.diagnostics && mutation.diagnostics.some((d) => d && d.code === 'owner-threw') ? 'owner-exception' : 'mutation-owner';
+      const diag = (mutation.diagnostics || []).slice();
+      if (refusedOrigin === 'mutation-owner') {
+        diag.push({ code: 'not-found-origin', detail: 'mutation-owner' });
+      } else {
+        diag.push({ code: 'owner-exception-origin', detail: 'owner-exception' });
+      }
       return outcome({
         reason: mutation.reason || REASONS.PROJECT_NOT_FOUND,
         projectId,
         field,
         phase,
-        diagnostics: mutation.diagnostics || [],
+        diagnostics: diag,
       });
     }
     if (!mutation.changed) {
@@ -666,16 +691,6 @@
     }, extra || {}));
   }
 
-  // ACT 5D diagnostic delivery gate: revision marker proving the SERVED and
-  // browser-executed adapter contains this diagnostic revision. Emitted once
-  // at adapter registration and once per Apply batch entry, on the SAME
-  // safeLog channel as the phase=failed line, so absence of the marker in
-  // owner logs proves a stale served file rather than a silent logger.
-  const ADAPTER_DIAG_REV = 'act5d-diag-rev-2';
-  function logDiagRev(where) {
-    try { safeLog(`ProjectsApplyBatch: diag-rev=${ADAPTER_DIAG_REV} where=${where}`); } catch {}
-  }
-
   // ACT 5D corrective §4: bounded, privacy-safe diagnostics emitted ONLY at a
   // project-not-found boundary. Reports the ACTUAL identity values needed to
   // locate the divergence — requested id(s), Index match count and the
@@ -786,8 +801,8 @@
     } catch (err) {
       // If diagnostic collection itself throws, say so on the SAME channel —
       // a silent helper must never be mistaken for "no divergence found".
-      try { safeLog(`ProjectsApplyBatch: diagnostic-failed rev=${ADAPTER_DIAG_REV} detail=${String((err && err.message) || err || 'unknown').slice(0, 120)}`); } catch {}
-      return { diagnosticFailed: true, diagRev: ADAPTER_DIAG_REV };
+      try { safeLog(`ProjectsApplyBatch: diagnostic-failed detail=${String((err && err.message) || err || 'unknown').slice(0, 120)}`); } catch {}
+      return { diagnosticFailed: true };
     }
   }
 
@@ -840,7 +855,6 @@
    * @param {{projects:Array, sources:Array, fieldCount:number}} plan
    */
   async function applyProjectBatch(plan) {
-    logDiagRev('batch-entry');
     const h = host();
     const m = owner();
     const projects = Array.isArray(plan && plan.projects) ? plan.projects : [];
@@ -1032,11 +1046,16 @@
           try {
             mutation = m.mutateProject(proposed, { projectId: id }, request);
           } catch (e) {
-            refused = { ok: false, reason: REASONS.PROJECT_NOT_FOUND, diagnostics: [{ code: 'owner-threw', detail: String(e && e.message ? e.message : e) }] };
+            // An OWNER EXCEPTION is never proof of a missing Project. It keeps
+            // the conservative failure and is classified as its own origin so it
+            // can never be reported as a proven project-not-found.
+            refused = { ok: false, reason: REASONS.PROJECT_NOT_FOUND, origin: 'owner-exception', diagnostics: [{ code: 'owner-threw', detail: String(e && e.message ? e.message : e) }] };
             break;
           }
           if (!mutation || mutation.ok === false) {
+            // A named refusal from the mutation owner (canonical-grammar locator).
             refused = mutation || { ok: false, reason: REASONS.PROJECT_NOT_FOUND, diagnostics: [] };
+            refused = Object.assign({}, refused, { origin: 'mutation-owner' });
             break;
           }
           if (!mutation.changed) continue;
@@ -1045,8 +1064,21 @@
         if (refused) {
           failed += 1;
           const code = boundedReason(refused.reason, BOUNDED.MUTATION_FAILED);
+          // §5 failure-diagnostic coverage: when the mutation owner returns
+          // project-not-found, emit bounded diagnostics and name the origin
+          // explicitly (mutation-owner vs owner-exception). An owner exception is
+          // never reported as a proven missing Project — it stays a distinct,
+          // conservative failure origin.
+          const origin = String(refused.origin || 'mutation-owner');
+          let diag = refused.diagnostics || [];
+          if (code === BOUNDED.PROJECT_NOT_FOUND && origin === 'mutation-owner') {
+            const info = boundedNotFoundDiagnostics(proposed, groupProjects, h, group.sourcePath || (groupProjects[0] && groupProjects[0].sourcePath));
+            diag = (diag || []).concat([{ code: 'not-found-origin', detail: origin, info }]);
+          } else if (origin === 'owner-exception') {
+            diag = (diag || []).concat([{ code: 'owner-exception-origin', detail: origin }]);
+          }
           logBatch(BATCH_PHASES.FAILED, counts(), code, sourceReady);
-          finalResult = partialOutcome(code, appliedIds, appliedFields, failed, projects, groups, processed, { diagnostics: refused.diagnostics || [] });
+          finalResult = partialOutcome(code, appliedIds, appliedFields, failed, projects, groups, processed, { diagnostics: diag });
           break;
         }
         groupOk.push({ id, fields: Number(p.fieldCount) || fieldCountOf(p.operations) });
@@ -1150,7 +1182,5 @@
     resolveSourceDocument,
     resolveDirtyNote,
     projectIdPresentIn,
-    ADAPTER_DIAG_REV,
   });
-  logDiagRev('adapter-registration');
 })();

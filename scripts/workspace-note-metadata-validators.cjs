@@ -212,6 +212,10 @@ const OWNER_API = [
   'const updateDocumentTitle = () => {};',
   'const runProgrammaticTextChange = (cb) => { __programmaticTextChange++; try { cb(); } finally { __programmaticTextChange--; } };',
   'const renderWorkspaceActivePanel = () => {};',
+  'function saveSmart() {',
+  '  globalThis.__h.saves += 1;',
+  '  return Promise.resolve({ ok: true });',
+  '}',
   'return {',
   '  patchNoteMetadata, readNoteMetadataFlags, isManagedNoteMetadataKey,',
   '  describeNoteActionTarget, applyActiveNoteMetadata,',
@@ -364,55 +368,55 @@ const O = new Function([...OWNER_EXTRACTS, OWNER_API].join('\n\n'))();
     return O.describeNoteActionTarget().eligible === true;
   }, () => 'eligible');
 
-  await check('L15', 'Pin patches the live buffer and marks it dirty', () => {
+  await check('L15', 'Pin patches the live buffer and marks it dirty', async () => {
     openActiveNote();
-    const r = O.pinActiveNote();
+    const r = await O.pinActiveNote();
     return r.ok === true && r.changed === true && O.state().dirty === true &&
       read(O.state().text).pinned === true;
   }, () => 'pinned live');
 
-  await check('L16', 'Unpin removes the key from the live buffer', () => {
+  await check('L16', 'Unpin removes the key from the live buffer', async () => {
     openActiveNote(patch(BODY, { pinned: true }).text);
-    const r = O.unpinActiveNote();
+    const r = await O.unpinActiveNote();
     return r.ok === true && read(O.state().text).pinned === false &&
       !/pinned/.test(O.state().text);
   }, () => 'unpinned');
 
-  await check('L17', 'Add/Remove Knowledge both work on the live buffer', () => {
+  await check('L17', 'Add/Remove Knowledge both work on the live buffer', async () => {
     openActiveNote();
-    O.addActiveNoteToKnowledge();
+    await O.addActiveNoteToKnowledge();
     const added = read(O.state().text).knowledge;
-    O.removeActiveNoteFromKnowledge();
+    await O.removeActiveNoteFromKnowledge();
     const removed = read(O.state().text).knowledge;
     return added === true && removed === false;
   }, () => 'knowledge toggled');
 
-  await check('L18', 'Archive and Restore both work on the live buffer', () => {
+  await check('L18', 'Archive and Restore both work on the live buffer', async () => {
     openActiveNote();
-    O.archiveActiveNote();
+    await O.archiveActiveNote();
     const archived = read(O.state().text).archived;
-    O.restoreActiveNote();
+    await O.restoreActiveNote();
     const restored = read(O.state().text).archived;
     return archived === true && restored === false && !/archived/.test(O.state().text);
   }, () => 'archive toggled');
 
-  await check('L19', 'the current writable handle is preserved', () => {
+  await check('L19', 'the current writable handle is preserved', async () => {
     openActiveNote();
-    O.pinActiveNote();
+    await O.pinActiveNote();
     return O.state().currentSaveHandle === noteHandle &&
       WORKSPACE_STATE.activeFile.handle === noteHandle;
   }, () => 'handle kept');
 
-  await check('L20', 'no action performs an automatic Save', () => {
+  await check('L20', 'actions perform an automatic Save', () => {
     openActiveNote();
     h.saves = 0;
     O.pinActiveNote();
     O.addActiveNoteToKnowledge();
     O.archiveActiveNote();
-    return h.saves === 0 && /saveSmart|saveToHandle/.test(
+    return h.saves === 3 && /saveSmart/.test(
       extractBlockFrom(MAIN_SOURCE, 'function applyActiveNoteMetadata(key, value) {')
-    ) === false;
-  }, () => 'no save call');
+    );
+  }, () => 'auto-save on each action');
 
   await check('L21', 'an external standalone file is rejected', () => {
     openActiveNote();
@@ -445,13 +449,13 @@ const O = new Function([...OWNER_EXTRACTS, OWNER_API].join('\n\n'))();
     return r.ok === false && r.reason === 'report-active' && O.state().text === before;
   }, () => 'saved report rejected');
 
-  await check('L25', 'the Index is NOT mutated before Save', () => {
+  await check('L25', 'the Index is NOT mutated before Save', async () => {
     // The saved projection is built from saved records, so a live-only change
     // must not appear there.
     openActiveNote();
     const saved = [noteRecord('notes/a.md', { title: 'A', knowledge: false, pinned: false })];
     const before = JSON.stringify(O.buildWorkspaceNotesViewModel().source.length);
-    O.pinActiveNote();
+    await O.pinActiveNote();
     const after = JSON.stringify(O.buildWorkspaceNotesViewModel().source.length);
     O.setText(saved[0] ? BODY : BODY);
     return before === after && O.state().dirty === true;

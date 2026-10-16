@@ -405,30 +405,57 @@ This period focused on:
     {
       id: 'journal-projects',
       title: 'Projects',
-      subtitle: 'An aggregated view of Projects currently parsed from the workspace.',
+      subtitle: 'Manage Projects across your workspace.',
       html: t`<section class="helpSection">
-  <h2>Read-only in this release</h2>
-  <p>The Projects panel shows Projects already present in workspace content. There is no Project editor in this release.</p>
+  <h2>What is a Project</h2>
+  <p>A Project is a visible Markdown declaration:</p>
+  <code class="helpCode">Project: Customer Expansion [800000 BRL] [27Q3]</code>
+  <ul>
+    <li>The title is required.</li>
+    <li><code>[value currency]</code> is optional (for example <code>[800000 BRL]</code>).</li>
+    <li><code>[quarter]</code> is optional (for example <code>[27Q3]</code>).</li>
+    <li>Dash, star and plus bullet prefixes are accepted and preserved.</li>
+  </ul>
 </section>
 <section class="helpSection">
-  <h2>What is shown</h2>
-  <p>Each Project shows its name, value with currency (or · no currency), expected order, status, and its source file · line.</p>
+  <h2>Creating a Project</h2>
+  <ul>
+    <li>Write a <code>Project:</code> declaration in any Note.</li>
+    <li>Save the source once to create managed identity.</li>
+    <li>Open Projects to see the Project in the summary view.</li>
+  </ul>
 </section>
 <section class="helpSection">
-  <h2>Grouping</h2>
-  <p>Projects are grouped by Expected Order year (ascending), with unscheduled Projects last; within a year they sort by order, then name.</p>
+  <h2>Project fields</h2>
+  <ul>
+    <li><strong>Value / Currency:</strong> the monetary value and its currency code.</li>
+    <li><strong>Expected Order:</strong> the quarter the work is expected (for example <code>27Q3</code>).</li>
+    <li><strong>Stage:</strong> managed stage (for example <code>planned</code>, <code>active</code>).</li>
+    <li><strong>State:</strong> managed state (for example <code>open</code>, <code>closed</code>).</li>
+    <li><strong>Expected Delivery:</strong> managed delivery quarter.</li>
+    <li><strong>Expected Billing:</strong> managed billing quarter.</li>
+  </ul>
 </section>
 <section class="helpSection">
-  <h2>Open source</h2>
-  <p>Click a Project to open the source file at that line.</p>
+  <h2>Editing a Project</h2>
+  <ul>
+    <li>Open Projects and select a Project.</li>
+    <li>Change Stage, State, Delivery or Billing in the expanded row.</li>
+    <li>Click Apply — one physical Save occurs per changed source.</li>
+    <li>Viewport and route are restored after Save.</li>
+  </ul>
+</section>
+<section class="helpSection">
+  <h2>Read-only before identity</h2>
+  <p>A Project without managed identity (no Save yet) is read-only for managed fields.</p>
+</section>
+<section class="helpSection">
+  <h2>Source navigation</h2>
+  <p>Click a Project to open its source file at the declaration line.</p>
 </section>
 <section class="helpSection">
   <h2>Empty / not-ready states</h2>
   <p>Open a workspace first, Index not ready, No Projects found.</p>
-</section>
-<section class="helpSection">
-  <h2>Not permanent</h2>
-  <p>Project parsing and editing are under active development; this view reflects the current reading of workspace content and may change.</p>
 </section>`,
     },
     {
@@ -452,6 +479,23 @@ This period focused on:
 <section class="helpSection">
   <h2>Task Board</h2>
   <p>A visual board with lifecycle columns and priority filtering. Invalid metadata values are ignored rather than promoted.</p>
+</section>
+<section class="helpSection">
+  <h2>Source filter</h2>
+  <ul>
+    <li>Filter the Task Board by exact source file path.</li>
+    <li>Duplicate file names are disambiguated by full path context.</li>
+    <li>All Sources shows every Task.</li>
+    <li>Source filter composes with Status, Priority and Search filters.</li>
+    <li>Selected Source survives Board rerender and Workspace Index refresh.</li>
+  </ul>
+</section>
+<section class="helpSection">
+  <h2>Board context</h2>
+  <ul>
+    <li>Responsive column widths; Task text wraps instead of overlapping controls.</li>
+    <li>Scroll position and board context are retained after Task operations.</li>
+  </ul>
 </section>`,
     },
     {
@@ -472,6 +516,46 @@ This period focused on:
 <section class="helpSection">
   <h2>Opening</h2>
   <p>Clicking a Wiki Link opens the target through the workspace. A target that resolves to exactly one file opens it. Multiple matches show "Multiple files match <target>". A missing target shows "Wiki link target not found: <target>".</p>
+</section>`,
+    },
+    {
+      id: 'journal-quick-actions',
+      title: 'Quick Actions',
+      subtitle: 'Pin, Unpin, Promote to Knowledge, and Archive.',
+      html: t`<section class="helpSection">
+  <h2>Pin / Unpin</h2>
+  <ul>
+    <li><code>pinned: true</code> places the Note in the Pinned subsection.</li>
+    <li>Unpin removes the classification.</li>
+    <li>An accepted change performs one automatic physical Save.</li>
+    <li>No second manual Save is normally required.</li>
+  </ul>
+</section>
+<section class="helpSection">
+  <h2>Promote to Knowledge</h2>
+  <ul>
+    <li>Adds <code>knowledge: true</code> to the Note's frontmatter.</li>
+    <li>The Note remains visible in Notes; nothing is moved or duplicated.</li>
+    <li>An accepted change performs one automatic physical Save.</li>
+    <li>Sidebar and Workspace Index refresh after Save.</li>
+  </ul>
+</section>
+<section class="helpSection">
+  <h2>Archive</h2>
+  <ul>
+    <li><code>archived: true</code> removes the Note from Notes, Pinned and Knowledge.</li>
+    <li>The physical file stays in <code>notes/</code>; Archive is not deletion.</li>
+    <li>The Note is listed in Archive.</li>
+    <li>Restore removes the archived classification.</li>
+  </ul>
+</section>
+<section class="helpSection">
+  <h2>Automatic Save</h2>
+  <ul>
+    <li>Accepted metadata Quick Actions save automatically.</li>
+    <li>Save failure cannot claim persisted success; state remains recoverable.</li>
+    <li>No separate manual Save is needed after an accepted Quick Action.</li>
+  </ul>
 </section>`,
     },
   ];

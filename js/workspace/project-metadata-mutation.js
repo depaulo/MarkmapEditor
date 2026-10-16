@@ -64,14 +64,19 @@
 
   // ---- locating ------------------------------------------------------------
 
-  function findManagedCommentLine(lines, fromIndex) {
+  function findManagedCommentLine(lines, fromIndex, fencedSet) {
     // Mirrors the ACT 5A reader: immediate next line, or the line after exactly
     // one blank line, stopping at a blank/heading/Project declaration/fence.
+    // Declaration boundary recognizes the canonical parser grammar, including
+    // supported bullet prefixes ("- ", "* ", "+ "), so a neighboring Project
+    // never donates its comment. No second blank line is crossed. Fenced lines
+    // (parser fenced set) never yield a comment.
     let cursor = fromIndex;
     let blanks = 0;
     const parser = globalThis.parseManagedProjectComment;
 
     while (cursor < lines.length) {
+      if (fencedSet && fencedSet.has(cursor)) return null;
       const raw = lines[cursor];
       const trimmed = String(raw == null ? '' : raw).trim();
       if (!trimmed) {
@@ -81,11 +86,12 @@
         continue;
       }
       if (/^#{1,6}\s/.test(trimmed)) return null;
+      if (/^(```|~~~)/.test(trimmed)) return null;
       if (typeof parser === 'function') {
         const parsed = parser(raw);
         if (parsed && parsed.present) return { index: cursor, parsed };
       }
-      if (/^Project\s*:/i.test(trimmed)) return null;
+      if (/^(?:[-*+]\s+)?Project\s*:/i.test(trimmed)) return null;
       cursor += 1;
     }
     return null;
@@ -93,6 +99,12 @@
 
   // Returns { ok, reason, declIndex, comment, id, sourceLine } for the single
   // Project whose managed id equals projectId.
+  // Declaration recognition aligns with the canonical parser grammar
+  // (stripListPrefix + isProjectDeclLine): optional bullet prefix "- "/"* "/"+
+  // " followed by "Project:". splitDeclaration() already supports that grammar
+  // for the visible-line edit, so the locator must too. Indentation and the
+  // original prefix are preserved by splitDeclaration; fenced-code spans are
+  // excluded exactly as in parseProjects.
   function locateProject(markdown, projectId) {
     const wantId = String(projectId == null ? '' : projectId).trim();
     if (!wantId) {
@@ -101,11 +113,32 @@
 
     const lines = String(markdown).split(/\r?\n/);
     const hits = [];
+    // Prefer the canonical parser fenced set when available; fall back to a
+    // simple fence toggle so the owner never targets fenced declarations.
+    let fencedSet = null;
+    try {
+      if (globalThis.WORKSPACE_PARSER && typeof globalThis.WORKSPACE_PARSER.computeFencedLineRanges === 'function') {
+        const ranges = globalThis.WORKSPACE_PARSER.computeFencedLineRanges(lines);
+        fencedSet = new Set();
+        for (const r of (ranges || [])) {
+          const a = Number(r[0]); const b = Number(r[1]);
+          for (let k = a; k <= b; k += 1) fencedSet.add(k);
+        }
+      }
+    } catch {}
+    let inFence = false;
 
     for (let i = 0; i < lines.length; i += 1) {
-      const trimmed = String(lines[i] || '').trim();
-      if (!/^Project\s*:/i.test(trimmed)) continue;
-      const found = findManagedCommentLine(lines, i + 1);
+      const rawLine = String(lines[i] || '');
+      const trimmed = rawLine.trim();
+      if (fencedSet) { if (fencedSet.has(i)) continue; }
+      else {
+        // Mirror parseProjects: fenced-code spans are invisible to declarations.
+        if (/^(```|~~~)/.test(trimmed)) { inFence = !inFence; continue; }
+        if (inFence) continue;
+      }
+      if (!/^(?:[-*+]\s+)?Project\s*:/i.test(trimmed)) continue;
+      const found = findManagedCommentLine(lines, i + 1, fencedSet);
       if (!found || !found.parsed || !found.parsed.fields) continue;
       if (String(found.parsed.fields.id || '') === wantId) {
         hits.push({ declIndex: i, comment: found, id: wantId });

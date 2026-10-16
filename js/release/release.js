@@ -12,10 +12,10 @@
 
   const RELEASE = Object.freeze({
     // User-facing semantic product version (MAJOR.MINOR.PATCH).
-    productVersion: '0.6.3',
+    productVersion: '0.7.0',
     // Service-worker / cache identity for this release boundary.
     // Must match APP_VERSION in sw.js (checked by scripts/release-parity.cjs).
-    cacheIdentity: 'markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation',
+    cacheIdentity: 'markmap-journal-pwa-0.7.0-projects-foundation',
     // One-time What's New / Release Notes seen-state storage key.
     // Records the active productVersion when the current release is dismissed.
     lastSeenKey: 'mme:lastSeenRelease',

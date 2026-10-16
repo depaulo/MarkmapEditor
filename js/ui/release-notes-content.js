@@ -17,14 +17,66 @@
   //   limitations?, helpTopic? (links to a Help topic ID).
   const RELEASES = Object.freeze([
     {
+      version: '0.7.0',
+      title: 'MarkmapEditor 0.7.0: Projects Foundation',
+      summary: t`Version 0.7.0 introduces managed Projects with stable identity, Task Board source\nfiltering, and automatic Save after accepted metadata Quick Actions. Projects can be\ncreated, edited and applied from the Workspace; the Task Board filters by exact source\nfile; Pin, Unpin and Knowledge promotion save automatically.`,
+      expanded: true,
+      changes: [
+        {
+          group: 'Projects',
+          items: [
+            'Managed Projects foundation: stable projectId, plain and compatible bullet declarations (dash, star, plus), and fenced-code exclusion.',
+            'Stage and State as separate managed fields; Value / Currency; Expected Order, Delivery and Billing.',
+            'Same-source and cross-source Apply; one physical Save per changed source; failed drafts remain safe.',
+            'Source navigation and route restoration; viewport preservation after Save.',
+            'Expanded Projects View with collapsed summary: Project | Stage | State | Value | Order | Delivery | Billing | Source.',
+            'Workspace Index Project parity: separate Stage and State, Value/Currency, Order, Delivery, Billing, Source actions.',
+          ],
+        },
+        {
+          group: 'Task Board',
+          items: [
+            'Responsive column widths; Task text wraps instead of overlapping controls.',
+            'Source filter by exact indexed filePath; duplicate file names disambiguated by path context.',
+            'All Sources uses the canonical empty filter value.',
+            'Source filter composes with Status, Priority and Search filters.',
+            'Selected Source survives rerender and Workspace Index refresh; scroll and board context preserved.',
+            'Task movement and priority mutation with physical Save.',
+          ],
+        },
+        {
+          group: 'Workspace',
+          items: [
+            'Automatic physical Save after accepted metadata Quick Actions (Pin, Unpin, Promote to Knowledge, Archive).',
+            'No second manual Save is normally required.',
+            'Workspace Index and Sidebar refresh after successful Save.',
+            'Save failure remains visible and recoverable.',
+          ],
+        },
+        {
+          group: 'Development foundation',
+          items: [
+            'Cline project entrypoint Rule and compact AI-state continuity files.',
+            'Validation catalog with owner-to-test mapping and targeted validation profiles.',
+            'Canonical regression consolidation; isolated mutation controls.',
+            'Release parity (normal + strict) enforcing single version identity.',
+          ],
+        },
+      ],
+      tryIt: t`Project: Customer Expansion [800000 BRL] [27Q3]\n\nSave the source once to create managed identity;\nopen Projects; edit Stage, State, Delivery or Billing;\nApply.`,
+      uiPath: 'Open a Note → add a Project declaration → Save → open Projects → Apply',
+      limitations: [
+        'Task-to-Project association is not implemented in this release.',
+        'Subprojects and Project hierarchy remain deferred.',
+      ],
+      helpTopic: 'journal-projects',
+    },
+    {
       version: '0.6.3',
       title: 'MarkmapEditor 0.6.3: Tasks and Wiki Links Foundation',
       summary: t`Version 0.6.3 stabilizes Tasks and Wiki Links. Tasks now share one
-normalized contract across Task Review and the Task Board, and a Task Board card can
-set priority directly. Wiki Links now resolve through one canonical owner, and the
-Sidebar panel that showed related Notes is now a Links In panel driven by real
-resolved relationships.`,
-      expanded: true,
+normalized contract across Task Review and the Task Board, and a Task Board card can\nset priority directly. Wiki Links now resolve through one canonical owner, and the\nSidebar panel that showed related Notes is now a Links In panel driven by real\nresolved relationships.`,
+      expanded: false,
       changes: [
         {
           group: 'Tasks',

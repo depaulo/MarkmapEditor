@@ -16,7 +16,11 @@ It governs:
 - command lifecycle;
 - validation;
 - browser evidence;
-- handoff and completion reports.
+- handoff and completion reports;
+- mandatory session entry and authority precedence;
+- model/context-compaction handoff and AI-state lifecycle;
+- validation tiers, owner-based test selection and mutation-control
+  isolation.
 
 Environment-specific instructions are defined separately in:
 
@@ -907,7 +911,195 @@ reminder recurrence.
 
 ---
 
-## 29. General Rule
+## 29. Session Entry and Authority Precedence
+
+### Mandatory session entry
+
+Every new coding agent must, before planning, editing, running broad tests or
+making architecture claims:
+
+1. read completely: docs/AI_DEVELOPMENT_WORKFLOW.md,
+   docs/AI_DEVELOPMENT_ENVIRONMENT.md, docs/ai-state/README.md,
+   docs/ai-state/ACTIVE_CONTEXT.md, docs/ai-state/CURRENT_ACT.md,
+   docs/ai-state/VALIDATION_STATE.md;
+2. read only the canonical architecture documents explicitly listed under
+   "Required Architecture" in ACTIVE_CONTEXT.md;
+3. inspect `git branch --show-current`, `git status --short`,
+   `git diff --stat`, `git diff --check` and `git diff --name-only`;
+4. consult docs/validation/OWNER_TEST_MATRIX.md before selecting tests.
+
+The concise project entrypoint rule lives in
+.cline/rules/00-markmapeditor-entrypoint.md and must not be duplicated
+elsewhere.
+
+### Authority precedence
+
+1. accepted canonical architecture;
+2. roadmap and Package mapping;
+3. checked-out source and executable validators;
+4. compact AI-state documents;
+5. previous reports and conversations;
+6. Repomix snapshots.
+
+Current source may expose an implementation defect, but accepted architecture
+remains the authority for intended behavior. Contradictions between source,
+validators and architecture must be surfaced to the owner, never silently
+resolved.
+
+### Repository-first inspection and Repomix boundary
+
+- Inspect the live repository directly with targeted symbol searches and
+  small source ranges.
+- Repomix snapshots are secondary; they must not be loaded when the
+  checked-out repository is available.
+- Do not repeatedly read complete large files when symbol-level inspection
+  is sufficient.
+
+---
+
+## 30. Model Switch and Context-Compaction Handoff
+
+- A replacement model must read the AI-state documents first, before any
+  planning or editing.
+- Agents must not reconstruct active state from conversation history when
+  repository state files exist.
+- CURRENT_ACT.md carries the current authorization: stage, allowed and
+  protected files, stop conditions.
+- VALIDATION_STATE.md carries inherited static, browser and device evidence,
+  kept as separate evidence classes.
+- ACTIVE_CONTEXT.md carries the current phase, working-tree boundary and the
+  list of architecture documents that are required right now.
+- A context-compaction handoff is complete only when no tool_call_ids remain
+  unresolved and any partial work is recorded in CURRENT_ACT.md.
+- One Cline task has one clear goal or one bounded staged ACT; a replacement
+  model continues that ACT rather than starting a new broad one.
+
+### AI-state update responsibilities
+
+- Update CURRENT_ACT.md at every stage change within the authorized ACT.
+- Update VALIDATION_STATE.md with concise evidence (command, exit, summary
+  count, failure-log path) after each accepted validation run.
+- Update ACTIVE_CONTEXT.md at owner-acceptance and closure boundaries.
+- Migrate durable decisions into canonical architecture via DECISION_LOG.md
+  pointers; clean stale operational detail at Package closure.
+- Full terminal logs and source dumps never belong in AI-state.
+
+---
+
+## 31. Context-Efficient Execution
+
+### Source inspection
+
+- Inspect symbols and small ranges; avoid broad reads of large files.
+- Search first (`rg`, targeted `sed` ranges), read only what the question
+  requires.
+
+### Terminal output
+
+- Successful validation output is summarized: one line per suite with
+  command, exit code and summary count.
+- Verbose output is written to an ignored local log (for example
+  `.validation/<suite>.log`), never returned wholesale to the model.
+- Failures are inspected through targeted log ranges, not entire logs.
+- Warnings and unexpected stderr are retained in the log and mentioned in the
+  summary.
+
+---
+
+## 32. Validation Tiers and Owner-Based Test Selection
+
+### Owner-based selection
+
+- Consult docs/validation/OWNER_TEST_MATRIX.md and
+  docs/validation/TEST_CATALOG.md before selecting tests.
+- Run the smallest meaningful tier for the changed owners; do not run every
+  script after every edit.
+- Inherited accepted evidence is not rerun unless a changed owner can
+  invalidate it.
+- Map `js/main.js` changes by functional owner or source range; a `main.js`
+  edit does not require every Workspace suite.
+
+### Tiers
+
+- TIER 0 — EDIT HYGIENE: `node --check` on touched JS/CJS,
+  `git diff --check`, focused anchor/static check.
+- TIER 1 — QUICK DOMAIN SMOKE: fast, non-mutating, changed domain only.
+- TIER 2 — TARGETED DOMAIN REGRESSION: selected by changed owner; affected
+  contracts and integrations; no unrelated domains.
+- TIER 3 — PACKAGE PRE-ACCEPTANCE: all active Package validators, affected
+  shared-runtime regressions, anchor audit, syntax/diff, release parity.
+- TIER 4 — PACKAGE CLOSURE: final active Package suite, required
+  cross-domain regressions, documentation checks, Help/Release Notes checks,
+  release parity, browser/device checklist.
+- TIER M — MUTATION-CONTROL GATE: see the next section.
+- TIER D — BROWSER/DEVICE: physical evidence, kept separate from static
+  evidence.
+
+### Evidence classes
+
+Static fixtures never prove: physical scrolling, visual overlap, keyboard
+behavior, responsive usability, File System Access prompts, Service Worker
+activation, Android/DeX usability. Browser and device claims require
+physically observed evidence, labeled as such.
+
+Aggregate commands (see package.json and scripts/validate-aggregate.cjs):
+`validate:quick`, `validate:projects`, `validate:tasks`,
+`validate:workspace`, `validate:reports`, `validate:package5`,
+`validate:closure`, `validate:mutation:projects`. Direct script execution
+remains available.
+
+---
+
+## 33. Mutation-Control Isolation (Tier M)
+
+Tier M runs only after contract-sensitive changes, after material validator
+changes, or at explicit gates — never routinely.
+
+Requirements:
+
+- run in a disposable isolated copy of the repository;
+- include the current uncommitted candidate in the copy;
+- never mutate browser-served source;
+- run no two mutation suites concurrently;
+- take exact byte snapshots (sha256) before and after every mutation;
+- prove byte-identical restoration and a green baseline rerun;
+- account every control as biting, non-biting or structural guard;
+- remove the disposable copy and logs afterward.
+
+Behavior-changing suites that mutate source belong only to Tier M; ordinary
+validators must be non-mutating against the served tree.
+
+---
+
+## 34. ACT Completion, Owner Acceptance and Package Closure
+
+### ACT lifecycle
+
+- CURRENT_ACT.md is updated at every stage change (A/B/C/owner acceptance/
+  closed) and must reflect the actual state, never intent.
+- On ACT completion, VALIDATION_STATE.md records concise evidence per suite:
+  command, exit code, summary count, failure-log path — no pasted output.
+- ACTIVE_CONTEXT.md is updated when the owner accepts a checkpoint and at
+  Package closure.
+
+### Owner acceptance
+
+- Owner-accepted evidence is summarized compactly in ACTIVE_CONTEXT.md and
+  never rewritten or re-labeled later.
+- Browser/device acceptance is labeled as such and is not claimed from Node
+  fixtures.
+
+### Package closure cleanup
+
+- Migrate durable decisions from DECISION_LOG.md into canonical architecture
+  and leave a short pointer.
+- Remove stale operational detail and temporary artifacts.
+- Keep release-identity changes, commit and push for the explicit closure
+  boundary only (see §26 Release Closure).
+
+---
+
+## 35. General Rule
 
 Inspect first.
 Plan before editing.

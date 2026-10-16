@@ -360,6 +360,16 @@ group('read-only preservation');
   const idx = fs.readFileSync(path.join(ROOT, 'js', 'workspace', 'workspace-index-document.js'), 'utf8');
   check('N06', 'Workspace Index has no mutation owner call', !/MME_PROJECT_METADATA_MUTATION/.test(idx));
   check('N07', 'Workspace Index keeps its Projects section', /workspaceIndexProjectsSection/.test(idx));
+  // §2 presentation parity: the register shows Stage and State as SEPARATE
+  // columns through the canonical display helpers, never the combined Status
+  // model (status stays a legacy read-only mirror of stage for Reports).
+  check('N07b', 'Workspace Index shows Stage and State as separate columns',
+    /wsIndexProjectStage/.test(idx) && /wsIndexProjectState/.test(idx) &&
+    !/wsIndexProjectStatus/.test(idx) &&
+    /projectStageLabel/.test(idx) && /projectStateLabel/.test(idx));
+  // Delivery and Billing stay visible in the index register after the split.
+  check('N07c', 'Workspace Index keeps Delivery and Billing columns',
+    />Delivery</.test(idx) && />Billing</.test(idx));
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   check('N08', 'APP_VERSION unchanged', /markmap-journal-pwa-0\.6\.3-tasks-wiki-links-foundation/.test(sw));
   const rel = fs.readFileSync(path.join(ROOT, 'js', 'release', 'release.js'), 'utf8');

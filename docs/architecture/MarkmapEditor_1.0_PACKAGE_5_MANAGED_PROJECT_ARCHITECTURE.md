@@ -2,12 +2,11 @@
 
 ## Status
 
-- **Package 5 — MANAGED PROJECTS: ACT 5D statically accepted; ACT 5D follow-up
-  (quarter 2020–2100 controls, short sequential workspace IDs, roadmap
-  alignment) in progress — not device-accepted, not closed.**
+- **Package 5 — MANAGED PROJECTS: closed in release 0.7.0.** All ACT 5A/5B/5C/5D
+  work is implemented, statically validated, and owner-accepted.
 - This document is the authoritative architecture contract for Package 5.
-- Baseline at last amendment: `development` @ `9f39851`, `productVersion 0.6.3`,
-  cache identity `markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation`.
+- Baseline at last amendment: `development` @ `5270b10`, `productVersion 0.7.0`,
+  cache identity `markmap-journal-pwa-0.7.0-projects-foundation`.
   Package 4 (Standalone Note experiment) is archived and absent from active runtime.
 
 Decisions in this document are **owner-approved**. Items marked
@@ -53,6 +52,8 @@ Task priority remains `#p1`, `#p2`, `#p3`. Package 5 does **not** propose `[p1]`
 
 ### 2.1 Accepted forms
 
+Canonical (write this form):
+
 ```md
 Project: Alibaba
 
@@ -61,6 +62,16 @@ Project: Alibaba [800000 BRL]
 Project: Alibaba [27Q3]
 
 Project: Alibaba [800000 BRL] [27Q3]
+```
+
+Compatible (parsed identically; never written by the serializer):
+
+```md
+- Project: Alibaba [800000 BRL] [27Q3]
+
+* Project: Alibaba [27Q3]
+
++ Project: Alibaba
 ```
 
 ### 2.2 What the visible declaration owns
@@ -108,6 +119,40 @@ consumed. In the third example the `[[Alibaba]]` Wiki Link remains intact inside
 the title while `[27Q3]` is consumed as Expected Order. Project parsing never
 consumes Task lines, so `- [ ] Ship Alibaba [800000 BRL]` remains a Task whose
 text carries a Project-shaped token (§15.3).
+
+### 2.4 Declaration grammar — canonical vs compatible prefixes
+
+The ONE declaration grammar is defined by the canonical parser
+(`workspace-parser.js`): a line is a Project declaration when, after trimming,
+it starts with `Project:`.
+
+| Form | Status | Example |
+| --- | --- | --- |
+| `Project: <title> …` | **CANONICAL** — the only form the serializer writes | `Project: Alibaba [27Q3]` |
+| `- Project: …` / `* Project: …` / `+ Project: …` | **COMPATIBLE** — read, never written | `- Project: Alibaba [27Q3]` |
+
+Rules:
+
+- **Bullet prefix is transparent.** Before declaration recognition the parser
+  applies `stripListPrefix()` — `/^[-*+]\s+/` removed, then trimmed. The prefix
+  therefore changes nothing about the record: the title, value, currency and
+  quarter tokens are identical in both forms, and the visible-line edit path
+  (`splitDeclaration()`) preserves the original indentation and prefix so a
+  re-serialization never rewrites the author's list.
+- **Only the three ASCII bullet markers are stripped.** `stripListPrefix()` is
+  exactly `/^[-*+]\s+/`; ordered-list markers (`1. Project:`) and quote markers
+  (`> Project:`) are NOT stripped and therefore are not declarations.
+- **A Task line is never a Project.** `isTaskCheckboxLine()` runs before
+  declaration recognition, so `- [ ] Ship Alibaba [27Q3]` stays a Task (§15.3).
+- **Fenced code is invisible.** Declaration scanning (both the parser and the
+  managed-metadata locator) skips fenced spans (` ``` ` / `~~~`), so a
+  `Project:` line inside a fence is text, never a Project.
+- **Locators use the same grammar.** The managed-comment locator
+  (`project-metadata-mutation.js → locateProject()`) recognizes exactly this
+  grammar — including the compatible bullet prefixes and the fenced set — when
+  it decides which declaration owns a following managed comment. A neighboring
+  Project (in either form) terminates the search instead of donating its
+  comment, which is what keeps `id`-keyed mutation address correct.
 
 ---
 
@@ -721,6 +766,39 @@ only after a stable `projectId` **and** the managed Project writer are accepted.
 that must survive round-trip unchanged in meaning
 (`js/tasks/task-lifecycle.js:41-42`). Package 5 does not change that behavior; it
 only declines to give the key authority.
+
+---
+
+## 12A. Task Board correction contract
+
+Task Board Source filtering uses exact indexed `filePath`:
+
+- `fileName` is display only; exact `filePath` is the canonical filter key;
+- duplicate basenames are disambiguated with full path context;
+- All Sources uses the canonical empty filter value `''`;
+- Source filtering composes with existing Status, Priority and Search filters;
+- selected Source survives applicable rerenders and Workspace Index refreshes;
+- viewport state survives destructive column rerender (scrollTop/scrollLeft
+  capture and restore);
+- Task mutation owners remain unchanged; Task source files remain canonical.
+
+**Do not describe this as Task-to-Project linkage.** Tasks remain Tasks;
+Projects remain Projects; no association exists between them in Package 5.
+
+---
+
+## 12B. Workspace metadata Quick Actions contract
+
+Existing frontmatter mutation owner remains authoritative:
+
+- an accepted changed action performs one physical Save;
+- no-change does not perform an unnecessary Save;
+- baseline/dirty state updates only after successful persistence;
+- Save failure cannot claim persisted success;
+- user state remains recoverable after failure;
+- Workspace Index and dependent Sidebar projections refresh after successful
+  Save;
+- no separate filesystem writer was introduced.
 
 ---
 

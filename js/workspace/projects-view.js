@@ -565,6 +565,8 @@
         <div class="projectsCell projectsCellState${cell('state')}" role="cell" data-col="state">${escapeHtml(stateLabel(f.state))}</div>
         <div class="projectsCell projectsCellValue${cell('value')}" role="cell" data-col="value">${escapeHtml(valueText)}</div>
         <div class="projectsCell projectsCellOrder${cell('expectedOrder')}" role="cell" data-col="order">${escapeHtml(f.expectedOrder || '—')}</div>
+        <div class="projectsCell projectsCellDelivery${cell('expectedDelivery')}" role="cell" data-col="delivery">${escapeHtml(f.expectedDelivery || '—')}</div>
+        <div class="projectsCell projectsCellBilling${cell('expectedBilling')}" role="cell" data-col="billing">${escapeHtml(f.expectedBilling || '—')}</div>
         <div class="projectsCell projectsCellSource" role="cell" data-col="source">
           <button type="button" class="projectsRowSource" data-action="open-source"
             data-path="${escapeHtml(r.sourcePath)}" data-kind="${escapeHtml(r.sourceKind)}"
@@ -698,6 +700,8 @@
         <span class="projectsHeadCell" role="columnheader">State</span>
         <span class="projectsHeadCell" role="columnheader">Value</span>
         <span class="projectsHeadCell" role="columnheader">Order</span>
+        <span class="projectsHeadCell" role="columnheader">Delivery</span>
+        <span class="projectsHeadCell" role="columnheader">Billing</span>
         <span class="projectsHeadCell" role="columnheader">Source</span>
       </div>`;
 

@@ -307,9 +307,10 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     const V = globalThis.MME_PROJECTS_VIEW;
     check('V00', 'Projects view exposes a projection API', Boolean(V) && typeof V.buildProjection === 'function');
     const html = V.buildProjection().html;
-    // B07: the compact desktop/DeX column set. Delivery/Billing/Created moved
-    // into the details region and are no longer header columns.
-    for (const col of ['Project', 'Stage', 'State', 'Value', 'Order', 'Source']) {
+    // B07: the compact desktop/DeX column set. Created moved into the details
+    // region; Delivery and Billing were re-introduced as summary columns by the
+    // accepted §1 presentation (nine header cells incl. the expand control).
+    for (const col of ['Project', 'Stage', 'State', 'Value', 'Order', 'Delivery', 'Billing', 'Source']) {
       check('V-col-' + col, 'compact column present: ' + col, html.includes('>' + col + '</span>'));
     }
     check('V01', 'accessible table semantics', /role="table"/.test(html) && /role="columnheader"/.test(html) && /role="rowgroup"/.test(html) && /role="row"/.test(html) && /role="cell"/.test(html));
@@ -367,7 +368,7 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
       const headStart = html.indexOf('class="projectsHeadRow"');
       const headEnd = html.indexOf('role="rowgroup"');
       const head = html.slice(headStart, headEnd);
-      check('B07', 'Source stays inside the same header row', /Source<\/span>/.test(head) && (head.match(/projectsHeadCell/g) || []).length === 7);
+      check('B07', 'Source stays inside the same header row', /Source<\/span>/.test(head) && (head.match(/projectsHeadCell/g) || []).length === 9);
       check('B07b', 'no second header row is rendered', (html.match(/class="projectsHeadRow"/g) || []).length === 1);
       const legacyRegion = (() => {
         const i = html.indexOf('data-details-for="' + legacyKey + '"');
@@ -1679,6 +1680,57 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     check('AP29', 'no hidden direct file read occurs in the batch owner', !/require\(['"]fs['"]\)|readFileSync|writeFileSync|createWriteStream/.test(adSrc));
     check('AP30', 'no timeout-based readiness is required', !/setTimeout|setInterval/.test(adSrc) && /opened\.ready === true/.test(adSrc), 'accepted completion flag present');
 
+    // ---- AP32-AP41: consolidated from package5-batch-and-diagnostics ------
+    // Cross-source/mixed batch with a BULLET short-ID source, bullet-alone
+    // with its source already active, bounded not-found origin, and the
+    // owner-exception origin (never reported as proven project-not-found).
+    const SHORT_B = 'prj_0002';
+    const DOC_BULLET_B = '- Project: BulletProj [500000 BRL] [28Q1]\n' + mc(SHORT_B) + '\n';
+    globalThis.WORKSPACE_STATE.files.notes.push(wsFile('notes/b.md'));
+    const recBullet = { projectId: SHORT_B, name: 'BulletProj', stage: '', state: 'open', value: 500000, currency: 'BRL', expectedOrder: q('28Q1', '2028-Q1', true), sourcePath: 'notes/b.md', sourceLine: 1, sourceName: 'b.md', sourceKind: 'notes', created: TODAY };
+    const entryBullet = { projectId: SHORT_B, sourcePath: 'notes/b.md', sourceKind: 'notes', sourceLine: 1, fieldCount: 1, operations: [{ operation: 'setState', value: 'on-hold' }] };
+    const planBullet = { projects: [entryBullet], fieldCount: 1, sources: [{ sourcePath: 'notes/b.md', sourceKind: 'notes', projects: [entryBullet] }] };
+    globalThis.WORKSPACE_INDEX_STATE.projects = [record, recBullet];
+    // AP32-AP33: bullet short-ID source ALREADY ACTIVE — one Save, prefix kept.
+    opener.behavior = 'faithful';
+    install({ markdown: DOC_BULLET_B, openByPath: null });
+    V.discardPendingChanges();
+    const rAlone = await capture(() => A.applyProjectBatch(planBullet));
+    check('AP32', 'a bullet short-ID source applies alone with ONE Save', rAlone.res.ok === true && rAlone.res.appliedProjects === 1 && rAlone.saves === 1, JSON.stringify({ ok: rAlone.res.ok, reason: rAlone.res.reason, saves: rAlone.saves }));
+    check('AP33', 'the bullet prefix and metadata survive the physical buffer update', host.markdown.startsWith('- Project: BulletProj') && /state=on-hold/.test(host.markdown) && host.markdown.includes('id=' + SHORT_B), JSON.stringify(host.markdown.split('\n')[0]));
+    // AP34-AP35: mixed batch — plain UUID source + bullet short-ID source.
+    const entryA3 = { projectId: ID_A, sourcePath: 'notes/Test2.md', sourceKind: 'notes', sourceLine: 1, fieldCount: 1, operations: [{ operation: 'setStage', value: 'delivered' }] };
+    const planCross = { projects: [entryA3, entryBullet], fieldCount: 2, sources: [{ sourcePath: 'notes/Test2.md', sourceKind: 'notes', projects: [entryA3] }, { sourcePath: 'notes/b.md', sourceKind: 'notes', projects: [entryBullet] }] };
+    opener.behavior = 'faithful';
+    install({ markdown: STALE, openByPath: { 'notes/Test2.md': DOC, 'notes/b.md': DOC_BULLET_B } });
+    V.discardPendingChanges();
+    const rX = await capture(() => A.applyProjectBatch(planCross));
+    check('AP34', 'a mixed plain-UUID + bullet short-ID batch applies across two sources with one Save each', rX.res.ok === true && rX.res.appliedProjects === 2 && rX.saves === 2 && rX.bufferWrites === 2, JSON.stringify({ ok: rX.res.ok, applied: rX.res.appliedProjects, saves: rX.saves, writes: rX.bufferWrites }));
+    check('AP35', 'the bullet source keeps its prefix in the final buffer', host.markdown.startsWith('- Project: BulletProj') && /state=on-hold/.test(host.markdown), JSON.stringify(host.markdown.split('\n')[0]));
+    // AP36-AP38: bounded not-found with an explicit mutation-owner origin.
+    opener.behavior = 'faithful';
+    install({ markdown: DOC, openByPath: null });
+    V.discardPendingChanges();
+    const MISSING = 'prj_99999999-9999-4999-8999-999999999999';
+    const fr = await capture(() => A.applyProjectFieldChange({ projectId: MISSING, operation: 'setState', value: 'on-hold' }));
+    check('AP36', 'a missing projectId is refused as project-not-found', fr.res.ok === false && fr.res.reason === 'project-not-found', JSON.stringify({ ok: fr.res.ok, reason: fr.res.reason }));
+    check('AP37', 'the refusal names its mutation-owner not-found origin', Array.isArray(fr.res.diagnostics) && fr.res.diagnostics.some((d) => d && d.code === 'not-found-origin'), JSON.stringify((fr.res.diagnostics || []).map((d) => d && d.code)));
+    check('AP38', 'the refusal mutates nothing and Saves nothing', fr.saves === 0 && fr.bufferWrites === 0, JSON.stringify({ saves: fr.saves, writes: fr.bufferWrites }));
+    // AP39-AP41: an OWNER EXCEPTION is a distinct origin, never proven not-found.
+    const spyOwnerAp2 = globalThis.MME_PROJECT_METADATA_MUTATION;
+    globalThis.MME_PROJECT_METADATA_MUTATION = Object.freeze(Object.assign({}, realOwnerAp, {
+      mutateProject: () => { throw new Error('boom'); },
+    }));
+    opener.behavior = 'faithful';
+    install({ markdown: DOC, openByPath: null });
+    V.discardPendingChanges();
+    const er = await capture(() => A.applyProjectFieldChange({ projectId: ID_A, sourcePath: 'notes/Test2.md', sourceKind: 'notes', operation: 'setState', value: 'on-hold' }));
+    globalThis.MME_PROJECT_METADATA_MUTATION = spyOwnerAp2;
+    check('AP39', 'an owner exception is refused', er.res.ok === false, JSON.stringify({ ok: er.res.ok, reason: er.res.reason }));
+    const ediag = Array.isArray(er.res.diagnostics) ? er.res.diagnostics : [];
+    check('AP40', 'an owner exception is never reported as proven project-not-found', ediag.some((d) => d && d.code === 'owner-exception-origin') && !ediag.some((d) => d && d.code === 'not-found-origin'), JSON.stringify(ediag.map((d) => d && d.code)));
+    check('AP41', 'an owner exception mutates nothing and Saves nothing', er.saves === 0 && er.bufferWrites === 0, JSON.stringify({ saves: er.saves, writes: er.bufferWrites }));
+
     V.discardPendingChanges();
     globalThis.MME_PROJECT_METADATA_MUTATION = realOwnerAp;
   }
@@ -1747,6 +1799,16 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     check('CW03', 'columns honour explicit minimum widths', (gridRule.match(/minmax\(\d+(\.\d+)?rem/g) || []).length >= 6, gridRule);
     check('CW04', 'columns expand with proportional fr units', (gridRule.match(/\d(\.\d)?fr/g) || []).length >= 5);
     check('CW05', 'controls use the full cell width without forcing overflow', /width: 100%/.test(rule('.projectsCellInput, .projectsCellSelect')) && /min-width: 0/.test(rule('.projectsCell')));
+    // §3: width:100% + padding + border only fits the track when the control is
+    // border-box. Scoped to the two overflowing controls, never a global reset.
+    check('CW05b', 'detail controls are border-box so they cannot spill into the neighbour',
+      /box-sizing:\s*border-box/.test(rule('.projectsCellInput, .projectsCellSelect')));
+    // §3: Value must stay wider than Currency in the details grid.
+    check('CW05c', 'the Value track is wider than the Currency track', (() => {
+      const tracks = [...rule('.projectsDetailsFields').matchAll(/minmax\(0,\s*([\d.]+)fr\)/g)].map((m) => parseFloat(m[1]));
+      // Stage, State, Value, Currency, Order, Delivery, Billing
+      return tracks.length === 7 && tracks[2] > tracks[3];
+    })(), rule('.projectsDetailsFields'));
     check('CW06', 'Source stays attached to the Project row', /minmax\(8rem, 1\.1fr\);/.test(gridRule) && /data-col="source"/.test(viewSrc) && (() => {
       const h3 = V.buildProjection().html;
       const i = h3.indexOf('data-projects-key=');

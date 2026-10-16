@@ -473,6 +473,10 @@ That document defines:
 - validation;
 - final reporting.
 
+It also defines mandatory session entry (.cline rule plus docs/ai-state
+reads), source-authority precedence, validation tiers and mutation-control
+isolation.
+
 If the two documents appear to conflict:
 
 - environment and command availability are governed by

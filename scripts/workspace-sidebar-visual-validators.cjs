@@ -94,7 +94,7 @@ function extractLineFrom(src, marker) {
 // ---------------------------------------------------------------
 // Recording DOM shim
 // ---------------------------------------------------------------
-const h = { logs: [], toasts: [], status: [] };
+const h = { logs: [], toasts: [], saves: 0, status: [] };
 globalThis.__h = h;
 
 function makeEl(id) {
@@ -214,6 +214,10 @@ const OWNER_API = [
   'const forceUpgradeWorkspacePanelMarkup = () => {};',
   'const isWorkspacePanelCollapsed = () => false;',
   'const applyWorkspacePanelCollapsed = () => {};',
+  'function saveSmart() {',
+  '  globalThis.__h.saves = (globalThis.__h.saves || 0) + 1;',
+  '  return Promise.resolve({ ok: true });',
+  '}',
   'return {',
   '  readNoteMetadataFlags, describeNoteActionTarget, applyActiveNoteMetadata,',
   '  archiveActiveNote, restoreActiveNote,',
@@ -333,7 +337,7 @@ const BADGE_CLASSIFICATION = [
   { id: 'workspaceTasksBadge', title: 'Tasks', kind: 'COUNT ONLY', keep: '195' },
   { id: 'workspaceReportBadge', title: 'Report', kind: 'COMPOUND SUMMARY (state)', keep: 'Config' },
   { id: 'workspaceTagsBadge', title: 'Tags', kind: 'COUNT ONLY', keep: '94' },
-  { id: 'workspaceIndexBadge', title: 'Workspace Index', kind: 'COMPOUND SUMMARY (2 metrics)', keep: '62 files - 195 open' },
+  { id: 'workspaceIndexBadge', title: 'Workspace Index', kind: 'COMPOUND SUMMARY (2 metrics, 2 lines)', keep: '62 files / 195 open' },
   { id: 'workspaceArchiveBadge', title: 'Archive', kind: 'COUNT ONLY', keep: '3' },
 ];
 
@@ -610,8 +614,14 @@ function buildTagsSandbox() {
     return dom.workspaceArchiveBadge.textContent === '1';
   });
 
-  await check('B21', 'Workspace Index compound summary is preserved', () =>
-    /badge\.textContent = `\$\{index\.files\.length\} files · \$\{openTasks\} open`/.test(MAIN_SOURCE));
+  await check('B21', 'Workspace Index compound summary is preserved on two lines', () => {
+    const body = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceIndexSummary() {');
+    // The SAME two dynamic owners, stacked as <n> files / <n> open. The old
+    // single crowded line (`… files · … open`) must be gone.
+    return /\$\{index\.files\.length\} files<\/span>/.test(body) &&
+      /\$\{openTasks\} open<\/span>/.test(body) &&
+      !/files · /.test(body);
+  });
 
   await check('B22', 'Active category badge is preserved', () =>
     /badge\.textContent = kindLabel/.test(MAIN_SOURCE) && /badge\.textContent = 'No file'/.test(MAIN_SOURCE));

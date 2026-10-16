@@ -1,5 +1,16 @@
 {
   "type": "module",
+  "scripts": {
+    "validate:quick": "node scripts/validate-aggregate.cjs quick",
+    "validate:projects": "node scripts/validate-aggregate.cjs projects",
+    "validate:tasks": "node scripts/validate-aggregate.cjs tasks",
+    "validate:workspace": "node scripts/validate-aggregate.cjs workspace",
+    "validate:reports": "node scripts/validate-aggregate.cjs reports",
+    "validate:package5": "node scripts/validate-aggregate.cjs package5",
+    "validate:closure": "node scripts/validate-aggregate.cjs closure",
+    "validate:mutation:projects": "node scripts/validate-aggregate.cjs mutation:projects",
+    "validate:list": "node scripts/validate-aggregate.cjs --list"
+  },
   "devDependencies": {
     "typescript": "^6.0.3"
   }

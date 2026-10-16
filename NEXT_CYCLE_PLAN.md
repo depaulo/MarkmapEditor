@@ -173,13 +173,20 @@ PACKAGE 4   Standalone Notes and scope composition
 PACKAGE 5   Projects data foundation + Expanded View (historical P6 absorbed
                 by owner decision; see Package 5 architecture §18.1) -> ACT 5D
                 statically accepted; ACT 5D follow-up in progress
-PACKAGE 6   NEXT: Reports direction (historical P7/P8) — NOT STARTED; no
-                Package 6 implementation in this ACT
-PACKAGE 7   Quick Report Markdown
-PACKAGE 8   Enriched Reports
-PACKAGE 9   HTML and Draw.io workflow completion
-PACKAGE 10  Final visual consistency
-PACKAGE 11  1.0 integration and release closure
+PACKAGE 6   Expanded-View Behavior and Visual Consistency (NEW — PLAN-only,
+                source-proven inventory and comparison first; see
+                docs/architecture/consistency-package-plan.md)
+PACKAGE 7   Reports improvement (historical P7/P8 — deferred, not canceled;
+                current Reports remains usable; preserves existing
+                Markdown/marker/Draw.io flow)
+PACKAGE 8   Draw.io/presentation-flow improvement according to the preserved plan
+PACKAGE 9   remaining pre-1.0 integration and acceptance
+PACKAGE 10  Quick Report Markdown (historical P7 content — preserved in
+                Reports plan section below)
+PACKAGE 11  Enriched Reports (historical P8 content — preserved in Reports plan
+                section below)
+PACKAGE 12  HTML and Draw.io workflow completion (historical P9 content —
+                preserved in Reports plan section below)
 ```
 
 Packages 2 and 3 may run in either order. Package 4 was executed as an
@@ -241,30 +248,37 @@ the current canonical architecture and this roadmap.
 - Non-touch: the Notes projection; the metadata writer.
 - **One Sidebar, two entry points. Never two independent Sidebars.**
 
-**Packages 5-6 - Projects**
-- Owners: `js/workspace/workspace-parser.js` (`parseProjects`,
+**Packages 5-6 - Projects + Expanded-View Consistency**
+- Package 5 Owners: `js/workspace/workspace-parser.js` (`parseProjects`,
   `WORKSPACE_INDEX_STATE.projects`), the Projects Sidebar renderer in `js/main.js`,
   the Workspace Index Projects projection, `css/workspace.css`, `index.html`.
-- Future `mme-project` writer owner: **does not exist yet.** `mme-project` has zero
-  occurrences in `js/` at Gate 1. Package 5 creates it.
+- Package 6 (Expanded-View Behavior and Visual Consistency — PLAN-only):
+  docs/architecture/consistency-package-plan.md. No implementation authorized
+  in this document.
+- Future `mme-project` writer owner: created by Package 5.
 - Non-touch: the Notes projection; the metadata writer; `js/release/release.js`; `sw.js`.
 - Subprojects remain deferred; no parent IDs, nested UI or rollups in 1.0.
+- Reports remain deferred under Package 5 closure: current Reports is usable,
+  preserved, not canceled. See Reports preservation plan below.
 
-**Packages 7-9 - Reports**
-- Owners: `js/report/report-dictionary.js`, `quick-report-generator.js`,
-  `report-panel.js`, `report-markdown-import.js`, `drawio-report-reconciler.js`,
-  `drawio-report-panel.js`.
-- Non-touch: the Notes projection; the metadata writer; **Project semantics** -
+**Packages 7-8 - Reports improvement + Draw.io/presentation-flow**
+- Package 7 Owners: `js/report/report-dictionary.js`, `quick-report-generator.js`,
+  `report-panel.js`, `report-markdown-import.js`.
+- Package 8 Owners: `drawio-report-reconciler.js`, `drawio-report-panel.js`.
+- Non-touch: the Notes projection; the metadata writer; **Project semantics** —
   Reports consumes Project fields, it does not define them; `sw.js` precache
   grouping except where a new module is genuinely added.
 - Pipeline: source -> Quick Report -> Markdown Report -> user review -> HTML ->
   optional Draw.io reconciliation and generation.
+- Reports plan preserved: existing Markdown/marker/Draw.io flow, marker-based
+  reconciliation, user edits generated Markdown directly, Report Notes field
+  removed, import markers present in Draw.io but absent in Markdown, insert
+  Markdown markers absent from Draw.io, validate against real presentation
+  template/workflow, no compatibility layer for old Reports, no silent mutation
+  of Notes/Tasks/Projects.
 
-**Package 10 - Final visual consistency**
-- Owners: `css/workspace.css`, `css/view-layout.css`, `index.html`, panel renderers.
-- Also owns the **pane-divider requirement** (canonical architecture Section 9A)
-  unless a small local correction is proven earlier in the existing layout owner
-  (`js/ui/view-layout.js`; splitters `#splitEditor` and `#splitHtml`).
+**Package 9 - remaining pre-1.0 integration and acceptance**
+- Cross-package integration and 1.0 release closure.
 
 ## 8. Validator strategy
 
@@ -294,7 +308,8 @@ Each package requires: full static chain green, then the package's own device
 check, then a regression pass of the A/B/C/D laptop checklist. P2 and P3 add
 their own device checks. P4 is a document review, not a device check. P5 and P6
 add Report-generation device checks (partial generation, unresolved placeholders,
-Draw.io output) before acceptance.
+Draw.io output) before acceptance. P6 (consistency package) is PLAN-only in this
+release and adds no device checks until its PLAN is approved.
 
 No package is accepted on static validation alone.
 
@@ -319,17 +334,17 @@ No package is accepted on static validation alone.
 - **P5** The `mme-project` managed model exists; a Project can be created
   standalone-first, appears in the Sidebar and feeds Report Mode; dates validate;
   status is explicit; archive works. The managed comment is stable across edits.
-- **P6** Projects Expanded View is a virtual view with Return, source navigation and a
-  controlled modal; no hidden database; no direct Index mutation.
-- **P7** Quick Report generates, updates and reconciles; placeholders extract,
-  normalize and survive partial generation.
-- **P8** Enriched Reports consume Task and Project contracts without inventing them.
-- **P9** Draw.io output remains valid and editable; HTML import and reconciliation
-  complete.
-- **P10** Cross-experience visual consistency accepted on mobile and laptop; the
-  pane-divider requirement holds; no data contract changed.
-- **P11** Help, docs, onboarding, Release Notes, version/cache, publication and PWA
-  update all verified.
+- **P6** Expanded-View Behavior and Visual Consistency — PLAN-only;
+  docs/architecture/consistency-package-plan.md. Source-proven inventory and
+  comparison required before implementation. No generic expanded-view
+  framework; MarkmapEditor not converted into a generic note/database app.
+- **P7** Reports improvement — deferred, not canceled; current Reports remains
+  usable. Preserves existing Markdown/marker/Draw.io flow, marker-based
+  reconciliation, user edits generated Markdown directly, Report Notes field
+  removed.
+- **P8** Draw.io/presentation-flow improvement according to the preserved plan.
+- **P9** remaining pre-1.0 integration and acceptance — cross-package
+  integration and 1.0 release closure.
 
 ---
 
@@ -342,7 +357,8 @@ No package is accepted on static validation alone.
 - Useful standalone / Current Document composition.
 - Projects foundation and Projects Expanded View.
 - Quick Report Markdown, Enriched Reports, and completed HTML / Draw.io workflow.
-- Accepted final visual consistency package.
+- Accepted consistency package (Expanded-View Behavior and Visual Consistency)
+  per docs/architecture/consistency-package-plan.md.
 
 **Remain deferred past 1.0**
 - Subprojects and Project hierarchy.

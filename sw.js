@@ -11,13 +11,12 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 
 // APP_VERSION is the single authoritative release/version owner. It names the
 // installed cache identity (APP_CACHE / RUNTIME_CACHE) for this release
-// boundary: MarkmapEditor 0.6.3 — Tasks and Wiki Links Foundation. This boundary
-// carries the accepted Package 2 (Tasks) and Package 3 (Wiki Links) static
-// implementation, so an installed 0.6.2 client will discover a new worker and
-// follow the existing user-controlled Update Ready contract. All changed assets
-// are deterministic precache entries, so a new identity ensures installed
-// clients receive the complete accepted package.
-const APP_VERSION = 'markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation';
+// boundary: MarkmapEditor 0.7.0 — Projects Foundation. This boundary
+// carries the accepted Package 5 (Managed Projects) implementation, so an installed
+// 0.6.3 client will discover a new worker and follow the existing user-controlled
+// Update Ready contract. All changed assets are deterministic precache entries,
+// so a new identity ensures installed clients receive the complete accepted package.
+const APP_VERSION = 'markmap-journal-pwa-0.7.0-projects-foundation';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.

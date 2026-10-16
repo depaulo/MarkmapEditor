@@ -190,6 +190,34 @@
   cursor: pointer;
 }
 
+/* Source filter: shares the Done/Priority/Sort select vocabulary. The select
+   is sized to fit typical source labels while staying compact in the header. */
+.taskBoardSourceLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.taskBoardSourceFilter {
+  height: 30px;
+  min-width: 160px;
+  max-width: 260px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--toolbar-border);
+  background: var(--toolbar-bg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .taskBoardClose {
   height: 30px;
   padding: 0 14px;
@@ -231,7 +259,8 @@
 }
 
 .taskBoardColumn {
-  flex: 0 0 250px;
+  flex: 1 1 240px;
+  min-width: 200px;
   min-height: 0;
 
   display: flex;
@@ -324,6 +353,7 @@ html.dark .taskBoardPanel select {
 .taskBoardCardTitle {
   width: 100%;
   text-align: left;
+  min-width: 0;
 
   background: transparent;
   border: none;
@@ -335,6 +365,12 @@ html.dark .taskBoardPanel select {
 
   cursor: pointer;
   padding: 0;
+
+  /* Long Task text must wrap within the card and never overflow into
+     metadata or action controls. overflow-wrap allows breaking very long
+     words; white-space: normal lets the button wrap like normal text. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .taskBoardCardTitle:hover {

@@ -640,6 +640,31 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
   transform: rotate(0deg);
 }
 
+/* §4 Workspace Index header: the two existing count lines stack inside the SAME
+   badge element (still inside the panel-toggle button, so collapse delegation
+   and the Refresh/Open action buttons stay exactly where they were). The shared
+   .workspacePanelBadge rule below remains the single pill owner for the other
+   badges; this rule only relaxes the single-line clipping for THIS badge. */
+#workspaceIndexBadge {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+
+  max-width: none;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  padding: 3px 8px;
+}
+
+.workspaceIndexBadgeCount {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
 .workspacePanelBadge {
   flex: 0 0 auto;
 
@@ -3713,7 +3738,10 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
   margin-bottom: 8px;
 }
 
-/* ---- Workspace Index: Projects register ---- */
+/* ---- Workspace Index: Projects register ----
+   §2 parity: eight columns — Project | Value | Order | Delivery | Billing |
+   Stage | State | Source. Stage and State replace the combined Status column
+   (status stays a legacy mirror of stage for Reports only). */
 .wsIndexProjectRegister {
   display: flex;
   flex-direction: column;
@@ -3721,12 +3749,21 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
   min-width: 0;
 }
 
+.wsIndexProjectHeader,
+.wsIndexProjectRow {
+  grid-template-columns:
+    minmax(140px, 1.6fr) /* Project */
+    minmax(90px, 0.8fr)  /* Value   */
+    minmax(60px, 0.5fr)  /* Order   */
+    minmax(60px, 0.5fr)  /* Delivery */
+    minmax(60px, 0.5fr)  /* Billing */
+    minmax(70px, 0.6fr)  /* Stage   */
+    minmax(70px, 0.6fr)  /* State   */
+    minmax(100px, 1fr);  /* Source  */
+}
+
 .wsIndexProjectHeader {
   display: grid;
-  grid-template-columns: minmax(140px, 1.6fr) minmax(90px, 0.8fr) minmax(60px, 0.5fr) minmax(
-      60px,
-      0.5fr
-    ) minmax(60px, 0.5fr) minmax(80px, 0.7fr) minmax(100px, 1fr);
   gap: 6px;
   padding: 6px 8px;
   font-size: 11px;
@@ -3740,10 +3777,6 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
 
 .wsIndexProjectRow {
   display: grid;
-  grid-template-columns: minmax(140px, 1.6fr) minmax(90px, 0.8fr) minmax(60px, 0.5fr) minmax(
-      60px,
-      0.5fr
-    ) minmax(60px, 0.5fr) minmax(80px, 0.7fr) minmax(100px, 1fr);
   gap: 6px;
   align-items: center;
   width: 100%;
@@ -4674,6 +4707,8 @@ html.projects-view-active .splitter::before { content: none; }
     minmax(7rem, 1fr)          /* State    */
     minmax(9rem, 1.2fr)        /* Value    */
     minmax(6rem, 0.8fr)        /* Order    */
+    minmax(6rem, 0.8fr)        /* Delivery */
+    minmax(6rem, 0.8fr)        /* Billing  */
     minmax(8rem, 1.1fr);       /* Source   */
   gap: 8px; align-items: center;
 }
@@ -4725,7 +4760,19 @@ html.projects-view-active .splitter::before { content: none; }
 .projectsDetailsInner { min-width: 0; max-width: 100%; }
 .projectsDetailsFields {
   display: grid; gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  /* §3 presentation: seven fixed tracks — Stage | State | Value | Currency |
+     Order | Delivery | Billing. Value is explicitly WIDER than Currency, and
+     every track is minmax(0, …) so a long label shrinks its own track instead
+     of pushing a control into the neighbour. Created and Source wrap to a
+     second line. The narrow rule below replaces this with ONE column. */
+  grid-template-columns:
+    minmax(0, 1.4fr)   /* Stage    */
+    minmax(0, 1.4fr)   /* State    */
+    minmax(0, 2.4fr)   /* Value    */
+    minmax(0, 1.3fr)   /* Currency */
+    minmax(0, 1.8fr)   /* Order    */
+    minmax(0, 1.8fr)   /* Delivery */
+    minmax(0, 1.8fr);  /* Billing  */
   align-items: end;
 }
 .projectsDetailsReadOnly {
@@ -4736,6 +4783,12 @@ html.projects-view-active .splitter::before { content: none; }
 .projectsFieldError { font-size: 11px; color: #b91c1c; }
 .projectsCellInput, .projectsCellSelect {
   height: 30px; padding: 0 6px; font-size: 12px; width: 100%;
+  /* §3 Value/Currency overlap: with the browser default content-box, width:100%
+     PLUS padding PLUS border made every control 14px wider than its track, so it
+     spilled across the 8px gap into the neighbouring control. Scoped here to the
+     two overflowing controls — never a global box-sizing change. */
+  box-sizing: border-box;
+  min-width: 0;
   border: 1px solid var(--menu-border); border-radius: 6px;
   background: var(--toolbar-bg); color: var(--text);
 }
@@ -4769,10 +4822,18 @@ html.projects-view-active .splitter::before { content: none; }
   .projectsHeadRow, .projectsRow {
     grid-template-columns: 28px minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
   }
+  /* §1 narrow: the accepted five-track collapsed row is unchanged. Stage,
+     Delivery and Billing are re-flowed OUT of the summary (their values stay
+     fully readable in the expanded details) so the visible set is byte-for-byte
+     the accepted one — no squeeze, no horizontal scroll, no page overflow. */
   .projectsHeadRow .projectsHeadCell:nth-child(3) { display: none; }
+  .projectsHeadRow .projectsHeadCell:nth-child(7) { display: none; }
+  .projectsHeadRow .projectsHeadCell:nth-child(8) { display: none; }
   .projectsRow .projectsCell[data-col="stage"] { display: none; }
+  .projectsRow .projectsCell[data-col="delivery"] { display: none; }
+  .projectsRow .projectsCell[data-col="billing"] { display: none; }
   .projectsRow .projectsCell[data-col="source"] { grid-column: 2 / -1; }
-  .projectsHeadRow .projectsHeadCell:nth-child(7) { grid-column: 2 / -1; }
+  .projectsHeadRow .projectsHeadCell:nth-child(9) { grid-column: 2 / -1; }
   .projectsRowDetails { padding-left: 0; }
   .projectsDetailsFields { grid-template-columns: minmax(0, 1fr); }
   .projectsDetailsReadOnly { flex-direction: column; gap: 4px; }

@@ -4011,7 +4011,14 @@ function renderWorkspaceIndexSummary() {
 
   const badge = document.getElementById('workspaceIndexBadge');
   if (badge) {
-    badge.textContent = `${index.files.length} files · ${openTasks} open`;
+    // §4 presentation: the SAME two dynamic count owners, stacked into a
+    // two-line count block so the title, the counts and the Refresh/Open
+    // actions never fight for one crowded line. The badge stays inside the
+    // panel-toggle button, so collapse delegation and the existing handlers
+    // are untouched.
+    badge.innerHTML =
+      `<span class="workspaceIndexBadgeCount">${index.files.length} files</span>` +
+      `<span class="workspaceIndexBadgeCount">${openTasks} open</span>`;
   }
 
   const updated = document.getElementById('workspaceIndexUpdated');
@@ -5742,6 +5749,7 @@ function describeNoteActionTarget() {
  *
  * @param {'knowledge'|'pinned'|'archived'} key
  * @param {boolean} value
+ * @returns {{ok: boolean, changed: boolean, path?: string, text?: string, saved?: boolean, saveFailed?: boolean, saveReason?: string, saveError?: string}}
  */
 function applyActiveNoteMetadata(key, value) {
   const target = describeNoteActionTarget();
@@ -5791,9 +5799,62 @@ function applyActiveNoteMetadata(key, value) {
   setStatus?.(modeLabel?.() || 'Journal');
   updateDocumentTitle?.();
 
-  log?.(`Note action applied: ${key}=${value} path=${target.active.path} (unsaved)`);
+  // ACT 5B: Auto-Save after accepted Workspace metadata Quick Action.
+  // patchNoteMetadata already returned changed=true, so a physical Save is
+  // warranted. saveSmart() handles: write → captureTaskBaseline (saved baseline)
+  // → dirty = false → scheduleWorkspaceIndexRebuild('save'). The click handler
+  // already refreshes the Sidebar after this returns.
+  // Return a Promise so callers can await completion; keep this a regular
+  // (non-async) function so verbatim extraction by validation suites works.
+  return saveSmart().then(
+    (saveResult) => {
+      if (saveResult && saveResult.ok === true) {
+        log?.(`Note action applied and auto-Saved: ${key}=${value} path=${target.active.path}`);
+        return {
+          ok: true,
+          changed: true,
+          path: target.active.path,
+          text: result.text,
+          saved: true,
+        };
+      }
 
-  return { ok: true, changed: true, path: target.active.path, text: result.text };
+      // Save failed or was canceled — dirty remains true, user must Save manually.
+      const reason = saveResult?.reason || 'unknown';
+      log?.(`Note action auto-save failed: ${key}=${value} path=${target.active.path} reason=${reason}`);
+      globalThis.MME_APP?.showToast?.(
+        `Metadata applied but auto-Save failed (${reason}). Document remains unsaved.`,
+        'error',
+        4000
+      );
+      return {
+        ok: true,
+        changed: true,
+        path: target.active.path,
+        text: result.text,
+        saveFailed: true,
+        saveReason: reason,
+      };
+    },
+    (e) => {
+      // saveSmart rejected — dirty stays true so the user can retry Save manually.
+      const msg = e?.message || String(e);
+      log?.(`Note action auto-save threw: ${msg}`);
+      globalThis.MME_APP?.showToast?.(
+        `Metadata applied but auto-Save failed: ${msg}`,
+        'error',
+        4000
+      );
+      return {
+        ok: true,
+        changed: true,
+        path: target.active.path,
+        text: result.text,
+        saveFailed: true,
+        saveError: msg,
+      };
+    }
+  );
 }
 
 function pinActiveNote() {
@@ -5930,7 +5991,7 @@ function renderWorkspaceActiveNoteActions() {
   if (host.__noteActionsBound) return;
   host.__noteActionsBound = true;
 
-  host.addEventListener('click', (event) => {
+  host.addEventListener('click', async (event) => {
     const btn = event.target?.closest?.('[data-note-action]');
     if (!btn) return;
 
@@ -5943,7 +6004,7 @@ function renderWorkspaceActiveNoteActions() {
       return;
     }
 
-    fn();
+    await fn();
     renderWorkspaceActiveNoteActions();
     renderWorkspaceActivePanel?.();
   });

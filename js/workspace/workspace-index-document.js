@@ -309,6 +309,24 @@
     `;
   }
 
+  // §2 Stage / State parity with the dedicated Projects route: BOTH columns
+  // delegate to the ONE canonical display owner published by workspace-parser
+  // (projectStageLabel / projectStateLabel), so a legacy value renders exactly
+  // as the route renders it and no new combined Status model is introduced.
+  // A missing helper or an empty value falls back to the raw value or "—", so
+  // the column is never "undefined".
+  function canonicalLabel(helperName, raw) {
+    const fallback = String(raw == null ? '' : raw).trim();
+    try {
+      const fn = globalThis[helperName];
+      if (typeof fn === 'function') {
+        const label = String(fn(fallback) || '').trim();
+        if (label) return label;
+      }
+    } catch {}
+    return fallback || '\u2014';
+  }
+
   function buildProjectsSection(index, filters) {
     const projects = index.projects || [];
 
@@ -388,8 +406,11 @@
               ? project.expectedBilling.display
               : '\u2014';
 
-          // Status
-          const statusDisplay = project.status ? project.status : '\u2014';
+          // Stage + State — the SAME canonical display helpers the dedicated
+          // Projects route uses (workspace-parser). No combined Status model:
+          // `status` stays a legacy read-only mirror of stage for Reports.
+          const stageDisplay = canonicalLabel('projectStageLabel', project.stage);
+          const stateDisplay = canonicalLabel('projectStateLabel', project.state);
 
           // Source label
           const sourceLabel = project.sourceName || project.sourcePath || '\u2014';
@@ -410,7 +431,8 @@
               <span class="wsIndexProjectCell wsIndexProjectOrder">${escapeHtml(orderDisplay)}</span>
               <span class="wsIndexProjectCell wsIndexProjectDelivery">${escapeHtml(deliveryDisplay)}</span>
               <span class="wsIndexProjectCell wsIndexProjectBilling">${escapeHtml(billingDisplay)}</span>
-              <span class="wsIndexProjectCell wsIndexProjectStatus">${escapeHtml(statusDisplay)}</span>
+              <span class="wsIndexProjectCell wsIndexProjectStage">${escapeHtml(stageDisplay)}</span>
+              <span class="wsIndexProjectCell wsIndexProjectState">${escapeHtml(stateDisplay)}</span>
               <span class="wsIndexProjectCell wsIndexProjectSource">${escapeHtml(sourceLabel)}</span>
             </button>
           `;
@@ -431,7 +453,8 @@
             <span class="wsIndexProjectCell wsIndexProjectOrder">Order</span>
             <span class="wsIndexProjectCell wsIndexProjectDelivery">Delivery</span>
             <span class="wsIndexProjectCell wsIndexProjectBilling">Billing</span>
-            <span class="wsIndexProjectCell wsIndexProjectStatus">Status</span>
+            <span class="wsIndexProjectCell wsIndexProjectStage">Stage</span>
+            <span class="wsIndexProjectCell wsIndexProjectState">State</span>
             <span class="wsIndexProjectCell wsIndexProjectSource">Source</span>
           </div>
           ${rowsHtml}

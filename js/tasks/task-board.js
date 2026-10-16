@@ -45,6 +45,11 @@
   const VALID_DONE_WINDOWS = ['7', '30', '90', 'all'];
   const COLUMN_ORDER = ['backlog', 'todo', 'ongoing', 'done'];
 
+  // ---- Source filter (ACT: exact source-file filter) ----
+
+  const SOURCE_FILTER_KEY = 'markmap:taskBoard:source';
+  const SOURCE_FILTER_DEFAULT = ''; // '' means "All Sources"
+
   const STATUS_LABELS = {
     backlog: 'Backlog',
     todo: 'Todo',
@@ -243,6 +248,119 @@
     return normalized;
   }
 
+  // ---- Source filter helpers (ACT: exact source-file filter) ----
+
+  // Collects the unique source filePaths present in the indexed Task records.
+  // Returns paths sorted for deterministic option order.
+  function availableSourcePaths(index) {
+    const paths = new Set();
+    const tasks = index && Array.isArray(index.tasks) ? index.tasks : [];
+    for (const task of tasks) {
+      const p = String(task?.filePath || '').trim();
+      if (p) paths.add(p);
+    }
+    return Array.from(paths).sort(cmpStrings);
+  }
+
+  // Builds a readable label for a source path. Unique filenames show the
+  // basename only. Duplicate filenames are disambiguated with the relative
+  // directory context (everything before the basename). Absolute filesystem
+  // paths are never exposed; only Workspace-relative paths are used.
+  function sourceLabelForPath(filePath, allPaths) {
+    const fileName = String(filePath).replace(/\\/g, '/').split('/').pop() || filePath;
+
+    // Count how many indexed tasks share this basename.
+    let dupCount = 0;
+    for (const p of allPaths) {
+      const name = String(p).replace(/\\/g, '/').split('/').pop();
+      if (name === fileName) dupCount++;
+    }
+
+    if (dupCount <= 1) return fileName;
+
+    // Duplicate basename: show "fileName — dir/context" using the directory
+    // portion of the path (everything before the last segment).
+    const segments = String(filePath).replace(/\\/g, '/').split('/').filter(Boolean);
+    segments.pop(); // remove basename
+    const context = segments.length ? segments.join('/') : '';
+    return context ? `${fileName} — ${context}` : fileName;
+  }
+
+  // Normalizes a stored source filter value against the currently available
+  // source paths. Returns '' (All Sources) when the stored path no longer
+  // exists — a conservative, explicit reset. Never mutates tasks or sources.
+  function normalizeSourceFilterValue(value, availablePaths) {
+    const v = String(value == null ? '' : value).trim();
+    if (!v) return SOURCE_FILTER_DEFAULT;
+    if (availablePaths.indexOf(v) !== -1) return v;
+    return SOURCE_FILTER_DEFAULT;
+  }
+
+  function getStoredSourceFilter(availablePaths) {
+    try {
+      return normalizeSourceFilterValue(localStorage.getItem(SOURCE_FILTER_KEY), availablePaths);
+    } catch {
+      return SOURCE_FILTER_DEFAULT;
+    }
+  }
+
+  function setStoredSourceFilter(value, availablePaths) {
+    const normalized = normalizeSourceFilterValue(value, availablePaths);
+    try {
+      localStorage.setItem(SOURCE_FILTER_KEY, normalized);
+    } catch {
+      // Storage may be unavailable or blocked; filtering continues unpersisted.
+    }
+    return normalized;
+  }
+
+  // Pure: returns true when the task passes the source filter. '' matches all.
+  function matchesSourceFilter(task, sourceFilter) {
+    if (!sourceFilter) return true;
+    return String(task?.filePath || '') === sourceFilter;
+  }
+
+  // Rebuilds the source filter <select> options from the current Workspace
+  // Index. Option VALUE is the exact source filePath; option LABEL is the
+  // readable filename, with path context added for duplicate basenames.
+  // Preserves the current selection when it still exists in the index;
+  // otherwise resets to 'All Sources' (conservative, explicit reset).
+  function rebuildSourceOptions(select, index, currentFilter) {
+    if (!select) return;
+
+    const availablePaths = availableSourcePaths(index);
+
+    // Remember current selection before clearing.
+    const previousValue = select.value;
+
+    // Rebuild options.
+    select.innerHTML = '';
+
+    const allOption = document.createElement('option');
+    allOption.value = '';
+    allOption.label = 'All Sources';
+    allOption.textContent = 'All Sources';
+    select.appendChild(allOption);
+
+    for (const filePath of availablePaths) {
+      const option = document.createElement('option');
+      option.value = filePath;
+      option.label = sourceLabelForPath(filePath, availablePaths);
+      option.textContent = option.label;
+      select.appendChild(option);
+    }
+
+    // Restore selection if it still exists; otherwise reset to All Sources.
+    if (currentFilter && availablePaths.indexOf(currentFilter) !== -1) {
+      select.value = currentFilter;
+    } else if (availablePaths.indexOf(previousValue) !== -1) {
+      select.value = previousValue;
+    } else {
+      select.value = '';
+      setStoredSourceFilter('', availablePaths);
+    }
+  }
+
   // Deterministic, locale-independent string compare (stable across engines and
   // repeated renders).
   function cmpStrings(a, b) {
@@ -432,7 +550,7 @@
   // - a Workspace Index object containing { tasks }
   // - a raw Task array
 
-  function viewModel(indexOrTasks, doneWindow, today, priorityFilter, sortValue) {
+  function viewModel(indexOrTasks, doneWindow, today, priorityFilter, sortValue, sourceFilter) {
     const index =
       indexOrTasks && Array.isArray(indexOrTasks.tasks)
         ? indexOrTasks
@@ -441,7 +559,15 @@
     const priority = normalizePriorityFilterValue(priorityFilter);
     const sort = normalizeSortValue(sortValue);
 
-    const grouped = groupTasks(index.tasks);
+    // Source filter applies BEFORE grouping: only tasks from the selected
+    // source path are considered. '' (All Sources) passes every task. Uses
+    // exact filePath identity — never filename alone — so duplicate filenames
+    // in different directories are never conflated.
+    const allTasks = sourceFilter
+      ? (index.tasks || []).filter((t) => matchesSourceFilter(t, sourceFilter))
+      : (index.tasks || []);
+
+    const grouped = groupTasks(allTasks);
 
     // Priority filter applies to every lifecycle column after Done eligibility.
     const applyFilter = (tasks) => tasks.filter((t) => matchesPriorityFilter(t, priority));
@@ -491,6 +617,7 @@
       allDoneCount: allDone.length,
       doneWindow,
       priorityFilter: priority,
+      sourceFilter: sourceFilter || '',
     };
   }
 
@@ -735,7 +862,9 @@
     const doneWindow = doneWindowFromStored();
     const priorityFilter = getStoredPriorityFilter();
     const sortValue = getStoredSort();
-    const model = viewModel(index, doneWindow, today, priorityFilter, sortValue);
+    const availablePaths = availableSourcePaths(index);
+    const sourceFilter = getStoredSourceFilter(availablePaths);
+    const model = viewModel(index, doneWindow, today, priorityFilter, sortValue, sourceFilter);
 
     const prioritySelect = document.getElementById('mmeTaskBoardPriorityFilter');
     if (prioritySelect && prioritySelect.value !== priorityFilter) {
@@ -746,6 +875,16 @@
     if (sortSelect && sortSelect.value !== sortValue) {
       sortSelect.value = sortValue;
     }
+
+    // ---- Scroll preservation across destructive render ----
+    // Capture offsets immediately before innerHTML replaces all column DOM.
+    // The container element itself is not detached (only its children are),
+    // so we restore onto the same live container after replacement.
+    const savedScrollLeft = container.scrollLeft;
+    const savedScrollTop = container.scrollTop;
+    const savedColumnScrolls = Array.from(
+      container.querySelectorAll('.taskBoardColumnBody'),
+    ).map((el) => ({ el, scrollTop: el.scrollTop }));
 
     const columnDefinitions = [
       ['backlog', 'Backlog', model.columns.backlog],
@@ -777,6 +916,32 @@
       })
       .join('');
 
+    // ---- Scroll restoration onto the new live column DOM ---
+    // The container element itself was not detached (only its children were),
+    // so we restore onto the same live container after replacement.
+    // Columns are matched by data-column so a Task that moved between columns
+    // does not inherit the wrong column's scroll position.
+    const newBodies = container.querySelectorAll('.taskBoardColumnBody');
+    savedColumnScrolls.forEach((saved) => {
+      // Try to match by data-column index position (same order as saved).
+      const body = newBodies[savedColumnScrolls.indexOf(saved)];
+      if (!body) return;
+
+      if (saved.scrollTop > 0 && body.scrollHeight > 0) {
+        const max = body.scrollHeight - body.clientHeight;
+        body.scrollTop = max > 0 ? Math.min(saved.scrollTop, max) : saved.scrollTop;
+      } else {
+        body.scrollTop = saved.scrollTop;
+      }
+    });
+
+    if (savedScrollLeft > 0 && container.scrollWidth > 0) {
+      const max = container.scrollWidth - container.clientWidth;
+      container.scrollLeft = max > 0 ? Math.min(savedScrollLeft, max) : savedScrollLeft;
+    } else {
+      container.scrollLeft = savedScrollLeft;
+    }
+
     const note = document.getElementById('mmeTaskBoardDoneNote');
 
     if (note) {
@@ -802,6 +967,14 @@
 
       summary.textContent =
         `${openCount} open${filterLabel} · ` + `${model.undatedCount} undated done`;
+    }
+
+    // Rebuild Source filter options from the current Index so the selector
+    // always reflects the actual available source filePaths.
+    const sourceSelect = document.getElementById('mmeTaskBoardSourceFilter');
+
+    if (sourceSelect) {
+      rebuildSourceOptions(sourceSelect, index, sourceFilter);
     }
   }
 
@@ -872,6 +1045,14 @@
       `<option value="opened-newest">Opened, newest first</option>` +
       `<option value="opened-oldest">Opened, oldest first</option>` +
       `<option value="name">Task name A–Z</option>` +
+      `</select>` +
+      `</label>` +
+      `<label class="taskBoardSourceLabel">` +
+      `Source` +
+      `<select ` +
+      `id="mmeTaskBoardSourceFilter" ` +
+      `class="taskBoardSourceFilter" ` +
+      `aria-label="Task Board source filter">` +
       `</select>` +
       `</label>` +
       `<button ` +
@@ -967,6 +1148,24 @@
         }
 
         sortSelect.value = setStoredSort(value);
+        renderColumns();
+      });
+    }
+
+    const sourceSelect = document.getElementById('mmeTaskBoardSourceFilter');
+
+    if (sourceSelect) {
+      sourceSelect.addEventListener('change', () => {
+        const value = sourceSelect.value;
+
+        // Validate against current index; reset conservatively if the path
+        // no longer exists.
+        const index = getWorkspaceIndex();
+        const availablePaths = availableSourcePaths(index);
+        const normalized = normalizeSourceFilterValue(value, availablePaths);
+
+        sourceSelect.value = normalized;
+        setStoredSourceFilter(normalized, availablePaths);
         renderColumns();
       });
     }
@@ -1978,7 +2177,94 @@
 
     check('Z persistence normalizer never returns unsupported', ['all', 'p1', 'p2', 'p3', 'none'].indexOf(normalizePriorityFilterValue('bogus')) !== -1 && ['all', 'p1', 'p2', 'p3', 'none'].indexOf(normalizePriorityFilterValue('P2')) !== -1);
 
-    // ---------- SORT (pure, deterministic) ----------
+    // ---------- SOURCE FILTER (pure) ----------
+    const sourceIndex = {
+      tasks: [
+        { id: 's1', text: 'alpha task', filePath: 'notes/2026-09-29.md', fileName: '2026-09-29.md', line: 3, effectiveStatus: 'todo' },
+        { id: 's2', text: 'beta task', filePath: 'notes/2026-10-01.md', fileName: '2026-10-01.md', line: 5, effectiveStatus: 'ongoing' },
+        { id: 's3', text: 'gamma task', filePath: 'notes/2026-09-29.md', fileName: '2026-09-29.md', line: 8, effectiveStatus: 'done' },
+        { id: 's4', text: 'dup task', filePath: 'docs/readme.md', fileName: 'readme.md', line: 1, effectiveStatus: 'backlog' },
+        { id: 's5', text: 'dup task two', filePath: 'notes/readme.md', fileName: 'readme.md', line: 2, effectiveStatus: 'todo' },
+      ],
+    };
+
+    check('SA availableSourcePaths returns unique sorted paths', availableSourcePaths(sourceIndex).join('|') === 'docs/readme.md|notes/2026-09-29.md|notes/2026-10-01.md|notes/readme.md');
+    check('SB availableSourcePaths empty index returns []', availableSourcePaths({ tasks: [] }).length === 0);
+    check('SC availableSourcePaths missing tasks returns []', availableSourcePaths({}).length === 0);
+
+    check('SD sourceLabelForPath unique basename', sourceLabelForPath('notes/2026-09-29.md', availableSourcePaths(sourceIndex)) === '2026-09-29.md');
+    check('SE sourceLabelForPath duplicate basename with context', sourceLabelForPath('docs/readme.md', availableSourcePaths(sourceIndex)) === 'readme.md — docs');
+    check('SF sourceLabelForPath duplicate basename second context', sourceLabelForPath('notes/readme.md', availableSourcePaths(sourceIndex)) === 'readme.md — notes');
+    check('SG sourceLabelForPath no paths context empty', sourceLabelForPath('readme.md', []) === 'readme.md');
+
+    check('SH matchesSourceFilter exact filePath identity', matchesSourceFilter({ filePath: 'notes/a.md' }, 'notes/a.md') === true);
+    check('SI matchesSourceFilter different path fails', matchesSourceFilter({ filePath: 'notes/a.md' }, 'notes/b.md') === false);
+    check('SJ matchesSourceFilter empty filter passes all', matchesSourceFilter({ filePath: 'notes/a.md' }, '') === true);
+    check('SK matchesSourceFilter missing filter passes all', matchesSourceFilter({ filePath: 'notes/a.md' }, null) === true);
+
+    check('SL normalizeSourceFilterValue known path kept', normalizeSourceFilterValue('notes/a.md', ['notes/a.md', 'notes/b.md']) === 'notes/a.md');
+    check('SM normalizeSourceFilterValue unknown path resets', normalizeSourceFilterValue('notes/c.md', ['notes/a.md', 'notes/b.md']) === '');
+    check('SN normalizeSourceFilterValue empty stays empty', normalizeSourceFilterValue('', ['notes/a.md']) === '');
+
+    // viewModel with sourceFilter filters before grouping.
+    const svModel = viewModel(sourceIndex, 'all', '2026-09-02', 'all', 'file', 'notes/2026-09-29.md');
+    check('SO viewModel sourceFilter only matching tasks', svModel.columns.todo.length + svModel.columns.ongoing.length + svModel.columns.done.length + svModel.columns.backlog.length === 2);
+    const svAllModel = viewModel(sourceIndex, 'all', '2026-09-02', 'all', 'file', '');
+    check('SP viewModel empty sourceFilter passes all tasks', svAllModel.columns.todo.length + svAllModel.columns.ongoing.length + svAllModel.columns.done.length + svAllModel.columns.backlog.length === 5);
+
+    // ---------- SOURCE FILTER (production-path regression) ----------
+    const regressionIndex = {
+      tasks: [
+        { id: 'a1', text: 'backlog A', filePath: 'notes/a.md', fileName: 'a.md', line: 1, effectiveStatus: 'backlog' },
+        { id: 'b1', text: 'ongoing B', filePath: 'notes/a.md', fileName: 'a.md', line: 2, effectiveStatus: 'ongoing' },
+        { id: 'c1', text: 'backlog C', filePath: 'notes/b.md', fileName: 'b.md', line: 1, effectiveStatus: 'backlog' },
+        { id: 'd1', text: 'ongoing D', filePath: 'notes/b.md', fileName: 'b.md', line: 2, effectiveStatus: 'ongoing' },
+        { id: 'e1', text: 'Daily E', filePath: 'notes/customer-a/Daily.md', fileName: 'Daily.md', line: 1, effectiveStatus: 'todo' },
+        { id: 'f1', text: 'Daily F', filePath: 'notes/customer-b/Daily.md', fileName: 'Daily.md', line: 1, effectiveStatus: 'todo' },
+      ],
+    };
+    const regressionPaths = availableSourcePaths(regressionIndex);
+
+    const storedKnown = setStoredSourceFilter('notes/a.md', regressionPaths);
+    check('SQ setStoredSourceFilter stores exact known path', storedKnown === 'notes/a.md');
+    const storedUnknown = setStoredSourceFilter('notes/nonexistent.md', regressionPaths);
+    check('SR setStoredSourceFilter resets unknown path', storedUnknown === '');
+    const storedEmpty = setStoredSourceFilter('', regressionPaths);
+    check('SS setStoredSourceFilter empty stays empty', storedEmpty === '');
+
+    const sxModel = viewModel(regressionIndex, 'all', '2026-09-02', 'all', 'file', 'notes/a.md');
+    check('SX sourceFilter notes/a.md shows only 2 tasks',
+      sxModel.columns.backlog.length + sxModel.columns.todo.length +
+      sxModel.columns.ongoing.length + sxModel.columns.done.length === 2);
+    check('SY sourceFilter notes/a.md backlog only A',
+      sxModel.columns.backlog.length === 1 && sxModel.columns.backlog[0].text === 'backlog A');
+    check('SZ sourceFilter notes/a.md ongoing only B',
+      sxModel.columns.ongoing.length === 1 && sxModel.columns.ongoing[0].text === 'ongoing B');
+
+    const taModel = viewModel(regressionIndex, 'all', '2026-09-02', 'p1', 'file', 'notes/a.md');
+    check('TA source+priority intersection', taModel.columns.backlog.length + taModel.columns.ongoing.length === 0);
+
+    const staleIndex = {
+      tasks: regressionIndex.tasks.filter((t) => t.filePath !== 'notes/a.md'),
+    };
+    const stalePaths = availableSourcePaths(staleIndex);
+    const staleStored = setStoredSourceFilter('notes/a.md', stalePaths);
+    check('TB stale source resets to All Sources', staleStored === '');
+    const staleModel = viewModel(staleIndex, 'all', '2026-09-02', 'all', 'file', '');
+    check('TC stale index renders all remaining 4 tasks',
+      staleModel.columns.backlog.length + staleModel.columns.todo.length +
+      staleModel.columns.ongoing.length + staleModel.columns.done.length === 4);
+
+    const dailyA = regressionPaths.find((p) => p === 'notes/customer-a/Daily.md');
+    const dailyB = regressionPaths.find((p) => p === 'notes/customer-b/Daily.md');
+    check('TD both Daily.md paths indexed', Boolean(dailyA) && Boolean(dailyB) && dailyA !== dailyB);
+    const dailyModelA = viewModel(regressionIndex, 'all', '2026-09-02', 'all', 'file', dailyA);
+    const dailyModelB = viewModel(regressionIndex, 'all', '2026-09-02', 'all', 'file', dailyB);
+    check('TE customer-a/Daily.md shows only Task E',
+      dailyModelA.columns.todo.length === 1 && dailyModelA.columns.todo[0].text === 'Daily E');
+    check('TF customer-b/Daily.md shows only Task F',
+      dailyModelB.columns.todo.length === 1 && dailyModelB.columns.todo[0].text === 'Daily F');
+
     check('A normalize file -> file', normalizeSortValue('file') === 'file');
     check('B normalize opened-newest', normalizeSortValue('opened-newest') === 'opened-newest');
     check('C normalize opened-oldest', normalizeSortValue('opened-oldest') === 'opened-oldest');
@@ -2085,6 +2371,14 @@
     fileCompare,
     sortColumn,
     sortableTaskText,
+    // ACT: exact source-file filter — pure, testable surface for contract
+    // validation without booting the Board overlay.
+    availableSourcePaths,
+    sourceLabelForPath,
+    matchesSourceFilter,
+    normalizeSourceFilterValue,
+    rebuildSourceOptions,
+    SOURCE_FILTER_KEY,
     PRIORITY_FILTER_KEY,
     SORT_KEY,
     DONE_WINDOW_KEY,

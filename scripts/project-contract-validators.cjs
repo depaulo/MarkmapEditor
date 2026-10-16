@@ -31,6 +31,13 @@ if (!P || typeof P.reconcileManagedProjects !== 'function') {
   process.exit(1);
 }
 
+require(path.join(ROOT, 'js', 'workspace', 'project-metadata-mutation.js'));
+const M = globalThis.MME_PROJECT_METADATA_MUTATION;
+if (!M || typeof M.mutateProject !== 'function') {
+  console.error('FATAL: MME_PROJECT_METADATA_MUTATION owners unavailable — cannot validate.');
+  process.exit(1);
+}
+
 
 // Defensive accessors: a mutation must produce a NAMED fixture failure, never a
 // crash, so diagnostics are always read defensively.
@@ -601,6 +608,105 @@ group('R/S/T. purity, Package 4 absence, version identity');
   check('T07', 'cacheIdentity unchanged', /cacheIdentity\s*:\s*'markmap-journal-pwa-0\.6\.3-tasks-wiki-links-foundation'/.test(releaseSrc));
   check('T05', 'no ## Project: heading grammar introduced', !/^## Project:/m.test(fs.readFileSync(PARSER_PATH, 'utf8')));
   check('T06', '## Project: heading is behaviorally not a declaration', P.parseProjects('## Project: NotAProject\n', {}).length === 0);
+}
+
+/* ============ U. Package 5 bullet-prefix grammar + mutation ops =============
+ * Consolidated coverage (coverage-equivalence proof: docs/validation/TEST_CATALOG.md)
+ * from the retired one-off scripts package5-bullet-locator-regression.cjs and
+ * package5-bullet-ops-coverage.cjs. REAL parser + REAL mutation owner only.
+ */
+
+group('U. bullet-prefix grammar and mutation-owner operations');
+{
+  const M = globalThis.MME_PROJECT_METADATA_MUTATION;
+  const ctx = { path: 'notes/x.md', kind: 'notes', name: 'x.md' };
+  const CREATED = '2026-10-13';
+  const mcLine = (id) => '<!-- mme-project: id=' + id + '; created=' + CREATED + ' -->';
+  const PREFIXES = [['plain', ''], ['dash', '- '], ['star', '* '], ['plus', '+ ']];
+  const IDS = [['short', 'prj_0001'], ['uuid', 'prj_11111111-1111-4111-8111-111111111111']];
+
+  // ---- U1: locator regression — each declaration prefix x each ID shape ----
+  for (const [tag, id] of IDS) {
+    for (const [pName, prefix] of PREFIXES) {
+      const key = tag + '-' + pName;
+      const md = prefix + 'Project: Acceptance [800000 BRL] [29Q3]\n' + mcLine(id) + '\n';
+      const mc = P.parseManagedProjectComment(md.split('\n')[1]);
+      check('U1-' + key, 'managed comment valid ' + key, !!(mc && mc.valid && mc.fields && mc.fields.id === id));
+      let projects = [];
+      try { projects = P.parseProjects(md, ctx); } catch (e) { projects = []; }
+      check('U2-' + key, 'parseProjects one project ' + key, projects.length === 1 && projects[0].projectId === id);
+      let r = null;
+      try { r = M.mutateProject(md, { projectId: id }, { op: 'setState', value: 'on-hold' }); } catch (e) { r = { ok: false, reason: 'threw:' + e.message }; }
+      const okMut = !!(r && r.ok && r.changed);
+      check('U3-' + key, 'mutateProject setState succeeds ' + key, okMut, r ? (r.reason || 'ok') : 'null');
+      if (okMut) {
+        let back = [];
+        try { back = P.parseProjects(r.proposedMarkdown, ctx); } catch (e) { back = []; }
+        check('U4-' + key, 'readback on-hold ' + key, !!(back[0] && back[0].state === 'on-hold'));
+        check('U5-' + key, 'ID and created unchanged ' + key, r.proposedMarkdown.includes('id=' + id) && r.proposedMarkdown.includes('created=' + CREATED));
+        check('U6-' + key, 'prefix preserved ' + key, String(r.proposedMarkdown).split('\n')[0].startsWith(prefix + 'Project:'));
+      }
+    }
+  }
+  // ---- U2: visible + managed op coverage across every declaration prefix ---
+  const OPS = [
+    { op: 'setState', req: { op: 'setState', value: 'on-hold' }, read: (p) => p.state, want: 'on-hold' },
+    { op: 'setStage', req: { op: 'setStage', value: 'quoted' }, read: (p) => p.stage, want: 'quoted' },
+    { op: 'setExpectedDelivery', req: { op: 'setExpectedDelivery', quarter: '29Q3' }, read: (p) => p.expectedDelivery && p.expectedDelivery.canonical, want: '2029-Q3' },
+    { op: 'setExpectedBilling', req: { op: 'setExpectedBilling', quarter: '29Q4' }, read: (p) => p.expectedBilling && p.expectedBilling.canonical, want: '2029-Q4' },
+    { op: 'setExpectedOrder', req: { op: 'setExpectedOrder', quarter: '29Q3' }, read: (p) => p.expectedOrder && p.expectedOrder.canonical, want: '2029-Q3' },
+    { op: 'setValueCurrency', req: { op: 'setValueCurrency', value: '900000', currency: 'eur' }, read: (p) => (p.value === 900000 && p.currency === 'EUR' ? 'ok' : JSON.stringify([p.value, p.currency])), want: 'ok' },
+  ];
+  const OP_ID = 'prj_11111111-1111-4111-8111-111111111111';
+  for (const [pName, prefix] of PREFIXES) {
+    for (const o of OPS) {
+      // setExpectedOrder starts from a distinct quarter so the op changes.
+      const startDecl = prefix + 'Project: Acceptance [800000 BRL] ' + (o.op === 'setExpectedOrder' ? '[28Q1]' : '[29Q3]') + '\n';
+      const md = startDecl + mcLine(OP_ID) + '\n';
+      const r = M.mutateProject(md, { projectId: OP_ID }, o.req);
+      const key = pName + '-' + o.op;
+      check('U7-' + key, 'mutate ' + key + ' succeeds', !!(r && r.ok && r.changed), r && (r.reason || 'ok'));
+      if (r && r.ok) {
+        check('U8-' + key, 'prefix preserved ' + key, String(r.proposedMarkdown).split('\n')[0].startsWith(prefix + 'Project:'));
+        const back = P.parseProjects(r.proposedMarkdown, ctx)[0];
+        check('U9-' + key, 'readback ' + key, o.read(back) === o.want);
+        check('U10-' + key, 'ID unchanged ' + key, r.proposedMarkdown.includes('id=' + OP_ID));
+        const r2 = M.mutateProject(r.proposedMarkdown, { projectId: OP_ID }, o.req);
+        check('U11-' + key, 'idempotent ' + key, !!(r2 && r2.ok && !r2.changed && r2.reason === 'no-change'), r2 && r2.reason);
+      }
+    }
+  }
+
+  // ---- U3: structural refusals and adjacency boundaries -------------------
+  {
+    const md = 'Project: A\n' + mcLine(OP_ID) + '\n\n- Project: B\n' + mcLine(OP_ID) + '\n';
+    const r = M.mutateProject(md, { projectId: OP_ID }, { op: 'setState', value: 'on-hold' });
+    check('U12', 'duplicate IDs refused', r.reason === 'duplicate-project-id', r.reason);
+  }
+  {
+    const md = '- Project: A\n<!-- mme-project: id=' + OP_ID + '; created=not-a-date -->\n';
+    const r = M.mutateProject(md, { projectId: OP_ID }, { op: 'setState', value: 'on-hold' });
+    check('U13', 'malformed comment blocks', r.reason === 'malformed-project-comment', r.reason);
+  }
+  {
+    const md = '- Project: A\n\n- Project: B\n' + mcLine(OP_ID) + '\n';
+    const r = M.mutateProject(md, { projectId: OP_ID }, { op: 'setState', value: 'on-hold' });
+    const lines = String(r.proposedMarkdown).split('\n');
+    check('U14', 'neighbor targets the correct declaration', !!(r.ok && lines[0] === '- Project: A'), JSON.stringify(lines.slice(0, 4)));
+    const rA = M.mutateProject(md, { projectId: 'prj_99999999-9999-4999-8999-999999999999' }, { op: 'setState', value: 'on-hold' });
+    check('U15', 'unmanaged neighbor not found', rA.reason === 'project-not-found', rA.reason);
+    const md2 = '- Project: A\n- Project: B\n' + mcLine(OP_ID) + '\n';
+    const projs = P.parseProjects(md2, ctx);
+    check('U16', 'parser keeps the adjacent bullet boundary', projs.length === 2 && projs[1].projectId === OP_ID && projs[0].projectId === '', projs.length + '/' + (projs[0] && projs[0].projectId) + '/' + (projs[1] && projs[1].projectId));
+  }
+  {
+    const md = FENCE + '\nProject: Fake\n' + mcLine(OP_ID) + '\n' + FENCE + '\nProject: Real\n' + mcLine(OP_ID) + '\n';
+    const r = M.mutateProject(md, { projectId: OP_ID }, { op: 'setState', value: 'on-hold' });
+    check('U17', 'fenced declaration excluded from mutation', !!(r.ok && r.changed), r.reason || 'ok');
+    const onlyFenced = FENCE + '\n- Project: Fake\n' + mcLine(OP_ID) + '\n' + FENCE + '\n';
+    const r2 = M.mutateProject(onlyFenced, { projectId: OP_ID }, { op: 'setState', value: 'on-hold' });
+    check('U18', 'fenced-only declaration not found', r2.reason === 'project-not-found', r2.reason);
+  }
 }
 
 /* ============================== diagnostics bound =========================== */
