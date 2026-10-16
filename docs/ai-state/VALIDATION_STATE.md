@@ -1,14 +1,13 @@
 # Validation State
 
 ## Current Required Test Tier
-Tier: Stage C — Tier 0 + selected Tier 1/2 per changed owner; Tier 3/4 closure
-(normal + strict release parity); Tier M only for contract-sensitive changes.
-Reason: Stage C documentation changes touch docs/**, js/ui/help-content.js,
-js/ui/release-notes-content.js. Stage D release identity changes touch
-js/release/release.js and sw.js — release-parity (normal + strict) required.
-Changed owners: docs/**, js/ui/help-content.js, js/ui/release-notes-content.js.
-Selected suites: release-parity (normal + strict), release-notes-validators,
-git diff --check, node --check on touched JS/CJS, validate:closure.
+Tier: Stage D closure re-verification — Tier 0 + Tier 3/4 closure gate,
+re-run 2026-10-16 after 545da19. Tier M not required: no mutation contract
+or mutation-strength validator changed. Changed owners since promotion: none
+in production; the current tree holds docs/ai-state/** closure
+reconciliation only.
+Selected suites: git diff --check, validate:quick, release-parity (normal +
+strict), release-notes-validators.
 Deferred gate suites: Tier M mutation controls (only if contract-sensitive
 runtime change).
 Browser/device checkpoint: Stage B focused owner retest (Task Board widths,
@@ -83,10 +82,36 @@ Consolidated coverage:
 - release-parity normal + strict OK
 
 ## Pending Owner Checkpoints
-1. Stage C documentation gate (architecture, roadmap, Help, Release Notes,
-   release parity at 0.7.0).
-2. Stage D activated-build acceptance and daily-driver physical smoke.
-3. Stage D commit/push on development, promotion to main, push main.
+## Final Closure Gate (2026-10-16, main = origin/main = development = origin/development = 545da19)
+- git diff --check — exit 0
+- npm run validate:quick — 3/3 PASS (syntax 93 files, git-diff-check clean,
+  mutation-anchor-audit PASS)
+- node scripts/release-parity.cjs — productVersion=0.7.0,
+  cacheIdentity=sw.js=markmap-journal-pwa-0.7.0-projects-foundation — PASS
+- RELEASE_PARITY_STRICT_SW=1 node scripts/release-parity.cjs — PASS
+- node scripts/release-notes-validators.cjs — ALL FOCUSED VALIDATORS PASS
+  (RN-01 asserts newest-first 0.7.0; the historical 0.6.3 current-release
+  assertions were superseded by 545da19 — no stale failures remain)
+- Git reconciliation: 133607c is an ancestor of main/HEAD;
+  main...development rev-list 0/0; origin/main == origin/development ==
+  545da19; no independent main history.
+- Deployment observation (public read only, no activation): served
+  https://depaulo.github.io/MarkmapEditor/js/release/release.js reports
+  productVersion 0.7.0 — production follows main and is now 0.7.0. This is
+  NOT activated-build evidence; the installed PWA client still requires
+  owner-laptop upgrade-path acceptance.
+
+
+1. Stage C documentation gate — COMPLETE (source-proven in 133607c).
+2. Stage D commit/push on development — COMPLETE (133607c + 545da19 on
+   origin/development, source-proven 2026-10-16).
+3. Stage D promotion to main + push main — COMPLETE (545da19 on main and
+   origin/main; rev-list 0/0; tree diff empty; source-proven 2026-10-16).
+4. Stage D activated-build acceptance and daily-driver physical smoke —
+   PENDING owner laptop (cannot be claimed from this Termux shell).
+   Deployment now serves 0.7.0 from main; owner laptop last observed 0.6.3 —
+   upgrade path (Update Ready → Update now → What's New/Help/Logs) is the
+   outstanding physical gate.
 
 ## Release Boundary
 - [x] architecture aligned (Stage C);
@@ -95,9 +120,11 @@ Consolidated coverage:
 - [x] release parity (normal + strict) at closure — target 0.7.0 — PASS;
 - [x] product version — Stage D complete (0.6.3 → 0.7.0);
 - [x] cache identity — Stage D complete (markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation → markmap-journal-pwa-0.7.0-projects-foundation);
-- [ ] activated-build acceptance — Stage D;
-- [ ] commit — Stage D;
-- [ ] push — Stage D.
+- [ ] activated-build acceptance — Stage D (owner laptop; pending);
+- [x] commit — Stage D: 133607c (Stage C docs + Stage D release identity) and
+  545da19 (current-release validation alignment) on development and main;
+- [x] push — Stage D: origin/development and origin/main both at 545da19
+  (source-proven 2026-10-16).
 
 ## Stage C Documentation Evidence
 - Package 5 canonical architecture Sections 2.1–2.9 updated with final

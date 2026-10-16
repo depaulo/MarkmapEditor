@@ -1,9 +1,9 @@
 # Current ACT
 
 ## Status
-IN PROGRESS — Stage D — Release identity 0.7.0, closure validation,
-final activated-build acceptance, commit and push to development,
-safe promotion to main, push main.
+GIT PROMOTION COMPLETE — 545da19 on development + main + origin/development +
+origin/main. PENDING: owner-laptop activated-build acceptance and daily-driver
+physical smoke; final Package 5 CLOSED record after physical evidence.
 
 ## Mission
 Package 5 closure: canonical documentation alignment, roadmap reorder
@@ -73,10 +73,9 @@ mutation contract materially changed.
 - git diff --check — clean;
 - npm run validate:package5 — 14/14 passed (incl. release-parity normal + strict);
 - npm run validate:closure — release-parity normal + strict PASS;
-- release-notes-validators — RN-02–RN-17, HC-*, CL-03–CL-08, CL-10–CL-14,
-  CL-16, CL-17 PASS; RN-01, CL-01, CL-02, CL-09, CL-15 expected due to
-  hardcoded 0.6.3 checks in scripts/release-notes-validators.cjs (not in
-  allowed files for Stage C or D; unchanged).
+- release-notes-validators — ALL PASS at closure. The pre-545da19 stale 0.6.3
+  current-release assertions (RN-01, CL-01, CL-02, CL-09, CL-15) were aligned
+  to 0.7.0 in 545da19 (test-scope only, no production file touched).
 
 ## Validation Results
 - node --check: js/release/release.js OK, sw.js OK,
@@ -86,6 +85,11 @@ mutation contract materially changed.
   cacheIdentity=markmap-journal-pwa-0.7.0-projects-foundation — PASS;
 - release-parity strict: same identity — PASS;
 - validate:closure: release-parity normal + strict PASS.
+- Final closure gate re-verified 2026-10-16 on main 545da19: git diff --check
+  clean; validate:quick 3/3 PASS; release-parity normal + strict PASS (0.7.0
+  identity); release-notes-validators ALL PASS; public Pages read shows
+  productVersion 0.7.0 (deployment follows main — not activated-build
+  evidence).
 
 ## Mutation Gate Required
 No by default. Tier M required only if a mutation contract or

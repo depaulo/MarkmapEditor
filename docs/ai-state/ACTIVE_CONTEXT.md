@@ -1,15 +1,20 @@
 # Active Context
 
 ## Current Package
-Package 5 — Closure
+Package 5 — Git closure complete (545da19 on development + main + both remotes);
+physical activated-build acceptance and daily-driver smoke pending owner laptop.
 
 ## Current Phase
-0.7.0 Release Preparation
+0.7.0 Release — Git promotion complete; production activation pending
 
 ## Current Branch and HEAD
-- branch: development
-- HEAD: 5270b10 (dirty working tree preserved; Stage C/D authorized per
-  owner release program)
+- branch: main
+- HEAD: 545da19 (test(release): align current release validation with 0.7.0)
+- development: 545da19; origin/development: 545da19; origin/main: 545da19
+- Git truth (2026-10-16 reconciliation): 133607c exists and is ancestor of all
+  four refs; Stage C docs + Stage D release identity pushed; narrow RN-01
+  alignment 545da19 pushed to development AND main; rev-list main...development
+  0/0; development...main tree diff empty; no independent main history.
 
 ## Accepted Package 5 Evidence
 Summarize only:
@@ -38,6 +43,8 @@ Summarize only:
   Save.
 
 ## Current Working-Tree Boundary
+All groups below are committed; the release landed in 133607c + 545da19.
+The current tree holds docs/ai-state closure reconciliation only.
 Changed files by functional group (Stage B, complete):
 - Projects runtime: js/workspace/projects-view.js,
   js/workspace/project-visual-adapter.js,
@@ -61,11 +68,11 @@ Changed files by functional group (Stage B, complete):
   docs/ai-state/DECISION_LOG.md.
 
 ## Immediate Next Action
-Complete Stage C documentation: architecture alignment (Sections 2.1–2.9),
-roadmap reorder (consistency before Reports), consistency-package PLAN
-document, Help alignment (Projects/Task Board/Quick Action topics),
-Release Notes 0.7.0 entry, then Stage D release identity, validation,
-commit, push, promotion to main.
+Owner laptop: activated-build acceptance (0.6.3 → 0.7.0 upgrade path, SW/cache
+identity, one-time What's New, Help/Release Notes/Logs) + compact daily-driver
+smoke (Workspace, Projects, Task Board, Quick Action, surfaces). Then final
+AI-state closure to Previous Package: Package 5 — CLOSED. Do NOT invoke
+Consistency PLAN-0 until physical activation is recorded.
 
 ## Do Not Start
 - consistency implementation before PLAN approval;
@@ -82,7 +89,11 @@ commit, push, promotion to main.
 
 ## Current Owner Checkpoint
 Package 5 Projects presentation checkpoint — owner-accepted. Stage C
-documentation gate pending. Stage D release authorization pending.
+documentation gate COMPLETE (133607c). Stage D release identity + Git
+promotion COMPLETE (545da19 on development, main, both remotes; deployment
+now serves 0.7.0). Remaining physical gate: activated-build acceptance +
+daily-driver smoke (owner laptop) before "Package 5 — CLOSED" and Consistency
+PLAN-0.
 
 ## Known Blockers
 None source-proven.
