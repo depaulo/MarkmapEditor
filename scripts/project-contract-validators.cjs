@@ -600,12 +600,12 @@ group('R/S/T. purity, Package 4 absence, version identity');
 }
 {
   const swSrc = fs.readFileSync(SW_PATH, 'utf8');
-  check('T01', 'APP_VERSION unchanged', swSrc.includes("const APP_VERSION = 'markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation';"));
+  check('T01', 'APP_VERSION unchanged', swSrc.includes("const APP_VERSION = 'markmap-journal-pwa-0.7.0-projects-foundation';"));
   check('T02', 'cache identity unchanged', swSrc.includes('const APP_CACHE = `${APP_VERSION}-app`;'));
   check('T03', 'no ACT 5A cache identity introduced', !/5a|managed-project/i.test(swSrc));
   const releaseSrc = fs.readFileSync(path.join(ROOT, 'js', 'release', 'release.js'), 'utf8');
-  check('T04', 'productVersion still 0.6.3', /productVersion\s*:\s*'0\.6\.3'/.test(releaseSrc));
-  check('T07', 'cacheIdentity unchanged', /cacheIdentity\s*:\s*'markmap-journal-pwa-0\.6\.3-tasks-wiki-links-foundation'/.test(releaseSrc));
+  check('T04', 'productVersion still 0.7.0', /productVersion\s*:\s*'0.7.0'/.test(releaseSrc));
+  check('T07', 'cacheIdentity unchanged', /cacheIdentity\s*:\s*'markmap-journal-pwa-0.7.0-projects-foundation'/.test(releaseSrc));
   check('T05', 'no ## Project: heading grammar introduced', !/^## Project:/m.test(fs.readFileSync(PARSER_PATH, 'utf8')));
   check('T06', '## Project: heading is behaviorally not a declaration', P.parseProjects('## Project: NotAProject\n', {}).length === 0);
 }

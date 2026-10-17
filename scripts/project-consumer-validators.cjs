@@ -371,9 +371,9 @@ group('read-only preservation');
   check('N07c', 'Workspace Index keeps Delivery and Billing columns',
     />Delivery</.test(idx) && />Billing</.test(idx));
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-  check('N08', 'APP_VERSION unchanged', /markmap-journal-pwa-0\.6\.3-tasks-wiki-links-foundation/.test(sw));
+  check('N08', 'APP_VERSION unchanged', /markmap-journal-pwa-0.7.0-projects-foundation/.test(sw));
   const rel = fs.readFileSync(path.join(ROOT, 'js', 'release', 'release.js'), 'utf8');
-  check('N09', 'productVersion unchanged', /productVersion\s*:\s*'0\.6\.3'/.test(rel));
+  check('N09', 'productVersion unchanged', /productVersion\s*:\s*'0.7.0'/.test(rel));
   check('N10', 'no Task-to-Project link written', !/project=/.test(fs.readFileSync(path.join(ROOT, 'js', 'workspace', 'project-metadata-mutation.js'), 'utf8')));
   check('N11', 'no Groups field added to mme-project', !/group=/i.test(fs.readFileSync(path.join(ROOT, 'js', 'workspace', 'workspace-parser.js'), 'utf8')));
   // Assert on the OWNED operation vocabulary, not on prose. `archived` is a
