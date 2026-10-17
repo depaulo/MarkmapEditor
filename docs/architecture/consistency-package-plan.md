@@ -3,7 +3,11 @@
 **Status:** PLAN-only. No runtime implementation authorized by this document.
 **Package:** Next package after Package 5 (0.7.0 release).
 **Prerequisite:** Package 5 closure and 0.7.0 release must be complete before
-this package is authorized.
+this package is authorized. — MET: Package 5 CLOSED 2026-10-16 (owner laptop
+acceptance; refs converged at 7232494).
+**PLAN-0 deliverable:** docs/architecture/CONSISTENCY_PLAN_0_SURFACE_INVENTORY.md
+(source-proven surface inventory + divergence register + owner questions
+Q1–Q8). Awaiting owner review before any implementation ACT.
 
 ---
 
