@@ -1,11 +1,16 @@
 # Active Context
 
 ## Current Package
-Package 5 — Git closure complete (545da19 on development + main + both remotes);
-physical activated-build acceptance and daily-driver smoke pending owner laptop.
+Expanded-View Behavior and Visual Consistency — PLAN-0 (inventory only;
+PLAN stage, no implementation authorized).
+
+## Previous Package
+Package 5 — CLOSED (0.7.0 activated: deployed build accepted on owner laptop
+2026-10-16; git closure at 133607c + 545da19 + 7232494 on development, main
+and both remotes).
 
 ## Current Phase
-0.7.0 Release — Git promotion complete; production activation pending
+Consistency package — PLAN-0 source-proven surface inventory
 
 ## Current Branch and HEAD
 - branch: main
@@ -68,11 +73,12 @@ Changed files by functional group (Stage B, complete):
   docs/ai-state/DECISION_LOG.md.
 
 ## Immediate Next Action
-Owner laptop: activated-build acceptance (0.6.3 → 0.7.0 upgrade path, SW/cache
-identity, one-time What's New, Help/Release Notes/Logs) + compact daily-driver
-smoke (Workspace, Projects, Task Board, Quick Action, surfaces). Then final
-AI-state closure to Previous Package: Package 5 — CLOSED. Do NOT invoke
-Consistency PLAN-0 until physical activation is recorded.
+Owner review of docs/architecture/CONSISTENCY_PLAN_0_SURFACE_INVENTORY.md
+and rulings on open questions Q1–Q8 (return grammar, Task Board exit model,
+badge placement, filter persistence, empty/failure contract, virtual-projects
+history verification, scroll-owner grammar, disclosure scope). Then owner
+authorizes (or revises) the first implementation ACT. No implementation
+until that authorization.
 
 ## Do Not Start
 - consistency implementation before PLAN approval;
@@ -88,12 +94,10 @@ Consistency PLAN-0 until physical activation is recorded.
 - NEXT_CYCLE_PLAN.md (roadmap; not architecture)
 
 ## Current Owner Checkpoint
-Package 5 Projects presentation checkpoint — owner-accepted. Stage C
-documentation gate COMPLETE (133607c). Stage D release identity + Git
-promotion COMPLETE (545da19 on development, main, both remotes; deployment
-now serves 0.7.0). Remaining physical gate: activated-build acceptance +
-daily-driver smoke (owner laptop) before "Package 5 — CLOSED" and Consistency
-PLAN-0.
+Package 5 CLOSED — owner-accepted activated build on laptop 2026-10-16
+(upgrade path, What's New/Help/Logs, daily-driver smoke). Consistency package
+activated at PLAN stage; PLAN-0 inventory in progress. Implementation starts
+only after PLAN approval.
 
 ## Known Blockers
 None source-proven.

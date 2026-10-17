@@ -109,4 +109,27 @@ pointer to the canonical document that now owns the decision.
 - Canonical destination: docs/validation/TEST_CATALOG.md,
   docs/validation/OWNER_TEST_MATRIX.md, scripts/validate-aggregate.cjs,
   package.json validate:* scripts, docs/AI_DEVELOPMENT_WORKFLOW.md §29–§35.
+- Canonical destination: docs/validation/TEST_CATALOG.md,
+  docs/validation/OWNER_TEST_MATRIX.md, scripts/validate-aggregate.cjs,
+  package.json validate:* scripts, docs/AI_DEVELOPMENT_WORKFLOW.md §29–§35.
+- Integration status: complete (Stage A).
+
+## D-008 — Package 5 closure and consistency package activation
+- Date: 2026-10-16
+- Status: integrated
+- Decision: Package 5 is CLOSED. All release gates are green: Stage C docs +
+  Stage D release identity committed (133607c), validation alignment
+  (545da19), AI-state reconciliation (7232494) — all pushed to development
+  and main with refs converged; deployment serves 0.7.0; owner accepted the
+  activated build on laptop (0.6.3 → 0.7.0 upgrade path, What's New/Help,
+  daily-driver smoke). The Expanded-View Behavior and Visual Consistency
+  package is activated at PLAN stage: PLAN-0 = source-proven surface
+  inventory, docs-only, zero production edits. Implementation requires
+  separate owner authorization after PLAN review.
+- Evidence/reason: owner statement (laptop acceptance, 2026-10-16); git
+  rev-parse/rev-list reconciliation; release-parity + release-notes
+  validators green; public Pages read at productVersion 0.7.0.
+- Canonical destination: docs/architecture/consistency-package-plan.md;
+  docs/ai-state/CURRENT_ACT.md (PLAN-0 ACT).
+- Integration status: complete (closure); PLAN-0 in progress.
 - Integration status: complete (Stage A).

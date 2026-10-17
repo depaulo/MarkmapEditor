@@ -1,15 +1,12 @@
 # Validation State
 
 ## Current Required Test Tier
-Tier: Stage D closure re-verification — Tier 0 + Tier 3/4 closure gate,
-re-run 2026-10-16 after 545da19. Tier M not required: no mutation contract
-or mutation-strength validator changed. Changed owners since promotion: none
-in production; the current tree holds docs/ai-state/** closure
-reconciliation only.
-Selected suites: git diff --check, validate:quick, release-parity (normal +
-strict), release-notes-validators.
-Deferred gate suites: Tier M mutation controls (only if contract-sensitive
-runtime change).
+Tier: PLAN-0 — Tier 0 only (documentation/inventory; no production file
+touched). Reason: consistency package is at PLAN stage per
+docs/architecture/consistency-package-plan.md; the deliverable is a
+source-proven inventory document. Tier M/1/2/3/4 defer to implementation
+ACTs after owner PLAN approval. Selected checks: git diff --check; docs
+readability; no production file in the change set.
 Browser/device checkpoint: Stage B focused owner retest (Task Board widths,
 source filter, scroll retention, Quick Action auto-Save) — accepted as Package
 5 owner acceptance evidence.
@@ -108,10 +105,9 @@ Consolidated coverage:
 3. Stage D promotion to main + push main — COMPLETE (545da19 on main and
    origin/main; rev-list 0/0; tree diff empty; source-proven 2026-10-16).
 4. Stage D activated-build acceptance and daily-driver physical smoke —
-   PENDING owner laptop (cannot be claimed from this Termux shell).
-   Deployment now serves 0.7.0 from main; owner laptop last observed 0.6.3 —
-   upgrade path (Update Ready → Update now → What's New/Help/Logs) is the
-   outstanding physical gate.
+   COMPLETE (owner-accepted on laptop 2026-10-16). Deployment serves 0.7.0
+   from main; owner confirmed the 0.6.3 → 0.7.0 upgrade path, What's
+   New/Help/Logs and daily-driver smoke.
 
 ## Release Boundary
 - [x] architecture aligned (Stage C);
@@ -120,7 +116,9 @@ Consolidated coverage:
 - [x] release parity (normal + strict) at closure — target 0.7.0 — PASS;
 - [x] product version — Stage D complete (0.6.3 → 0.7.0);
 - [x] cache identity — Stage D complete (markmap-journal-pwa-0.6.3-tasks-wiki-links-foundation → markmap-journal-pwa-0.7.0-projects-foundation);
-- [ ] activated-build acceptance — Stage D (owner laptop; pending);
+- [x] activated-build acceptance — Stage D (owner-accepted on laptop
+  2026-10-16: 0.6.3 → 0.7.0 upgrade path, What's New/Help/Logs, daily-driver
+  smoke — owner statement, no source re-validation needed);
 - [x] commit — Stage D: 133607c (Stage C docs + Stage D release identity) and
   545da19 (current-release validation alignment) on development and main;
 - [x] push — Stage D: origin/development and origin/main both at 545da19

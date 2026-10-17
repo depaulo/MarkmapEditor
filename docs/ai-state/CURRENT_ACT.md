@@ -1,43 +1,72 @@
 # Current ACT
 
 ## Status
-GIT PROMOTION COMPLETE — 545da19 on development + main + origin/development +
-origin/main. PENDING: owner-laptop activated-build acceptance and daily-driver
-physical smoke; final Package 5 CLOSED record after physical evidence.
+CONSISTENCY PACKAGE — PLAN-0 COMPLETE (inventory document delivered:
+docs/architecture/CONSISTENCY_PLAN_0_SURFACE_INVENTORY.md). PLAN stage only.
+NO implementation authorized. AWAITING OWNER REVIEW of the inventory and
+rulings on open questions Q1–Q8. Package 5 is CLOSED (owner laptop
+acceptance 2026-10-16; refs at 7232494).
 
 ## Mission
-Package 5 closure: canonical documentation alignment, roadmap reorder
-(consistency before Reports), consistency-package PLAN-only direction,
-Help alignment, Release Notes 0.7.0, release identity 0.7.0, closure
-validation, final activated-build acceptance, commit and push to development,
-safe promotion to main, push main. Stage D (release identity, commit, push)
-is AUTHORIZED per owner release program.
+Execute PLAN-0 for the Expanded-View Behavior and Visual Consistency
+package: inventory every expanded view and cross-surface behavior listed in
+docs/architecture/consistency-package-plan.md §7 (headers, Back/Workspace
+actions, source navigation, full-view entry/exit, route restoration,
+viewport/filter/search preservation, pending drafts, loading/empty/failure
+states, responsive behavior) with source-proven evidence (file + line).
+Deliver one PLAN-0 inventory document. No production file is touched.
 
 ## Current Stage
-D — Release identity 0.7.0 and closure acceptance
-Stage C documentation gate is green; release parity at 0.7.0 PASS.
+PLAN-0 complete — inventory + Q1–Q8 delivered; awaiting owner review.
 
 ## Authorized Scope
-- Stage D: release identity 0.7.0; closure validation; final activated-build
-  acceptance; commit and push to development; safe promotion to main; push
-  main; final Package 5 closure report.
-Do not implement the next product Package during this closure.
+- Read-only inspection of production sources (js/**, css/**, index.html)
+  for evidence.
+- Write docs/architecture/CONSISTENCY_PLAN_0_SURFACE_INVENTORY.md and, if
+  needed, pointer/annotation lines in consistency-package-plan.md.
+- docs/ai-state/** continuity updates at ACT boundaries.
+Stop before any implementation. Owner reviews the inventory and then
+authorizes (or revises) the implementation ACTs.
 
 ## Allowed Files
-Stage C (complete): docs/**, js/ui/help-content.js, js/ui/release-notes-content.js,
-docs/ai-state/**.
-Stage D (current): js/release/release.js (productVersion 0.7.0,
-cacheIdentity markmap-journal-pwa-0.7.0-projects-foundation),
-sw.js (APP_VERSION markmap-journal-pwa-0.7.0-projects-foundation),
-package.json (version fields only if present), plus all Stage C allowed files
-for documentation/version consistency.
+- docs/architecture/CONSISTENCY_PLAN_0_SURFACE_INVENTORY.md (new);
+- docs/architecture/consistency-package-plan.md (pointer only);
+- docs/ai-state/** (ACT continuity).
 
 ## Protected Files
-- all accepted Projects runtime behavior (no redesign);
-- Workspace Index canonical state; no second stores;
-- Task lifecycle semantics (no change); Task-to-Project linkage (none);
-- Do not begin consistency implementation; do not begin Reports
-  implementation.
+- ALL production js/**, css/**, index.html, sw.js — zero edits this ACT;
+- no generic expanded-view framework; no WYSIWYG; no Standalone revival;
+- no Reports/Draw.io/Reminders/Highlights implementation;
+- domain models stay distinct (Tasks, Projects, Reports, Notes).
+
+## Known Blockers
+None source-proven. PLAN-0 can proceed read-only.
+
+## Minimum Required Validation Tier
+Tier 0 only: git diff --check; change set contains docs/** only.
+Tier 1/2/3/4/M defer to implementation ACTs after PLAN approval.
+
+## Browser/Device Checkpoint
+None required for PLAN-0 (static, source-proven inventory).
+
+## Stop Conditions
+- any proposed edit to a production file;
+- owner revokes PLAN stage;
+- inventory expands into design decisions requiring owner ruling — record
+  and ask; do not decide unilaterally.
+
+## Closure Requirements
+PLAN-0 ends with the inventory document committed on development and main
+(fast-forward promotion, pushed to origin), CURRENT_ACT updated to await
+owner PLAN review, and an explicit note that implementation is NOT yet
+authorized.
+
+## Authorized Scope (this ACT)
+- Read-only inspection of production sources for inventory evidence;
+- write the PLAN-0 inventory document (docs only);
+- docs/ai-state/** continuity updates at ACT boundaries.
+Stop before any implementation. Owner reviews the inventory and then
+authorizes (or revises) the implementation ACTs.
 
 ## Changed Owners (Stage B, complete)
 - js/tasks/task-board.js (widths, source filter, scroll preservation);
