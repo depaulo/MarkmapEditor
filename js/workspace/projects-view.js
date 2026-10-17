@@ -520,7 +520,7 @@
       : '<span aria-label="No created date">—</span>';
     const sourceBtn = `<button type="button" class="projectsDetailSource" data-action="open-source"
       data-path="${escapeHtml(r.sourcePath)}" data-kind="${escapeHtml(r.sourceKind)}" data-line="${escapeHtml(String(r.sourceLine))}"
-      aria-label="Open source for ${escapeHtml(r.name)}">${escapeHtml(r.sourceName || r.sourcePath || '—')}:${escapeHtml(String(r.sourceLine || ''))}</button>`;
+      aria-label="Open source for ${escapeHtml(r.name)}">${escapeHtml(r.sourceDisplayName || r.sourceName || r.sourcePath || '—')}:${escapeHtml(String(r.sourceLine || ''))}</button>`;
 
     return `
       <div class="projectsDetailsFields" role="group" aria-label="Edit ${escapeHtml(r.name)}"${expanded ? '' : ' hidden'}>
@@ -545,7 +545,7 @@
     const managedTag = r.managed ? '' : '<span class="projectsUnmanagedTag" title="Not yet managed — open the source and Save">read-only</span>';
     const draftBadge = `<span class="projectsDraftBadge" data-draft-badge="${changed.length ? '1' : '0'}" aria-label="${changed.length} pending field change(s)">${changed.length ? changed.length + ' pending' : ''}</span>`;
     const valueText = f.value ? `${f.currency ? f.currency + ' ' : ''}${f.value}` : '—';
-    const sourceText = `${r.sourceName || r.sourcePath || '—'}:${r.sourceLine || ''}`;
+    const sourceText = `${r.sourceDisplayName || r.sourceName || r.sourcePath || '—'}:${r.sourceLine || ''}`;
     const cell = (field) => (changed.indexOf(field) !== -1 ? ' projectsCellChanged' : '');
 
     // The collapsed row is READ-ONLY: no input, no selector, no per-row Apply.
@@ -651,6 +651,20 @@
     const src = readProjectSource();
     if (!src.indexReady) return { html: renderEmpty('Loading Projects…'), count: 0, ready: false, state: 'loading' };
     const all = src.projects.map(decorate);
+    // Duplicate basename disambiguation: when two or more projects share the
+    // same sourceName (basename) but different sourcePath, show the full path
+    // for those rows so the Source column never shows two identical labels.
+    const sourceNameCounts = new Map();
+    for (const r of all) {
+      const sn = r.sourceName || r.sourcePath || '';
+      sourceNameCounts.set(sn, (sourceNameCounts.get(sn) || 0) + 1);
+    }
+    for (const r of all) {
+      const sn = r.sourceName || r.sourcePath || '';
+      r.sourceDisplayName = (sourceNameCounts.get(sn) > 1 && r.sourcePath)
+        ? r.sourcePath
+        : (r.sourceName || r.sourcePath || '—');
+    }
     const u = utils();
     const ordered = u ? u.sortProjects(all) : all;
     const rows = applyFilters(ordered);

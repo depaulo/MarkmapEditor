@@ -1,67 +1,56 @@
-# AI State — Operational Continuity Files
+# AI State — Operational Continuity Files (CONSOLIDATED)
 
-Compact, tracked operational continuity for AI coding agents. These files do
-NOT replace architecture, roadmap, TODO or source.
+> **Status:** This file has been consolidated into the MarkmapEditor knowledge
+> system. The content below is a compatibility pointer. Canonical locations are
+> listed under "Where the information now lives."
 
-## File responsibilities
+## File responsibilities (historical)
 
 - **ACTIVE_CONTEXT.md** — where the program is right now: Package, phase,
   branch/HEAD, accepted evidence, working-tree boundary, immediate next
   action, do-not-start list, required architecture, owner checkpoint, known
-  blockers. Kept compact; no historical reports.
+  blockers.
 - **CURRENT_ACT.md** — the single authorized ACT: status, mission, stage,
   allowed/protected files, changed owners, required validation tier, selected
   suites, mutation gate, browser/device checkpoint, stop conditions, closure
-  requirements. Does not accumulate older ACT prompts.
+  requirements.
 - **VALIDATION_STATE.md** — current required tier, selected suites, inherited
   static/browser/device evidence (separated), current-stage evidence, pending
   owner checkpoints, release boundary checklist.
 - **DECISION_LOG.md** — durable decisions with ID, date, status, evidence and
-  canonical destination. After integration, entries carry a short pointer to
-  the canonical document that now owns the decision.
+  canonical destination.
+
+## Where the information now lives
+
+| Concern | Canonical location |
+|---|---|
+| Project state (machine-readable) | `project-state.json` |
+| AI agent entry point | `AGENTS.md` |
+| Current work summary | `docs/work/CURRENT.md` |
+| Current validation summary | `docs/validation/CURRENT_VALIDATION.md` |
+| Roadmap and package sequence | `docs/ROADMAP.md` |
+| Architecture decisions (ADR-001…008) | `docs/decisions/README.md` + `docs/decisions/ADR-00*.md` |
+| Canonical architecture | `docs/architecture/*.md` |
+| Workflow rules | `docs/AI_DEVELOPMENT_WORKFLOW.md` |
+| Environment | `docs/AI_DEVELOPMENT_ENVIRONMENT.md` |
+| Original ai-state content (archived) | `docs/archive/ai-state-*.original.md` |
 
 ## Source-authority precedence
 
 1. accepted canonical architecture;
 2. roadmap and Package mapping;
 3. checked-out source and executable validators;
-4. AI-state documents;
+4. compact AI-state documents;
 5. previous reports and conversations;
 6. Repomix snapshots.
 
-AI-state can never override architecture or current source. AI-state is not a
-second roadmap and not a permanent ACT archive.
+AI-state can never override architecture or current source.
 
-## Update ownership
+## Original content
 
-Only an agent executing an authorized ACT updates these files, and only at
-accepted ACT boundaries or owner-checkpoint changes. Updates record what
-actually happened, never intent.
-
-## Cleanup lifecycle
-
-After a Package closure: migrate durable decisions into canonical
-architecture, delete stale operational detail, and reset CURRENT_ACT to the
-next authorized ACT. Stale entries are cleaned, not accumulated.
-
-## Model-switch procedure
-
-A replacement model must read the six entry documents (see
-.cline/rules/00-markmapeditor-entrypoint.md) before working. It must not
-reconstruct active state from conversation history when repository state
-files exist. Unresolved tool_call_ids must be resolved before handoff.
-
-## prohibitions
-
-- No complete terminal logs or source dumps in AI-state. Summaries only.
-- Browser/device evidence must be labeled accurately and kept separate from
-  static Node evidence.
-- Full Repomix snapshots must not be loaded when the repository is available.
-
-## Document classes
-
-- **Rules** (.cline/rules/) — mandatory agent behavior.
-- **AI-state** (docs/ai-state/) — compact operational continuity.
-- **Architecture** (docs/architecture/) — durable truth about the product.
-- **Skills** — only proven repeatable procedures; none mandatory today.
-- **MCP** — only necessary external capabilities; none added.
+The pre-consolidation content of each file is preserved at:
+- `docs/archive/ai-state-README.original.md`
+- `docs/archive/ai-state-ACTIVE_CONTEXT.original.md`
+- `docs/archive/ai-state-CURRENT_ACT.original.md`
+- `docs/archive/ai-state-VALIDATION_STATE.original.md`
+- `docs/archive/ai-state-DECISION_LOG.original.md`
