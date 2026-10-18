@@ -108,6 +108,22 @@ const MUTATIONS = [
     suites: ['workspace-index-task-filter-validators.cjs'], expect: ['T01', 'T01c', 'T11c'], count: 1,
     why: 'The projection default is All.' },
 
+  // ---- Package 6 ACT 2 controls (Return control + scroll preservation) ----
+  { id: 'F11-return-aria-label-removed', file: WS,
+    find: ' aria-label="Return to ${label}"', replace: '',
+    suites: ['workspace-index-task-filter-validators.cjs'], expect: ['W02', 'W04'], count: 1,
+    why: 'The Return control must announce its target to assistive tech.' },
+
+  { id: 'F12-return-escape-noop', file: WS,
+    find: "      .replace(/</g, '&lt;')", replace: "      .replace(/</g, '<')",
+    suites: ['workspace-index-task-filter-validators.cjs'], expect: ['W01'], count: 1,
+    why: 'The Return label must really escape markup.' },
+
+  { id: 'F13-no-anchor-scroll-restore-dropped', file: WS,
+    find: '        restoreScrollTop(scrollContainer, priorScrollTop);', replace: '',
+    suites: ['workspace-index-task-filter-validators.cjs'], expect: ['W05'], count: 1,
+    why: 'Filter rerenders must not jump to the top.' },
+
   // ---- structural guards ----
   { id: 'G01-no-index-rebuild', file: WS,
     find: '        rerenderProjectionWithAnchor(\'#workspaceIndexTasksSection\');',

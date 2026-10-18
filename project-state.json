@@ -23,16 +23,16 @@
   },
   "git": {
     "currentBranch": "main",
-    "head": "66e3b7a8eb683e02dcd65f70ce7cbe0dad082ce6",
-    "main": "66e3b7a8eb683e02dcd65f70ce7cbe0dad082ce6",
+    "head": "fbe08a512a441582a09c3c9810ab49f0f59c6fce",
+    "main": "fbe08a512a441582a09c3c9810ab49f0f59c6fce",
     "development": "1905a86058b66908ce9d9eb38e8dcef458302d26",
     "originMain": "1905a86058b66908ce9d9eb38e8dcef458302d26",
     "originDevelopment": "1905a86058b66908ce9d9eb38e8dcef458302d26",
-    "revListMainDevelopment": "3/0",
-    "revListMainOriginMain": "3/0",
+    "revListMainDevelopment": "4/0",
+    "revListMainOriginMain": "4/0",
     "revListDevOriginDev": "0/0",
     "workingTreeClean": false,
-    "workingTreeNote": "ACT 1 closure knowledge-doc updates staged alongside docs/work/CURRENT.md; push pending (owner executes push)",
+    "workingTreeNote": "ACT 2 slice 1 (source + validators + knowledge docs) staged for commit; push pending (owner executes push)",
     "untrackedArtifacts": ["re"],
     "untrackedArtifactAction": "do not touch",
     "commits": {
@@ -76,7 +76,7 @@
         "browserEvidence": "owner physical checkpoint (Mme-test-new, 8 projects): filter options, exact-source filtering, clear/reset, empty-vs-filtered-empty, return/scroll preservation; Legacy: label confirmed as rendering fallback",
         "packageDoc": "docs/packages/P6-CONSISTENCY.md"
       },
-      "nextStep": "ACT 2: first bounded slice — Projects + Workspace Index exit/return semantics, scroll ownership, empty vs filtered-empty state presentation"
+      "nextStep": "ACT 2 slice 1 (Workspace Index return control + scroll preservation) implemented, static gate green — awaiting owner browser checkpoint; next slice candidates need owner rulings (Q1 visible return grammar, B2 inspection recovery)"
     }
   },
   "workflow": {
@@ -86,10 +86,9 @@
     "protectedFiles": ["js/**", "css/**", "index.html", "sw.js"]
   },
   "nextActions": [
-    "Commit ACT 1 closure (knowledge docs + docs/work/CURRENT.md) locally; owner executes push (main is ahead of origin/main)",
-    "Finish ACT 2 source inspection (Task Board overlay open/close, Workspace Index empty/filter states) and record proven inconsistencies",
-    "Implement first bounded ACT 2 consistency slice within current owners; run targeted validation",
-    "Owner browser checkpoint for ACT 2; update knowledge docs at ACT 2 boundary",
+    "Owner browser checkpoint for ACT 2 slice 1 (Index close/reopen scroll, filter-change scroll, Return label with markup-bearing fileName)",
+    "Owner executes push of main (4+ commits ahead of origin/main, including ACT 2 slice commit)",
+    "Owner rulings on PLAN-0 Q1-Q8 to unlock further ACT 2 slices (visible return grammar B1, inspection recovery B2, exit grammar E1)",
     "Do NOT activate 0.8.x; no service-worker/version/cache changes; no persistent filter storage"
   ]
 }

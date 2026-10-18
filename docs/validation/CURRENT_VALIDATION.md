@@ -73,16 +73,23 @@ None required — Tier 0 only (`git diff --check`, docs readability).
 | `js/workspace/project-visual-adapter.js` | node --check | — | project-consumer, project-save-integration | yes — contract + consumer controls | owner apply checkpoint |
 | `css/workspace.css` | git diff --check | — | project-view (columns/grid) | no | owner visual checkpoint |
 
-## Selected suites for ACT 2 (first bounded consistency slice) — finalize when slice owners are fixed
+## Selected suites for ACT 2 — slice 1 EXECUTED 2026-10-18 (browser checkpoint pending)
 
-Expected changed owners: `js/workspace/projects-view.js`,
-`js/workspace/workspace-index-workspace.js` (and `-document.js` only if its
-proven inconsistencies are in-slice), plus validators. Suites: Tier 0
-(`node --check`, `git diff --check`), project-view, contract, consumer,
-device-acceptance, workspace suites if workspace-index changes, mutation
-anchors. Owner browser checkpoint required before acceptance. Task Board
-owners (`js/tasks/task-board.js`) are NOT in this slice — overlay conversion
-not authorized.
+Changed owners: `js/workspace/workspace-index-workspace.js`,
+`scripts/workspace-index-task-filter-validators.cjs` (W01–W08),
+`scripts/workspace-index-task-filter-mutation-controls.cjs` (F11–F13).
+
+| Suite | Result |
+|---|---|
+| workspace-index-task-filter | 64/64 PASS |
+| workspace-index-notes | 58/58 PASS |
+| project-view / contract / consumer / save-integration / device-acceptance | 534 / 434 / 163 / 103 / 74 PASS |
+| mutation-anchor-audit | 167/167 PASS |
+| Tier M workspace-index mutation controls (disposable copy) | 13/13 behavioral controls bit, restored byte-identically, baselines green |
+| `git diff --check` | clean |
+
+Task Board owners (`js/tasks/task-board.js`) NOT touched — overlay conversion
+not authorized. Owner browser checkpoint required before slice acceptance.
 
 Aggregate commands:
 - `npm run validate:quick`

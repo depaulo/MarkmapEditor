@@ -11,17 +11,17 @@
 - **Target version:** 0.8.x
 - **Release activation:** NOT authorized
 - **Branch:** main
-- **HEAD:** 66e3b7a (main 3 ahead of origin/main; development still at
+- **HEAD:** fbe08a5 (main 4 ahead of origin/main; development still at
   1905a86 — push pending, owner executes push)
-- **Working tree:** ACT 1 closure knowledge-doc updates staged with
-  docs/work/CURRENT.md; untracked artifact `re` (do not touch)
+- **Working tree:** ACT 2 slice 1 changes staged (source + validators +
+  knowledge docs); untracked artifact `re` (do not touch)
 - **Active package:** Package 6 — Expanded-View Behavior and Visual Consistency
 - **PLAN-0:** complete (source-proven surface inventory delivered)
 - **ACT 1 (Projects Source filter):** accepted 2026-10-18 (commit 66e3b7a;
   full static gate green; owner browser checkpoint passed)
-- **ACT 2:** first bounded consistency slice in progress (Projects +
-  Workspace Index exit/return semantics, scroll ownership, empty vs
-  filtered-empty presentation)
+- **ACT 2 slice 1:** implemented 2026-10-18 — Workspace Index Return control
+  (real escaping + aria-label) and scroll preservation across rerenders and
+  close/reopen; static gate + Tier M green; owner browser checkpoint PENDING
 
 ## Where the information now lives
 

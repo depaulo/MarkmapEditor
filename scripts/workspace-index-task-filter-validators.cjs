@@ -223,6 +223,24 @@ group('Unrelated surfaces unchanged');
   check('T19d', 'Task priority untouched', /#p\[123\]/.test(lifecycle));
 }
 
+group('Return control + scroll preservation (Package 6 ACT 2)');
+
+{
+  const wsSrc = fs.readFileSync(WS_SRC, 'utf8');
+  const escSrc = wsSrc.slice(wsSrc.indexOf('function escapeIndexLabel'), wsSrc.indexOf('function buildReturnButtonHtml'));
+  const retSrc = wsSrc.slice(wsSrc.indexOf('function buildReturnButtonHtml'), wsSrc.indexOf('// ---- Action handling'));
+  check('W01', 'Return label escaping is real (no-op chain removed)', escSrc.includes("replace(/</g, '&lt;')") && escSrc.includes("replace(/>/g, '&gt;')") && escSrc.includes("replace(/&/g, '&amp;')"));
+  check('W02', 'Return button carries a target-naming aria-label', retSrc.includes('aria-label="Return to ${label}"'));
+  check('W03', 'Return button keeps native-button action grammar', retSrc.includes('<button type="button" data-action="return-to-workspace"'));
+  check('W04', 'aria-label and visible text share the escaped label', (retSrc.match(/\$\{label\}/g) || []).length >= 2 && !retSrc.includes('escapedLabel'));
+  check('W05', 'no-anchor rerenders preserve the container scroll offset', wsSrc.includes('const priorScrollTop = Number(scrollContainer.scrollTop) || 0;') && wsSrc.includes('restoreScrollTop(scrollContainer, priorScrollTop);'));
+  check('W06', 'scroll restore clamps only when measurable (hidden = raw offset)', wsSrc.includes('const measurable = Number.isFinite(sh) && Number.isFinite(ch) && ch > 0;'));
+  const activateSrc = wsSrc.slice(wsSrc.indexOf('async function activate('), wsSrc.indexOf('function deactivate('));
+  const deactivateSrc = wsSrc.slice(wsSrc.indexOf('function deactivate('), wsSrc.indexOf('// ---- ACT E: Project filter handlers'));
+  check('W07', 'close/reopen preserves scroll: deactivate captures, activate restores', deactivateSrc.includes('savedScrollTop = Number(container.scrollTop) || 0;') && activateSrc.includes('restoreScrollTop(container, savedScrollTop);'));
+  check('W08', 'scroll state stays module-local (no persistence)', !/localStorage|sessionStorage/.test(wsSrc.slice(wsSrc.indexOf('let savedScrollTop'), wsSrc.indexOf('function safeLog'))));
+}
+
 /* -------------------------------- report -------------------------------- */
 let passed = 0, failed = 0, groups = 0;
 for (const r of results) {

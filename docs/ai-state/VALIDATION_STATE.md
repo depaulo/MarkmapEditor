@@ -15,6 +15,10 @@ checkpoint (Tier D).**
   device-acceptance 74/74, mutation-anchor 164/164, `git diff --check` clean.
 - ACT 2 suite selection is fixed when the slice's changed owners are fixed
   (see docs/validation/CURRENT_VALIDATION.md — "Selected suites for ACT 2").
+- ACT 2 slice 1 executed 2026-10-18: workspace-index-task-filter 64/64
+  (W01–W08), workspace-index-notes 58/58, project suites 534/434/163/103/74,
+  mutation anchors 167/167, Tier M 13/13 in a disposable copy,
+  `git diff --check` clean. Owner browser checkpoint pending.
 - Evidence discipline: static, browser and device evidence stay separately
   labeled; browser claims require owner physical observation.
 

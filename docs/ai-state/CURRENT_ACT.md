@@ -8,12 +8,18 @@
 ## Current ACT status
 
 - **Package:** Package 6 — Expanded-View Behavior and Visual Consistency
-- **Stage:** ACT 2 — first bounded consistency slice (implementation
-  authorized by owner; ACT 1 closed 2026-10-18)
+- **Stage:** ACT 2 — slice 1 IMPLEMENTED 2026-10-18 (Workspace Index Return
+  control + scroll preservation); awaiting owner browser checkpoint
 - **Mission:** Projects + Workspace Index expanded-view behavioral
   consistency — exit/return semantics, scroll ownership, empty vs
   filtered-empty state presentation; implement only differences proven
   inconsistent against current source
+- **Slice 1 status:** `js/workspace/workspace-index-workspace.js` — real
+  `escapeIndexLabel()` on the Return label, `aria-label="Return to …"`,
+  module-local scroll preservation (Projects-style clamp grammar) across
+  no-anchor rerenders, refresh and close/reopen. Static gate + Tier M green.
+  Owner browser checkpoint pending before acceptance; further slices need
+  owner rulings (Q1 visible return grammar, B2 inspection recovery).
 - **Authorized scope:** production edits limited to the slice's current
   owners (`js/workspace/projects-view.js`,
   `js/workspace/workspace-index-workspace.js`, `-document.js` only if its

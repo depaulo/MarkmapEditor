@@ -52,6 +52,30 @@
   // globalThis / URL.
   let taskFilter = 'all';
 
+  // ---- Local scroll preservation (P6 ACT 2, A2-3/A2-4) ----
+  // #workspaceIndexView is its own scroll owner (css/workspace.css:
+  // overflow-y: auto). Destructive innerHTML rebuilds (activate / refresh /
+  // rerender) used to reset scrollTop to the top, unlike the Projects owner
+  // which preserves its scroll owner across re-renders. Grammar mirrors
+  // projects-view restoreScrollOwner: a measurable layout gets a clamped
+  // restore; a hidden / zero-height container gets the raw saved offset and
+  // lets the browser clamp at paint time. Module-local only — never written
+  // to storage, globals or the Index state.
+  let savedScrollTop = 0;
+
+  function restoreScrollTop(container, saved) {
+    const top = Number(saved);
+    if (!container || !Number.isFinite(top) || top <= 0) return;
+    try {
+      const sh = Number(container.scrollHeight);
+      const ch = Number(container.clientHeight);
+      const measurable = Number.isFinite(sh) && Number.isFinite(ch) && ch > 0;
+      container.scrollTop = measurable
+        ? Math.min(Math.max(0, top), Math.max(0, sh - ch))
+        : Math.max(0, top);
+    } catch {}
+  }
+
   function resetProjectFilters() {
     projectFilters = { ...DEFAULT_PROJECT_FILTERS };
   }
@@ -117,13 +141,25 @@
     return 'Workspace';
   }
 
+  // Real HTML escaping for the Return label (P6 ACT 2, A2-1). The previous
+  // chain (`replace(/</g, '<')`) was a NO-OP: a fileName containing markup
+  // was injected raw into innerHTML. Mirrors the Projects return control's
+  // escape discipline.
+  function escapeIndexLabel(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function buildReturnButtonHtml() {
-    const label = getPreviousWorkspaceLabel();
-    const escapedLabel = String(label).replace(/</g, '<').replace(/>/g, '>');
+    const label = escapeIndexLabel(getPreviousWorkspaceLabel());
     return `
       <div class="wsIndexReturnRow">
-        <button type="button" data-action="return-to-workspace" class="wsIndexReturnAction">
-          ← Return to ${escapedLabel}
+        <button type="button" data-action="return-to-workspace" class="wsIndexReturnAction" aria-label="Return to ${label}">
+          ← Return to ${label}
         </button>
       </div>
     `;
@@ -401,6 +437,12 @@
     const returnBtnHtml = buildReturnButtonHtml();
     container.insertAdjacentHTML('afterbegin', returnBtnHtml);
 
+    // P6 ACT 2 (A2-4): restore the previous scroll offset. The container is
+    // still hidden here (clientHeight 0), so the helper assigns the RAW
+    // offset — same grammar as the Projects owner — and the browser clamps
+    // at paint time once visible.
+    restoreScrollTop(container, savedScrollTop);
+
     // 7. Show Index only as the final non-throwing step
     showContainer(container);
 
@@ -418,6 +460,9 @@
   function deactivate() {
     const container = document.getElementById(CONTAINER_ID);
     if (container) {
+      // P6 ACT 2 (A2-4): remember the scroll offset so a later activate()
+      // can restore it instead of landing at the top.
+      savedScrollTop = Number(container.scrollTop) || 0;
       hideContainer(container);
     }
 
@@ -476,6 +521,9 @@
 
     // Measure the disclosure card's viewport position before rerender.
     const scrollContainer = container;
+    // P6 ACT 2 (A2-3): capture the raw offset so rerenders WITHOUT an anchor
+    // (project-filter changes) keep the user's place instead of jumping to top.
+    const priorScrollTop = Number(scrollContainer.scrollTop) || 0;
     const oldTop = anchorSelector
       ? (() => {
           const oldCard = container.querySelector(anchorSelector);
@@ -503,6 +551,10 @@
           }
         }
         // If replacement card cannot be located, fail safely without throwing.
+      } else {
+        // No anchor (e.g. project-filter changes): restore the captured
+        // offset with the Projects-style clamp grammar (P6 ACT 2, A2-3).
+        restoreScrollTop(scrollContainer, priorScrollTop);
       }
     } catch (e) {
       safeLog(`WorkspaceIndex: projection rerender failed: ${e?.message || e}`);
@@ -517,12 +569,14 @@
     if (!container) return;
 
     // Regenerate projection and swap in a single innerHTML assignment
+    const priorScrollTop = Number(container.scrollTop) || 0;
     try {
       const html = docApi.buildProjection(projectFilters, expandedDisclosureCards);
       container.innerHTML = html;
       // Re-prepend Return button after refresh
       const returnBtnHtml = buildReturnButtonHtml();
       container.insertAdjacentHTML('afterbegin', returnBtnHtml);
+      restoreScrollTop(container, priorScrollTop);
     } catch (e) {
       safeLog(`WorkspaceIndex: refresh projection failed: ${e?.message || e}`);
     }
