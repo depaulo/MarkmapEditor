@@ -73,9 +73,12 @@
   let inspectionActive = false;
 
   // ---- view state (module-local; never persisted) ----
+  // filters.source is the exact Workspace-relative sourcePath ('' = All Sources).
+  // Filter state is in-memory view state only: no browser storage APIs,
+  // no Markdown writes, no Index writes, no adapter calls.
   const viewState = {
     search: '',
-    filters: { stage: ALL, state: ALL, value: ALL, year: ALL, quarter: ALL, currency: ALL },
+    filters: { stage: ALL, state: ALL, value: ALL, year: ALL, quarter: ALL, currency: ALL, source: '' },
     scroll: 0,
     expandedKeys: [],
     applying: false,
@@ -151,6 +154,43 @@
   }
 
   // ---- filters (persisted/indexed records ONLY - drafts never filter) ----
+  // Source filter (Package 6 ACT 1): exact sourcePath identity, never basename.
+  // Option ordering is deterministic: sorted by label, then by path.
+  function sourceOptions(records) {
+    const seen = new Map();
+    for (const r of records) {
+      const p = String(r.sourcePath || '');
+      if (p && !seen.has(p)) seen.set(p, String(r.sourceName || ''));
+    }
+    const paths = Array.from(seen.keys()).sort();
+    const counts = new Map();
+    for (const p of paths) {
+      const base = baseNameOf(p, seen.get(p));
+      counts.set(base, (counts.get(base) || 0) + 1);
+    }
+    return paths.map((p) => {
+      const base = baseNameOf(p, seen.get(p));
+      const dup = (counts.get(base) || 0) > 1;
+      return { value: p, label: dup ? `${base} — ${dirOf(p) || p}` : base };
+    }).sort((a, b) => String(a.label).localeCompare(String(b.label)) || String(a.value).localeCompare(String(b.value)));
+  }
+  function baseNameOf(p, fallbackName) {
+    const s = String(p).replace(/\\/g, '/');
+    const seg = s.split('/').filter(Boolean).pop();
+    return seg || String(fallbackName || p || '');
+  }
+  function dirOf(p) {
+    const segs = String(p).replace(/\\/g, '/').split('/').filter(Boolean);
+    segs.pop();
+    return segs.join('/');
+  }
+  // Unknown source identity must reset to All rather than basename-match.
+  function normalizeSourceValue(value, records) {
+    const v = String(value == null ? '' : value);
+    if (!v) return '';
+    const ok = records.some((r) => String(r.sourcePath || '') === v);
+    return ok ? v : '';
+  }
   function yearOptions(records) {
     const set = new Set();
     for (const r of records) if (Number.isFinite(r.year)) set.add(String(r.year));
@@ -188,6 +228,9 @@
       if (f.currency !== ALL && r.currency !== f.currency) return false;
       if (f.value === 'with' && !Number.isFinite(r.value)) return false;
       if (f.value === 'without' && Number.isFinite(r.value)) return false;
+      // Source filter: exact sourcePath identity only. '' matches all; basename
+      // matching is prohibited — duplicates stay distinct by full path.
+      if (f.source && String(r.sourcePath || '') !== String(f.source)) return false;
       return true;
     });
   }
@@ -674,9 +717,16 @@
     if (!all.length) return { html: renderEmpty('No Projects yet.'), count: 0, ready: true, state: 'empty' };
 
     const f = viewState.filters;
+    // Normalize a stale source selection against the current Index: a source
+    // that no longer exists resets to All without touching other filters.
+    f.source = normalizeSourceValue(f.source, all);
+    const srcOpts = sourceOptions(all);
+    const srcIsAll = !f.source;
+    const srcSelected = srcIsAll ? '' : `<option value="${escapeHtml(f.source)}" selected>Legacy: ${escapeHtml(f.source)}</option>`;
     const filterHtml = `
       <div class="projectsFilters" role="group" aria-label="Project filters">
         <input class="projectsFilterSearch" type="search" data-filter="search" value="${escapeHtml(viewState.search)}" placeholder="Search projects" aria-label="Search projects" />
+        <select class="projectsFilterSelect" data-filter="source" aria-label="Source filter"><option value=""${srcIsAll ? ' selected' : ''}>All Sources</option>${srcOpts.map((o) => `<option value="${escapeHtml(o.value)}"${(!srcIsAll && o.value === f.source) ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}${srcSelected}</select>
         <select class="projectsFilterSelect" data-filter="stage" aria-label="Stage filter">${opts(STAGE_OPTIONS, f.stage, 'All stages')}</select>
         <select class="projectsFilterSelect" data-filter="state" aria-label="State filter">${opts(STATE_OPTIONS, f.state, 'All states')}</select>
         <select class="projectsFilterSelect" data-filter="value" aria-label="Value filter">
@@ -1582,7 +1632,7 @@
 
   function resetViewState() {
     viewState.search = '';
-    viewState.filters = { stage: ALL, state: ALL, value: ALL, year: ALL, quarter: ALL, currency: ALL };
+    viewState.filters = { stage: ALL, state: ALL, value: ALL, year: ALL, quarter: ALL, currency: ALL, source: '' };
     viewState.expandedKeys = [];
     viewState.applying = false;
     viewState.lastError = '';
@@ -1612,6 +1662,7 @@
 
   function setFilter(dim, value) {
     if (dim === 'search') { viewState.search = String(value == null ? '' : value); return true; }
+    if (dim === 'source') { viewState.filters.source = String(value == null ? '' : value); return true; }
     if (!Object.prototype.hasOwnProperty.call(viewState.filters, dim)) return false;
     viewState.filters[dim] = String(value == null ? ALL : value);
     return true;
@@ -1619,7 +1670,7 @@
 
   function clearFilters() {
     viewState.search = '';
-    viewState.filters = { stage: ALL, state: ALL, value: ALL, year: ALL, quarter: ALL, currency: ALL };
+    viewState.filters = { stage: ALL, state: ALL, value: ALL, year: ALL, quarter: ALL, currency: ALL, source: '' };
     return true;
   }
 

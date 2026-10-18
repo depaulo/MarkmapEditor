@@ -768,7 +768,7 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     V.resetViewState();
     await V.getDescriptor().activate();
     const rows = globalThis.WORKSPACE_INDEX_STATE.projects.map(V.decorate);
-    check('F01', 'default filters are all All', JSON.stringify(V.getViewState().filters) === JSON.stringify({ stage: 'all', state: 'all', value: 'all', year: 'all', quarter: 'all', currency: 'all' }));
+    check('F01', 'default filters are all All', JSON.stringify(V.getViewState().filters) === JSON.stringify({ stage: 'all', state: 'all', value: 'all', year: 'all', quarter: 'all', currency: 'all', source: '' }));
     check('F02', 'no filters hides nothing', V.applyFilters(rows).length === 3);
     V.getViewState().filters.state = 'lost';
     check('F03', 'state filter narrows', (V.setFilter('state', 'lost'), V.applyFilters(rows).length === 1));
@@ -790,11 +790,52 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     check('F08', 'zero result yields an empty row set', Array.isArray(zero) && zero.length === 0);
     const zeroHtml = V.buildProjection().html;
     check('F09', 'zero-result KEEPS Clear filters reachable', zeroHtml.includes('data-action="clear-filters"'));
-    check('F10', 'zero-result KEEPS every filter control', ['stage', 'state', 'value', 'year', 'quarter', 'currency'].every((k) => zeroHtml.includes('data-filter="' + k + '"')));
+    check('F10', 'zero-result KEEPS every filter control', ['stage', 'state', 'value', 'year', 'quarter', 'currency', 'source'].every((k) => zeroHtml.includes('data-filter="' + k + '"')));
     check('F11', 'zero-result states the reason', /No Projects match/.test(zeroHtml));
     V.resetViewState();
     const after = V.buildProjection().html;
     check('F12', 'Clear filters restores every Project', !/No Projects match/.test(after) && V.applyFilters(rows).length === 3);
+  }
+  {
+    // Package 6 ACT 1: rendered Source filter — exact sourcePath identity.
+    const V = globalThis.MME_PROJECTS_VIEW;
+    V.resetViewState();
+    globalThis.WORKSPACE_INDEX_STATE = {
+      ready: true,
+      projects: [
+        proj({ projectId: ID_A, name: 'Alpha', stage: 'quoted', state: 'open', sourcePath: 'notes/a.md', sourceName: 'a.md', sourceLine: 10, created: TODAY }),
+        proj({ projectId: ID_B, name: 'Beta', stage: 'open', state: 'open', sourcePath: 'notes/b.md', sourceName: 'b.md', sourceLine: 4, created: TODAY }),
+        proj({ projectId: ID_B + 'x', name: 'Gamma', stage: 'open', state: 'open', sourcePath: 'docs/a.md', sourceName: 'a.md', sourceLine: 2, created: TODAY }),
+      ],
+    };
+    const srows = globalThis.WORKSPACE_INDEX_STATE.projects.map(V.decorate);
+    const sHtml = V.buildProjection().html;
+    check('S01', 'Source control is rendered', sHtml.includes('data-filter="source"'));
+    check('S02', 'All Sources default is present and selected', /data-filter="source"[^>]*>[\s\S]*?All Sources/.test(sHtml) && /<option value="" selected>All Sources<\/option>/.test(sHtml));
+    check('S03', 'option values are exact sourcePaths', sHtml.includes('value="notes/a.md"') && sHtml.includes('value="notes/b.md"') && sHtml.includes('value="docs/a.md"'));
+    check('S04', 'duplicate basenames are disambiguated in labels', /a\.md — (notes|docs)/.test(sHtml));
+    V.setFilter('source', 'notes/a.md');
+    const only = V.applyFilters(srows);
+    check('S05', 'exact source selects only its Projects', only.length === 1 && only[0].name === 'Alpha');
+    V.setFilter('source', 'docs/a.md');
+    const onlyDup = V.applyFilters(srows);
+    check('S06', 'one duplicate excludes the other', onlyDup.length === 1 && onlyDup[0].name === 'Gamma');
+    V.setFilter('source', 'notes');
+    check('S07', 'basename alone never matches', V.applyFilters(srows).length === 0);
+    V.setFilter('source', 'notes/a.md');
+    V.setFilter('state', 'lost');
+    check('S08', 'Source composes with existing filters', V.applyFilters(srows).length === 0);
+    V.setFilter('state', 'all');
+    check('S09', 'changing Source keeps other filters', V.getViewState().filters.state === 'all' && V.applyFilters(srows).length === 1);
+    check('S10', 'filtering is view-only (no Save path)', (() => {
+      const src = require('fs').readFileSync(require('path').join(ROOT, 'js', 'workspace', 'projects-view.js'), 'utf8');
+      const start = src.indexOf('function applyFilters');
+      const end = src.indexOf('// ---- DRAFT OWNER');
+      const seg = src.slice(start, end > start ? end : start + 1500);
+      return !/saveSmart|saveToHandle|createWritable|currentSaveHandle|applyMarkdown|localStorage|sessionStorage|indexedDB|applyProjectFieldChange/i.test(seg);
+    })());
+    V.resetViewState();
+    check('S11', 'reset restores All Sources', V.getViewState().filters.source === '' && V.applyFilters(srows).length === 3);
   }
   {
     const V = globalThis.MME_PROJECTS_VIEW;
