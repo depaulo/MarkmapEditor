@@ -2,14 +2,38 @@
 
 ## Current required test tier
 
-**Tier: PLAN-0 / Knowledge Consolidation — Tier 0 only.**
+**Tier: ACT 2 active — targeted Tier 1/2 suites by changed owner + owner
+browser checkpoint (Tier D).**
 
-No production source files are touched in this session. Validation is limited to:
-- `git diff --check` — clean
-- `node --check` on any touched JS/CJS — exit 0
-- No browser/device checkpoint required for PLAN-0 docs-only work
+ACT 1 (Projects Source filter) is implemented, statically re-verified and
+owner-accepted. ACT 2 (first bounded expanded-view consistency slice) will
+run the Tier 1/2 suites selected by the owners it touches (expected:
+project-view, contract, consumer, device-acceptance — plus workspace suites
+if workspace-index owners change) plus an owner browser checkpoint.
 
-## Inherited Package 5 static evidence (accepted, not rerun)
+## ACT 1 closure evidence (2026-10-18, commit 66e3b7a)
+
+Static full-gate re-run, all green:
+- project-view validators: 534/534 PASS (28 groups; includes new S01–S11
+  Source-filter group)
+- project-contract: 434/434 PASS
+- project-consumer: 163/163 PASS
+- project-save-integration: 103/103 PASS
+- project-device-acceptance: 74/74 PASS
+- mutation-anchor-audit: 164 anchors, 0 missing/ambiguous PASS
+- `git diff --check` clean
+
+Browser/device evidence (owner physical checkpoint, 2026-10-18):
+Mme-test-new, 8 projects — Source options rendered with duplicate-basename
+disambiguation; exact-sourcePath filtering; All Sources/clear/reset;
+empty-vs-filtered-empty copy; return/scroll preservation across
+close/reopen. `Legacy:` option label confirmed as a proven rendering
+fallback for a stale selection, not a filter defect.
+
+Release gate: still CLOSED — 0.8.x activation not authorized; no
+service-worker/version/cache changes in this package.
+
+## Inherited Package 5 static evidence (superseded for Projects owners by ACT 1 closure re-run above)
 
 - contract 434/434, project-view 523/523, project-consumer 163/163,
   project-save-integration 103/103, project-device-acceptance 74/74,
@@ -41,13 +65,24 @@ from earlier ACTs; not rerun — no changed owner can invalidate them.
 
 None required — Tier 0 only (`git diff --check`, docs readability).
 
-## Selected suites for first implementation ACT (Projects source filtering)
+## Selected suites — ACT 1 (Projects source filtering) EXECUTED, accepted 2026-10-18
 
 | Changed owner | Tier 0 | Tier 1 smoke | Tier 2 targeted | Tier M | Browser/device |
 |---|---|---|---|---|---|
-| `js/workspace/projects-view.js` | node --check, git diff --check | — | project-view (523) | yes — project-view-mutation-controls | owner visual checkpoint (desktop + narrow) |
+| `js/workspace/projects-view.js` | node --check, git diff --check | — | project-view (534) | yes — project-view-mutation-controls | owner visual checkpoint (desktop + narrow) — DONE |
 | `js/workspace/project-visual-adapter.js` | node --check | — | project-consumer, project-save-integration | yes — contract + consumer controls | owner apply checkpoint |
 | `css/workspace.css` | git diff --check | — | project-view (columns/grid) | no | owner visual checkpoint |
+
+## Selected suites for ACT 2 (first bounded consistency slice) — finalize when slice owners are fixed
+
+Expected changed owners: `js/workspace/projects-view.js`,
+`js/workspace/workspace-index-workspace.js` (and `-document.js` only if its
+proven inconsistencies are in-slice), plus validators. Suites: Tier 0
+(`node --check`, `git diff --check`), project-view, contract, consumer,
+device-acceptance, workspace suites if workspace-index changes, mutation
+anchors. Owner browser checkpoint required before acceptance. Task Board
+owners (`js/tasks/task-board.js`) are NOT in this slice — overlay conversion
+not authorized.
 
 Aggregate commands:
 - `npm run validate:quick`

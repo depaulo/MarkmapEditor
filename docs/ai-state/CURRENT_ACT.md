@@ -8,16 +8,24 @@
 ## Current ACT status
 
 - **Package:** Package 6 — Expanded-View Behavior and Visual Consistency
-- **Stage:** PLAN-0 complete — PLAN stage only, NO implementation authorized
-- **Mission:** Execute PLAN-0; await owner review of Q1–Q8; then first
-  implementation ACT
-- **Authorized scope:** Read-only inspection of production sources for
-  inventory evidence; write PLAN-0 inventory document (docs only);
-  docs/ai-state/** continuity updates at ACT boundaries
-- **Protected files:** ALL production `js/**`, `css/**`, `index.html`,
-  `sw.js` — zero edits this ACT
-- **Stop conditions:** any proposed edit to a production file; owner revokes
-  PLAN stage; inventory expands into design decisions requiring owner ruling
+- **Stage:** ACT 2 — first bounded consistency slice (implementation
+  authorized by owner; ACT 1 closed 2026-10-18)
+- **Mission:** Projects + Workspace Index expanded-view behavioral
+  consistency — exit/return semantics, scroll ownership, empty vs
+  filtered-empty state presentation; implement only differences proven
+  inconsistent against current source
+- **Authorized scope:** production edits limited to the slice's current
+  owners (`js/workspace/projects-view.js`,
+  `js/workspace/workspace-index-workspace.js`, `-document.js` only if its
+  proven inconsistencies are in-slice, validators, CSS only if a proven
+  inconsistency requires it); docs updates at ACT boundary
+- **Protected files/areas:** Reports owners; Task Board overlay conversion
+  (`js/tasks/task-board.js` stays an overlay); `js/release/release.js`,
+  `sw.js`, cache identity; 0.8.x activation; persistent filter storage; the
+  untracked artifact `re`; generic expanded-view frameworks
+- **Stop conditions:** slice would expand beyond proven inconsistencies;
+  a PLAN-0 question (Q1–Q8) requires an owner ruling to proceed; any
+  protected file would change
 
 ## Where the information now lives
 

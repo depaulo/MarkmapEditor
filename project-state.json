@@ -1,6 +1,6 @@
 {
   "schema": "markmap-editor-project-state",
-  "generatedAt": "2026-10-17",
+  "generatedAt": "2026-10-18",
   "project": {
     "name": "MarkmapEditor",
     "description": "Single File Markmap Editor",
@@ -23,15 +23,16 @@
   },
   "git": {
     "currentBranch": "main",
-    "head": "1905a86058b66908ce9d9eb38e8dcef458302d26",
-    "main": "1905a86058b66908ce9d9eb38e8dcef458302d26",
+    "head": "66e3b7a8eb683e02dcd65f70ce7cbe0dad082ce6",
+    "main": "66e3b7a8eb683e02dcd65f70ce7cbe0dad082ce6",
     "development": "1905a86058b66908ce9d9eb38e8dcef458302d26",
     "originMain": "1905a86058b66908ce9d9eb38e8dcef458302d26",
     "originDevelopment": "1905a86058b66908ce9d9eb38e8dcef458302d26",
-    "revListMainDevelopment": "0/0",
-    "revListMainOriginMain": "0/0",
+    "revListMainDevelopment": "3/0",
+    "revListMainOriginMain": "3/0",
     "revListDevOriginDev": "0/0",
-    "workingTreeClean": true,
+    "workingTreeClean": false,
+    "workingTreeNote": "ACT 1 closure knowledge-doc updates staged alongside docs/work/CURRENT.md; push pending (owner executes push)",
     "untrackedArtifacts": ["re"],
     "untrackedArtifactAction": "do not touch",
     "commits": {
@@ -46,6 +47,10 @@
       "7232494": {
         "subject": "docs(ai-state): closure reconciliation — main promotion proven, activation pending",
         "isAncestorOfMain": true
+      },
+      "66e3b7a": {
+        "subject": "feat(projects): add rendered Source filter with exact sourcePath identity (ACT 1 correction)",
+        "isAncestorOfMain": true
       }
     }
   },
@@ -58,27 +63,33 @@
     },
     "package6": {
       "name": "Expanded-View Behavior and Visual Consistency",
-      "status": "PLAN-0 complete — awaiting owner review of Q1-Q8",
+      "status": "ACT 1 accepted — ACT 2 first bounded consistency slice in progress",
       "plannedVersion": "0.8.x",
       "plan0Document": "docs/architecture/CONSISTENCY_PLAN_0_SURFACE_INVENTORY.md",
       "plan0Status": "delivered, docs-only, zero production changes",
-      "implementationAuthorized": false,
-      "nextStep": "owner review of PLAN-0 inventory and rulings on Q1-Q8, then first implementation ACT"
+      "implementationAuthorized": true,
+      "act1": {
+        "objective": "Projects Source filter — exact sourcePath identity matching, module-local state only",
+        "commit": "66e3b7a",
+        "closedAt": "2026-10-18",
+        "staticEvidence": "view 534/534, contract 434/434, consumer 163/163, save-integration 103/103, device-acceptance 74/74, mutation-anchor 164/164 PASS, git diff --check clean",
+        "browserEvidence": "owner physical checkpoint (Mme-test-new, 8 projects): filter options, exact-source filtering, clear/reset, empty-vs-filtered-empty, return/scroll preservation; Legacy: label confirmed as rendering fallback",
+        "packageDoc": "docs/packages/P6-CONSISTENCY.md"
+      },
+      "nextStep": "ACT 2: first bounded slice — Projects + Workspace Index exit/return semantics, scroll ownership, empty vs filtered-empty state presentation"
     }
   },
   "workflow": {
-    "planningMode": "PLAN-0 complete, PLAN stage only — no implementation until owner authorization",
-    "validationTier": "Tier 0 for PLAN-0 docs; Tier 1/2/3/4/M defer to implementation ACTs",
+    "planningMode": "PLAN-0 complete; owner-authorized implementation ACTs — bounded slices only (ACT 1 accepted 2026-10-18, ACT 2 in progress)",
+    "validationTier": "ACT 1 closure gate re-run green (Tier 1/2 + device suite); ACT 2 selects Tier 1/2 suites by changed owner + owner browser checkpoint",
     "prohibitedCommands": ["git reset", "git restore", "git clean", "git stash", "git commit --amend", "git push", "git checkout -b", "branch switching"],
     "protectedFiles": ["js/**", "css/**", "index.html", "sw.js"]
   },
   "nextActions": [
-    "Create knowledge system: AGENTS.md, project-state.json, docs/work/CURRENT.md, docs/validation/CURRENT_VALIDATION.md, docs/ROADMAP.md, docs/decisions/ADR-001..007",
-    "Consolidate old docs/ai-state/* into compatibility pointers or docs/archive/",
-    "Close PLAN-0 decisions Q1-Q8 with owner rulings",
-    "Authorize and execute first implementation ACT: Projects source-file filtering with session-level filter/scroll/return-context preservation",
-    "Run targeted validation and prepare browser checklist",
-    "Commit locally if repository is safe (do not push unless authorized)",
-    "Deliver final report and stop for owner browser acceptance"
+    "Commit ACT 1 closure (knowledge docs + docs/work/CURRENT.md) locally; owner executes push (main is ahead of origin/main)",
+    "Finish ACT 2 source inspection (Task Board overlay open/close, Workspace Index empty/filter states) and record proven inconsistencies",
+    "Implement first bounded ACT 2 consistency slice within current owners; run targeted validation",
+    "Owner browser checkpoint for ACT 2; update knowledge docs at ACT 2 boundary",
+    "Do NOT activate 0.8.x; no service-worker/version/cache changes; no persistent filter storage"
   ]
 }

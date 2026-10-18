@@ -11,12 +11,17 @@
 - **Target version:** 0.8.x
 - **Release activation:** NOT authorized
 - **Branch:** main
-- **HEAD:** 1905a86 (all refs synchronized: main, development, origin/main,
-  origin/development — rev-list 0/0)
-- **Working tree:** clean except untracked artifact `re` (do not touch)
+- **HEAD:** 66e3b7a (main 3 ahead of origin/main; development still at
+  1905a86 — push pending, owner executes push)
+- **Working tree:** ACT 1 closure knowledge-doc updates staged with
+  docs/work/CURRENT.md; untracked artifact `re` (do not touch)
 - **Active package:** Package 6 — Expanded-View Behavior and Visual Consistency
 - **PLAN-0:** complete (source-proven surface inventory delivered)
-- **Implementation:** NOT authorized — awaiting owner PLAN review and Q1–Q8 rulings
+- **ACT 1 (Projects Source filter):** accepted 2026-10-18 (commit 66e3b7a;
+  full static gate green; owner browser checkpoint passed)
+- **ACT 2:** first bounded consistency slice in progress (Projects +
+  Workspace Index exit/return semantics, scroll ownership, empty vs
+  filtered-empty presentation)
 
 ## Where the information now lives
 

@@ -7,11 +7,16 @@
 
 ## Current required test tier
 
-**Tier: PLAN-0 / Knowledge Consolidation — Tier 0 only.**
+**Tier: ACT 2 — targeted Tier 1/2 suites by changed owner + owner browser
+checkpoint (Tier D).**
 
-No production source files are touched. Validation is limited to:
-- `git diff --check` — clean
-- `node --check` on any touched JS/CJS — exit 0
+- ACT 1 closure gate (2026-10-18) re-run green: project-view 534/534,
+  contract 434/434, consumer 163/163, save-integration 103/103,
+  device-acceptance 74/74, mutation-anchor 164/164, `git diff --check` clean.
+- ACT 2 suite selection is fixed when the slice's changed owners are fixed
+  (see docs/validation/CURRENT_VALIDATION.md — "Selected suites for ACT 2").
+- Evidence discipline: static, browser and device evidence stay separately
+  labeled; browser claims require owner physical observation.
 
 ## Where the information now lives
 
