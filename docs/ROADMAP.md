@@ -16,7 +16,7 @@
 | Package 1 (post-release defects) | DORMANT; no reproduced defect |
 | Package 2 (Tasks) | CLOSED |
 | Package 5 (Managed Project Foundation) | CLOSED — 0.7.0 released, owner-accepted 2026-10-16 |
-| Package 6 (Expanded-View Behavior and Visual Consistency) | ACTIVE — ACT 1 (Projects Source filter) accepted 2026-10-18; ACT 2 first bounded consistency slice in progress |
+| Package 6 (Expanded-View Behavior and Visual Consistency) | ACTIVE on `development` — ACT 1 accepted; ACT 2 Slice 1 (Workspace Index return control + scroll preservation) accepted 2026-10-18; ACT 2 Slice 2 (inspection/return recovery alignment) active |
 
 ## Package order after Package 5
 

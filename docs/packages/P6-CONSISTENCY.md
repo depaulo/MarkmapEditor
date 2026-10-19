@@ -8,7 +8,8 @@
 
 - PLAN-0: complete (source-proven inventory, zero production changes)
 - ACT 1: complete and accepted (2026-10-18)
-- ACT 2: first bounded consistency slice — in progress
+- ACT 2 Slice 1: complete and accepted (owner browser checkpoint 2026-10-18)
+- ACT 2 Slice 2: Inspection and Return Recovery Alignment — active (on `development`)
 
 ## ACT 1 — Projects Source filter (ACCEPTED, commit 66e3b7a)
 
@@ -108,9 +109,10 @@ Static:
   structural guards clean
 - `git diff --check` clean
 
-Browser: owner checkpoint PENDING — Index close/reopen scroll, project-filter
-scroll stability, Return visible label + aria-label with a markup-bearing
-fileName.
+Browser: owner checkpoint ACCEPTED 2026-10-18 — project-filter scroll
+preservation passed; close/reopen scroll restoration passed; Return target
+remained correct; no unexpected Save or mutation observed; application
+remains at released version 0.7.0.
 
 ## Open owner questions (PLAN-0 Q1–Q8, still open)
 

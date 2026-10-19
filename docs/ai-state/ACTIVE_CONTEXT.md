@@ -19,9 +19,11 @@
 - **PLAN-0:** complete (source-proven surface inventory delivered)
 - **ACT 1 (Projects Source filter):** accepted 2026-10-18 (commit 66e3b7a;
   full static gate green; owner browser checkpoint passed)
-- **ACT 2 slice 1:** implemented 2026-10-18 — Workspace Index Return control
-  (real escaping + aria-label) and scroll preservation across rerenders and
-  close/reopen; static gate + Tier M green; owner browser checkpoint PENDING
+- **ACT 2 slice 1:** ACCEPTED 2026-10-18 (owner browser checkpoint passed:
+  filter-scroll, close/reopen scroll, Return target correct, no unexpected
+  Save; still 0.7.0). Commit 9d01638 + closure docs.
+- **Next:** ACT 2 Slice 2 (inspection/return recovery alignment) on
+  `development` after branch correction
 
 ## Where the information now lives
 

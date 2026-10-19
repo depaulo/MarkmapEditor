@@ -73,7 +73,7 @@ None required — Tier 0 only (`git diff --check`, docs readability).
 | `js/workspace/project-visual-adapter.js` | node --check | — | project-consumer, project-save-integration | yes — contract + consumer controls | owner apply checkpoint |
 | `css/workspace.css` | git diff --check | — | project-view (columns/grid) | no | owner visual checkpoint |
 
-## Selected suites for ACT 2 — slice 1 EXECUTED 2026-10-18 (browser checkpoint pending)
+## Selected suites for ACT 2 — slice 1 EXECUTED 2026-10-18, owner-accepted (browser checkpoint passed)
 
 Changed owners: `js/workspace/workspace-index-workspace.js`,
 `scripts/workspace-index-task-filter-validators.cjs` (W01–W08),
@@ -89,7 +89,7 @@ Changed owners: `js/workspace/workspace-index-workspace.js`,
 | `git diff --check` | clean |
 
 Task Board owners (`js/tasks/task-board.js`) NOT touched — overlay conversion
-not authorized. Owner browser checkpoint required before slice acceptance.
+not authorized. Owner browser checkpoint PASSED 2026-10-18; slice accepted.
 
 Aggregate commands:
 - `npm run validate:quick`

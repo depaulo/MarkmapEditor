@@ -8,8 +8,9 @@
 ## Current ACT status
 
 - **Package:** Package 6 — Expanded-View Behavior and Visual Consistency
-- **Stage:** ACT 2 — slice 1 IMPLEMENTED 2026-10-18 (Workspace Index Return
-  control + scroll preservation); awaiting owner browser checkpoint
+- **Stage:** ACT 2 — Slice 1 ACCEPTED 2026-10-18 (owner browser checkpoint
+  passed); Slice 2 (Inspection and Return Recovery Alignment) next, on
+  `development`
 - **Mission:** Projects + Workspace Index expanded-view behavioral
   consistency — exit/return semantics, scroll ownership, empty vs
   filtered-empty state presentation; implement only differences proven

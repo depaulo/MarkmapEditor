@@ -11,7 +11,7 @@
   },
   "release": {
     "releasedVersion": "0.7.0",
-    "targetVersion": "0.8.x",
+    "targetVersion": "0.8.0",
     "releaseActivationAuthorized": false,
     "versionFiles": [
       "js/release/release.js",
@@ -32,7 +32,7 @@
     "revListMainOriginMain": "4/0",
     "revListDevOriginDev": "0/0",
     "workingTreeClean": false,
-    "workingTreeNote": "ACT 2 slice 1 (source + validators + knowledge docs) staged for commit; push pending (owner executes push)",
+    "workingTreeNote": "Slice 1 acceptance closure commit follows on main; then development is fast-forwarded and Package 6 continues on development (push pending for owner-approved development push)",
     "untrackedArtifacts": ["re"],
     "untrackedArtifactAction": "do not touch",
     "commits": {
@@ -63,7 +63,7 @@
     },
     "package6": {
       "name": "Expanded-View Behavior and Visual Consistency",
-      "status": "ACT 1 accepted — ACT 2 first bounded consistency slice in progress",
+      "status": "ACT 2 Slice 1 accepted — Slice 2 (inspection/return recovery alignment) next, on development",
       "plannedVersion": "0.8.x",
       "plan0Document": "docs/architecture/CONSISTENCY_PLAN_0_SURFACE_INVENTORY.md",
       "plan0Status": "delivered, docs-only, zero production changes",
@@ -76,7 +76,7 @@
         "browserEvidence": "owner physical checkpoint (Mme-test-new, 8 projects): filter options, exact-source filtering, clear/reset, empty-vs-filtered-empty, return/scroll preservation; Legacy: label confirmed as rendering fallback",
         "packageDoc": "docs/packages/P6-CONSISTENCY.md"
       },
-      "nextStep": "ACT 2 slice 1 (Workspace Index return control + scroll preservation) implemented, static gate green — awaiting owner browser checkpoint; next slice candidates need owner rulings (Q1 visible return grammar, B2 inspection recovery)"
+      "nextStep": "ACT 2 Slice 2: inspection and return recovery alignment (B2), on development; owner browser checkpoint for Slice 1 ACCEPTED 2026-10-18"
     }
   },
   "workflow": {

@@ -18,7 +18,8 @@ checkpoint (Tier D).**
 - ACT 2 slice 1 executed 2026-10-18: workspace-index-task-filter 64/64
   (W01–W08), workspace-index-notes 58/58, project suites 534/434/163/103/74,
   mutation anchors 167/167, Tier M 13/13 in a disposable copy,
-  `git diff --check` clean. Owner browser checkpoint pending.
+  `git diff --check` clean. Owner browser checkpoint PASSED 2026-10-18;
+  slice accepted.
 - Evidence discipline: static, browser and device evidence stay separately
   labeled; browser claims require owner physical observation.
 

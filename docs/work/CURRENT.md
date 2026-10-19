@@ -4,10 +4,10 @@
 
 - **Released version:** 0.7.0
 - **Target version:** 0.8.0
-- **Branch:** main, HEAD = `fbe08a5` (ACT 1 closure docs; 4 ahead of origin/main, push pending)
+- **Branch:** main, HEAD = `9d01638` (5 ahead of origin/main; Package 6 work moves to `development` next)
 - **Working tree:** clean except untracked artifact `re` (do not touch)
 - **Package 5:** CLOSED (owner laptop acceptance 2026-10-16)
-- **Package 6:** Expanded-View Behavior and Visual Consistency — ACT 1 CLOSED, ACT 2 active
+- **Package 6:** Expanded-View Behavior and Visual Consistency — ACT 1 CLOSED, ACT 2 Slice 1 ACCEPTED, Slice 2 next (on `development`)
 
 ## Package 6 ACT 1 Closure
 
@@ -85,7 +85,7 @@ Recorded, NOT implemented (owner ruling / separate ACT): visible return-label
 grammar (Q1), inspection-recovery asymmetry (B2), overlay exit grammar (E1),
 filter persistence (F1), copy divergences (Q5), Escape semantics.
 
-## Authorized Implementation — slice 1 (IMPLEMENTED, awaiting owner browser checkpoint)
+## Authorized Implementation — slice 1 (ACCEPTED)
 
 `js/workspace/workspace-index-workspace.js` only:
 
@@ -98,7 +98,7 @@ filter persistence (F1), copy divergences (Q5), Escape semantics.
   `refresh()`, and close/reopen (`deactivate` captures, `activate` restores
   while hidden — raw offset, browser clamps at paint).
 
-Validation (2026-10-18):
+Static evidence (2026-10-18):
 
 - workspace-index task-filter 64/64 (new W01–W08); notes 58/58;
   project-view 534/534; contract 434/434; consumer 163/163;
@@ -108,8 +108,41 @@ Validation (2026-10-18):
   bit, including new F11 (aria-label), F12 (escape no-op), F13 (scroll
   restore); byte-identical restores; baseline green after every restore.
 
-Owner browser checkpoint PENDING: Index close/reopen scroll, project-filter
-scroll stability, Return label/aria-label with a markup-bearing fileName.
+### P6 ACT 2 Slice 1 — closure record
+
+Status: accepted (owner browser checkpoint 2026-10-18)
+
+Implemented:
+
+- Workspace Index Return-label escaping;
+- Return button accessible label;
+- project-filter rerender scroll preservation;
+- close/reopen scroll restoration.
+
+Owner browser evidence:
+
+- project-filter scroll preservation passed;
+- close/reopen scroll restoration passed;
+- Return target remained correct;
+- no unexpected Save or mutation observed;
+- application remains at released version 0.7.0.
+
+Static evidence:
+
+- Workspace Index task/filter suite passed (64/64);
+- Notes suite passed (58/58);
+- full Projects profile passed (534/434/163/103/74);
+- mutation-anchor audit passed (167/167);
+- isolated Tier M controls passed (13/13, disposable copy);
+- `git diff --check` passed.
+
+Deferred (owner-ruled, later slices or rulings):
+
+- Return-label grammar normalization (PLAN-0 Q1);
+- inspection-recovery alignment (B2 — selected for Slice 2);
+- Task Board overlay exit grammar (E1);
+- broader filter-persistence alignment (F1/Q4);
+- state-copy normalization (Q5).
 
 ## Protected Scope
 
