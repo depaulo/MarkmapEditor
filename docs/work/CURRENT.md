@@ -8,7 +8,7 @@
 - Branch: development
 - Released baseline: 0.7.0
 - Target release: 0.8.0
-- Status: active
+- Status: accepted
 
 ## Objective
 
@@ -206,3 +206,4 @@ identity; no basename fallback exists on either surface.
   state-copy normalization (Q5).
 - **P6 ACT 1 — accepted** (Projects Source filter, exact `sourcePath`):
   see `docs/packages/P6-CONSISTENCY.md`.
+- **P6 ACT 2 Slice 2 — Status: accepted** (owner browser checkpoint 2026-10-19): Inspection and Return Recovery Alignment. Static gate: project-view 536/536; inspection validators 15/15; workspace-index task/filter 64/64; `git diff --check` clean. Browser gate: normal Project source inspection PASS; Return to Projects PASS; Project Source/Search/filter restoration PASS; Project scroll restoration PASS; normal Workspace Index source inspection PASS; Return to Workspace Index PASS; Index Project and Task filter restoration PASS; Index scroll restoration PASS; cancellation recoverable PASS; recovery controls not duplicated or stranded PASS; Task Board overlay regression PASS; no unexpected Save PASS; no unexpected source mutation PASS. In-session transient state preserved; full browser refresh may reset transient state; no persistent browser storage. Released identity remains 0.7.0. No persistent storage, no service-worker/version/cache changes.

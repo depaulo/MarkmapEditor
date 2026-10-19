@@ -1,6 +1,6 @@
 {
   "schema": "markmap-editor-project-state",
-  "generatedAt": "2026-10-18",
+  "generatedAt": "2026-10-19",
   "project": {
     "name": "MarkmapEditor",
     "description": "Single File Markmap Editor",
@@ -23,12 +23,12 @@
   },
   "git": {
     "currentBranch": "development",
-    "head": "d07435b5bf8aded5fe96f1fe9768247df71124a9",
+    "head": "85feeace8af1b5dfb8d0955235902c3387fb35d6",
     "main": "d07435b5bf8aded5fe96f1fe9768247df71124a9",
-    "development": "d07435b5bf8aded5fe96f1fe9768247df71124a9",
+    "development": "85feeace8af1b5dfb8d0955235902c3387fb35d6",
     "originMain": "1905a86058b66908ce9d9eb38e8dcef458302d26",
-    "originDevelopment": "d07435b5bf8aded5fe96f1fe9768247df71124a9",
-    "revListMainDevelopment": "0/0",
+    "originDevelopment": "85feeace8af1b5dfb8d0955235902c3387fb35d6",
+    "revListMainDevelopment": "2/0",
     "revListMainOriginMain": "6/0",
     "revListDevOriginDev": "0/0",
     "workingTreeClean": true,
@@ -58,6 +58,14 @@
       "66e3b7a": {
         "subject": "feat(projects): add rendered Source filter with exact sourcePath identity (ACT 1 correction)",
         "isAncestorOfMain": true
+      },
+      "78a1528": {
+        "subject": "feat(consistency): align source inspection and return recovery",
+        "isAncestorOfMain": false
+      },
+      "85feeac": {
+        "subject": "docs(package6): record inspection recovery slice",
+        "isAncestorOfMain": false
       }
     }
   },
@@ -70,7 +78,7 @@
     },
     "package6": {
       "name": "Expanded-View Behavior and Visual Consistency",
-      "status": "ACT 2 Slice 1 accepted — Slice 2 (Inspection and Return Recovery Alignment) ACTIVE on development",
+      "status": "ACT 2 Slice 2 accepted — Inspection and Return Recovery Alignment complete on development; closure commit pending",
       "plannedVersion": "0.8.x",
       "plan0Document": "docs/architecture/CONSISTENCY_PLAN_0_SURFACE_INVENTORY.md",
       "plan0Status": "delivered, docs-only, zero production changes",
@@ -83,7 +91,7 @@
         "browserEvidence": "owner physical checkpoint (Mme-test-new, 8 projects): filter options, exact-source filtering, clear/reset, empty-vs-filtered-empty, return/scroll preservation; Legacy: label confirmed as rendering fallback",
         "packageDoc": "docs/packages/P6-CONSISTENCY.md"
       },
-      "nextStep": "ACT 2 Slice 2 implementation: B2 corrections (Index recovery control, no-strand failure handling, session filter retention; Projects arm-on-every-post-switch-outcome) — pre-edit record written to docs/work/CURRENT.md; browser checkpoint pending after static gate"
+      "nextStep": "ACT 2 Slice 2 closure commit (docs only) then ACT 2 Slice 3 — Overlay Exit, Transient State, and State-Copy Consistency (E1, F1, Q5) on development"
     }
   },
   "workflow": {
@@ -93,10 +101,8 @@
     "protectedFiles": ["js/**", "css/**", "index.html", "sw.js"]
   },
   "nextActions": [
-    "Implement ACT 2 Slice 2 corrections (workspace-index-workspace.js, projects-view.js, css, validators) per docs/work/CURRENT.md pre-edit record",
-    "Run selected suites + Tier M in disposable copy; secondary consistency inspection",
-    "Owner browser checkpoint for Slice 2 (checklist in docs/work/CURRENT.md)",
-    "Push accepted static work to origin/development only; never push main",
+    "Create Slice 2 closure commit (docs only) on development; push to origin/development only",
+    "Begin ACT 2 Slice 3 source inspection (E1, F1, Q5): task-board.js, workspace-index-workspace.js, projects-view.js, css/workspace.css",
     "Do NOT activate 0.8.0; no service-worker/version/cache changes; no persistent filter storage"
   ]
 }

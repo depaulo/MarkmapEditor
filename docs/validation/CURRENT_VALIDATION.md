@@ -109,6 +109,12 @@ behavior, responsive usability, File System Access prompts, Service Worker
 activation, Android/DeX usability. Browser and device claims require physically
 observed evidence, labeled as such.
 
+## ACT 2 Slice 2 — ACCEPTED (owner browser checkpoint 2026-10-19)
+
+Static gate: project-view 536/536 PASS; inspection validators 15/15 PASS; workspace-index task/filter 64/64 PASS; mutation-anchor-audit PASS; `git diff --check` clean.
+
+Browser gate: normal Project source inspection PASS; Return to Projects PASS; Project Source/Search/filter restoration PASS; Project scroll restoration PASS; normal Workspace Index source inspection PASS; Return to Workspace Index PASS; Index Project and Task filter restoration PASS; Index scroll restoration PASS; cancellation recoverable PASS; recovery controls not duplicated or stranded PASS; Task Board overlay regression PASS; no unexpected Save PASS; no unexpected source mutation PASS. Same-session transient state preserved; full browser refresh may reset transient state; no persistent browser storage. Released identity remains 0.7.0.
+
 ## Pending owner checkpoints
 
 None at this stage.

@@ -10,7 +10,7 @@
 - PLAN-0: complete (source-proven inventory, zero production changes)
 - ACT 1: complete and accepted (2026-10-18)
 - ACT 2 Slice 1: complete and accepted (owner browser checkpoint 2026-10-18)
-- ACT 2 Slice 2: Inspection and Return Recovery Alignment — active (on `development`)
+- ACT 2 Slice 2: Inspection and Return Recovery Alignment — complete and accepted (on `development`)
 
 ## ACT 1 — Projects Source filter (ACCEPTED, commit 66e3b7a)
 
