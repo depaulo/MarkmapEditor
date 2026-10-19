@@ -63,6 +63,15 @@
   let lastInvoker = null;
   let mutationInProgress = false;
 
+  // ---- Module-local filter state (P6 ACT 2 Slice 3, F1 correction) ----
+  // Replaces localStorage persistence with module-local only, matching
+  // Projects and Workspace Index filter-state contracts. No persistent
+  // browser storage per P6 policy.
+  let storedDoneWindow = DONE_WINDOW_DEFAULT;
+  let storedPriorityFilter = PRIORITY_FILTER_DEFAULT;
+  let storedSort = SORT_DEFAULT;
+  let storedSourceFilter = SOURCE_FILTER_DEFAULT;
+
   // ---- Small helpers ----
 
   function safeLog(msg) {
@@ -161,8 +170,7 @@
 
   function doneWindowFromStored() {
     try {
-      const raw = localStorage.getItem(DONE_WINDOW_KEY);
-      return doneWindowDefault(raw);
+      return doneWindowDefault(storedDoneWindow);
     } catch {
       return DONE_WINDOW_DEFAULT;
     }
@@ -170,12 +178,7 @@
 
   function setStoredDoneWindow(value) {
     if (!isValidDoneWindow(value)) return;
-
-    try {
-      localStorage.setItem(DONE_WINDOW_KEY, String(value));
-    } catch {
-      // Storage may be unavailable or blocked.
-    }
+    storedDoneWindow = String(value);
   }
 
   // ---- Priority filter preference (Board-owned presentation) ----
@@ -191,7 +194,7 @@
 
   function getStoredPriorityFilter() {
     try {
-      return normalizePriorityFilterValue(localStorage.getItem(PRIORITY_FILTER_KEY));
+      return normalizePriorityFilterValue(storedPriorityFilter);
     } catch {
       return PRIORITY_FILTER_DEFAULT;
     }
@@ -199,11 +202,7 @@
 
   function setStoredPriorityFilter(value) {
     const normalized = normalizePriorityFilterValue(value);
-    try {
-      localStorage.setItem(PRIORITY_FILTER_KEY, normalized);
-    } catch {
-      // Storage may be unavailable or blocked; filtering continues unpersisted.
-    }
+    storedPriorityFilter = normalized;
     return normalized;
   }
 
@@ -232,7 +231,7 @@
 
   function getStoredSort() {
     try {
-      return normalizeSortValue(localStorage.getItem(SORT_KEY));
+      return normalizeSortValue(storedSort);
     } catch {
       return SORT_DEFAULT;
     }
@@ -240,11 +239,7 @@
 
   function setStoredSort(value) {
     const normalized = normalizeSortValue(value);
-    try {
-      localStorage.setItem(SORT_KEY, normalized);
-    } catch {
-      // Storage may be unavailable or blocked; sorting continues unpersisted.
-    }
+    storedSort = normalized;
     return normalized;
   }
 
@@ -298,7 +293,7 @@
 
   function getStoredSourceFilter(availablePaths) {
     try {
-      return normalizeSourceFilterValue(localStorage.getItem(SOURCE_FILTER_KEY), availablePaths);
+      return normalizeSourceFilterValue(storedSourceFilter, availablePaths);
     } catch {
       return SOURCE_FILTER_DEFAULT;
     }
@@ -306,11 +301,7 @@
 
   function setStoredSourceFilter(value, availablePaths) {
     const normalized = normalizeSourceFilterValue(value, availablePaths);
-    try {
-      localStorage.setItem(SOURCE_FILTER_KEY, normalized);
-    } catch {
-      // Storage may be unavailable or blocked; filtering continues unpersisted.
-    }
+    storedSourceFilter = normalized;
     return normalized;
   }
 
