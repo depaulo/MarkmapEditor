@@ -3,20 +3,86 @@
 ## Identity
 
 - Package: P6
-- ACT: ACT 2 Slice 3
-- Name: Overlay Exit, Transient State, and State-Copy Consistency
+- ACT: ACT 2 complete (Slices 1–3 accepted); ACT 3 PLAN-0 active
+- Name: Sidebar Information Architecture
 - Branch: development
 - Released baseline: 0.7.0
 - Target release: 0.8.0
-- Status: accepted
+- Status: PLAN-0 (source inspection only; implementation not authorized)
 
 ## Objective
 
-Correct only source-proven inconsistencies in Task Board overlay exit,
-transient surface state, and empty/failure presentation. Task Board overlay
-exit grammar (E1) verified conforming; transient filter/state lifecycle (F1)
-inspected for persistence policy alignment; state-copy presentation (Q5)
-inspected for empty vs filtered-empty distinction.
+ACT 2 is complete. ACT 3 PLAN-0 is active: Sidebar Information Architecture source inspection only. No runtime implementation is authorized during PLAN-0.
+
+## ACT 2 — Completion Record
+
+ACT 2 Slice 1 — Workspace Index return control + scroll preservation: ACCEPTED (commit 9d01638).
+
+ACT 2 Slice 2 — Inspection and Return Recovery Alignment: ACCEPTED (commits 78a1528 + 85feeac + 13e9b88).
+
+ACT 2 Slice 3 — Overlay Exit, Transient State, and State-Copy Consistency: ACCEPTED (commits 484fd94 + 8431188 + 9399cae).
+
+- Slice 3 implemented: Task Board localStorage filter persistence replaced with module-local state.
+- Slice 3 inspection-only: Task Board exit grammar conforming; empty vs filtered-empty semantics conforming.
+- ACT 2 browser checkpoints passed for all slices.
+- Released identity remains 0.7.0.
+
+## ACT 3 PLAN-0 — Sidebar Information Architecture
+
+### Objective
+
+Perform source inspection only. Do not reorganize Sidebar runtime in PLAN-0. Identify current Sidebar owners and classify existing content into:
+
+- Current Document
+- File Knowledge
+- Workspace Knowledge
+
+Determine the smallest grayfield implementation plan.
+
+### Hypothesis (to validate against source)
+
+**Current Document** — top-level context for the active document (document identity, file name/path, Edit/Read control, source access, Quick Actions, dirty status, entry points to Full Editor/Full Read/Full Markmap).
+
+**File Knowledge** — document-scoped information only (Open Tasks, Done Tasks, Links In, Links Out, related Projects, document-scoped metadata). No Reminders, Highlights, or new relationships.
+
+**Workspace Knowledge** — Workspace-scoped navigation (Search, Notes, Knowledge, Tasks, Projects, Index, Reports, Archive). Search remains Workspace-scoped; do not move Search into Current Document or File Knowledge.
+
+### Accepted Owner Ruling — Header/Badge Grammar
+
+Panel headers follow this logical order:
+
+1. surface or disclosure identity;
+2. title;
+3. contextual action;
+4. Help;
+5. count or status badge.
+
+Badge normally occupies the final logical header position. Do not duplicate the same count immediately in the body. Collapsed panels retain title and useful count.
+
+### Accepted Owner Ruling — Responsive Contract
+
+Essential controls remain available; no unexpected horizontal overflow; filters and actions may wrap; titles, badges and disclosure remain understandable; Sidebar remains usable at narrow width. Do not implement responsive changes during PLAN-0.
+
+### Protected Scope (ACT 3 PLAN-0)
+
+No runtime Sidebar reorganization; no Edit/Read changes; no Document Surface changes; no Markmap mode changes; no top-bar changes; no Reports redesign; no Compact View; no Task/Project domain changes; no generic panel/surface framework; no persistent layout storage changes; no release/version/cache changes.
+
+### Required Validation
+
+- `git diff --check`
+- every referenced source file exists
+- every named owner is source-proven
+- layer classification is complete; no panel classified in two primary layers without explanation
+- Search is Workspace-scoped; Reports is protected
+- ACT 4 boundaries are explicit
+- no runtime file changed; no version/cache file changed
+
+### Stop Conditions
+
+- Sidebar runtime reorganization would be required
+- Edit/Read or Document Surface changes would be needed
+- persistent layout storage changes would be required
+- release/version/cache changes would be required
 
 ## Source-Proven Findings (ACT 2 Slice 3 inspection)
 
@@ -139,8 +205,8 @@ Release boundary:
 
 ## Current Phase
 
-Package 6 consolidation and remaining-scope assessment. No new active
-implementation slice assigned after Slice 3.
+ACT 3 PLAN-0 active (Sidebar Information Architecture — source inspection
+only). Status: awaiting owner review. Implementation: not authorized.
 
 ## Source-Proven Asymmetry (B2) — live-source comparison, 2026-10-18
 

@@ -223,36 +223,179 @@ module owns its own state.
 post-refresh reset passed; no unexpected Save or mutation observed. Released identity
 remains 0.7.0.
 
-## Package 6 Remaining-Scope Assessment
+## Package 6 Remaining-Scope Assessment — CORRECTED
 
-Documentation and source inspection only — no runtime source changes.
+The previous conclusion "Package 6 implementation complete" is rejected.
+Package 6 ACT 2 implementation is complete. Package 6 continues with ACT 3
+Sidebar Information Architecture.
 
-| Topic | Classification | Evidence | Additional implementation needed | Recommended owner action |
+## ACT Sequence (accepted)
+
+| ACT | Name | Status |
+|---|---|---|
+| ACT 1 | Projects Source filtering | ACCEPTED (commit 66e3b7a) |
+| ACT 2 | Existing Expanded View behavior and state consistency | ACCEPTED (Slices 1–3) |
+| ACT 3 | Sidebar Information Architecture | PLAN-0 active |
+| ACT 4 | Current Document, Edit/Read and Document Surface | planned |
+| ACT 5 | Cross-surface visual, responsive and accessibility consistency | planned |
+| ACT 6 | Package closure and 0.8.0 release | not authorized |
+
+**Package 6 ACT 2 implementation complete.**
+**Package 6 continues with ACT 3 Sidebar Information Architecture (PLAN-0 active).**
+
+## ACT 3 PLAN-0 — Sidebar Information Architecture
+
+### Objective
+
+Perform source inspection only. Do not reorganize Sidebar runtime in PLAN-0.
+Identify current Sidebar owners and classify existing content into:
+
+- Current Document
+- File Knowledge
+- Workspace Knowledge
+
+Determine the smallest grayfield implementation plan.
+
+### Sidebar Ownership Matrix
+
+| Panel / Area | Container Owner | Render Owner | State Owner | Mutation Owner | Save Owner | Scope | Ordering | Disclosure Owner | Header Owner | Badge Owner | Responsive CSS Owner | Proposed Layer | Move Required | Runtime Risk | Relevant Validators |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Header / workspace creation | `index.html` + `js/main.js` | `index.html` | none | none (creation actions only) | none | Workspace | 1 | `#btnWorkspaceCollapse` | `#workspaceTitle` ("Notes Workspace") | Help: none | none | `css/workspace.css` | Open Workspace, Today, New Note | `WORKSPACE_STATE.rootHandle` | Workspace Knowledge | no | low | workspace-sidebar-visual |
+| Search | `js/main.js` (`ensureWorkspaceSearchPanel`, `#workspaceSearchPanel`) | `js/main.js` | search input value (ephemeral) | none | none | Workspace | after Header, before Active | none (label + input, no disclosure) | `#workspaceSearchLabel` ("Search") | Help: none (label-input pattern) | `#workspaceSearchResults` (result count implicit) | `css/workspace.css` | typing + result selection | `WORKSPACE_INDEX_STATE`, `openWorkspaceFile` | Workspace Knowledge | no | low | workspace-search |
+| Active File / Current Document | `js/main.js` (`ensureWorkspaceActivePanel`, `renderWorkspaceActivePanel`) | `js/main.js` | `WORKSPACE_STATE.activeFile` | `applyActiveNoteMetadata()` / `patchNoteMetadata()` | user-controlled Save | document | after Header, before Index | `workspacePanelHeaderButton` `data-workspace-panel-toggle="active"` | `workspaceActiveTitle` | `#workspaceActiveBadge` | `css/workspace.css` | Current Document | no | low | current-document-scope |
+| Open Tasks / Task Review | `index.html` (`#workspaceTasksPanel`) + `js/workspace/task-review.js` | `js/workspace/task-review.js` (`renderTaskReview`, upgrades panel in place) | `filterState` (task-review.js) + `WORKSPACE_STATE.activeFile` (document scope) | lifecycle via `MME_TASK_LIFECYCLE` (task-review.js:841+) | user-controlled Save | document | after Related | `data-workspace-panel-toggle="tasks"` (`aria-expanded="false"`) | `workspaceTasksTitle` ("Open Tasks") | contextual Help via `attachContextualHelpButton` (`journal-tasks`, main.js:3698) | `#workspaceTasksBadge` ("N open") | `css/workspace.css` | open-source, priority edit, lifecycle actions | `WORKSPACE_STATE.activeFile`, `WORKSPACE_INDEX_STATE`, `findWorkspaceFileByPath`, `openWorkspaceFile` | File Knowledge | no | medium | workspace-task-contract, workspace-task-consumers |
+| Related / Links In | `index.html` (`#workspaceRelatedPanel`) | `js/main.js` (`ensureWorkspaceRelatedPanel`) | none (derived from active file) | none | none | document | after Tasks, before Notes | `data-workspace-panel-toggle="related"` | `workspaceRelatedTitle` | none | `css/workspace.css` | File Knowledge | no | low | wiki-link-relationship |
+| Notes | `index.html` (`#workspaceJournalsPanel`) | `js/workspace/workspace-sidebar.js` (inert/legacy) | none | none | none | Workspace | after Tasks | `data-workspace-panel-toggle="journals"` | `workspaceJournalsTitle` | `#workspaceJournalsBadge` | `css/workspace.css` | Workspace Knowledge | no | low | workspace-index-notes |
+| Knowledge | `index.html` (`#workspaceConceptsPanel`) | `js/workspace/workspace-sidebar.js` (inert/legacy) | none | none | none | Workspace | after Notes | `data-workspace-panel-toggle="concepts"` | `workspaceConceptsTitle` | `#workspaceConceptsBadge` | `css/workspace.css` | Workspace Knowledge | no | low | workspace-index-notes |
+| Archive | `index.html` (`#workspaceArchivePanel`) | `js/main.js` (`ensureWorkspaceArchivePanel`) | Workspace metadata | metadata writer (Archive/Restore action row) | user-controlled Save | Workspace | after Knowledge | `data-workspace-panel-toggle="archive"` | `workspaceArchiveTitle` | `#workspaceArchiveBadge` | `css/workspace.css` | Workspace Knowledge | no | low | package5 contract |
+| Tags | `js/main.js` (`#workspaceTagsPanel`, dynamic) | `js/main.js` | `__workspaceActiveTag` (main.js) | tag toggle (main.js) | none | document | after Index | `workspacePanelHeaderButton` | header title | badge inline | `css/workspace.css` | File Knowledge | no | low | workspace-task-contract |
+| Workspace Index panel | `js/main.js` (`ensureWorkspaceIndexPanel`) | `js/main.js` | `WORKSPACE_INDEX_STATE` | none (read-only) | none | Workspace | after Tags | `data-workspace-panel-toggle="index"` | `workspaceIndexTitle` | `#workspaceIndexBadge` | `css/workspace.css` | Workspace Knowledge | no | low | workspace-index-* |
+| Workspace Index full view | `js/workspace/workspace-index-workspace.js` | `js/workspace/workspace-index-workspace.js` | module-local filters | none | none | Workspace | routed Host | `data-workspace-panel-toggle` | Return row | Return row | `css/workspace.css` | Workspace Knowledge | no | low | workspace-index-inspection, workspace-index-task-filter |
+| Projects panel | `js/main.js` (`#workspaceProjectsPanel`, dynamic) | `js/main.js` | none | none | none | Workspace | toggleable | `data-workspace-panel-toggle="projects"` | header title | badge inline | `css/workspace.css` | Workspace Knowledge | no | low | project-view |
+| Reports panel | `js/main.js` (`#workspaceReportPanel`, dynamic) | `js/report/report-panel.js` | Report state | none | none | Workspace | toggleable | `data-workspace-panel-toggle="report"` | header title | badge inline | `css/report/` | Outside Sidebar scope | no | low | report-panel |
+| Resize handle | `index.html` (`#workspaceSidebarResizeHandle`) | `index.html` | none | none | none | Workspace | last | none | none | none | `css/workspace.css` | Outside Sidebar scope | no | low | visual |
+| Navigation controls | `js/workspace/workspace-sidebar.js` (`renderNavigationControls`) | `js/workspace/workspace-sidebar.js` | history engine | none | none | Workspace | footer | none | none | none | `css/workspace.css` | Outside Sidebar scope | no | low | visual |
+
+### Layer Classification
+
+**Current Document** (document-scoped):
+- Active File / Current Document panel (`js/main.js`, `WORKSPACE_STATE.activeFile`)
+- Open Tasks / Task Review (`js/workspace/task-review.js`, document-scoped via `filePath`)
+- Related / Links In (`js/main.js`, derived from active file)
+- Tags (`js/main.js`, `__workspaceActiveTag`)
+
+**File Knowledge** (document-scoped):
+- (Open Tasks, Related, Tags as above — no additional File Knowledge panels identified)
+
+**Workspace Knowledge** (Workspace-scoped):
+- Header / workspace creation area
+- Notes panel (`js/workspace/workspace-sidebar.js`, inert/legacy)
+- Knowledge panel (`js/workspace/workspace-sidebar.js`, inert/legacy)
+- Archive panel (`js/main.js`, metadata writer)
+- Workspace Index panel + full view (`js/main.js` + `workspace-index-workspace.js`)
+- Projects panel (`js/main.js`)
+- Reports panel (`js/report/report-panel.js` — protected, unchanged)
+
+**Outside Sidebar scope:**
+- Resize handle
+- Navigation controls
+
+### Mixed-scope findings
+
+None identified — each panel has a single clear primary scope.
+
+### Active File / Current Document analysis
+
+1. Does Active File already own document identity? **Yes** — `WORKSPACE_STATE.activeFile` with `path`, `name`, `handle`.
+2. Does it already own source access? **Yes** — active file handle provides source access.
+3. Which Quick Actions live there? **Metadata actions** (Pin, Unpin, Promote to Knowledge, Archive) via `applyActiveNoteMetadata()`.
+4. Do Quick Actions trigger the accepted one-save owner? **Yes** — metadata patches the live buffer and marks dirty; Save is user-controlled.
+5. Where does Edit/Read currently live? **Editor overlay controls** (`index.html` `#editorBtnEditToggle`, `js/main.js` mode ownership).
+6. Who owns the selected mode? **`js/main.js`** — mode state in `WORKSPACE_STATE`/view-layout.
+7. Can Edit/Read be moved visually without moving its state owner? **Yes** — visual relocation in Sidebar does not require state owner change.
+8. Can the area remain visible while secondary details collapse? **Yes** — `workspacePanelHeaderButton` with `aria-expanded` supports collapse.
+9. What happens with no active file? **`workspaceActiveEmpty`: "No active workspace file"** — panel hidden when no workspace.
+10. What happens with an unwritable file? **`describeNoteActionTarget()` returns ineligible** with `no-active-note` / `not-a-workspace-note` / `report-active`.
+11. What happens with a dirty file? **Dirty state tracked on buffer; Save is user-controlled.**
+12. What happens after switching Workspace context? **`WORKSPACE_STATE.activeFile = null`** (line 5248).
+13. Would adding Markmap to the same control overload the mode model? **Potentially** — Markmap is a separate mode; belongs to ACT 4.
+14. ACT 3 vs ACT 4 boundary: ACT 3 = structural placement/placeholder only; ACT 4 = functional Edit/Read control, mode state ownership.
+
+### Help owner / Action set / Dependencies (spec §7 companion — fields not in the wide table)
+
+| Panel / Area | Help owner | Current action set | Dependencies | Accessible labels |
 |---|---|---|---|---|
-| Projects Source filtering | COMPLETE | ACT 1 closure (534/534 + browser checkpoint) | None | None |
-| exact source identity | COMPLETE | ACT 1 exact-match `sourcePath` contract | None | None |
-| filter composition | COMPLETE | Module-local filter state across all three surfaces | None | None |
-| same-session transient state | COMPLETE | Slice 3 F1 correction; Slice 1/ACT 1 preservation | None | None |
-| Workspace Index scroll restoration | COMPLETE | Slice 1 scroll preservation (clamp grammar) | None | None |
-| Projects inspection and return | COMPLETE | Slice 2 Return control + scroll preservation | None | None |
-| Workspace Index inspection and return | COMPLETE | Slice 2 Return to Index control + rollback | None | None |
-| cancellation and failure recovery | COMPLETE | Slice 2 distinct cancel/failure toasts + rollback | None | None |
-| Task Board overlay lifecycle | COMPLETE | E1 inspection — overlay stays modal; Close/Escape conform | None | None |
-| Task Board transient filter state | COMPLETE | Slice 3 F1 correction — module-local state | None | None |
-| empty vs filtered-empty semantics | COMPLETE | Q5 inspection — Projects "No Projects match the current filters." | None | None |
-| unavailable and failure semantics | COMPLETE | Slice 2 source-unavailable/failure distinct from empty | None | None |
-| header/action/help/badge grammar | NO CHANGE REQUIRED | PLAN-0 H1/H2/H3 recorded as intentional divergence | None | Owner ruling if convergence desired |
-| disclosure behavior | DEFERRED BY DESIGN | PLAN-0 Q8 — coexisting grammars retained | None | Owner ruling if consolidation desired |
-| accessibility | COMPLETE | aria-labels match visible text on Return/Close controls | None | None |
-| responsive behavior | NO CHANGE REQUIRED | Per-surface strategies documented in PLAN-0 R1 | None | Owner ruling if shared contract desired |
-| Current Document evaluation | NO CHANGE REQUIRED | Outside Package 6 scope (pane system) | None | None |
-| File Knowledge vs Workspace Knowledge boundaries | NO CHANGE REQUIRED | Outside Package 6 scope | None | None |
-| Search remaining Workspace-scoped | NO CHANGE REQUIRED | Outside Package 6 scope | None | None |
-| Edit and Read as modes of one Document Surface | NO CHANGE REQUIRED | Outside Package 6 scope | None | None |
-| Task Board intentional overlay exception | COMPLETE | E1 — overlay stays modal, not routed | None | None |
-| generic-framework prohibition | COMPLETE | No generic expanded-view framework introduced | None | None |
-| Reports and future Package 7 protection | DEFERRED BY DESIGN | Reports runtime untouched; Package 7 not started | None | None |
+| Header / workspace creation | none | Open Workspace, Today, New Note | `WORKSPACE_STATE.rootHandle` | `title`/`aria-label` on buttons |
+| Search | none (label-input pattern) | typing + result selection | `WORKSPACE_INDEX_STATE`, `openWorkspaceFile` | `<label for="workspaceSearchInput">` |
+| Active File / Current Document | TBD (Help alignment is ACT 5) | Pin/Unpin, Add/Remove Knowledge, Archive/Restore | `WORKSPACE_STATE.activeFile`, live buffer, `patchNoteMetadata()` | `aria-expanded`; `#workspaceActiveBadge` status |
+| Open Tasks / Task Review | `attachContextualHelpButton` (`journal-tasks`, main.js:3698) | open-source, priority edit, lifecycle actions | `WORKSPACE_STATE.activeFile`, `WORKSPACE_INDEX_STATE` | `aria-expanded="false"`; `#workspaceTasksBadge` |
+| Related / Links In | `attachContextualHelpButton` (`journal-links`, main.js:3702) | link navigation | active file derivation | disclosure `aria-expanded` |
+| Notes | none (legacy inert — ACT 5 decides) | none (inert) | none (nothing populates journals) | disclosure `aria-expanded` |
+| Knowledge | none (legacy inert — ACT 5 decides) | none (inert) | none (nothing populates concepts) | disclosure `aria-expanded` |
+| Archive | TBD (ACT 5) | Archive/Restore via Active action row | metadata writer, live buffer | disclosure `aria-expanded`; badge |
+| Tags | none (ACT 5 decides) | tag toggle → filtered results | `WORKSPACE_INDEX_STATE.tags`, `__workspaceActiveTag` | disclosure `aria-expanded` |
+| Workspace Index panel | TBD (ACT 5) | open Index full view | `WORKSPACE_INDEX_STATE` | disclosure `aria-expanded`; badge |
+| Workspace Index full view | TBD (ACT 5) | Return row, filters | module-local filters, host route | Return row labels |
+| Projects panel | `attachContextualHelpButton` (`journal-projects`, main.js:3694) | open full Index (`open-index`) | `WORKSPACE_INDEX_STATE.projects` | `aria-expanded="false"`; badge |
+| Reports panel | `attachContextualHelpButton` (`journal-reports`, main.js:3690) — protected | report actions (unchanged) | Report state | report-panel labels |
+| Resize handle | none | drag-resize | `#workspaceSidebar` width var | `aria-hidden` (decorative) |
+| Navigation controls | none | Back/Forward | history engine | `aria-label` Back/Forward |
 
-**Package 6 implementation outcome:** All required behavior accepted. Remaining items
-are documented directions, future evaluations, or deliberately deferred work — no
-concrete unresolved Package 6 inconsistency requires another implementation slice.
+### File Knowledge analysis (spec §9)
+
+- **Open Tasks / Task Review** — genuinely document-scoped: render driven by `WORKSPACE_STATE.activeFile`; badge ("N open") and empty state ("No open tasks") document-scoped; actions reuse `MME_TASK_LIFECYCLE` + `openWorkspaceFile`. Open vs Done are separate projections (Done counts in Active stats, main.js:3912 — no second panel). Moving the panel changes no parsing/mutation ownership.
+- **Related / Links In** — genuinely document-scoped: derived from active file, no independent state; empty state ("No active note") document-scoped.
+- **Tags panel** — MIXED (the one mixed panel): summary derives from Workspace-wide `WORKSPACE_INDEX_STATE.tags`, but selection (`__workspaceActiveTag`) and per-note chips are document-scoped. Proposed: File Knowledge for document usage; Workspace tag index stays Workspace concern.
+- Active stats rows (Open/Done/Related/Links out, main.js:3911-3914) are document-scoped readouts inside Current Document, not separate panels. No Tasks redesign in ACT 3.
+
+### Workspace Knowledge analysis (spec §10)
+
+- **Search** — confirmed Workspace-scoped (`ensureWorkspaceSearchPanel`, main.js:1824; queries `WORKSPACE_INDEX_STATE`). It is a control + results section, not a collapsible panel. Stays Workspace-scoped; never moves into Current Document or File Knowledge.
+- **Notes / Knowledge panels** — Workspace-scoped but **inert/legacy**: `workspace-sidebar.js` header comment (ACT 2B retained legacy) states nothing populates `files.journals`/`files.concepts` after ACT 1B; renderer only called from the dead legacy activation sequence. Independently collapsible. ACT 3 must decide remove/repurpose/leave-inert — removal needs an owner ruling (deferred past structural checkpoint per the file's own comment).
+- **Tasks entry point** — the Open Tasks panel doubles as the Tasks entry; no separate Workspace-wide Tasks panel exists in the Sidebar (Task Board is the Workspace-wide Tasks surface: overlay, out of Sidebar scope).
+- **Projects entry point** — Workspace-scoped (`WORKSPACE_INDEX_STATE.projects`), collapsible, `open-index` contextual action routes to the full Index view. No incorrect active-document dependency.
+- **Index panel** — Workspace-scoped read-only projection (`WORKSPACE_INDEX_STATE`), collapsible.
+- **Reports panel** — Workspace-scoped, protected, unchanged (`js/report/report-panel.js`).
+- **Archive panel** — Workspace-scoped projection (`renderWorkspaceArchivePanel`, main.js:5902), collapsible, actions route through the Active action row's metadata writer.
+- No Workspace panel incorrectly depends on the active document for its primary content (Tags selection is the single mixed case, documented above).
+
+### Header and badge owner ruling (spec §11 — recorded)
+
+Order: 1. surface/disclosure identity; 2. title; 3. contextual action; 4. Help; 5. count/status badge (final position). No same-count duplication in body; collapsed panels retain title + useful count; nonessential actions may hide when collapsed; no generic header framework in ACT 3; reuse existing owners first.
+
+Violations found (visual only — no behavioral inconsistency proven):
+
+- **Related panel** — badge `#workspaceRelatedBadge` exists in the dynamic ensure path but the static `index.html` fallback (line 182-190) has no badge: visual inconsistency static-vs-dynamic. No behavioral gap (render upgrades markup).
+- **Tasks panel** — same pattern: static `index.html` (192-196) title-only; dynamic path adds badge + Help. Visual only.
+- **Active badge** — `#workspaceActiveBadge` (kind label) + stat values in body: intentional domain difference (badge = kind status, body = counts), not a violation.
+- **Projects summary/body duplication** — badge count + `#workspaceProjectsSummary` ("N Projects") + list: summary line duplicates the badge count. Candidate visual-only alignment for ACT 3 Slice 4. No behavioral change.
+- **Help coverage partial** (Reports/Projects/Tasks/Related have `attachContextualHelpButton`; Active/Search/Tags/Index/Archive do not): intentional staging — Help alignment belongs to ACT 5, not ACT 3.
+
+### Responsive contract owner ruling (spec §12 — recorded)
+
+Essential controls remain available; no unexpected horizontal overflow; filters/actions may wrap; titles, badges and disclosure remain understandable; Sidebar usable at narrow width; Task Board keeps independent column scrolling; Projects/Index keep central scrolling; domain differences valid; notebook + narrow-browser acceptance required per ACT; S22/DeX acceptance required before Package 6 release when global Sidebar or Document Surface layout changes.
+
+Current CSS owners / risk (no implementation in PLAN-0): owner `css/workspace.css` — sidebar width var (`--workspace-sidebar-width`, 229-230), `@container` narrow query (139-140), coarse-pointer rules (205), breakpoints 767/1023/1199px. Risk: header rows (disclosure + title + actions + badge) at narrow widths — wrapping unproven; Slice 5 validates only if Slices 1-3 change header markup.
+
+### ACT 3 implementation slicing recommendation (spec §13)
+
+Default 5-slice shape assessed against source evidence; recommendation compresses to **3 slices** (grouping + ordering combined; header alignment kept separate; responsive/accessibility folded as gate criteria unless Slices 1-2 change header markup):
+
+**ACT 3 Slice 1 — Sidebar structural grouping + ordering (semantic section containers).**
+Source-proven need: two overlapping insertion grammars (`getWorkspaceSidebarContentHost()` + `insertBefore` chains vs `#projectsSectionRoot` experimental gate with swallowed `insertAdjacentElement` exceptions) can silently reorder panels; Tag selection (`__workspaceActiveTag`) is the single mixed-scope interaction. Runtime owners: `js/main.js` (ensure/render/collapse owners), `index.html` static fallback, `css/workspace.css` section styles. Files expected: `js/main.js`, `index.html`, `css/workspace.css`, narrow validator. Protected: Reports runtime, Task Board overlay, Save/mutation owners, Edit/Read mode state. Validators: sidebar structural (panel order assertion), collapse persistence, header/badge position. Browser checkpoint: open workspace, verify Current Document → File Knowledge → Workspace Knowledge order, collapse/expand each section, reload and confirm no reorder. Stop: second insertion owner required; mode ownership would move; persistent layout storage required.
+
+**ACT 3 Slice 2 — Current Document structural area using existing Active File owner.**
+Source-proven need: Active already owns identity + source access + Quick Actions + collapse; Edit/Read lives in editor overlay (`#editorBtnEditToggle`, js/main.js:11918), so only a structural placeholder (not functional control) may be created. Runtime owners: `renderWorkspaceActivePanel`/`ensureWorkspaceActivePanel`, `applyActiveNoteMetadata`, `describeNoteActionTarget`. Files expected: `js/main.js` (Active panel template only), docs. Protected: mode state owner, Save owner, Markmap mode, Reports. Validators: current-document-scope (identity/source/Quick Actions/empty states). Browser checkpoint: no-file / unwritable / dirty / workspace-switch states render correctly; no Save triggered by viewing. Stop: functional Edit/Read required (→ ACT 4); second mode owner required.
+
+**ACT 3 Slice 3 — Panel header, badge and disclosure alignment.**
+Source-proven need: static-vs-dynamic badge gap (Related/Tasks), Projects summary/body count duplication — visual only. Runtime owners: panel templates in `js/main.js`, `index.html` fallback, `css/workspace.css`. Protected: behavioral owners, Help expansion (→ ACT 5), generic header framework (prohibited). Validators: header/badge position assertions, `git diff --check`. Browser checkpoint: each panel header shows disclosure → title → action → Help → badge; collapsed panels retain title + count. Stop: behavioral change required; Help framework required.
+
+Slice 4 (ordering alone) and Slice 5 (responsive/a11y alone) **not recommended as standalone slices**: ordering is inseparable from grouping (same insertion owners); responsive/accessibility ride as acceptance gates on Slices 1-3 unless header markup actually changes.
+
+### ACT 4 boundary (spec §14 — reserved, not in ACT 3)
+
+Functional Edit/Read control, mode state ownership, Editor/Read synchronization, handle preservation, dirty-state preservation, cursor/selection preservation, Editor scroll, Read scroll, Markmap relationship, shared vs mode-specific top controls, Full Editor / Full Read / Full Markmap behavior. ACT 3 creates the Current Document location/placeholder only; it must not duplicate mode ownership.
+
+### ACT 3 PLAN-0 status
+
+Status: **awaiting owner review.** Implementation: **not authorized.** No runtime file changed in PLAN-0; no version/cache file changed; `git diff --check` governs.

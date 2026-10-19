@@ -8,13 +8,11 @@
 ## Current ACT status
 
 - **Package:** Package 6 — Expanded-View Behavior and Visual Consistency
-- **Stage:** ACT 2 — Slice 1 ACCEPTED 2026-10-18 (owner browser checkpoint
-  passed); Slice 2 (Inspection and Return Recovery Alignment) next, on
+- **Stage:** ACT 3 PLAN-0 active (Sidebar Information Architecture), on
   `development`
-- **Mission:** Projects + Workspace Index expanded-view behavioral
-  consistency — exit/return semantics, scroll ownership, empty vs
-  filtered-empty state presentation; implement only differences proven
-  inconsistent against current source
+- **Mission:** Sidebar Information Architecture source inspection only —
+  classify existing content into Current Document / File Knowledge /
+  Workspace Knowledge; implementation not authorized during PLAN-0
 - **Slice 1 status:** `js/workspace/workspace-index-workspace.js` — real
   `escapeIndexLabel()` on the Return label, `aria-label="Return to …"`,
   module-local scroll preservation (Projects-style clamp grammar) across

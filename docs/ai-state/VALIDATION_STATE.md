@@ -7,19 +7,10 @@
 
 ## Current required test tier
 
-**Tier: ACT 2 — targeted Tier 1/2 suites by changed owner + owner browser
-checkpoint (Tier D).**
+**Tier: ACT 3 PLAN-0 — source inspection and documentation only.**
 
-- ACT 1 closure gate (2026-10-18) re-run green: project-view 534/534,
-  contract 434/434, consumer 163/163, save-integration 103/103,
-  device-acceptance 74/74, mutation-anchor 164/164, `git diff --check` clean.
-- ACT 2 suite selection is fixed when the slice's changed owners are fixed
-  (see docs/validation/CURRENT_VALIDATION.md — "Selected suites for ACT 2").
-- ACT 2 slice 1 executed 2026-10-18: workspace-index-task-filter 64/64
-  (W01–W08), workspace-index-notes 58/58, project suites 534/434/163/103/74,
-  mutation anchors 167/167, Tier M 13/13 in a disposable copy,
-  `git diff --check` clean. Owner browser checkpoint PASSED 2026-10-18;
-  slice accepted.
+- ACT 2 (Slices 1–3) accepted; see docs/validation/CURRENT_VALIDATION.md
+  for closure evidence.
 - Evidence discipline: static, browser and device evidence stay separately
   labeled; browser claims require owner physical observation.
 

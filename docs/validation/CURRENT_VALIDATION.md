@@ -5,14 +5,32 @@
 
 ## Current required test tier
 
-**Tier: ACT 2 active — targeted Tier 1/2 suites by changed owner + owner
-browser checkpoint (Tier D).**
+**Tier: ACT 3 PLAN-0 — source inspection and documentation only (`git diff --check`, docs readability).** No runtime implementation authorized during PLAN-0.
 
-ACT 1 (Projects Source filter) is implemented, statically re-verified and
-owner-accepted. ACT 2 (first bounded expanded-view consistency slice) will
-run the Tier 1/2 suites selected by the owners it touches (expected:
-project-view, contract, consumer, device-acceptance — plus workspace suites
-if workspace-index owners change) plus an owner browser checkpoint.
+## ACT 2 — COMPLETE (all slices accepted)
+
+ACT 2 Slice 1 — Workspace Index return control + scroll preservation: ACCEPTED (commit 9d01638).
+Static: task/filter 64/64, Notes 58/58, project-view/contract/consumer/save-integration/device-acceptance 534/434/163/103/74, mutation-anchor 167/167, Tier M 13/13, `git diff --check` clean. Browser checkpoint passed 2026-10-18.
+
+ACT 2 Slice 2 — Inspection and Return Recovery Alignment: ACCEPTED (commits 78a1528 + 85feeac + 13e9b88).
+Static: project-view 536/536, inspection validators 15/15, workspace-index task/filter 64/64, `git diff --check` clean. Browser checkpoint passed 2026-10-19.
+
+ACT 2 Slice 3 — Overlay Exit, Transient State, and State-Copy Consistency: ACCEPTED (commits 484fd94 + 8431188 + 9399cae).
+Static: project-view 536/536, inspection validators 15/15, workspace-index task/filter 64/64, `git diff --check` clean. Browser checkpoint passed (Task Board opens, exit works, Escape/close works, filters preserved in-session, filters reset after refresh, no unexpected Save or mutation).
+
+Release gate: still CLOSED — 0.8.x activation not authorized; no service-worker/version/cache changes in this package.
+
+## ACT 3 PLAN-0 — ACTIVE (source inspection only, awaiting owner review)
+
+ACT 3 PLAN-0 inventory recorded in docs/packages/P6-CONSISTENCY.md
+(Sidebar ownership matrix, layer classification, Active File analysis,
+File/Workspace Knowledge analysis, header/badge + responsive rulings,
+3-slice recommendation, ACT 4 boundary). Implementation not authorized.
+Validation: `git diff --check` + docs readability only.
+
+## Pending owner checkpoints
+
+None at this stage.
 
 ## ACT 1 closure evidence (2026-10-18, commit 66e3b7a)
 
