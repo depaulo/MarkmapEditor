@@ -23,11 +23,11 @@
   },
   "git": {
     "currentBranch": "development",
-    "head": "85feeace8af1b5dfb8d0955235902c3387fb35d6",
+    "head": "13e9b88d4b056b3487e762e95d75f1770e88ec80",
     "main": "d07435b5bf8aded5fe96f1fe9768247df71124a9",
-    "development": "85feeace8af1b5dfb8d0955235902c3387fb35d6",
+    "development": "13e9b88d4b056b3487e762e95d75f1770e88ec80",
     "originMain": "1905a86058b66908ce9d9eb38e8dcef458302d26",
-    "originDevelopment": "85feeace8af1b5dfb8d0955235902c3387fb35d6",
+    "originDevelopment": "13e9b88d4b056b3487e762e95d75f1770e88ec80",
     "revListMainDevelopment": "2/0",
     "revListMainOriginMain": "6/0",
     "revListDevOriginDev": "0/0",
@@ -78,7 +78,7 @@
     },
     "package6": {
       "name": "Expanded-View Behavior and Visual Consistency",
-      "status": "ACT 2 Slice 2 accepted — Inspection and Return Recovery Alignment complete on development; closure commit pending",
+      "status": "ACT 2 Slice 3 active — Overlay Exit, Transient State, and State-Copy Consistency (E1, F1, Q5) on development",
       "plannedVersion": "0.8.x",
       "plan0Document": "docs/architecture/CONSISTENCY_PLAN_0_SURFACE_INVENTORY.md",
       "plan0Status": "delivered, docs-only, zero production changes",
@@ -91,7 +91,7 @@
         "browserEvidence": "owner physical checkpoint (Mme-test-new, 8 projects): filter options, exact-source filtering, clear/reset, empty-vs-filtered-empty, return/scroll preservation; Legacy: label confirmed as rendering fallback",
         "packageDoc": "docs/packages/P6-CONSISTENCY.md"
       },
-      "nextStep": "ACT 2 Slice 2 closure commit (docs only) then ACT 2 Slice 3 — Overlay Exit, Transient State, and State-Copy Consistency (E1, F1, Q5) on development"
+      "nextStep": "ACT 2 Slice 3 implementation: F1 correction — replace Task Board localStorage filter persistence with module-local state in task-board.js; add validators + Tier M mutation control; run static gate + Tier M (disposable copy) + secondary consistency inspection"
     }
   },
   "workflow": {
@@ -101,8 +101,8 @@
     "protectedFiles": ["js/**", "css/**", "index.html", "sw.js"]
   },
   "nextActions": [
-    "Create Slice 2 closure commit (docs only) on development; push to origin/development only",
-    "Begin ACT 2 Slice 3 source inspection (E1, F1, Q5): task-board.js, workspace-index-workspace.js, projects-view.js, css/workspace.css",
-    "Do NOT activate 0.8.0; no service-worker/version/cache changes; no persistent filter storage"
+    "Implement ACT 2 Slice 3 F1 correction: replace task-board.js localStorage filter persistence with module-local state",
+    "Add validator assertions proving Task Board filter state is module-local (no localStorage)",
+    "Add Tier M mutation control (disposable copy): close/reopen preserves filter state without localStorage"
   ]
 }

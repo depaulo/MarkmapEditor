@@ -3,18 +3,116 @@
 ## Identity
 
 - Package: P6
-- ACT: ACT 2 Slice 2
-- Name: Inspection and Return Recovery Alignment
+- ACT: ACT 2 Slice 3
+- Name: Overlay Exit, Transient State, and State-Copy Consistency
 - Branch: development
 - Released baseline: 0.7.0
 - Target release: 0.8.0
-- Status: accepted
+- Status: active
 
 ## Objective
 
-Align source inspection and return recovery between Projects Expanded View
-and Workspace Index using existing navigation and state owners. Task Board is
-inspected only to prove slice isolation; Reports is inspection-excluded.
+Correct only source-proven inconsistencies in Task Board overlay exit,
+transient surface state, and empty/failure presentation. Task Board overlay
+exit grammar (E1) verified conforming; transient filter/state lifecycle (F1)
+inspected for persistence policy alignment; state-copy presentation (Q5)
+inspected for empty vs filtered-empty distinction.
+
+## Source-Proven Findings (ACT 2 Slice 3 inspection)
+
+### E1 — Task Board overlay exit grammar: NO inconsistency proven
+
+- Visible Close control present with correct accessible name
+  (`aria-label="Close Task Board"`, task-board.js:1058-1064)
+- Escape uses the same `close()` owner (no duplicate handler,
+  task-board.js:1099-1105)
+- `close()` hides overlay, restores focus to `lastInvoker`, triggers no Save
+  (task-board.js:1251-1272)
+- `wired` flag prevents double wiring on re-open (task-board.js:1087)
+- All E1 items conform to accepted lifecycle contracts
+
+### F1 — Task Board filter persistence: PROVEN inconsistency
+
+- Current behavior: Task Board persists `doneWindow`, `priorityFilter`,
+  `sort`, `sourceFilter` to `localStorage` via
+  `setStoredDoneWindow()`/`setStoredPriorityFilter()`/`setStoredSort()`
+  (task-board.js:1118, 1134, 1150; keys defined at lines 37-51)
+- Expected behavior: Module-local only (matching Projects and Workspace
+  Index), no persistent browser storage per P6 policy
+- Responsible source owner: `js/tasks/task-board.js`
+- Responsible state owner: Task Board module (`globalThis.MME_TASK_BOARD`)
+- Responsible render owner: Task Board module
+- Smallest safe correction: replace `localStorage` reads/writes with
+  module-local variables in task-board.js
+
+### Q5 — State-copy/empty vs filtered-empty: NO inconsistency proven
+
+- Projects: `"No Projects match the current filters."` (line 756) —
+  correctly filtered-empty; filters + Clear filters button remain reachable
+- Workspace Index: filter-state module-local; empty state consistent
+- No copy divergence requiring runtime correction
+
+## Authorized Implementation
+
+1. `js/tasks/task-board.js`: Replace `localStorage` reads/writes with
+   module-local variables for doneWindow, priorityFilter, sort, sourceFilter
+   state. No new global store; Task Board module owns its own state.
+2. Add validator assertions proving module-local filter state (no localStorage
+   access) for Task Board.
+3. Add Tier M mutation control verifying filter state survives close/reopen
+   without persistent storage.
+
+## Protected Scope
+
+- no Task Board lifecycle conversion (stays modal overlay)
+- no Reports changes
+- no Compact View work
+- no Timeline work
+- no Sidebar redesign
+- no generic framework
+- no persistent browser storage
+- no release activation
+
+## Required Validation
+
+- `git diff --check`
+- Task Board aggregate / T20 proof Task Board is conforming
+- workspace-index-task-filter-validators (W01–W08) — regression
+- project-view-validators (PR01–PR23) — regression
+- New validator: Task Board filter state is module-local (no localStorage)
+- Tier M mutation control (disposable copy): close/reopen preserves filter
+  state without localStorage
+- Secondary consistency inspection after validator execution
+
+## Browser Checklist (after static validation)
+
+### Task Board exit
+1. Open Task Board from a recognizable prior surface.
+2. Confirm the visible Close control and its accessible label.
+3. Close using the visible control; confirm prior surface returns.
+4. Reopen Task Board; Close using Escape; confirm same prior surface returns.
+5. Confirm no duplicate close behavior; confirm no Save.
+
+### Task Board state (F1 correction)
+1. Select Source filter; apply another filter; scroll two columns.
+2. Close Task Board; reopen during same session; confirm filter/column
+   state preserved (module-local, not localStorage).
+3. Refresh browser; confirm no persistent browser storage behavior.
+
+### Empty-state behavior
+1. Create filtered-empty result safely.
+2. Confirm filters remain available; Clear Filters works.
+3. Confirm message does not claim domain is empty.
+4. Confirm clearing restores results.
+
+## Stop Conditions
+
+- second navigation or close owner required;
+- Task mutation owner would change;
+- persistent browser storage required;
+- broad visual redesign required;
+- Reports runtime would need modification;
+- source does not prove a real inconsistency.
 
 ## Source-Proven Asymmetry (B2) — live-source comparison, 2026-10-18
 

@@ -115,6 +115,34 @@ preservation passed; close/reopen scroll restoration passed; Return target
 remained correct; no unexpected Save or mutation observed; application
 remains at released version 0.7.0.
 
+### Slice 2 — Inspection and Return Recovery Alignment (ACCEPTED, commits 78a1528 + 85feeac + closure commit 13e9b88)
+
+- **Objective:** align source inspection and return recovery between Projects
+  Expanded View and Workspace Index; prove Task Board isolation.
+- **Owners touched:** `js/workspace/projects-view.js`
+  (`openProjectSource` arms `setInspection(true)` on cancelled/thrown);
+  `js/workspace/workspace-index-workspace.js`
+  (`ensureReturnToIndexButton`/`setIndexInspection`/`returnToIndex` recovery
+  control; rollback extended to `!opened || ok === false || cancelled ===
+  true` with distinct cancel/failure toasts; `activate()`/`refresh()` pass
+  `taskFilter` to `buildProjection` and no longer reset `projectFilters`/`taskFilter`);
+  `css/workspace.css` (`.wsIndexReturnToIndex` mirrors
+  `.projectsBackToProjects`); `dom-shim.cjs` (`closest()` compound selectors,
+  `contains()`, `dataset` getter); validators + mutation controls.
+- **Static evidence (2026-10-19):** project-view 536/536 PASS; inspection
+  validators IX01–IX15 15/15 PASS; workspace-index task/filter 64/64 PASS;
+  `git diff --check` clean.
+- **Browser evidence (owner checkpoint 2026-10-19):** normal Project source
+  inspection PASS; Return to Projects PASS; Project Source/Search/filter
+  restoration PASS; Project scroll restoration PASS; normal Workspace Index
+  source inspection PASS; Return to Workspace Index PASS; Index Project and
+  Task filter restoration PASS; Index scroll restoration PASS; cancellation
+  recoverable PASS; recovery controls not duplicated or stranded PASS; Task
+  Board overlay regression PASS; no unexpected Save PASS; no unexpected
+  source mutation PASS. Same-session transient state preserved; full browser
+  refresh may reset transient state; no persistent browser storage; released
+  identity remains 0.7.0.
+
 ## Open owner questions (PLAN-0 Q1–Q8, still open)
 
 Q1 return-label contract; Q2 Task Board overlay question; Q3 badge placement;
@@ -122,3 +150,55 @@ Q4 filter-persistence policy; Q5 empty/loading/failure shared contract; Q6
 `virtual-projects` route participation; Q7 scroll-owner grammar adoption; Q8
 disclosure grammar consolidation. ACT 2 must not pre-empt these rulings —
 only proven inconsistencies inside the authorized slice are implemented.
+
+## ACT 2 Slice 3 — Source Inspection Matrix (overlay exit, transient state,
+state-copy consistency)
+
+Slice 3 scope: E1 (Task Board overlay exit grammar), F1 (transient
+filter/state lifecycle consistency), Q5 (empty, filtered-empty, unavailable,
+failure and refusal presentation). No Task Board lifecycle conversion; no
+Reports changes; no persistent browser storage; no broad redesign.
+
+### Surface matrix
+
+| Surface | Task Board | Projects Expanded View | Workspace Index |
+|---|---|---|---|
+| Lifecycle type | Modal overlay (`role=dialog`) | Routed Host workspace | Routed Host workspace |
+| Activation owner | `open(invokerButton)` — task-board.js:1285 | `activate()` — projects-view.js:1534 | `activate()` — workspace-index-workspace.js |
+| Visible exit | Close button (`aria-label="Close Task Board"`, task-board.js:1058-1064) | Return row (`← Back to Workspace`, projects-view.js:813-814) | Return button (`← Return to …`, workspace-index-workspace.js) |
+| Escape behavior | Calls same `close()` (task-board.js:1099-1105) | No-op (PR05 accepted) | No-op |
+| Return destination | Not used to close overlay | Restores Projects view + filters + scroll | Restores Index view + filters + scroll |
+| Previous-context owner | `lastInvoker` (task-board.js:63, focus restored on close) | `presentationSnapshot` + Navigation History | `previousWorkspace` (informational) |
+| Filter-state owner | **localStorage** (task-board.js:37-51) — DONE_WINDOW_KEY, PRIORITY_FILTER_KEY, SORT_KEY, SOURCE_FILTER_KEY | Module-local `viewState.filters` (projects-view.js:75-76) | Module-local `projectFilters`/`taskFilter` (workspace-index-workspace.js:30-40, 53) |
+| Scroll owner | Independent column scroll owners (CSS tracks) | `data-projects-scroll-owner` clamp (projects-view.js:773) | `savedScrollTop`/`restoreScrollTop` (workspace-index-workspace.js:55-77) |
+| Close/reopen behavior | Overlay dismissed; filters/scroll from localStorage | Filters + scroll preserved in-session | Filters + scroll preserved in-session |
+| Full-refresh behavior | Transient state resets | Transient state resets | Transient state resets |
+| Domain-empty owner | N/A (task domain) | `"No Projects match the current filters."` (line 756) | `wsIndexEmpty` class |
+| Filtered-empty owner | N/A | `"No Projects match the current filters."` — filters + Clear remain reachable | `wsIndexEmpty` class |
+| Unavailable owner | N/A | `"File not found"` toast; surface stays open | `"File not found: <path>"` toast; surface stays open |
+| Failure owner | `task-board.js:90-94` toasts | batch result block + toasts (line 625-635) | rollback to Index + toasts |
+| Mutation-refusal owner | Task lifecycle owner (MME_TASK_LIFECYCLE) | visual adapter batch entry | N/A (read-only Index) |
+| Accessible labels | `aria-label="Close Task Board"` | Return aria matches visible text | Return aria matches visible text |
+| Relevant validators | Task Board aggregate / T20 | PR01–PR23, F/S groups | W01–W08, IX01–IX15 |
+| Proven inconsistency | **F1: localStorage usage** contradicts P6 policy "browser persistence: not authorized" / "Do not use localStorage"; Projects + Workspace Index both use module-local only | None — filter-state module-local, never persisted | None — filter-state module-local, never persisted |
+| Intentional difference | Overlay exit = close/Escape (not Return); routed views use Return | Return behavior after source inspection; explicit Close when leaving surface | Return behavior after source inspection; explicit Close |
+
+### Slice 3 findings
+
+**E1 — Task Board overlay exit grammar: NO inconsistency proven.**
+- Visible Close control present with correct accessible name (`aria-label="Close Task Board"`)
+- Escape uses the same `close()` owner (no duplicate handler)
+- `close()` hides overlay, restores focus to `lastInvoker`, triggers no Save
+- `wired` flag prevents double wiring on re-open
+- E1 items all conform to accepted lifecycle contracts
+
+**F1 — Task Board filter persistence: PROVEN inconsistency.**
+- Current behavior: Task Board persists `doneWindow`, `priorityFilter`, `sort`, `sourceFilter` to `localStorage` via `setStoredDoneWindow()`/`setStoredPriorityFilter()`/`setStoredSort()` (task-board.js:1118, 1134, 1150)
+- Expected behavior: Module-local only (matching Projects and Workspace Index), no persistent browser storage per P6 policy
+- Smallest safe correction: replace `localStorage` reads/writes with module-local variables in task-board.js; existing `getStored*`/`doneWindowFromStored` readers updated to read module-local state
+- Surfaces intentionally different: none — all three surfaces should use module-local filter state
+
+**Q5 — State-copy/empty vs filtered-empty: NO inconsistency proven.**
+- Projects: `"No Projects match the current filters."` (line 756) — correctly filtered-empty; filters + Clear filters button remain reachable (`renderEmpty()` line 795-805)
+- Workspace Index: filter-state module-local; empty state consistent with filtered-empty distinction
+- No copy divergence requiring runtime correction
