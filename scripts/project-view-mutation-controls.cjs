@@ -535,6 +535,18 @@ const MUTATIONS = [
     replace: '    save: async () => { const h = globalThis.MME_PROJECT_EDIT_HOST; return saveSmart(); },',
     suites: S, structural: true,
     why: 'INVARIANT: the bridge delegates to the single Save owner.' },
+
+  // ---- P6 ACT 2 Slice 2: inspection recovery never strands ----
+  { id: 'C33-cancelled-open-drops-recovery', file: VIEW,
+    find: '      if (opened && opened.cancelled) {\n        setInspection(true);\n        return { ok: false, reason: \'canceled\' };\n      }',
+    replace: '      if (opened && opened.cancelled) {\n        return { ok: false, reason: \'canceled\' };\n      }',
+    suites: S, expect: ['PR22'], count: 1,
+    why: 'A cancelled source open must leave Back to Projects armed.' },
+  { id: 'C34-thrown-open-drops-recovery', file: VIEW,
+    find: '      safeLog(`ProjectsView: source open failed reason=${String(e && e.message ? e.message : e)}`);\n      setInspection(true);',
+    replace: '      safeLog(`ProjectsView: source open failed reason=${String(e && e.message ? e.message : e)}`);',
+    suites: S, expect: ['PR23'], count: 1,
+    why: 'A thrown source open must leave Back to Projects armed.' },
 ];
 
 // ---- Leak guard (ACT 5D corrective) -------------------------------------

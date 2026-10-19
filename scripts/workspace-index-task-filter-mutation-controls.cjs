@@ -22,7 +22,7 @@ const DOC = 'js/workspace/workspace-index-document.js';
 const WS = 'js/workspace/workspace-index-workspace.js';
 const CSS = 'css/workspace.css';
 
-const BASELINE = ['workspace-index-task-filter-validators.cjs', 'workspace-index-notes-validators.cjs'];
+const BASELINE = ['workspace-index-task-filter-validators.cjs', 'workspace-index-notes-validators.cjs', 'workspace-index-inspection-validators.cjs'];
 const FINDING_RE = /^\s*FAIL\s{2}([A-Za-z0-9_.-]+)\s/gm;
 
 function sha256(f) { return crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex'); }
@@ -123,6 +123,24 @@ const MUTATIONS = [
     find: '        restoreScrollTop(scrollContainer, priorScrollTop);', replace: '',
     suites: ['workspace-index-task-filter-validators.cjs'], expect: ['W05'], count: 1,
     why: 'Filter rerenders must not jump to the top.' },
+
+  // ---- Package 6 ACT 2 Slice 2 controls (inspection & return recovery) ----
+  { id: 'F14-recovery-arm-removed', file: WS,
+    find: '    setIndexInspection(true);', replace: '',
+    suites: ['workspace-index-inspection-validators.cjs'], expect: ['IX03'], count: 1,
+    why: 'A successful source open must arm the Return to Workspace Index control.' },
+
+  { id: 'F15-rollback-narrowed-to-null-only', file: WS,
+    find: '    if (!opened || opened.ok === false || opened.cancelled === true) {',
+    replace: '    if (!opened) {',
+    suites: ['workspace-index-inspection-validators.cjs'], expect: ['IX06', 'IX07'], count: 1,
+    why: 'Cancelled and failed opens must roll back to the originating Index surface.' },
+
+  { id: 'F16-activation-filter-reset-restored', file: WS,
+    find: '    setIndexInspection(false);\n\n    let projectionHtml;',
+    replace: '    setIndexInspection(false);\n    resetProjectFilters();\n    taskFilter = \'all\';\n\n    let projectionHtml;',
+    suites: ['workspace-index-inspection-validators.cjs', 'workspace-index-task-filter-validators.cjs'], expect: ['IX11', 'T10a'], count: 1,
+    why: 'Session filter state must survive close/reopen (in-memory restoration ruling).' },
 
   // ---- structural guards ----
   { id: 'G01-no-index-rebuild', file: WS,

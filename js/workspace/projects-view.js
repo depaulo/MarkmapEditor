@@ -904,7 +904,13 @@
       const opened = await openWorkspaceFileSafe(rec, rec.kind || kind || 'notes', 'projects source navigation', {
         focusLine: Number(line) || 0,
       });
-      if (opened && opened.cancelled) return { ok: false, reason: 'canceled' };
+      // P6 ACT 2 Slice 2: EVERY post-switch outcome arms the ONE recovery
+      // action — a cancelled open must never strand the user in Journal
+      // (accepted ACT 5D model kept: stay closed + arm recovery).
+      if (opened && opened.cancelled) {
+        setInspection(true);
+        return { ok: false, reason: 'canceled' };
+      }
       focusSourceLine(Number(line) || 0);
       // ACT 5D smaller model (§5): explicit Source navigation from Projects
       // opens the source in the normal Workspace and arms the ONE persistent
@@ -913,6 +919,7 @@
       return { ok: true };
     } catch (e) {
       safeLog(`ProjectsView: source open failed reason=${String(e && e.message ? e.message : e)}`);
+      setInspection(true);
       return { ok: false, reason: 'open-failed' };
     }
   }

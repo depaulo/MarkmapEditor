@@ -2523,6 +2523,21 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     const ret3 = await V.returnToWorkspace();
     check('PR19', 'source open then Back to Workspace: Projects gone, source kept, never a re-open', src2.ok === true && ret3.ok === true && route === 'journal' && V.getPresentationState().closed === true && st.openings.length === openingsBeforeReturn, JSON.stringify({ ret: ret3, openings: st.openings }));
 
+    // PR22-PR23: P6 Slice 2 — no post-switch outcome may strand the user.
+    const openFakePrev = globalThis.openWorkspaceFile;
+    globalThis.openWorkspaceFile = async () => ({ ok: false, cancelled: true, reason: 'guard' });
+    await globalThis.MME_WORKSPACE_HOST.switchTo('projects');
+    const srcCancel = await V.openProjectSource('notes/pr-a.md', 'notes', 1);
+    const btnCancel = document.getElementById('mmeProjectsBackToProjects');
+    check('PR22', 'cancelled source open leaves Projects closed with Back to Projects armed', srcCancel.ok === false && srcCancel.reason === 'canceled' && V.getPresentationState().inspection === true && Boolean(btnCancel) && btnCancel.hidden === false && containerOf().hidden === true, JSON.stringify({ srcCancel, inspection: V.getPresentationState().inspection }));
+    await V.backToProjects();
+    globalThis.openWorkspaceFile = async () => { throw new Error('open-boom'); };
+    const srcThrow = await V.openProjectSource('notes/pr-a.md', 'notes', 1);
+    const btnThrow = document.getElementById('mmeProjectsBackToProjects');
+    check('PR23', 'thrown source open still arms the recovery action (never stranded)', srcThrow.ok === false && srcThrow.reason === 'open-failed' && V.getPresentationState().inspection === true && Boolean(btnThrow) && btnThrow.hidden === false, JSON.stringify({ srcThrow }));
+    globalThis.openWorkspaceFile = openFakePrev;
+    await V.returnToWorkspace();
+
     // PR20-PR21: Editor visibility snapshots (newer intentional state wins).
     st.editorHidden = true;
     document.body.classList.add('editor-hidden');

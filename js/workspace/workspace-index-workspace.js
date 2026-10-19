@@ -165,6 +165,59 @@
     `;
   }
 
+  // ---- Inspection recovery (P6 ACT 2 Slice 2, B2) ----
+  // Mirrors the accepted Projects model (projects-view ensureBackButton): ONE
+  // persistent, destination-aware recovery control armed ONLY after a fully
+  // successful source open, dismissed when Index is entered or when used.
+  // Uses the existing return owner (host.switchTo) — never a second
+  // navigation stack, never a Save. Visible label and aria-label are the
+  // same static destination string (no dynamic insertion).
+  let indexInspection = false;
+
+  function ensureReturnToIndexButton() {
+    try {
+      const existing = document.getElementById('mmeWsIndexReturnToIndex');
+      if (existing) return existing;
+      const toolbar = document.getElementById('toolbar');
+      if (!toolbar || typeof document.createElement !== 'function') return null;
+      const b = document.createElement('button');
+      b.id = 'mmeWsIndexReturnToIndex';
+      b.type = 'button';
+      b.className = 'wsIndexReturnToIndex';
+      b.textContent = 'Return to Workspace Index';
+      b.setAttribute('aria-label', 'Return to Workspace Index');
+      b.title = 'Return to Workspace Index';
+      b.hidden = !indexInspection;
+      b.addEventListener('click', function () { void returnToIndex(); });
+      toolbar.appendChild(b);
+      return b;
+    } catch { return null; }
+  }
+
+  function setIndexInspection(on) {
+    indexInspection = Boolean(on);
+    try {
+      if (indexInspection) document.documentElement.setAttribute('data-workspace-index-inspection', 'true');
+      else document.documentElement.removeAttribute('data-workspace-index-inspection');
+    } catch {}
+    try { const b = ensureReturnToIndexButton(); if (b) b.hidden = !indexInspection; } catch {}
+    return indexInspection;
+  }
+
+  async function returnToIndex() {
+    const host = getHost();
+    setIndexInspection(false);
+    let status = 'no-host';
+    try {
+      if (host && typeof host.switchTo === 'function') {
+        const r = await host.switchTo(HOST_ID, { reason: 'workspace-index inspection return' });
+        status = String((r && r.status) || 'unknown');
+      }
+    } catch (e) { status = 'failed'; }
+    safeLog(`WorkspaceIndex: inspection-return status=${status}`);
+    return Object.freeze({ status });
+  }
+
   // ---- Action handling (Corrections 1 & 2) ----
 
   function findWorkspaceFileByPath(path, kind) {
@@ -237,8 +290,12 @@
       safeLog(`WorkspaceIndex: openWorkspaceFile threw: ${e?.message || e}`);
     }
 
-    // Correction 2: Rollback on cancelled/failed
-    if (!opened) {
+    // P6 ACT 2 Slice 2: ANY non-success result (null, {cancelled}, {ok:false})
+    // is a failed open — the originating surface must never be stranded or
+    // silently redirected. Rollback uses the existing return owner; bounded
+    // distinct copy distinguishes cancel from failure (never empty-state copy).
+    if (!opened || opened.ok === false || opened.cancelled === true) {
+      const wasCancelled = Boolean(opened && opened.cancelled === true);
       safeLog('WorkspaceIndex: open cancelled/failed, rolling back to workspace-index');
       try {
         await host.switchTo(HOST_ID, {
@@ -247,8 +304,17 @@
       } catch (e) {
         safeLog(`WorkspaceIndex: rollback failed: ${e?.message || e}`);
       }
-      globalThis.MME_APP?.showToast?.('File open cancelled', 'warn', 2000);
+      if (wasCancelled) {
+        globalThis.MME_APP?.showToast?.('File open cancelled', 'warn', 2000);
+      } else {
+        globalThis.MME_APP?.showToast?.('Source could not be opened', 'error', 3000);
+      }
+      return;
     }
+
+    // Fully successful inspection: arm the ONE persistent recovery control
+    // (B2 alignment with the accepted Projects ACT 5D model).
+    setIndexInspection(true);
   }
 
   function handleRefreshIndex() {
@@ -397,13 +463,18 @@
     previousWorkspace = host ? host.getActiveId() : null;
 
     // 2. Build projection while hidden
-    // ACT E: reset filter state at the start of a fresh Index session.
-    resetProjectFilters();
-    taskFilter = 'all';
+    // P6 ACT 2 Slice 2: session-scoped presentation state is PRESERVED across
+    // close/reopen (in-memory restoration ruling — ACT E's per-activation
+    // filter reset removed). Module defaults apply at page load; a browser
+    // refresh still resets transient state. Entering Index also dismisses any
+    // armed inspection recovery control (mirrors Projects on entry).
+    setIndexInspection(false);
 
     let projectionHtml;
     try {
-      projectionHtml = docApi.buildProjection(projectFilters, expandedDisclosureCards);
+      // P6 Slice 2: pass the retained status too — the projection must render
+      // the session's current taskFilter, not the document default.
+      projectionHtml = docApi.buildProjection(projectFilters, expandedDisclosureCards, taskFilter);
     } catch (e) {
       throw new Error(`WorkspaceIndex.activate: projection failed: ${e?.message || e}`);
     }
@@ -571,7 +642,8 @@
     // Regenerate projection and swap in a single innerHTML assignment
     const priorScrollTop = Number(container.scrollTop) || 0;
     try {
-      const html = docApi.buildProjection(projectFilters, expandedDisclosureCards);
+      // P6 Slice 2: refresh renders the retained taskFilter as well.
+      const html = docApi.buildProjection(projectFilters, expandedDisclosureCards, taskFilter);
       container.innerHTML = html;
       // Re-prepend Return button after refresh
       const returnBtnHtml = buildReturnButtonHtml();

@@ -192,7 +192,11 @@ group('State lifecycle');
 
 {
   const wsSrc = fs.readFileSync(WS_SRC, 'utf8');
-  check('T10a', 'session default resets to All on activation', /taskFilter = 'all'/.test(wsSrc));
+  // P6 Slice 2: activation preserves session filter state — the ACT E
+  // per-activation reset (resetProjectFilters/taskFilter='all' inside
+  // activate) is removed under the in-memory restoration ruling.
+  const activateSlice = wsSrc.slice(wsSrc.indexOf('async function activate('), wsSrc.indexOf('function deactivate('));
+  check('T10a', 'activation preserves session filter state (no reset)', !/resetProjectFilters\(\);|taskFilter = 'all';/.test(activateSlice), activateSlice.match(/resetProjectFilters|taskFilter/g)?.join(','));
   check('T10d', 'module-level default status is All', /let taskFilter = 'all';/.test(wsSrc));
   check('T10b', 'selected status is passed into the projection', /buildProjection\(projectFilters, expandedDisclosureCards, taskFilter\)/.test(wsSrc));
   check('T10c', 'refresh re-renders with the current status (no reset)', !/function refresh[\s\S]{0,900}taskFilter = 'all'/.test(wsSrc));

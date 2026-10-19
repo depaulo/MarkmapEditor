@@ -84,24 +84,41 @@ class El {
     }
     return true;
   }
+  // P6 Slice 2: compound `tag[attr]` selectors join the pure `[attr]` form
+  // the shim already supported; matching for existing selectors is unchanged.
   closest(sel) {
-    const m = String(sel).match(/^\[([^\]=]+)(?:="([^"]*)")?\]$/);
+    const m = String(sel).match(/^(?:([A-Za-z][A-Za-z0-9-]*)\[|\[)([^\]=]+)(?:="([^"]*)")?\]$/);
     let node = this;
     while (node) {
       if (m) {
-        if (node.hasAttribute(m[1]) && (m[2] === undefined || node.getAttribute(m[1]) === m[2])) return node;
+        if ((!m[1] || node.tagName === m[1].toUpperCase()) && node.hasAttribute && node.hasAttribute(m[2]) && (m[3] === undefined || node.getAttribute(m[2]) === m[3])) return node;
       } else if (node.tagName === String(sel).toUpperCase()) return node;
       node = node.parentNode;
     }
     return null;
   }
+  contains(other) {
+    let n = other;
+    while (n) { if (n === this) return true; n = n.parentNode; }
+    return false;
+  }
+  // Read-only data-* snapshot, mirroring the browser's dataset reads the
+  // Workspace Index action handlers perform.
+  get dataset() {
+    const out = {};
+    for (const key of Object.keys(this.attributes)) {
+      if (!key.startsWith('data-')) continue;
+      out[key.slice(5).replace(/-([a-z])/g, (_m, c) => c.toUpperCase())] = this.attributes[key];
+    }
+    return out;
+  }
   querySelectorAll(sel) {
     const out = [];
-    const m = String(sel).match(/^\[([^\]=]+)(?:="([^"]*)")?\]$/);
+    const m = String(sel).match(/^(?:([A-Za-z][A-Za-z0-9-]*)\[|\[)([^\]=]+)(?:="([^"]*)")?\]$/);
     const walk = (n) => {
       for (const c of n.children) {
         if (sel === '*') out.push(c);
-        else if (m) { if (c.hasAttribute(m[1]) && (m[2] === undefined || c.getAttribute(m[1]) === m[2])) out.push(c); }
+        else if (m) { if ((!m[1] || c.tagName === m[1].toUpperCase()) && c.hasAttribute(m[2]) && (m[3] === undefined || c.getAttribute(m[2]) === m[3])) out.push(c); }
         else if (c.tagName === String(sel).toUpperCase()) out.push(c);
         walk(c);
       }

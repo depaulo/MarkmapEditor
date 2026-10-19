@@ -4654,6 +4654,21 @@ html.projects-view-active .splitter::before { content: none; }
 .projectsBackToProjects[hidden] {
   display: none !important;
 }
+/* P6 ACT 2 Slice 2: Workspace Index inspection recovery control — visual
+   family mirrors .projectsBackToProjects (same proven toolbar grammar). */
+.wsIndexReturnToIndex {
+  height: 30px;
+  padding: 0 10px;
+  cursor: pointer;
+  border: 1px solid var(--menu-border);
+  border-radius: 6px;
+  background: var(--toolbar-bg);
+  color: var(--text);
+  font-size: 12px;
+}
+.wsIndexReturnToIndex[hidden] {
+  display: none !important;
+}
 
 .projectsFilters {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
