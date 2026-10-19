@@ -1,161 +1,208 @@
 # Current Work — MarkmapEditor Package 6
 
-## Position
+## Identity
 
-- **Released version:** 0.7.0
-- **Target version:** 0.8.0
-- **Branch:** `development` (active Package 6 branch, = `origin/development`); local `main` preserved at the same commit but **not pushed**
-- **Working tree:** clean except untracked artifact `re` (do not touch)
-- **Package 5:** CLOSED (owner laptop acceptance 2026-10-16)
-- **Package 6:** Expanded-View Behavior and Visual Consistency — ACT 1 CLOSED, ACT 2 Slice 1 ACCEPTED, Slice 2 next (on `development`)
+- Package: P6
+- ACT: ACT 2 Slice 2
+- Name: Inspection and Return Recovery Alignment
+- Branch: development
+- Released baseline: 0.7.0
+- Target release: 0.8.0
+- Status: active
 
-## Package 6 ACT 1 Closure
+## Objective
 
-Status: accepted
+Align source inspection and return recovery between Projects Expanded View
+and Workspace Index using existing navigation and state owners. Task Board is
+inspected only to prove slice isolation; Reports is inspection-excluded.
 
-Implemented:
+## Source-Proven Asymmetry (B2) — live-source comparison, 2026-10-18
 
-- Projects Source control;
-- All Sources default;
-- exact sourcePath identity;
-- duplicate-basename display disambiguation;
-- Source and Search/filter composition;
-- view-only filtering;
-- same-session in-memory state;
-- reset after browser refresh;
-- no persistent Web Storage.
+### Ownership matrix
 
-Owner browser evidence (http://localhost:8000/, 0.7.0, Workspace Mme-test-new, 8 Projects):
+| Role | Projects (projects-view.js) | Workspace Index (workspace-index-workspace.js) |
+|---|---|---|
+| Activation owner | `activate()` presentation model (ACT 5D) | staged `activate()`: build hidden, show last |
+| Source-opening owner | `openProjectSource` → `switchTo('journal')` → `openWorkspaceFileSafe` | `handleOpenWorkspaceFile` → `switchTo('journal')` → `openWorkspaceFile` |
+| Inspection owner | `inspectionActive` + `data-projects-inspection` + `ensureBackButton` (toolbar) | none (B2 gap) |
+| Return-control render owner | `renderInto` return row; recovery = `ensureBackButton` | `buildReturnButtonHtml` prepended; no toolbar recovery |
+| Return-label owner | `← Back to Workspace` + matching aria-label (static) | `← Return to <escaped file\|Workspace>` + matching aria-label |
+| Originating-surface owner | host route + presentation snapshot | host route (`previousWorkspace`, informational) |
+| Return-context owner | ONE owner: `MME_WORKSPACE_HOST.switchTo` + Navigation History — no second stack | same one owner |
+| Filter-state owner | `viewState.filters`/`viewState.search` module-local (survive close/reopen) | `projectFilters`/`taskFilter` module-local — BUT reset inside `activate()` |
+| Scroll-state owner | `viewState.scroll` + `data-projects-scroll-owner` clamp | `savedScrollTop` + `restoreScrollTop` (Slice 1) |
+| Missing-source behavior | `!rec` → toast `File not found` (warn); surface stays open | `!fileRecord \|\| !handle` → toast `File not found: <path>` (error); surface stays open |
+| Failed-open behavior | `null` result → recovery armed; `{cancelled:true}` → **stranded**; throw → **stranded** | `null` → rollback to Index; `{cancelled:true}`/`{ok:false}` → **stranded**; throw → rollback |
+| Close behavior | deactivate hides; filters + scroll survive | deactivate hides; scroll survives (Slice 1); **filters reset on re-activation** |
+| Save behavior | none — view navigation only (PR19) | none — module contract (T16/T17) |
+| Relevant validators | PR01–PR21, F/S groups (project-view) | W01–W08, T-groups, new IX group |
 
-- source selection passed;
-- close and reopen preservation passed;
-- refresh reset passed;
-- Projects return-to-workspace passed;
-- no unexpected Save or mutation observed.
+Exact-path proof: `findWorkspaceFileByPath` (main.js:4140) matches on
+`normalizeWorkspaceSearchPath(file.path) === target` — exact normalized path
+identity; no basename fallback exists on either surface.
 
-Static evidence:
+### Scenario comparison (open → filter → scroll → inspect → return → fail → close/reopen)
 
-- Projects view 534/534;
-- Projects contract 434/434;
-- Projects consumers 163/163;
-- save integration 103/103;
-- device-oriented static validation 74/74;
-- mutation-anchor audit passed.
+| Step | Projects | Workspace Index | Verdict |
+|---|---|---|---|
+| 1 open surface | builds hidden, shows last; state module-local | same (Slice 1 scroll restore) | consistent |
+| 2 change filters | module-local, retained | module-local, retained in-session | consistent |
+| 3 scroll | scroll-owner clamp restore | Slice 1 clamp restore | consistent (accepted) |
+| 4 open source (success) | arms persistent `Back to Projects` toolbar action | **no recovery control armed** | **B2 core** |
+| 5 return success | `backToProjects()` restores view + filters + scroll | only via panel re-entry; **filters reset in `activate()`** | **asymmetry** |
+| 6 source unavailable at click | toast, surface stays, no navigation | toast, surface stays, no navigation | consistent (exact path, no fallback) |
+| 7a open returns `null` (dirty declined / nav in progress) | recovery armed (recoverable) | rollback to Index + toast (recoverable) | DIFFERENT mechanisms — intentionally preserved |
+| 7b open returns `{cancelled:true}` or `{ok:false}` | **stranded** (closed, no recovery) | **stranded** (no rollback) | both incorrect per ruling §11 |
+| 7c open throws | **stranded** (no recovery) | rollback to Index | asymmetry |
+| 8 close/reopen | filters + search + scroll preserved | **filters reset** (`resetProjectFilters()` + `taskFilter='all'` in `activate()`); scroll preserved | asymmetry vs ruling §8 |
 
-Non-blocking observation:
+### Current → intended → owner → smallest correction → intentionally different
 
-- Source-label observation verified.
-  The label is derived from the source path/display-name owner and exact
-  sourcePath filtering remains correct.
-  No ACT 1 correction required.
+- **B2 core (step 4-5):** current: Index arms nothing. Intended: one
+  persistent, destination-aware recovery control using the existing
+  `switchTo` owner. Owner: `workspace-index-workspace.js`. Smallest
+  correction: mirror the accepted Projects model (toolbar button
+  `Return to Workspace Index`, `data-workspace-index-inspection`), armed on
+  successful open only, dismissed on Index activation/use.
+- **Step 7b/7c:** current: stranding on truthy-failure results (both) and on
+  throw (Projects). Intended: surface context never destroyed. Owner:
+  projects-view.js + workspace-index-workspace.js. Smallest correction:
+  Index extends its EXISTING rollback to every non-success result with
+  bounded distinct toasts; Projects arms its EXISTING recovery on every
+  post-switch outcome (ACT 5D model kept: stay closed + arm).
+- **Step 8:** current: Index resets filters on re-activation. Intended:
+  session-scoped filter preservation (browser refresh resets). Owner:
+  workspace-index-workspace.js. Smallest correction: remove the two reset
+  calls from `activate()` (module defaults still initialize at load).
+- **Intentionally left different:** visible return labels (Q1 deferred —
+  both already destination-aware with matching aria-labels); failure
+  mechanisms (Projects = arm-and-stay-closed per ACT 5D, Index = rollback
+  per module contract); Index requires `.handle` while Projects resolves
+  failure later (records carry handles post-ACT 2A); recovery-button
+  coexistence when the user diverts surfaces (mirrors accepted Projects
+  behavior); empty-copy divergence (Q5); Escape semantics / overlay exit
+  (E1, protected).
 
-## ACT 2 Objective
+## Authorized Implementation
 
-Define and implement the narrow shared Expanded View behavioral contract for
-Projects and Workspace Index, with Task Board preserved as an overlay
-exception.
-
-## Source-Proven Owners
-
-- Projects view: `js/workspace/projects-view.js` — Return row with
-  `aria-label`, `escapeAttr`/`escapeHtml` discipline, scroll-owner grammar
-  (`data-projects-scroll-owner` + clamp restore), ACT 5D presentation model.
-- Workspace Index full view: `js/workspace/workspace-index-workspace.js` —
-  Return button builder, `activate`/`deactivate`/`refresh`/`rerenderProjectionWithAnchor`
-  rebuilds; `#workspaceIndexView` is its own scroll owner
-  (`css/workspace.css`, `overflow-y: auto`).
-- Workspace Index projection: `js/workspace/workspace-index-document.js` —
-  Projects section already distinguishes empty ("No Projects found.") vs
-  filtered-empty ("No Projects match the current filters.") — CONSISTENT
-  with the Projects view, out of slice.
-- Task Board: `js/tasks/task-board.js` — modal overlay, Close + Escape;
-  protected exception, no lifecycle change.
-
-## Confirmed Inconsistencies (slice 1, full evidence in docs/packages/P6-CONSISTENCY.md)
-
-- A2-1: Workspace Index Return label escaping was a NO-OP
-  (`replace(/</g, '<')`); markup-bearing fileNames injected raw HTML.
-- A2-2: Workspace Index Return control had no `aria-label` (Projects has one).
-- A2-3: project-filter rerenders called `rerenderProjectionWithAnchor()`
-  without an anchor → scroll reset to top (comment claimed anchoring).
-- A2-4: close/reopen lost scroll — `deactivate` hid the container but
-  `activate` rebuilt `innerHTML` from the top.
-
-Recorded, NOT implemented (owner ruling / separate ACT): visible return-label
-grammar (Q1), inspection-recovery asymmetry (B2), overlay exit grammar (E1),
-filter persistence (F1), copy divergences (Q5), Escape semantics.
-
-## Authorized Implementation — slice 1 (ACCEPTED)
-
-`js/workspace/workspace-index-workspace.js` only:
-
-- `escapeIndexLabel()` — real `&amp;/&lt;/&gt;/&quot;/&#39;` escaping on the
-  Return label;
-- Return button `aria-label="Return to <label>"` sharing the escaped label
-  with the visible text (visible copy unchanged — Q1 untouched);
-- module-local scroll preservation (`savedScrollTop` + `restoreScrollTop`
-  with the Projects-style clamp grammar) across no-anchor rerenders,
-  `refresh()`, and close/reopen (`deactivate` captures, `activate` restores
-  while hidden — raw offset, browser clamps at paint).
-
-Static evidence (2026-10-18):
-
-- workspace-index task-filter 64/64 (new W01–W08); notes 58/58;
-  project-view 534/534; contract 434/434; consumer 163/163;
-  save-integration 103/103; device-acceptance 74/74;
-  mutation-anchor audit 167/167; `git diff --check` clean.
-- Tier M in disposable copy (removed after run): 13/13 behavioral controls
-  bit, including new F11 (aria-label), F12 (escape no-op), F13 (scroll
-  restore); byte-identical restores; baseline green after every restore.
-
-### P6 ACT 2 Slice 1 — closure record
-
-Status: accepted (owner browser checkpoint 2026-10-18)
-
-Implemented:
-
-- Workspace Index Return-label escaping;
-- Return button accessible label;
-- project-filter rerender scroll preservation;
-- close/reopen scroll restoration.
-
-Owner browser evidence:
-
-- project-filter scroll preservation passed;
-- close/reopen scroll restoration passed;
-- Return target remained correct;
-- no unexpected Save or mutation observed;
-- application remains at released version 0.7.0.
-
-Static evidence:
-
-- Workspace Index task/filter suite passed (64/64);
-- Notes suite passed (58/58);
-- full Projects profile passed (534/434/163/103/74);
-- mutation-anchor audit passed (167/167);
-- isolated Tier M controls passed (13/13, disposable copy);
-- `git diff --check` passed.
-
-Deferred (owner-ruled, later slices or rulings):
-
-- Return-label grammar normalization (PLAN-0 Q1);
-- inspection-recovery alignment (B2 — selected for Slice 2);
-- Task Board overlay exit grammar (E1);
-- broader filter-persistence alignment (F1/Q4);
-- state-copy normalization (Q5).
+1. `js/workspace/workspace-index-workspace.js`
+   - arm/dismiss/return helpers for a toolbar recovery control
+     (`mmeWsIndexReturnToIndex`, visible + aria-label
+     `Return to Workspace Index`), wired to
+     `switchTo('workspace-index')` — the existing return owner;
+   - arm only after a fully successful open; dismissed on Index activation
+     and on use;
+   - rollback condition extended to `!opened || opened.ok === false ||
+     opened.cancelled === true` with bounded distinct toast copy
+     (cancelled vs failure);
+   - `activate()` no longer resets `projectFilters`/`taskFilter` (session
+     retention; browser refresh still resets).
+2. `js/workspace/projects-view.js`
+   - `openProjectSource` arms `setInspection(true)` on EVERY post-switch
+     outcome (cancelled + throw), so the accepted ACT 5D recovery is never
+     absent.
+3. `css/workspace.css` — `.wsIndexReturnToIndex` rules mirroring
+   `.projectsBackToProjects` (proven-necessary: new visible control).
+4. Validators: new behavioral suite `scripts/workspace-index-inspection-validators.cjs`
+   (rendered presence + wiring, not helper-only); PR22/PR23 in
+   `scripts/project-view-validators.cjs`; T10a realigned in
+   `scripts/workspace-index-task-filter-validators.cjs`; new controls
+   F14–F16 in `scripts/workspace-index-task-filter-mutation-controls.cjs`;
+   TEST_CATALOG registration.
 
 ## Protected Scope
 
-- no Reports runtime changes;
-- no Task Board lifecycle conversion;
-- no full Sidebar redesign;
-- no Current Document redesign;
-- no generic Expanded View framework;
-- no persistent filter storage;
-- no 0.8.0 activation.
+- No Task Board lifecycle conversion (overlay stays; T20 must stay green).
+- No full visible-header normalization; no Sidebar reorganization.
+- No Current Document redesign; no Edit/Read control movement.
+- No Reports runtime changes (inspection-excluded).
+- No Draw.io, Search relocation, Read/HTML search.
+- No generic expanded-view / navigation / recovery / disclosure framework.
+- No persistent browser filter storage (no localStorage/sessionStorage/
+  IndexedDB/SW state).
+- No Project metadata redesign; no Task-to-Project linkage.
+- No Reminders, Highlights, Reveal.js, shared `@` layer.
+- No version activation (stays 0.7.0), no service-worker changes, no
+  release-note closure.
+- No second navigation stack; no browser-history behavior added.
 
-## Do not start
+## Required Validation
 
-- Reports implementation (deferred, not canceled)
-- Draw.io redesign, generic expanded-view framework, Tasks redesign, Sidebar
-  redesign, Reminders, Highlights, Standalone resurrection
+- `git diff --check`
+- workspace-index-inspection-validators (NEW behavioral: rendered presence
+  + wiring for recovery control; missing-source; rollback; filter/scroll
+  retention; no-Save)
+- workspace-index-task-filter-validators (T-groups + W01–W08, T10a realigned)
+- workspace-index-notes-validators
+- project-view-validators (PR01–PR23 incl. new cancelled/throw checks)
+- project contract / consumer / save-integration / device-acceptance
+- mutation-anchor-audit
+- Tier M in disposable copy: workspace-index mutation controls (+F14–F16),
+  project-view mutation controls (changed owner)
+- tasks aggregate or T20 proof that Task Board is untouched
+- secondary consistency inspection after validator execution
+
+## Browser Checkpoint
+
+### Projects inspection
+
+1. Open Projects.
+2. Select Source and Search/filter criteria.
+3. Scroll to a recognizable position.
+4. Open a Project source.
+5. Return via `Back to Projects`.
+6. Confirm filters and scroll context.
+7. Confirm correct Return label (`← Back to Workspace`, aria matches).
+8. Confirm no Save (no dirty prompt, no save toast).
+
+### Workspace Index inspection
+
+1. Open Workspace Index.
+2. Select available filters.
+3. Scroll.
+4. Open a source — confirm `Return to Workspace Index` appears in the
+   toolbar after the source opens.
+5. Return via that control — confirm Index restores with filters + scroll.
+6. Confirm Return labels on the Index surface (`← Return to …`, aria
+   matches; visible copy unchanged).
+7. Close/reopen Index — confirm filters persist (session), scroll restores.
+8. Confirm no Save.
+
+### Recovery (safe fixture only)
+
+1. Attempt inspection of a source that becomes unavailable (controlled
+   fixture — do NOT damage real files).
+2. Confirm no unrelated same-basename source opens (exact-path identity).
+3. Confirm the originating surface remains recoverable (Projects: `Back to
+   Projects` armed; Index: rolled back to Index).
+4. Confirm the state reads as source-unavailable/failure toast — not an
+   empty-Workspace message.
+5. Confirm no Save or mutation.
+
+### Task Board regression
+
+- overlay opens; overlay closes; prior context returns; source filter usable;
+  column scroll behavior intact.
+
+## Stop Conditions
+
+- a second navigation/history owner would be required;
+- persistent browser storage would be required;
+- Task Board lifecycle must change;
+- Reports runtime must change;
+- broad framework extraction would be required;
+- source behavior contradicts an accepted Package 6 ruling (report instead
+  of forcing).
+
+## Accepted history
+
+- **P6 ACT 2 Slice 1 — Status: accepted** (owner browser checkpoint
+  2026-10-18): Return-label escaping; Return accessible label;
+  project-filter rerender scroll preservation; close/reopen scroll
+  restoration. Static: task/filter, Notes, full Projects profile,
+  mutation-anchor, isolated Tier M, `git diff --check` — all passed.
+  Deferred: return-label grammar (Q1), inspection-recovery alignment (B2 →
+  this slice), overlay exit grammar (E1), filter-persistence (F1/Q4),
+  state-copy normalization (Q5).
+- **P6 ACT 1 — accepted** (Projects Source filter, exact `sourcePath`):
+  see `docs/packages/P6-CONSISTENCY.md`.

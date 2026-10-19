@@ -70,7 +70,7 @@
     },
     "package6": {
       "name": "Expanded-View Behavior and Visual Consistency",
-      "status": "ACT 2 Slice 1 accepted — Slice 2 (inspection/return recovery alignment) next, on development",
+      "status": "ACT 2 Slice 1 accepted — Slice 2 (Inspection and Return Recovery Alignment) ACTIVE on development",
       "plannedVersion": "0.8.x",
       "plan0Document": "docs/architecture/CONSISTENCY_PLAN_0_SURFACE_INVENTORY.md",
       "plan0Status": "delivered, docs-only, zero production changes",
@@ -83,7 +83,7 @@
         "browserEvidence": "owner physical checkpoint (Mme-test-new, 8 projects): filter options, exact-source filtering, clear/reset, empty-vs-filtered-empty, return/scroll preservation; Legacy: label confirmed as rendering fallback",
         "packageDoc": "docs/packages/P6-CONSISTENCY.md"
       },
-      "nextStep": "ACT 2 Slice 2: inspection and return recovery alignment (B2), on development; owner browser checkpoint for Slice 1 ACCEPTED 2026-10-18"
+      "nextStep": "ACT 2 Slice 2 implementation: B2 corrections (Index recovery control, no-strand failure handling, session filter retention; Projects arm-on-every-post-switch-outcome) — pre-edit record written to docs/work/CURRENT.md; browser checkpoint pending after static gate"
     }
   },
   "workflow": {
@@ -93,9 +93,10 @@
     "protectedFiles": ["js/**", "css/**", "index.html", "sw.js"]
   },
   "nextActions": [
-    "Owner browser checkpoint for ACT 2 slice 1 (Index close/reopen scroll, filter-change scroll, Return label with markup-bearing fileName)",
-    "Owner executes push of main (4+ commits ahead of origin/main, including ACT 2 slice commit)",
-    "Owner rulings on PLAN-0 Q1-Q8 to unlock further ACT 2 slices (visible return grammar B1, inspection recovery B2, exit grammar E1)",
-    "Do NOT activate 0.8.x; no service-worker/version/cache changes; no persistent filter storage"
+    "Implement ACT 2 Slice 2 corrections (workspace-index-workspace.js, projects-view.js, css, validators) per docs/work/CURRENT.md pre-edit record",
+    "Run selected suites + Tier M in disposable copy; secondary consistency inspection",
+    "Owner browser checkpoint for Slice 2 (checklist in docs/work/CURRENT.md)",
+    "Push accepted static work to origin/development only; never push main",
+    "Do NOT activate 0.8.0; no service-worker/version/cache changes; no persistent filter storage"
   ]
 }

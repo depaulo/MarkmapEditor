@@ -60,6 +60,7 @@ identical before and after, no `isolated-*` directory left behind.
 | workspace-task-contract-validators.cjs | Normalized Task contract, scope projection, priority-source reconciliation (cross-consumer owner) | V | fast | none | T2 — Task contract changes | active |
 | workspace-task-consumers-validators.cjs | Task Review / Board / Projects / Index projection preservation | V | fast | none | T2 — consumer/projection changes | active |
 | workspace-index-task-filter-validators.cjs | Workspace Index Task filtering behavior | V | fast | none | T2 — index task filter changes | active |
+| workspace-index-inspection-validators.cjs | Workspace Index inspection & return recovery (P6 Slice 2: recovery control rendered presence + wiring, rollback, retention) | V | fast | none | T2 — index inspection/return changes | active |
 | workspace-index-task-filter-mutation-controls.cjs | Controls over index task-filter anchors | M | slow | isolated copy only | TM | gate-only |
 | act2a-checkpoint-harness.cjs | Deterministic replay of the ACT 2A device checkpoint scenarios against shipped owners | H | medium | none | checkpoint support — run on demand, not in profiles | gate-only |
 
