@@ -6,6 +6,7 @@
 
 ## Status
 
+- Branch: `development` (all Package 6 work; `main` is release-integration only)
 - PLAN-0: complete (source-proven inventory, zero production changes)
 - ACT 1: complete and accepted (2026-10-18)
 - ACT 2 Slice 1: complete and accepted (owner browser checkpoint 2026-10-18)

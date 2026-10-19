@@ -47,6 +47,11 @@ not be loaded as the primary source.
 
 ## 5. Working rules
 
+- **Branch check (Package 6):** before active implementation, verify the
+  checked-out branch matches the active development branch declared by
+  `project-state.json`. Package 6 implementation is performed on
+  `development`; do not implement on `main` unless executing an explicitly
+  authorized release-integration ACT.
 - Preserve PLAN → review → ACT separation; do not expand scope without
   authorization.
 - Prohibited unless explicitly authorized: `git reset`, `restore`, `clean`,

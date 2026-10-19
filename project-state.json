@@ -22,17 +22,24 @@
     "releaseNotesFilesMustNotChange": true
   },
   "git": {
-    "currentBranch": "main",
-    "head": "fbe08a512a441582a09c3c9810ab49f0f59c6fce",
-    "main": "fbe08a512a441582a09c3c9810ab49f0f59c6fce",
-    "development": "1905a86058b66908ce9d9eb38e8dcef458302d26",
+    "currentBranch": "development",
+    "head": "d07435b5bf8aded5fe96f1fe9768247df71124a9",
+    "main": "d07435b5bf8aded5fe96f1fe9768247df71124a9",
+    "development": "d07435b5bf8aded5fe96f1fe9768247df71124a9",
     "originMain": "1905a86058b66908ce9d9eb38e8dcef458302d26",
-    "originDevelopment": "1905a86058b66908ce9d9eb38e8dcef458302d26",
-    "revListMainDevelopment": "4/0",
-    "revListMainOriginMain": "4/0",
+    "originDevelopment": "d07435b5bf8aded5fe96f1fe9768247df71124a9",
+    "revListMainDevelopment": "0/0",
+    "revListMainOriginMain": "6/0",
     "revListDevOriginDev": "0/0",
-    "workingTreeClean": false,
-    "workingTreeNote": "Slice 1 acceptance closure commit follows on main; then development is fast-forwarded and Package 6 continues on development (push pending for owner-approved development push)",
+    "workingTreeClean": true,
+    "workingTreeNote": "clean except untracked artifact `re` (do not touch); local main is 6 ahead of origin/main and must NOT be pushed — its commits are preserved on development and origin/development",
+    "branchPolicy": {
+      "activeDevelopmentBranch": "development",
+      "remoteActiveBranch": "origin/development",
+      "releaseIntegrationBranch": "main",
+      "remoteReleasedBranch": "origin/main",
+      "rule": "Package 6 work happens on development; main advances only at the accepted 0.8.0 release-integration boundary; never push main during development"
+    },
     "untrackedArtifacts": ["re"],
     "untrackedArtifactAction": "do not touch",
     "commits": {

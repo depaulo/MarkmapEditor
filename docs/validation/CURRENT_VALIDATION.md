@@ -1,5 +1,8 @@
 # Current Validation — MarkmapEditor Package 6
 
+> Branch: `development` (active Package 6 branch; `main` is release-integration
+> only — see AGENTS.md branch policy).
+
 ## Current required test tier
 
 **Tier: ACT 2 active — targeted Tier 1/2 suites by changed owner + owner

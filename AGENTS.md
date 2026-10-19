@@ -72,12 +72,28 @@ AI-state can never override architecture or current source.
 ## Current project state (see project-state.json)
 
 - Released version: 0.7.0
-- Target version: 0.8.x
-- Branch: main (HEAD = 1905a86), all remotes synchronized
+- Target version: 0.8.0
+- **Active development branch: `development`** (Package 6 work happens here)
+- Release integration branch: `main` (do not advance until the accepted
+  0.8.0 release boundary; never push `main` during development)
 - Active package: Package 6 — Expanded-View Behavior and Visual Consistency
 - PLAN-0: complete (source-proven surface inventory delivered)
+- ACT 1 and ACT 2 Slice 1: accepted
 - Release activation: NOT authorized
 - Untracked artifact `re`: present — do not touch
+
+## Branch policy (Package 6)
+
+- `development` — all Package 6 planning, implementation, corrections,
+  validation and documentation work; remote: `origin/development`.
+- `main` — accepted released product baseline and final release-integration
+  branch; remote: `origin/main` (released-product branch — not updated until
+  the accepted 0.8.0 release boundary).
+- Mandatory startup check: before active implementation, verify the
+  checked-out branch matches the active development branch declared by
+  project state. For Package 6, implementation is performed on
+  `development`. Do not continue implementation on `main` unless executing
+  an explicitly authorized release-integration ACT.
 
 ## Prohibited unless explicitly authorized
 

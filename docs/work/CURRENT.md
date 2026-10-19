@@ -4,7 +4,7 @@
 
 - **Released version:** 0.7.0
 - **Target version:** 0.8.0
-- **Branch:** main, HEAD = `9d01638` (5 ahead of origin/main; Package 6 work moves to `development` next)
+- **Branch:** `development` (active Package 6 branch, = `origin/development`); local `main` preserved at the same commit but **not pushed**
 - **Working tree:** clean except untracked artifact `re` (do not touch)
 - **Package 5:** CLOSED (owner laptop acceptance 2026-10-16)
 - **Package 6:** Expanded-View Behavior and Visual Consistency — ACT 1 CLOSED, ACT 2 Slice 1 ACCEPTED, Slice 2 next (on `development`)

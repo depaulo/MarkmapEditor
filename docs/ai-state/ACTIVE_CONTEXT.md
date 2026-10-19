@@ -10,11 +10,10 @@
 - **Released version:** 0.7.0
 - **Target version:** 0.8.x
 - **Release activation:** NOT authorized
-- **Branch:** main
-- **HEAD:** fbe08a5 (main 4 ahead of origin/main; development still at
-  1905a86 — push pending, owner executes push)
-- **Working tree:** ACT 2 slice 1 changes staged (source + validators +
-  knowledge docs); untracked artifact `re` (do not touch)
+- **Branch:** development (active Package 6 branch = origin/development);
+  main = same commit locally, NOT pushed (origin/main unchanged)
+- **HEAD:** d07435b
+- **Working tree:** clean except untracked artifact `re` (do not touch)
 - **Active package:** Package 6 — Expanded-View Behavior and Visual Consistency
 - **PLAN-0:** complete (source-proven surface inventory delivered)
 - **ACT 1 (Projects Source filter):** accepted 2026-10-18 (commit 66e3b7a;
@@ -22,8 +21,8 @@
 - **ACT 2 slice 1:** ACCEPTED 2026-10-18 (owner browser checkpoint passed:
   filter-scroll, close/reopen scroll, Return target correct, no unexpected
   Save; still 0.7.0). Commit 9d01638 + closure docs.
-- **Next:** ACT 2 Slice 2 (inspection/return recovery alignment) on
-  `development` after branch correction
+- **Next:** ACT 2 Slice 2 (Inspection and Return Recovery Alignment) on
+  `development`
 
 ## Where the information now lives
 
