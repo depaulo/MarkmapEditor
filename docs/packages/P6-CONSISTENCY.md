@@ -11,6 +11,7 @@
 - ACT 1: complete and accepted (2026-10-18)
 - ACT 2 Slice 1: complete and accepted (owner browser checkpoint 2026-10-18)
 - ACT 2 Slice 2: Inspection and Return Recovery Alignment — complete and accepted (on `development`)
+- ACT 2 Slice 3: Overlay Exit, Transient State, and State-Copy Consistency — complete and accepted (on `development`)
 
 ## ACT 1 — Projects Source filter (ACCEPTED, commit 66e3b7a)
 
@@ -202,3 +203,56 @@ Reports changes; no persistent browser storage; no broad redesign.
 - Projects: `"No Projects match the current filters."` (line 756) — correctly filtered-empty; filters + Clear filters button remain reachable (`renderEmpty()` line 795-805)
 - Workspace Index: filter-state module-local; empty state consistent with filtered-empty distinction
 - No copy divergence requiring runtime correction
+
+## ACT 2 Slice 3 Closure (ACCEPTED)
+
+**Implemented:** replaced Task Board localStorage filter persistence with
+module-local state (`js/tasks/task-board.js`). No new global store; Task Board
+module owns its own state.
+
+**Accepted lifecycle:**
+- same-session close/reopen preserves Task Board filters;
+- full browser refresh resets transient filters;
+- no persistent browser storage is required.
+
+**Inspection-only conclusions:**
+- Task Board exit grammar was already consistent — no runtime correction required.
+- empty and filtered-empty semantics were already consistent — no runtime correction required.
+
+**Owner browser evidence:** Task Board opened successfully; same-session behavior passed;
+post-refresh reset passed; no unexpected Save or mutation observed. Released identity
+remains 0.7.0.
+
+## Package 6 Remaining-Scope Assessment
+
+Documentation and source inspection only — no runtime source changes.
+
+| Topic | Classification | Evidence | Additional implementation needed | Recommended owner action |
+|---|---|---|---|---|
+| Projects Source filtering | COMPLETE | ACT 1 closure (534/534 + browser checkpoint) | None | None |
+| exact source identity | COMPLETE | ACT 1 exact-match `sourcePath` contract | None | None |
+| filter composition | COMPLETE | Module-local filter state across all three surfaces | None | None |
+| same-session transient state | COMPLETE | Slice 3 F1 correction; Slice 1/ACT 1 preservation | None | None |
+| Workspace Index scroll restoration | COMPLETE | Slice 1 scroll preservation (clamp grammar) | None | None |
+| Projects inspection and return | COMPLETE | Slice 2 Return control + scroll preservation | None | None |
+| Workspace Index inspection and return | COMPLETE | Slice 2 Return to Index control + rollback | None | None |
+| cancellation and failure recovery | COMPLETE | Slice 2 distinct cancel/failure toasts + rollback | None | None |
+| Task Board overlay lifecycle | COMPLETE | E1 inspection — overlay stays modal; Close/Escape conform | None | None |
+| Task Board transient filter state | COMPLETE | Slice 3 F1 correction — module-local state | None | None |
+| empty vs filtered-empty semantics | COMPLETE | Q5 inspection — Projects "No Projects match the current filters." | None | None |
+| unavailable and failure semantics | COMPLETE | Slice 2 source-unavailable/failure distinct from empty | None | None |
+| header/action/help/badge grammar | NO CHANGE REQUIRED | PLAN-0 H1/H2/H3 recorded as intentional divergence | None | Owner ruling if convergence desired |
+| disclosure behavior | DEFERRED BY DESIGN | PLAN-0 Q8 — coexisting grammars retained | None | Owner ruling if consolidation desired |
+| accessibility | COMPLETE | aria-labels match visible text on Return/Close controls | None | None |
+| responsive behavior | NO CHANGE REQUIRED | Per-surface strategies documented in PLAN-0 R1 | None | Owner ruling if shared contract desired |
+| Current Document evaluation | NO CHANGE REQUIRED | Outside Package 6 scope (pane system) | None | None |
+| File Knowledge vs Workspace Knowledge boundaries | NO CHANGE REQUIRED | Outside Package 6 scope | None | None |
+| Search remaining Workspace-scoped | NO CHANGE REQUIRED | Outside Package 6 scope | None | None |
+| Edit and Read as modes of one Document Surface | NO CHANGE REQUIRED | Outside Package 6 scope | None | None |
+| Task Board intentional overlay exception | COMPLETE | E1 — overlay stays modal, not routed | None | None |
+| generic-framework prohibition | COMPLETE | No generic expanded-view framework introduced | None | None |
+| Reports and future Package 7 protection | DEFERRED BY DESIGN | Reports runtime untouched; Package 7 not started | None | None |
+
+**Package 6 implementation outcome:** All required behavior accepted. Remaining items
+are documented directions, future evaluations, or deliberately deferred work — no
+concrete unresolved Package 6 inconsistency requires another implementation slice.

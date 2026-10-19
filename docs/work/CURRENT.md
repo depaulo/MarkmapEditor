@@ -8,7 +8,7 @@
 - Branch: development
 - Released baseline: 0.7.0
 - Target release: 0.8.0
-- Status: active
+- Status: accepted
 
 ## Objective
 
@@ -105,14 +105,42 @@ inspected for empty vs filtered-empty distinction.
 3. Confirm message does not claim domain is empty.
 4. Confirm clearing restores results.
 
-## Stop Conditions
+## ACT 2 Slice 3 Closure
 
-- second navigation or close owner required;
-- Task mutation owner would change;
-- persistent browser storage required;
-- broad visual redesign required;
-- Reports runtime would need modification;
-- source does not prove a real inconsistency.
+Status: accepted
+
+Implemented:
+
+- replaced Task Board localStorage filter persistence with module-local state.
+
+Accepted lifecycle:
+
+- same-session close/reopen preserves Task Board filters;
+- full browser refresh resets transient filters;
+- no persistent browser storage is required.
+
+Inspection-only conclusions:
+
+- Task Board exit grammar was already consistent;
+- empty and filtered-empty semantics were already consistent.
+
+Owner browser evidence:
+
+- Task Board opened successfully;
+- same-session behavior passed;
+- post-refresh reset passed;
+- no unexpected Save or mutation was observed.
+
+Release boundary:
+
+- application remains at 0.7.0;
+- Package 6 remains active;
+- 0.8.0 release activation remains unauthorized.
+
+## Current Phase
+
+Package 6 consolidation and remaining-scope assessment. No new active
+implementation slice assigned after Slice 3.
 
 ## Source-Proven Asymmetry (B2) — live-source comparison, 2026-10-18
 

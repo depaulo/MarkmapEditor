@@ -23,12 +23,12 @@
   },
   "git": {
     "currentBranch": "development",
-    "head": "13e9b88d4b056b3487e762e95d75f1770e88ec80",
+    "head": "84311888683a2ad59014a079284c1f7d81b7f4bd",
     "main": "d07435b5bf8aded5fe96f1fe9768247df71124a9",
-    "development": "13e9b88d4b056b3487e762e95d75f1770e88ec80",
+    "development": "84311888683a2ad59014a079284c1f7d81b7f4bd",
     "originMain": "1905a86058b66908ce9d9eb38e8dcef458302d26",
-    "originDevelopment": "13e9b88d4b056b3487e762e95d75f1770e88ec80",
-    "revListMainDevelopment": "2/0",
+    "originDevelopment": "84311888683a2ad59014a079284c1f7d81b7f4bd",
+    "revListMainDevelopment": "4/0",
     "revListMainOriginMain": "6/0",
     "revListDevOriginDev": "0/0",
     "workingTreeClean": true,
@@ -66,6 +66,14 @@
       "85feeac": {
         "subject": "docs(package6): record inspection recovery slice",
         "isAncestorOfMain": false
+      },
+      "484fd94": {
+        "subject": "fix(tasks): replace Task Board localStorage filter persistence with module-local state",
+        "isAncestorOfMain": false
+      },
+      "8431188": {
+        "subject": "docs(package6): record overlay and state consistency slice",
+        "isAncestorOfMain": false
       }
     }
   },
@@ -78,7 +86,7 @@
     },
     "package6": {
       "name": "Expanded-View Behavior and Visual Consistency",
-      "status": "ACT 2 Slice 3 active — Overlay Exit, Transient State, and State-Copy Consistency (E1, F1, Q5) on development",
+      "status": "ACT 2 Slice 3 accepted — Overlay Exit, Transient State, and State-Copy Consistency (E1, F1, Q5) complete on development",
       "plannedVersion": "0.8.x",
       "plan0Document": "docs/architecture/CONSISTENCY_PLAN_0_SURFACE_INVENTORY.md",
       "plan0Status": "delivered, docs-only, zero production changes",
@@ -91,7 +99,7 @@
         "browserEvidence": "owner physical checkpoint (Mme-test-new, 8 projects): filter options, exact-source filtering, clear/reset, empty-vs-filtered-empty, return/scroll preservation; Legacy: label confirmed as rendering fallback",
         "packageDoc": "docs/packages/P6-CONSISTENCY.md"
       },
-      "nextStep": "ACT 2 Slice 3 implementation: F1 correction — replace Task Board localStorage filter persistence with module-local state in task-board.js; add validators + Tier M mutation control; run static gate + Tier M (disposable copy) + secondary consistency inspection"
+      "nextStep": "Package 6 remaining-scope assessment only; no new implementation slice"
     }
   },
   "workflow": {
@@ -101,8 +109,7 @@
     "protectedFiles": ["js/**", "css/**", "index.html", "sw.js"]
   },
   "nextActions": [
-    "Implement ACT 2 Slice 3 F1 correction: replace task-board.js localStorage filter persistence with module-local state",
-    "Add validator assertions proving Task Board filter state is module-local (no localStorage)",
-    "Add Tier M mutation control (disposable copy): close/reopen preserves filter state without localStorage"
+    "Package 6 remaining-scope assessment (documentation and source inspection only, no runtime changes)",
+    "Do NOT activate 0.8.0; no service-worker/version/cache changes; no persistent filter storage"
   ]
 }
