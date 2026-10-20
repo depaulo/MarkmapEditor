@@ -235,7 +235,7 @@ Sidebar Information Architecture.
 |---|---|---|
 | ACT 1 | Projects Source filtering | ACCEPTED (commit 66e3b7a) |
 | ACT 2 | Existing Expanded View behavior and state consistency | ACCEPTED (Slices 1–3) |
-| ACT 3 | Sidebar Information Architecture | Slices 1–3 complete after structural correction (static + executed-DOM gates passed; integrated browser acceptance pending) |
+| ACT 3 | Sidebar Information Architecture | Slices 1–3 complete after structural correction + final Workspace Knowledge ordering correction (static and executed-DOM S1–S41 gates passed; integrated browser acceptance pending) |
 | ACT 4 | Current Document, Edit/Read and Document Surface | planned |
 | ACT 5 | Cross-surface visual, responsive and accessibility consistency | planned |
 | ACT 6 | Package closure and 0.8.0 release | not authorized |
@@ -398,7 +398,7 @@ Functional Edit/Read control, mode state ownership, Editor/Read synchronization,
 
 ### ACT 3 PLAN-0 status
 
-Status: **Slices 1–3 complete after structural correction.** Implementation: Slices 1–3 on `development` (including the pre-browser group-attachment correction and executed-DOM gate S28–S34); integrated browser acceptance pending owner authorization.
+Status: **Slices 1–3 complete after structural correction + final Workspace Knowledge ordering correction.** Implementation: Slices 1–3 on `development` (including the pre-browser group-attachment correction, executed-DOM gate S28–S41, and the narrow ordering correction below); integrated browser acceptance pending owner authorization.
 
 ### ACT 3 Slice 1 — Final Semantic Mapping (recorded 2026-10-20)
 
@@ -407,7 +407,7 @@ Status: **Slices 1–3 complete after structural correction.** Implementation: S
 | Workspace Controls | (empty) | No existing global command area found as child of Sidebar content host; group rendered empty, visually neutral; owner remains existing header/global action area; no duplicate Open Workspace/Today/New Note/New Concept controls |
 | Current Document | Active File | `js/main.js` (`ensureWorkspaceActivePanel`, `renderWorkspaceActivePanel`) |
 | File Knowledge | Tasks, Related/Links | Order: Tasks before Related; `js/main.js` (`ensureWorkspaceTasksPanel`, `ensureWorkspaceRelatedPanel`) |
-| Workspace Knowledge | Search, Notes/Journals, Knowledge/Concepts, Tags, Projects, Index, Archive | Order: Search → Journals → Concepts → Tags → Projects → Index → Archive |
+| Workspace Knowledge | Search, Workspace Index, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive | Order (ACT 3 ordering correction): Search → Workspace Index → Journals → Concepts → Projects → Tags → Archive; no independent Workspace Tasks entry exists, so none was created |
 | Protected ungrouped | Reports | No movement or redesign; protected scope |
 
 Corrections from initial implementation:
@@ -442,3 +442,38 @@ Validation (at ACT 3 completion): workspace-sidebar-visual-validators.cjs 86/86 
   fix (S28–S34 failed on the real defect), 86/86 after.
 - **Integrated browser acceptance:** pending owner authorization. Release
   gate: CLOSED (0.8.x activation not authorized).
+
+### ACT 3 ordering correction (recorded 2026-10-20)
+
+One remaining ACT 3 issue from the integrated visual review: the Workspace
+Knowledge order did not yet reflect the accepted information hierarchy. Narrow
+correction — only the order array in `normalizeWorkspacePanelOrder()` changed
+(plus a stale creation-anchor comment in `ensureWorkspaceIndexPanel()`). No
+panel recreated, no listener re-wired, no Save or domain mutation.
+
+Recorded accepted order:
+- Current Document remains the first informational area (the Workspace Controls group above it stays empty and visually neutral — no visible empty heading, no empty spacing, no duplicated global controls);
+- File Knowledge follows Current Document (document-scoped Tasks, Related/Links unchanged);
+- Workspace Knowledge: Search first, Workspace Index second, Notes/Journals and Knowledge/Concepts follow, then the Workspace aggregations Projects and Tags, Archive last;
+- no independent Workspace-scoped Tasks panel exists — none created; document-scoped Task Review stays in File Knowledge;
+- Tags sits after Projects, immediately before Archive; Tags stays a separate Workspace Knowledge panel;
+- Report remains protected, ungrouped and visually last.
+
+Validation: workspace-sidebar-visual-validators.cjs 93/93 PASS (S1–S41; stale
+S12/S31 order assertions replaced; new executed gate S35–S41 — item-wise
+sequence, group precedences, Quick Actions ownership, repeated-finalization
+order/identity/uniqueness, missing optional panels, no event wiring, no
+Save/mutation); notes 65/65; discovery 52/52; tasks 62/62; `node --check`
+PASS; `git diff --check` clean.
+
+Deferred (recorded as future evaluation items):
+- Workspace Index becoming a richer Workspace Knowledge surface;
+- reducing redundant Index number cards (Index counts/filtering unchanged);
+- moving Tags into Workspace Index;
+- adding or changing Task statuses (Backlog/Ongoing/In Progress not canonical unless source-proven);
+- Archive exclusion from active aggregations — archived files may currently
+  contribute to active Workspace Index counts and possibly Search, Tasks,
+  Projects, Tags and Links; a later source-proven ACT must determine the
+  canonical indexing owner and exclude archived sources from active
+  aggregations without scattering consumer-level filters;
+- Reports redesign.

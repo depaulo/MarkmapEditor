@@ -3,12 +3,12 @@
 ## Identity
 
 - Package: P6
-- ACT: ACT 3 Slice 3
-- Name: Header, Badge and Disclosure Alignment
+- ACT: ACT 3 (Workspace Knowledge ordering correction)
+- Name: Sidebar Information Architecture — final panel order
 - Branch: development
 - Released baseline: 0.7.0
 - Target release: 0.8.0
-- Status: complete (all slices + pre-browser structural correction; static and executed-DOM gates passed, browser acceptance pending)
+- Status: ordering correction complete (static and executed-DOM gates passed, integrated browser acceptance pending)
 - Release activation: false
 
 ## Objective
@@ -238,7 +238,7 @@ Status: **completed**.
 | Workspace Controls | (empty — no existing global command area is movable) | existing header/global action area; group rendered as empty, visually neutral |
 | Current Document | Active File | `js/main.js` (`ensureWorkspaceActivePanel`, `renderWorkspaceActivePanel`) |
 | File Knowledge | Tasks, Related/Links | `js/main.js` (`ensureWorkspaceTasksPanel`, `ensureWorkspaceRelatedPanel`) |
-| Workspace Knowledge | Search, Notes/Journals, Knowledge/Concepts, Tags, Projects, Index, Archive | `js/main.js` (respective ensure/render owners) |
+| Workspace Knowledge | Search, Workspace Index, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive | `js/main.js` (respective ensure/render owners) |
 | Protected ungrouped | Reports | Report panel owner; no movement or redesign |
 
 ### Corrections from initial implementation
@@ -273,7 +273,7 @@ Status: **completed**.
 | Workspace Controls | (empty — no existing global command area is movable) | existing header/global action area; group rendered as empty, visually neutral |
 | Current Document | Active File | `js/main.js` (`ensureWorkspaceActivePanel`, `renderWorkspaceActivePanel`) |
 | File Knowledge | Tasks, Related/Links | `js/main.js` (`ensureWorkspaceTasksPanel`, `ensureWorkspaceRelatedPanel`) |
-| Workspace Knowledge | Search, Notes/Journals, Knowledge/Concepts, Tags, Projects, Index, Archive | `js/main.js` (respective ensure/render owners) |
+| Workspace Knowledge | Search, Workspace Index, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive | `js/main.js` (respective ensure/render owners) |
 | Protected ungrouped | Reports | Report panel owner; no movement or redesign |
 
 ### Correction from initial Slice 2 implementation
@@ -357,11 +357,60 @@ order (`getWorkspaceSidebarContentHost`, `ensureWorkspaceActivePanel`,
 - After the fix: visual suite 86/86 PASS; notes 65/65; discovery 52/52; tasks 62/62; `node --check js/main.js` PASS; `git diff --check` clean.
 - Evidence class: executed-DOM in Node — not browser evidence. Integrated browser acceptance remains owner-gated.
 
+## ACT 3 — Final Sidebar ordering correction (Workspace Knowledge order)
+
+The integrated visual review found one remaining ACT 3 issue: the Workspace
+Knowledge panel order did not yet reflect the accepted information hierarchy.
+This narrow correction changes only the deterministic order array in
+`normalizeWorkspacePanelOrder()` (plus a stale creation-anchor comment in
+`ensureWorkspaceIndexPanel()`). No panel recreated, no listener re-wired, no
+Save or domain mutation, no Edit/Read or Reports change, no Archive behavior
+change.
+
+### Accepted final order
+
+1. **Workspace Controls** — empty, visually neutral; Open Workspace / Today /
+   New Note stay with their existing global-action owner (no visible empty
+   heading, no empty spacing, no duplicated global controls).
+2. **Current Document** — first informational area; document identity, source
+   access and the existing Quick Actions remain inside it.
+3. **File Knowledge** — document-scoped only: Tasks (Task Review), Links In/Out.
+4. **Workspace Knowledge** — Search → Workspace Index → Notes/Journals →
+   Knowledge/Concepts → Projects → Tags → Archive. No independent
+   Workspace-scoped Tasks panel exists, so none was created; the
+   document-scoped Task Review stays in File Knowledge.
+5. **Report** — protected, ungrouped, visually last.
+
+### Deferred decisions (recorded, not implemented)
+
+- Workspace Index becoming a richer Workspace Knowledge surface;
+- reducing redundant Index number cards (and any Index count/filter change);
+- moving Tags into Workspace Index;
+- adding or changing Task statuses (Backlog/Ongoing/In Progress only if source proves canonical);
+- Archive exclusion from active aggregations — archived files may currently
+  contribute to active Workspace Index counts and possibly Search, Tasks,
+  Projects, Tags and Links; a later source-proven ACT must determine the
+  canonical indexing owner and exclude archived sources from active
+  aggregations without scattering consumer-level filters;
+- Reports redesign.
+
+### Evidence
+
+- Stale order assertions replaced (static S12, executed S31 constant); new
+  executed-DOM gate S35–S41: item-wise Workspace Knowledge sequence, group
+  precedences, Quick Actions ownership, repeated-finalization order/identity/
+  uniqueness, missing optional panels skipped safely, structural owners free
+  of event wiring and Save/mutation.
+- `workspace-sidebar-visual-validators.cjs`: 93/93 PASS (S1–S41); notes 65/65;
+  discovery 52/52; tasks 62/62; `node --check js/main.js` PASS;
+  `git diff --check` clean.
+- Evidence class: executed-DOM in Node — not browser evidence.
+
 ## Current Phase
 
-ACT 3 complete — all slices implemented after structural correction, including
-the group-attachment correction above.
-ACT 3 static gate (S1–S27) + executed rendered-DOM gate (S28–S34, 86/86) passed; integrated browser acceptance deferred to owner authorization.
+ACT 3 complete — all slices, group-attachment correction and the final
+Workspace Knowledge ordering correction above.
+ACT 3 static gate (S1–S27) + executed rendered-DOM gate (S28–S41, 93/93) passed; integrated browser acceptance deferred to owner authorization.
 ACT 4 not started.
 
 Package 6 release gate: closed.

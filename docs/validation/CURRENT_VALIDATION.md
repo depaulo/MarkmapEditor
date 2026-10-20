@@ -5,7 +5,7 @@
 
 ## Current required test tier
 
-**Tier: ACT 3 (all slices complete after structural correction — targeted Sidebar/Workspace suites + source-contract assertions S1–S27 + executed rendered-DOM gate S28–S34 + `git diff --check`).**
+**Tier: ACT 3 (all slices + structural correction + final Workspace Knowledge ordering correction — targeted Sidebar/Workspace suites + source-contract assertions S1–S27 + executed rendered-DOM gate S28–S41 + `git diff --check`).**
 
 ## ACT 2 — COMPLETE (all slices accepted)
 
@@ -28,7 +28,7 @@ Semantic mapping (final):
 - Workspace Controls: empty (no movable global command area; owner remains existing header/global action area)
 - Current Document: Active File
 - File Knowledge: Tasks, Related/Links
-- Workspace Knowledge: Search, Notes/Journals, Knowledge/Concepts, Tags, Projects, Index, Archive
+- Workspace Knowledge: Search, Workspace Index, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive
 - Protected ungrouped: Reports (unchanged)
 
 Static validation:
@@ -49,7 +49,7 @@ Semantic mapping (final):
 - Workspace Controls: empty (no movable global command area; owner remains existing header/global action area)
 - Current Document: Active File
 - File Knowledge: Tasks, Related/Links
-- Workspace Knowledge: Search, Notes/Journals, Knowledge/Concepts, Tags, Projects, Index, Archive
+- Workspace Knowledge: Search, Workspace Index, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive
 - Protected ungrouped: Reports (unchanged)
 
 Correction from initial implementation:
@@ -119,10 +119,40 @@ Evidence (executed-DOM in Node — NOT browser evidence):
 - gate-first, before fix: 79/86 with S28–S34 FAILED (detached-group/panel diagnostics — the gate caught the real defect);
 - after fix: visual suite 86/86 PASS; notes 65/65; discovery 52/52; tasks 62/62; `node --check js/main.js` PASS; `git diff --check` clean.
 
+## ACT 3 ordering correction — COMPLETE (final Workspace Knowledge order)
+
+ACT 3 — Workspace Knowledge ordering correction: COMPLETE. Narrow runtime
+owner: the order array in `normalizeWorkspacePanelOrder()` (plus a stale
+creation-anchor comment in `ensureWorkspaceIndexPanel()`). No panel recreated;
+no listeners re-wired; no Save or domain mutation; no Edit/Read, Reports,
+Archive-behavior, Task-status or Index-card change.
+
+Accepted order recorded:
+- Current Document remains the first informational area (after the empty, visually neutral Workspace Controls);
+- File Knowledge follows Current Document (document-scoped Tasks + Related/Links unchanged);
+- Workspace Knowledge: Search, Workspace Index, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive;
+- no independent Workspace-scoped Tasks panel exists — none created; document-scoped Task Review stays in File Knowledge;
+- Report remains protected, ungrouped, visually last.
+
+Validation (executed-DOM in Node — NOT browser evidence):
+- `workspace-sidebar-visual-validators.cjs`: 93/93 PASS (S1–S41). Stale order
+  assertions replaced (static S12, executed S31 constant). New executed gate
+  S35–S41: item-wise Workspace Knowledge sequence; group precedences; Quick
+  Actions ownership; repeated finalization preserves exact order, identity and
+  uniqueness; missing optional panels skip safely; structural owners contain
+  no event wiring; structural owners perform no Save/mutation.
+- `workspace-notes-sidebar-validators.cjs`: 65/65 PASS.
+- `workspace-discovery-consumers-validators.cjs`: 52/52 PASS.
+- `workspace-task-consumers-validators.cjs`: 62/62 PASS.
+- `node --check js/main.js`: PASS.
+- `git diff --check`: clean.
+
+Release gate: still CLOSED — 0.8.x activation not authorized; no service-worker/version/cache changes in this package.
+
 ## Pending owner checkpoints
 
 - ACT 3 integrated browser acceptance — pending owner authorization (static
-  S1–S27 and executed-DOM S28–S34 gates passed; browser gate not started;
+  S1–S27 and executed-DOM S28–S41 gates passed; browser gate not started;
   ACT 4 not started).
 
 ## ACT 1 closure evidence (2026-10-18, commit 66e3b7a)
@@ -235,5 +265,5 @@ Browser gate: Task Board opens normally; visible exit works; Escape/close works;
 ## Pending owner checkpoints
 
 - ACT 3 integrated browser acceptance — pending owner authorization (static
-  S1–S27 and executed-DOM S28–S34 gates passed; browser gate not started;
+  S1–S27 and executed-DOM S28–S41 gates passed; browser gate not started;
   ACT 4 not started).
