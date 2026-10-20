@@ -1897,7 +1897,7 @@ function ensureWorkspaceActivePanel() {
     >
       <span class="workspacePanelHeaderLeft">
         <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-        <span class="workspaceActiveTitle">Active</span>
+        <span class="workspaceActiveTitle">Current Document</span>
       </span>
 
       <span id="workspaceActiveBadge" class="workspaceActiveBadge">
@@ -1958,29 +1958,31 @@ function ensureWorkspaceIndexPanel() {
           <span class="workspacePanelChevron" aria-hidden="true">▶</span>
           <span class="workspaceIndexTitle">Workspace Index</span>
         </span>
+      </button>
+
+      <span class="workspacePanelHeaderControls">
+        <button
+          id="btnRefreshWorkspaceIndex"
+          type="button"
+          title="Refresh workspace index"
+          aria-label="Refresh workspace index"
+        >
+          ↻
+        </button>
+
+        <button
+          id="btnOpenWorkspaceIndex"
+          type="button"
+          title="Open full Workspace Index"
+          aria-label="Open full Workspace Index"
+        >
+          ▤
+        </button>
 
         <span id="workspaceIndexBadge" class="workspacePanelBadge">
           Not ready
         </span>
-      </button>
-
-      <button
-        id="btnRefreshWorkspaceIndex"
-        type="button"
-        title="Refresh workspace index"
-        aria-label="Refresh workspace index"
-      >
-        ↻
-      </button>
-
-      <button
-        id="btnOpenWorkspaceIndex"
-        type="button"
-        title="Open full Workspace Index"
-        aria-label="Open full Workspace Index"
-      >
-        ▤
-      </button>
+      </span>
     </div>
 
     <div class="workspacePanelBody">
@@ -3570,6 +3572,16 @@ function ensureWorkspaceSidebarGroups() {
       group.setAttribute('data-sidebar-group', item.key);
       group.setAttribute('role', 'group');
       group.setAttribute('aria-label', item.label);
+      // Structural correction: a detached group is invisible to
+      // document.getElementById and to the ordering loop below, and panels
+      // moved into it would vanish from the rendered Sidebar. Attach the new
+      // group to the host now; the ordering loop then places it after the
+      // header.
+      host.appendChild(group);
+    } else if (group.parentNode !== host) {
+      // Defensive: a group that exists but lost its host placement is
+      // re-homed so the ordering loop can position it.
+      host.appendChild(group);
     }
     groups[item.key] = group;
   }
