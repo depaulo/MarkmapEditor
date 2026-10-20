@@ -1996,9 +1996,11 @@ function ensureWorkspaceIndexPanel() {
     </div>
   `;
 
-  // Insert after Tags and before Navigation History so the sidebar order is:
-  // Header, Search, Active, Journals, Concepts, Related, Open Tasks, Tags,
-  // Workspace Index, Navigation History.
+  // Creation-time anchor only: place the newly created panel near the old
+  // flat-sidebar position (after Tags, before Navigation History). Final
+  // placement is owned by normalizeWorkspacePanelOrder(), which moves this
+  // node into the accepted Workspace Knowledge order: Search, Workspace
+  // Index, Notes, Knowledge, Projects, Tags, Archive.
   const tagsPanel = host.querySelector('#workspaceTagsPanel');
   const navControls = host.querySelector('.workspaceNavControls');
 
@@ -3656,12 +3658,19 @@ function normalizeWorkspacePanelOrder() {
       'workspaceRelatedPanel',
     ],
     workspaceWorkspaceKnowledgeGroup: [
+      // Accepted hierarchy (ACT 3 ordering correction): document-oriented
+      // panels first (Search, then the Workspace Index Expanded-View entry,
+      // then Notes and Knowledge), followed by the Workspace aggregations
+      // Projects and Tags, with Archive last. There is no independent
+      // Workspace-scoped Tasks panel: workspaceTasksPanel is the
+      // document-scoped Task Review owned by File Knowledge, so no Tasks
+      // entry is created here.
       'workspaceSearchPanel',
+      'workspaceIndexPanel',
       'workspaceJournalsPanel',
       'workspaceConceptsPanel',
-      'workspaceTagsPanel',
       'workspaceProjectsPanel',
-      'workspaceIndexPanel',
+      'workspaceTagsPanel',
       'workspaceArchivePanel',
     ],
   };

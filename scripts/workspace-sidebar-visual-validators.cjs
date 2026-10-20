@@ -1076,14 +1076,16 @@ await check('S11', 'File Knowledge orders Tasks before Related', () => {
   return tasksIdx >= 0 && relatedIdx >= 0 && tasksIdx < relatedIdx;
 });
 
-// S12: Workspace Knowledge panel order: Search, Journals, Concepts, Tags, Projects, Index, Archive
-await check('S12', 'Workspace Knowledge order: Search → Journals → Concepts → Tags → Projects → Index → Archive', () => {
+// S12: Workspace Knowledge panel order: Search, Workspace Index, Notes,
+// Knowledge, Projects, Tags, Archive (ACT 3 ordering correction)
+await check('S12', 'Workspace Knowledge order: Search → Workspace Index → Notes → Knowledge → Projects → Tags → Archive', () => {
   const sec = MAIN_SOURCE.slice(
     MAIN_SOURCE.indexOf('workspaceWorkspaceKnowledgeGroup: ['),
     MAIN_SOURCE.indexOf(']', MAIN_SOURCE.indexOf('workspaceWorkspaceKnowledgeGroup: [')) + 1
   );
-  const expected = ['workspaceSearchPanel', 'workspaceJournalsPanel', 'workspaceConceptsPanel',
-                    'workspaceTagsPanel', 'workspaceProjectsPanel', 'workspaceIndexPanel',
+  const expected = ['workspaceSearchPanel', 'workspaceIndexPanel',
+                    'workspaceJournalsPanel', 'workspaceConceptsPanel',
+                    'workspaceProjectsPanel', 'workspaceTagsPanel',
                     'workspaceArchivePanel'];
   let lastIdx = -1;
   for (const panel of expected) {
@@ -1465,11 +1467,11 @@ const MAPPED_PANEL_IDS = [
 
 const WORKSPACE_KNOWLEDGE_ORDER = [
   'workspaceSearchPanel',
+  'workspaceIndexPanel',
   'workspaceJournalsPanel',
   'workspaceConceptsPanel',
-  'workspaceTagsPanel',
   'workspaceProjectsPanel',
-  'workspaceIndexPanel',
+  'workspaceTagsPanel',
   'workspaceArchivePanel',
 ];
 
@@ -1477,7 +1479,13 @@ const WORKSPACE_KNOWLEDGE_ORDER = [
 // owners: panels are ensured flat (first open), then grouped, then ordered.
 // The fixture mirrors index.html: header, the flat panels the earlier
 // ensure* owners leave behind, Report, and the nav controls.
-function runStructuralPipeline() {
+const DEFAULT_FIXTURE_PANELS = [
+  'workspaceSearchPanel', 'workspaceJournalsPanel', 'workspaceConceptsPanel',
+  'workspaceRelatedPanel', 'workspaceTasksPanel', 'workspaceTagsPanel',
+  'workspaceProjectsPanel', 'workspaceArchivePanel', 'workspaceReportPanel',
+];
+
+function runStructuralPipeline(fixturePanels) {
   const { doc, body } = makeTreeDocument();
 
   const sidebar = makeTreeElement('div');
@@ -1492,11 +1500,7 @@ function runStructuralPipeline() {
   header.className = 'workspaceHeader';
   scroller.appendChild(header);
 
-  for (const id of [
-    'workspaceSearchPanel', 'workspaceJournalsPanel', 'workspaceConceptsPanel',
-    'workspaceRelatedPanel', 'workspaceTasksPanel', 'workspaceTagsPanel',
-    'workspaceProjectsPanel', 'workspaceArchivePanel', 'workspaceReportPanel',
-  ]) {
+  for (const id of fixturePanels || DEFAULT_FIXTURE_PANELS) {
     const panel = makeTreeElement('div');
     panel.id = id;
     panel.className = 'workspaceSection';
@@ -1517,7 +1521,7 @@ function runStructuralPipeline() {
   return { doc, sidebar, host: scroller, header, api };
 }
 
-  group('ACT 3 — Executed rendered-DOM structural gate (S28-S34)');
+  group('ACT 3 — Executed rendered-DOM structural gate (S28-S41)');
 
 let d28 = null;
 let d29 = null;
@@ -1526,6 +1530,13 @@ let d31 = null;
 let d32 = null;
 let d33 = null;
 let d34 = null;
+let d35 = null;
+let d36 = null;
+let d37 = null;
+let d38 = null;
+let d39 = null;
+let d40 = null;
+let d41 = null;
 
 // S28: all four group containers must END UP attached to the rendered host
 await check('S28', 'executed DOM: all four groups attached to the rendered host', () => {
@@ -1676,6 +1687,196 @@ await check('S34', 'executed DOM: second grouping run preserves group and panel 
   d34 = reasons.length ? reasons.join('; ') : null;
   return reasons.length === 0;
 }, () => d34);
+
+// S35: accepted Workspace Knowledge semantic sequence, asserted item by item —
+// Search first, Workspace Index immediately after, Notes and Knowledge next,
+// then the Workspace aggregations Projects and Tags, Archive final; no
+// Workspace Tasks entry (the only tasks panel is the document-scoped Task
+// Review, owned by File Knowledge)
+await check('S35', 'executed DOM: item-wise Workspace Knowledge sequence (Search, Index, Notes, Knowledge, Projects, Tags, Archive)', () => {
+  const state = runStructuralPipeline();
+  const g = state.doc.getElementById('workspaceWorkspaceKnowledgeGroup');
+  const ids = g ? g.childNodes.map((n) => n.id) : [];
+  const at = (id) => ids.indexOf(id);
+  const reasons = [];
+  if (!g) {
+    reasons.push('Workspace Knowledge group absent from rendered tree');
+  } else {
+    if (at('workspaceSearchPanel') !== 0) reasons.push('Search not first (index ' + at('workspaceSearchPanel') + ')');
+    if (at('workspaceIndexPanel') !== 1) reasons.push('Workspace Index does not immediately follow Search (index ' + at('workspaceIndexPanel') + ')');
+    const j = at('workspaceJournalsPanel');
+    if (j !== -1 && j !== 2) reasons.push('Notes/Journals should follow Workspace Index (expected 2, got ' + j + ')');
+    const c = at('workspaceConceptsPanel');
+    if (c !== -1 && (j === -1 ? c !== 2 : c !== j + 1)) {
+      reasons.push('Knowledge/Concepts should follow Notes (expected ' + (j === -1 ? 2 : j + 1) + ', got ' + c + ')');
+    }
+    const p = at('workspaceProjectsPanel');
+    const lastDocPanel = c !== -1 ? c : j;
+    if (p === -1) reasons.push('Projects missing from Workspace Knowledge');
+    else if (p <= lastDocPanel) reasons.push('Projects does not follow the document-oriented panels (index ' + p + ')');
+    const t = at('workspaceTagsPanel');
+    if (t === -1) reasons.push('Tags missing from Workspace Knowledge');
+    else if (p !== -1 && t !== p + 1) reasons.push('Tags does not immediately follow Projects (index ' + t + ')');
+    const a = at('workspaceArchivePanel');
+    if (a === -1 || a !== ids.length - 1) {
+      reasons.push('Archive is not the final Workspace Knowledge panel (index ' + a + ' of ' + ids.length + ')');
+    }
+    if (ids.includes('workspaceTasksPanel')) reasons.push('document-scoped Task Review leaked into Workspace Knowledge');
+    if (ids.some((id) => !id)) reasons.push('unnamed child node inside Workspace Knowledge');
+  }
+  d35 = reasons.length ? reasons.join('; ') : null;
+  return reasons.length === 0;
+}, () => d35);
+
+// S36: group precedences — Current Document precedes File Knowledge, File
+// Knowledge precedes Workspace Knowledge, and Report stays outside Workspace
+// Knowledge while following it
+await check('S36', 'executed DOM: group precedences (Current Document < File Knowledge < Workspace Knowledge < Report)', () => {
+  const state = runStructuralPipeline();
+  const pos = (id) => state.host.childNodes.findIndex((n) => n.id === id);
+  const cd = pos('workspaceCurrentDocumentGroup');
+  const fk = pos('workspaceFileKnowledgeGroup');
+  const wk = pos('workspaceWorkspaceKnowledgeGroup');
+  const rp = pos('workspaceReportPanel');
+  const reasons = [];
+  if (cd === -1 || fk === -1 || wk === -1 || rp === -1) {
+    reasons.push('missing from host: currentDoc=' + cd + ' fileK=' + fk + ' wsK=' + wk + ' report=' + rp);
+  } else {
+    if (!(cd < fk)) reasons.push('Current Document does not precede File Knowledge');
+    if (!(fk < wk)) reasons.push('File Knowledge does not precede Workspace Knowledge');
+    if (!(wk < rp)) reasons.push('Report does not follow Workspace Knowledge');
+    const report = state.doc.getElementById('workspaceReportPanel');
+    const wsg = state.doc.getElementById('workspaceWorkspaceKnowledgeGroup');
+    if (report && wsg && report.parentNode === wsg) reasons.push('Report is inside Workspace Knowledge');
+    if (report && report.parentNode !== state.host) reasons.push('Report is not a direct child of the host');
+  }
+  d36 = reasons.length ? reasons.join('; ') : null;
+  return reasons.length === 0;
+}, () => d36);
+
+// S37: Quick Actions remain inside Current Document — the
+// #workspaceActiveActions container is rendered exactly once, by
+// renderWorkspaceActivePanel, into #workspaceActiveBody which exists only in
+// the ensureWorkspaceActivePanel template; S29/S31 prove that panel is the
+// Current Document group's child in the executed tree
+await check('S37', 'Quick Actions rendered only inside the Current Document panel (source ownership + executed membership)', () => {
+  const render = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceActivePanel() {');
+  const ensure = extractBlockFrom(MAIN_SOURCE, 'function ensureWorkspaceActivePanel() {');
+  const reasons = [];
+  if (!/id="workspaceActiveActions"/.test(render)) reasons.push('renderWorkspaceActivePanel no longer renders #workspaceActiveActions');
+  if (!/getElementById\('workspaceActiveBody'\)/.test(render)) reasons.push('renderWorkspaceActivePanel no longer targets #workspaceActiveBody');
+  if (!/id="workspaceActiveBody"/.test(ensure)) reasons.push('#workspaceActiveBody template missing from ensureWorkspaceActivePanel');
+  const actionMarks = (MAIN_SOURCE.match(/id="workspaceActiveActions"/g) || []).length;
+  if (actionMarks !== 1) reasons.push('#workspaceActiveActions markup occurrences: ' + actionMarks + ' (expected 1)');
+  const bodyMarks = (MAIN_SOURCE.match(/id="workspaceActiveBody"/g) || []).length;
+  if (bodyMarks !== 1) reasons.push('#workspaceActiveBody markup occurrences: ' + bodyMarks + ' (expected 1)');
+  const state = runStructuralPipeline();
+  const active = state.doc.getElementById('workspaceActivePanel');
+  const parent = active ? active.parentNode : null;
+  if (!parent || parent.id !== 'workspaceCurrentDocumentGroup') {
+    reasons.push('executed: active panel parent is ' + (parent ? parent.id || parent.tagName : 'null'));
+  }
+  d37 = reasons.length ? reasons.join('; ') : null;
+  return reasons.length === 0;
+}, () => d37);
+
+// S38: repeated finalization — the second grouping/ordering pass must change
+// neither the host order nor any group's child order, recreate no node and
+// duplicate nothing
+await check('S38', 'executed DOM: repeated finalization preserves exact order, node identity and uniqueness', () => {
+  const state = runStructuralPipeline();
+  const snapshot = () => ({
+    host: state.host.childNodes.map((n) => n.id || n.className),
+    groups: GROUP_IDS.map((gid) => {
+      const g = state.doc.getElementById(gid);
+      return g ? g.childNodes.map((n) => n.id) : null;
+    }),
+  });
+  const before = snapshot();
+  const all = GROUP_IDS.concat(MAPPED_PANEL_IDS).concat(['workspaceReportPanel']);
+  const nodesBefore = all.map((id) => state.doc.getElementById(id));
+  state.api.ensureWorkspaceSidebarGroups();
+  state.api.normalizeWorkspacePanelOrder();
+  const after = snapshot();
+  const reasons = [];
+  if (before.host.join('|') !== after.host.join('|')) {
+    reasons.push('host order changed: ' + before.host.join(',') + ' -> ' + after.host.join(','));
+  }
+  before.groups.forEach((g, i) => {
+    const now = after.groups[i];
+    if ((g || []).join(',') !== (now || []).join(',')) {
+      reasons.push(GROUP_IDS[i] + ' order changed: ' + (g || []).join(',') + ' -> ' + (now || []).join(','));
+    }
+  });
+  all.forEach((id, i) => {
+    const node = state.doc.getElementById(id);
+    if (!node) reasons.push(id + ' missing after second run');
+    else if (node !== nodesBefore[i]) reasons.push(id + ' recreated on second finalization');
+    if (countIdInTree(state.doc.documentElement, id) !== 1) reasons.push(id + ' occurs more than once');
+  });
+  d38 = reasons.length ? reasons.join('; ') : null;
+  return reasons.length === 0;
+}, () => d38);
+
+// S39: absent inert/optional panels (Notes, Knowledge, Tags) must not break
+// grouping or ordering — the remaining panels keep the accepted relative order
+await check('S39', 'executed DOM: missing optional panels are skipped without breaking ordering', () => {
+  const state = runStructuralPipeline([
+    'workspaceSearchPanel', 'workspaceRelatedPanel', 'workspaceTasksPanel',
+    'workspaceProjectsPanel', 'workspaceArchivePanel', 'workspaceReportPanel',
+  ]);
+  const reasons = [];
+  const childIds = (gid) => {
+    const g = state.doc.getElementById(gid);
+    return g ? g.childNodes.map((n) => n.id) : null;
+  };
+  GROUP_IDS.forEach((gid) => {
+    const g = state.doc.getElementById(gid);
+    if (!g || g.parentNode !== state.host) reasons.push(gid + ' not attached to host');
+  });
+  const cd = childIds('workspaceCurrentDocumentGroup');
+  if (!cd || cd.join(',') !== 'workspaceActivePanel') reasons.push('Current Document children: ' + (cd ? cd.join(',') : 'absent'));
+  const fk = childIds('workspaceFileKnowledgeGroup');
+  if (!fk || fk.join(',') !== 'workspaceTasksPanel,workspaceRelatedPanel') reasons.push('File Knowledge children: ' + (fk ? fk.join(',') : 'absent'));
+  const wk = childIds('workspaceWorkspaceKnowledgeGroup');
+  if (!wk || wk.join(',') !== 'workspaceSearchPanel,workspaceIndexPanel,workspaceProjectsPanel,workspaceArchivePanel') {
+    reasons.push('Workspace Knowledge children: ' + (wk ? wk.join(',') : 'absent'));
+  }
+  const tail = state.host.childNodes.slice(5).map((n) => n.id || n.className);
+  if (tail.join(',') !== 'workspaceReportPanel,workspaceNavControls') {
+    reasons.push('ungrouped tail: ' + (tail.join(',') || 'empty'));
+  }
+  d39 = reasons.length ? reasons.join('; ') : null;
+  return reasons.length === 0;
+}, () => d39);
+
+// S40: the structural grouping/ordering owners add no event wiring, so
+// repeated finalization cannot duplicate listeners
+await check('S40', 'source: grouping and ordering owners contain no event wiring', () => {
+  const owners = [
+    ['ensureWorkspaceSidebarGroups', extractBlockFrom(MAIN_SOURCE, 'function ensureWorkspaceSidebarGroups() {')],
+    ['normalizeWorkspacePanelOrder', extractBlockFrom(MAIN_SOURCE, 'function normalizeWorkspacePanelOrder() {')],
+  ];
+  const bad = owners
+    .filter(([, src]) => /addEventListener|removeEventListener|\.on[a-z]+\s*=/.test(src))
+    .map(([name]) => name);
+  d40 = bad.length ? 'event wiring found in: ' + bad.join(', ') : null;
+  return bad.length === 0;
+}, () => d40);
+
+// S41: the structural owners perform no Save or domain mutation
+await check('S41', 'source: structural owners perform no Save or domain mutation', () => {
+  const owners = [
+    ['ensureWorkspaceSidebarGroups', extractBlockFrom(MAIN_SOURCE, 'function ensureWorkspaceSidebarGroups() {')],
+    ['normalizeWorkspacePanelOrder', extractBlockFrom(MAIN_SOURCE, 'function normalizeWorkspacePanelOrder() {')],
+    ['ensureWorkspaceActivePanel', extractBlockFrom(MAIN_SOURCE, 'function ensureWorkspaceActivePanel() {')],
+    ['ensureWorkspaceIndexPanel', extractBlockFrom(MAIN_SOURCE, 'function ensureWorkspaceIndexPanel() {')],
+  ];
+  const mutation = /localStorage|sessionStorage|saveActiveNote|saveNote|saveWorkspace|persistWorkspace|writeText|writeFile|markDirty|recordMutation|applyNoteMetadata|saveNoteMetadata/;
+  const bad = owners.filter(([, src]) => mutation.test(src)).map(([name]) => name);
+  d41 = bad.length ? 'Save/mutation token found in: ' + bad.join(', ') : null;
+  return bad.length === 0;
+}, () => d41);
 
 // ===============================================================
   const passed = results.filter((r) => !r.group && r.ok).length;
