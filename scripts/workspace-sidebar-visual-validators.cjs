@@ -851,11 +851,11 @@ function buildTagsSandbox() {
     return v0.every((t) => !/\bpane\b|PaneRegistry/i.test(t));
   });
 
-  // The accepted release boundary advanced to 0.6.3 (Package 3 closure). The
-  // ACT V0 fences that still hold are the ones about internal scaffolding never
-  // leaking into shipped product files.
+  // The accepted release boundary is 0.7.0 (Package 5 closure). sw.js carries
+  // the 0.7.0 cache identity; the ACT V0 fences below confirm no internal
+  // scaffolding leaks into shipped product files.
   await check('Y44', 'no internal scaffolding leaks into shipped product files', () => {
-    return /markmap-journal-pwa-0\.6\.3-tasks-wiki-links-foundation/.test(SW_SOURCE) &&
+    return /markmap-journal-pwa-0\.7\.0-projects-foundation/.test(SW_SOURCE) &&
       !/ACT V0/.test(SW_SOURCE) &&
       !/ACT V0/.test(read('js', 'ui', 'help-content.js')) &&
       !/ACT V0/.test(read('js', 'ui', 'release-notes-content.js')) &&
@@ -991,7 +991,164 @@ function buildTagsSandbox() {
     return own('workspaceProjectsTitle') === '600' && own('workspaceArchiveTitle') === '650';
   });
 
-  // ===============================================================
+  group('ACT 3 Slice 1 — Structural Grouping (S1-S8)');
+
+// S1: exactly one Current Document group spec entry
+await check('S1', 'exactly one current-document group spec', () => {
+  const sec = MAIN_SOURCE.slice(
+    MAIN_SOURCE.indexOf('const spec = ['),
+    MAIN_SOURCE.indexOf('];', MAIN_SOURCE.indexOf('const spec = [')) + 2
+  );
+  return (sec.match(/workspaceCurrentDocumentGroup/g) || []).length === 1;
+});
+
+// S2: exactly one File Knowledge group spec entry
+await check('S2', 'exactly one file-knowledge group spec', () => {
+  const sec = MAIN_SOURCE.slice(
+    MAIN_SOURCE.indexOf('const spec = ['),
+    MAIN_SOURCE.indexOf('];', MAIN_SOURCE.indexOf('const spec = [')) + 2
+  );
+  return (sec.match(/workspaceFileKnowledgeGroup/g) || []).length === 1;
+});
+
+// S3: exactly one Workspace Knowledge group spec entry
+await check('S3', 'exactly one workspace-knowledge group spec', () => {
+  const sec = MAIN_SOURCE.slice(
+    MAIN_SOURCE.indexOf('const spec = ['),
+    MAIN_SOURCE.indexOf('];', MAIN_SOURCE.indexOf('const spec = [')) + 2
+  );
+  return (sec.match(/workspaceWorkspaceKnowledgeGroup/g) || []).length === 1;
+});
+
+// S4: no more than one Workspace Controls group spec entry
+await check('S4', 'at most one workspace-controls group spec', () => {
+  const sec = MAIN_SOURCE.slice(
+    MAIN_SOURCE.indexOf('const spec = ['),
+    MAIN_SOURCE.indexOf('];', MAIN_SOURCE.indexOf('const spec = [')) + 2
+  );
+  return (sec.match(/workspaceControlsGroup/g) || []).length <= 1;
+});
+
+// S5: Search panel belongs to Workspace Knowledge (not Workspace Controls)
+await check('S5', 'Search panel is in Workspace Knowledge group', () => {
+  return /workspaceSearchPanel:\s*'workspace-knowledge'/.test(MAIN_SOURCE) &&
+    !/workspaceSearchPanel:\s*'workspace-controls'/.test(MAIN_SOURCE);
+});
+
+// S6: Tags panel belongs to Workspace Knowledge (not File Knowledge)
+await check('S6', 'Tags panel is in Workspace Knowledge group', () => {
+  return /workspaceTagsPanel:\s*'workspace-knowledge'/.test(MAIN_SOURCE) &&
+    !/workspaceTagsPanel:\s*'file-knowledge'/.test(MAIN_SOURCE);
+});
+
+// S7: Tasks panel belongs to File Knowledge
+await check('S7', 'Tasks panel is in File Knowledge group', () => {
+  return /workspaceTasksPanel:\s*'file-knowledge'/.test(MAIN_SOURCE);
+});
+
+// S8: Related panel belongs to File Knowledge
+await check('S8', 'Related panel is in File Knowledge group', () => {
+  return /workspaceRelatedPanel:\s*'file-knowledge'/.test(MAIN_SOURCE);
+});
+
+// S9: Reports panel is not assigned to any group (protected, ungrouped)
+await check('S9', 'Reports panel is ungrouped (protected scope)', () => {
+  return !/workspaceReportPanel:\s*'(workspace-controls|current-document|file-knowledge|workspace-knowledge)'/.test(MAIN_SOURCE);
+});
+
+// S10: Workspace Controls group has no panels assigned
+await check('S10', 'Workspace Controls group has no panels', () => {
+  return /workspaceControlsGroup:\s*\[\s*\]/.test(MAIN_SOURCE);
+});
+
+// S11: File Knowledge panel order: Tasks before Related
+await check('S11', 'File Knowledge orders Tasks before Related', () => {
+  const sec = MAIN_SOURCE.slice(
+    MAIN_SOURCE.indexOf('workspaceFileKnowledgeGroup: ['),
+    MAIN_SOURCE.indexOf(']', MAIN_SOURCE.indexOf('workspaceFileKnowledgeGroup: [')) + 1
+  );
+  const tasksIdx = sec.indexOf('workspaceTasksPanel');
+  const relatedIdx = sec.indexOf('workspaceRelatedPanel');
+  return tasksIdx >= 0 && relatedIdx >= 0 && tasksIdx < relatedIdx;
+});
+
+// S12: Workspace Knowledge panel order: Search, Journals, Concepts, Tags, Projects, Index, Archive
+await check('S12', 'Workspace Knowledge order: Search → Journals → Concepts → Tags → Projects → Index → Archive', () => {
+  const sec = MAIN_SOURCE.slice(
+    MAIN_SOURCE.indexOf('workspaceWorkspaceKnowledgeGroup: ['),
+    MAIN_SOURCE.indexOf(']', MAIN_SOURCE.indexOf('workspaceWorkspaceKnowledgeGroup: [')) + 1
+  );
+  const expected = ['workspaceSearchPanel', 'workspaceJournalsPanel', 'workspaceConceptsPanel',
+                    'workspaceTagsPanel', 'workspaceProjectsPanel', 'workspaceIndexPanel',
+                    'workspaceArchivePanel'];
+  let lastIdx = -1;
+  for (const panel of expected) {
+    const idx = sec.indexOf(panel);
+    if (idx === -1 || idx <= lastIdx) return false;
+    lastIdx = idx;
+  }
+  return true;
+});
+
+// S13: Group order in host: Controls → Current Document → File Knowledge → Workspace Knowledge
+await check('S13', 'group order is deterministic (Controls → Current Document → File Knowledge → Workspace Knowledge)', () => {
+  const sec = MAIN_SOURCE.slice(
+    MAIN_SOURCE.indexOf("const groupOrder = ["),
+    MAIN_SOURCE.indexOf('];', MAIN_SOURCE.indexOf("const groupOrder = [")) + 2
+  );
+  const expected = ['workspaceControlsGroup', 'workspaceCurrentDocumentGroup',
+                    'workspaceFileKnowledgeGroup', 'workspaceWorkspaceKnowledgeGroup'];
+  let lastIdx = -1;
+  for (const id of expected) {
+    const idx = sec.indexOf(id);
+    if (idx === -1 || idx <= lastIdx) return false;
+    lastIdx = idx;
+  }
+  return true;
+});
+
+// S14: ensureWorkspaceSidebarGroups exists and moves existing nodes via appendChild (no recreation)
+await check('S14', 'ensureWorkspaceSidebarGroups moves nodes via appendChild', () => {
+  return /function ensureWorkspaceSidebarGroups\(\)/.test(MAIN_SOURCE) &&
+    /group\.appendChild\(panel\)/.test(MAIN_SOURCE) &&
+    !/document\.createElement.*panel/.test(MAIN_SOURCE);
+});
+
+// S15: Simulated DOM — panels placed in correct groups, no duplicates
+await check('S15', 'simulated DOM: panel-to-group placement is correct and duplicate-free', () => {
+  const map = {};
+  let m;
+  const re = /workspace(\w+)Panel:\s*'([^']+)'/g;
+  while ((m = re.exec(MAIN_SOURCE)) !== null) {
+    map[m[1]] = m[2];
+  }
+  const required = {
+    Search: 'workspace-knowledge',
+    Active: 'current-document',
+    Tasks: 'file-knowledge',
+    Related: 'file-knowledge',
+    Tags: 'workspace-knowledge',
+    Journals: 'workspace-knowledge',
+    Concepts: 'workspace-knowledge',
+    Projects: 'workspace-knowledge',
+    Index: 'workspace-knowledge',
+    Archive: 'workspace-knowledge',
+  };
+  for (const [panel, expectedGroup] of Object.entries(required)) {
+    if (map[panel] !== expectedGroup) return `Panel ${panel} is in group ${map[panel]}, expected ${expectedGroup}`;
+  }
+  if ('Report' in map) return 'Report is incorrectly assigned to a group';
+  const keys = Object.keys(map);
+  if (keys.length !== new Set(keys).size) return 'duplicate panel IDs in mapping';
+  return true;
+});
+
+// S16: Edit/Read owner unchanged — mode toggle still in editor overlay, not in Sidebar groups
+await check('S16', 'Edit/Read owner remains unchanged (editor overlay, not Sidebar groups)', () => {
+  return /editorBtnEditToggle/.test(MAIN_SOURCE);
+});
+
+// ===============================================================
   const passed = results.filter((r) => !r.group && r.ok).length;
   const failed = results.filter((r) => !r.group && !r.ok);
   for (const r of results) {

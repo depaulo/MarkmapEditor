@@ -3,18 +3,42 @@
 ## Identity
 
 - Package: P6
-- ACT: ACT 2 complete (Slices 1–3 accepted); ACT 3 PLAN-0 active
-- Name: Sidebar Information Architecture
+- ACT: ACT 3 Slice 1
+- Name: Sidebar Structural Grouping and Deterministic Ordering
 - Branch: development
 - Released baseline: 0.7.0
 - Target release: 0.8.0
-- Status: PLAN-0 (source inspection only; implementation not authorized)
+- Status: completed
+- Release activation: false
 
 ## Objective
 
-ACT 2 is complete. ACT 3 PLAN-0 is active: Sidebar Information Architecture source inspection only. No runtime implementation is authorized during PLAN-0.
+Replace competing Sidebar insertion grammars with one deterministic structural
+ordering while preserving all existing render, action, mutation and Save
+owners.
 
-## ACT 2 — Completion Record
+## Authorized Scope
+
+- semantic Sidebar group containers;
+- one deterministic insertion/order owner;
+- migration of existing panels into their accepted semantic positions;
+- removal or disabling of the experimental competing insertion path;
+- narrow CSS required for grouping and responsive integrity;
+- focused validators.
+
+## Protected Scope
+
+- no Edit/Read relocation;
+- no mode-state change;
+- no Active File functional redesign;
+- no Task or Project redesign;
+- no Reports movement or redesign;
+- no Notes/Knowledge feature implementation;
+- no Reminders or Highlights;
+- no generic panel framework;
+- no version, cache or release-note changes.
+
+## ACT 2 — Completion Record (retained)
 
 ACT 2 Slice 1 — Workspace Index return control + scroll preservation: ACCEPTED (commit 9d01638).
 
@@ -203,10 +227,44 @@ Release boundary:
 - Package 6 remains active;
 - 0.8.0 release activation remains unauthorized.
 
+## ACT 3 Slice 1 — Completion Record (Sidebar Structural Grouping and Deterministic Ordering)
+
+Status: **completed**.
+
+### Semantic Mapping (final)
+
+| Group | Panels | Owner |
+|---|---|---|
+| Workspace Controls | (empty — no existing global command area is movable) | existing header/global action area; group rendered as empty, visually neutral |
+| Current Document | Active File | `js/main.js` (`ensureWorkspaceActivePanel`, `renderWorkspaceActivePanel`) |
+| File Knowledge | Tasks, Related/Links | `js/main.js` (`ensureWorkspaceTasksPanel`, `ensureWorkspaceRelatedPanel`) |
+| Workspace Knowledge | Search, Notes/Journals, Knowledge/Concepts, Tags, Projects, Index, Archive | `js/main.js` (respective ensure/render owners) |
+| Protected ungrouped | Reports | Report panel owner; no movement or redesign |
+
+### Corrections from initial implementation
+
+- Search: moved from Workspace Controls → Workspace Knowledge (Search is Workspace-scoped, not a global command).
+- Tags: moved from File Knowledge → Workspace Knowledge (Tags is Workspace-scoped despite interacting with the selected document).
+- Workspace Controls: no existing global command area found as a child of the Sidebar content host; group remains empty; no duplicate Open Workspace/Today/New Note/New Concept controls created.
+
+### Implementation
+
+- `js/main.js`: `ensureWorkspaceSidebarGroups()` creates 4 group containers and moves existing panel nodes via `appendChild`; `normalizeWorkspacePanelOrder()` orders groups deterministically in the host and panels within groups; both wired into `finalizeWorkspaceSidebar()`.
+- `css/workspace.css`: `.workspaceSidebarGroup` styles added.
+- No panels recreated; no listeners re-wired; no domain models mutated; no Save triggered; Edit/Read owner unchanged (`#editorBtnEditToggle` in editor overlay).
+
+### Validation
+
+- `workspace-sidebar-visual-validators.cjs`: 68/68 PASS (Y44 updated to 0.7.0 baseline; S1–S16 structural assertions added).
+- `workspace-notes-sidebar-validators.cjs`: 65/65 PASS (S50 updated to 0.7.0 baseline).
+- `workspace-discovery-consumers-validators.cjs`: 52/52 PASS.
+- `workspace-task-consumers-validators.cjs`: 62/62 PASS.
+- `node --check js/main.js`: PASS.
+- `git diff --check`: clean.
+
 ## Current Phase
 
-ACT 3 PLAN-0 active (Sidebar Information Architecture — source inspection
-only). Status: awaiting owner review. Implementation: not authorized.
+ACT 3 Slice 1 complete. ACT 3 Slice 2 not yet started.
 
 ## Source-Proven Asymmetry (B2) — live-source comparison, 2026-10-18
 

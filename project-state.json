@@ -86,7 +86,7 @@
     },
     "package6": {
       "name": "Expanded-View Behavior and Visual Consistency",
-      "status": "ACTIVE — ACT 2 implementation complete (Slice 1, 2, 3 accepted); ACT 3 PLAN-0 active (Sidebar Information Architecture)",
+      "status": "ACTIVE - ACT 2 accepted (Slices 1-3); ACT 3 Slice 1 complete",
       "plannedVersion": "0.8.x",
       "plan0Document": "docs/architecture/CONSISTENCY_PLAN_0_SURFACE_INVENTORY.md",
       "plan0Status": "delivered, docs-only, zero production changes",
@@ -98,7 +98,7 @@
           {"slice": 2, "name": "Inspection and Return Recovery Alignment", "status": "accepted", "commits": ["78a1528", "85feeac", "13e9b88"]},
           {"slice": 3, "name": "Overlay Exit, Transient State, and State-Copy Consistency", "status": "accepted", "commits": ["484fd94", "8431188", "9399cae"]}
         ]},
-        {"id": "ACT 3", "name": "Sidebar Information Architecture", "status": "PLAN-0 active"},
+        {"id": "ACT 3", "name": "Sidebar Information Architecture", "status": "Slice 1 complete", "slices": [{"slice": 1, "name": "Sidebar Structural Grouping and Deterministic Ordering", "status": "complete"}]},
         {"id": "ACT 4", "name": "Current Document, Edit/Read and Document Surface", "status": "planned"},
         {"id": "ACT 5", "name": "Cross-surface visual, responsive and accessibility consistency", "status": "planned"},
         {"id": "ACT 6", "name": "Package closure and 0.8.0 release", "status": "not authorized"}
@@ -111,7 +111,7 @@
         "browserEvidence": "owner physical checkpoint (Mme-test-new, 8 projects): filter options, exact-source filtering, clear/reset, empty-vs-filtered-empty, return/scroll preservation; Legacy: label confirmed as rendering fallback",
         "packageDoc": "docs/packages/P6-CONSISTENCY.md"
       },
-      "nextStep": "ACT 3 PLAN-0 — Sidebar Information Architecture source inspection (documentation and source inspection only, no runtime changes)"
+      "nextStep": "ACT 3 Slice 1 - Sidebar Structural Grouping and Deterministic Ordering"
     }
   },
   "workflow": {

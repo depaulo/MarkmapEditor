@@ -5,7 +5,7 @@
 
 ## Current required test tier
 
-**Tier: ACT 3 PLAN-0 — source inspection and documentation only (`git diff --check`, docs readability).** No runtime implementation authorized during PLAN-0.
+**Tier: ACT 3 Slice 1 — Sidebar structural grouping (completed — targeted Sidebar/Workspace suites + rendered-DOM assertions S1–S16 + `git diff --check`).**
 
 ## ACT 2 — COMPLETE (all slices accepted)
 
@@ -20,13 +20,26 @@ Static: project-view 536/536, inspection validators 15/15, workspace-index task/
 
 Release gate: still CLOSED — 0.8.x activation not authorized; no service-worker/version/cache changes in this package.
 
-## ACT 3 PLAN-0 — ACTIVE (source inspection only, awaiting owner review)
+## ACT 3 Slice 1 — COMPLETE (Sidebar structural grouping)
 
-ACT 3 PLAN-0 inventory recorded in docs/packages/P6-CONSISTENCY.md
-(Sidebar ownership matrix, layer classification, Active File analysis,
-File/Workspace Knowledge analysis, header/badge + responsive rulings,
-3-slice recommendation, ACT 4 boundary). Implementation not authorized.
-Validation: `git diff --check` + docs readability only.
+ACT 3 Slice 1 — Sidebar Structural Grouping and Deterministic Ordering: COMPLETE.
+
+Semantic mapping (final):
+- Workspace Controls: empty (no movable global command area; owner remains existing header/global action area)
+- Current Document: Active File
+- File Knowledge: Tasks, Related/Links
+- Workspace Knowledge: Search, Notes/Journals, Knowledge/Concepts, Tags, Projects, Index, Archive
+- Protected ungrouped: Reports (unchanged)
+
+Static validation:
+- workspace-sidebar-visual-validators.cjs: 68/68 PASS (Y44 updated to 0.7.0 baseline; S1–S16 structural assertions added)
+- workspace-notes-sidebar-validators.cjs: 65/65 PASS (S50 updated to 0.7.0 baseline)
+- workspace-discovery-consumers-validators.cjs: 52/52 PASS
+- workspace-task-consumers-validators.cjs: 62/62 PASS
+- `node --check js/main.js`: PASS
+- `git diff --check`: clean
+
+Release gate: still CLOSED — 0.8.x activation not authorized; no service-worker/version/cache changes in this package.
 
 ## Pending owner checkpoints
 

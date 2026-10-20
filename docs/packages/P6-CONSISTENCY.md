@@ -235,7 +235,7 @@ Sidebar Information Architecture.
 |---|---|---|
 | ACT 1 | Projects Source filtering | ACCEPTED (commit 66e3b7a) |
 | ACT 2 | Existing Expanded View behavior and state consistency | ACCEPTED (Slices 1–3) |
-| ACT 3 | Sidebar Information Architecture | PLAN-0 active |
+| ACT 3 | Sidebar Information Architecture | Slice 1 complete (Slices 2-3 planned) |
 | ACT 4 | Current Document, Edit/Read and Document Surface | planned |
 | ACT 5 | Cross-surface visual, responsive and accessibility consistency | planned |
 | ACT 6 | Package closure and 0.8.0 release | not authorized |
@@ -398,4 +398,20 @@ Functional Edit/Read control, mode state ownership, Editor/Read synchronization,
 
 ### ACT 3 PLAN-0 status
 
-Status: **awaiting owner review.** Implementation: **not authorized.** No runtime file changed in PLAN-0; no version/cache file changed; `git diff --check` governs.
+Status: **Slice 1 complete.** Implementation: Slice 1 committed on `development`; Slices 2-3 planned.
+
+### ACT 3 Slice 1 — Final Semantic Mapping (recorded 2026-10-20)
+
+| Group | Panels | Notes |
+|---|---|---|
+| Workspace Controls | (empty) | No existing global command area found as child of Sidebar content host; group rendered empty, visually neutral; owner remains existing header/global action area; no duplicate Open Workspace/Today/New Note/New Concept controls |
+| Current Document | Active File | `js/main.js` (`ensureWorkspaceActivePanel`, `renderWorkspaceActivePanel`) |
+| File Knowledge | Tasks, Related/Links | Order: Tasks before Related; `js/main.js` (`ensureWorkspaceTasksPanel`, `ensureWorkspaceRelatedPanel`) |
+| Workspace Knowledge | Search, Notes/Journals, Knowledge/Concepts, Tags, Projects, Index, Archive | Order: Search → Journals → Concepts → Tags → Projects → Index → Archive |
+| Protected ungrouped | Reports | No movement or redesign; protected scope |
+
+Corrections from initial implementation:
+- Search: Workspace Controls → Workspace Knowledge (Search is Workspace-scoped, not a global command).
+- Tags: File Knowledge → Workspace Knowledge (Tags is Workspace-scoped despite interacting with the selected document).
+
+Validation: workspace-sidebar-visual-validators.cjs 68/68 PASS; workspace-notes-sidebar-validators.cjs 65/65 PASS; workspace-discovery-consumers-validators.cjs 52/52 PASS; workspace-task-consumers-validators.cjs 62/62 PASS; `git diff --check` clean.
