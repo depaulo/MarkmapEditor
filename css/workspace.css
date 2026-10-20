@@ -699,6 +699,25 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
   display: none !important;
 }
 
+/* =========================== */
+/* Sidebar Semantic Groups     */
+/* =========================== */
+
+/* Group containers wrap panels by semantic layer. Panels stack vertically
+   inside the group; the group itself flows in the sidebar content host.
+   Per-panel borders remain on each panel so no double borders appear at
+   group boundaries. Groups carry no background or border of their own —
+   separation is provided by the existing per-panel top borders. */
+.workspaceSidebarGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.workspaceSidebarGroup[hidden] {
+  display: none !important;
+}
+
 .workspaceIndexHeader,
 .workspaceRelatedHeader,
 .workspaceTasksHeader,

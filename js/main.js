@@ -3533,45 +3533,173 @@ function wireWorkspaceProjectsPanel() {
   log?.('Workspace Projects: panel wired');
 }
 
+// ACT 3 Slice 1 — deterministic Sidebar semantic grouping.
+// Single structural owner: ensures four group containers and moves existing
+// panel nodes into their accepted groups. Moves nodes only (appendChild);
+// never recreates panels, never re-wires listeners, never renders content,
+// never mutates domain models, never owns Save or collapse state.
+//
+// Panel -> group mapping (accepted semantic positions from P6-CONSISTENCY.md):
+//   workspace-controls:  (empty — no existing global command area is movable;
+//                         owner remains the existing header/global action area)
+//   current-document:    workspaceActivePanel
+//   file-knowledge:      workspaceTasksPanel, workspaceRelatedPanel
+//   workspace-knowledge: workspaceSearchPanel, workspaceJournalsPanel,
+//                        workspaceConceptsPanel, workspaceTagsPanel,
+//                        workspaceProjectsPanel, workspaceIndexPanel,
+//                        workspaceArchivePanel
+// Report stays ungrouped (protected scope: no Reports movement or redesign).
+function ensureWorkspaceSidebarGroups() {
+  const host = getWorkspaceSidebarContentHost();
+  if (!host) return null;
+
+  const spec = [
+    { id: 'workspaceControlsGroup', key: 'workspace-controls', label: 'Workspace Controls' },
+    { id: 'workspaceCurrentDocumentGroup', key: 'current-document', label: 'Current Document' },
+    { id: 'workspaceFileKnowledgeGroup', key: 'file-knowledge', label: 'File Knowledge' },
+    { id: 'workspaceWorkspaceKnowledgeGroup', key: 'workspace-knowledge', label: 'Workspace Knowledge' },
+  ];
+
+  const groups = {};
+  for (const item of spec) {
+    let group = document.getElementById(item.id);
+    if (!group) {
+      group = document.createElement('div');
+      group.id = item.id;
+      group.className = 'workspaceSidebarGroup';
+      group.setAttribute('data-sidebar-group', item.key);
+      group.setAttribute('role', 'group');
+      group.setAttribute('aria-label', item.label);
+    }
+    groups[item.key] = group;
+  }
+
+  // Panel-to-group mapping. Move each panel into its accepted group.
+  // appendChild preserves listeners and collapse state; panels already in the
+  // correct group are left untouched.
+  const panelGroupMap = {
+    workspaceSearchPanel: 'workspace-knowledge',
+    workspaceActivePanel: 'current-document',
+    workspaceTasksPanel: 'file-knowledge',
+    workspaceRelatedPanel: 'file-knowledge',
+    workspaceJournalsPanel: 'workspace-knowledge',
+    workspaceConceptsPanel: 'workspace-knowledge',
+    workspaceTagsPanel: 'workspace-knowledge',
+    workspaceProjectsPanel: 'workspace-knowledge',
+    workspaceIndexPanel: 'workspace-knowledge',
+    workspaceArchivePanel: 'workspace-knowledge',
+  };
+
+  for (const [panelId, groupKey] of Object.entries(panelGroupMap)) {
+    const panel = document.getElementById(panelId);
+    const group = groups[groupKey];
+    if (panel && group && panel.parentNode !== group) {
+      group.appendChild(panel);
+    }
+  }
+
+  // Order groups deterministically inside the host (after the header, before
+  // any ungrouped content such as Report and Navigation History).
+  const groupOrder = [
+    'workspaceControlsGroup',
+    'workspaceCurrentDocumentGroup',
+    'workspaceFileKnowledgeGroup',
+    'workspaceWorkspaceKnowledgeGroup',
+  ];
+  let groupAnchor = host.querySelector('.workspaceHeader') || null;
+  for (const groupId of groupOrder) {
+    const group = document.getElementById(groupId);
+    if (!group || group.parentNode !== host) continue;
+    if (groupAnchor) {
+      if (groupAnchor.nextSibling !== group) {
+        host.insertBefore(group, groupAnchor.nextSibling);
+      }
+    } else {
+      if (host.firstChild !== group) {
+        host.insertBefore(group, host.firstChild);
+      }
+    }
+    groupAnchor = group;
+  }
+
+  return groups;
+}
+
 // ACT A: Idempotent panel order normalizer.
 // Moves existing nodes into canonical order using insertBefore/appendChild.
 // Tolerates absent panels; preserves listeners and collapse state.
+// ACT 3 Slice 1: panels are ordered within their semantic groups; groups are
+// ordered deterministically in the host. Ungrouped panels (e.g. Report,
+// protected scope) remain outside groups at the end.
 function normalizeWorkspacePanelOrder() {
   const host = getWorkspaceSidebarContentHost();
   if (!host) return;
 
-  // Canonical order (by panel ID). Header and Navigation History are anchors.
-  const order = [
-    'workspaceSearchPanel',
-    'workspaceActivePanel',
-    'workspaceJournalsPanel',
-    'workspaceConceptsPanel',
-    'workspaceProjectsPanel',
-    'workspaceRelatedPanel',
-    'workspaceTasksPanel',
-    'workspaceReportPanel',
-    'workspaceTagsPanel',
-    'workspaceIndexPanel',
+  // Panel order within each group (by panel ID).
+  const groupPanelOrders = {
+    workspaceControlsGroup: [],
+    workspaceCurrentDocumentGroup: ['workspaceActivePanel'],
+    workspaceFileKnowledgeGroup: [
+      'workspaceTasksPanel',
+      'workspaceRelatedPanel',
+    ],
+    workspaceWorkspaceKnowledgeGroup: [
+      'workspaceSearchPanel',
+      'workspaceJournalsPanel',
+      'workspaceConceptsPanel',
+      'workspaceTagsPanel',
+      'workspaceProjectsPanel',
+      'workspaceIndexPanel',
+      'workspaceArchivePanel',
+    ],
+  };
+
+  // Group order in the host (after header, before ungrouped content).
+  const groupOrder = [
+    'workspaceControlsGroup',
+    'workspaceCurrentDocumentGroup',
+    'workspaceFileKnowledgeGroup',
+    'workspaceWorkspaceKnowledgeGroup',
   ];
 
-  // Anchor: insert after header, or at top if header absent.
+  // Order groups in the host (after header, before ungrouped content).
   const header = host.querySelector('.workspaceHeader');
-  let anchor = header || null;
-
-  for (const id of order) {
-    const panel = document.getElementById(id);
-    if (!panel || panel.parentNode !== host) continue;
-
-    if (anchor) {
-      if (anchor.nextSibling !== panel) {
-        host.insertBefore(panel, anchor.nextSibling);
+  let groupAnchor = header || null;
+  for (const groupId of groupOrder) {
+    const group = document.getElementById(groupId);
+    if (!group || group.parentNode !== host) continue;
+    if (groupAnchor) {
+      if (groupAnchor.nextSibling !== group) {
+        host.insertBefore(group, groupAnchor.nextSibling);
       }
     } else {
-      if (host.firstChild !== panel) {
-        host.insertBefore(panel, host.firstChild);
+      if (host.firstChild !== group) {
+        host.insertBefore(group, host.firstChild);
       }
     }
-    anchor = panel;
+    groupAnchor = group;
+  }
+
+  // Order panels within each group.
+  for (const groupId of groupOrder) {
+    const group = document.getElementById(groupId);
+    if (!group || group.parentNode !== host) continue;
+    const panelOrder = groupPanelOrders[groupId] || [];
+    let panelAnchor = null;
+    for (const panelId of panelOrder) {
+      const panel = document.getElementById(panelId);
+      if (!panel || panel.parentNode !== group) continue;
+      if (panelAnchor) {
+        if (panelAnchor.nextSibling !== panel) {
+          group.insertBefore(panel, panelAnchor.nextSibling);
+        }
+      } else {
+        if (group.firstChild !== panel) {
+          group.insertBefore(panel, group.firstChild);
+        }
+      }
+      panelAnchor = panel;
+    }
   }
 
   // Navigation History controls remain last (workspaceNavControls).
@@ -3640,7 +3768,10 @@ function finalizeWorkspaceSidebar() {
       configureDrawioReportPanel?.();
     } catch {}
 
-    // Phase 2: normalize panel order.
+    // ACT 3 Slice 1: move panels into semantic groups before ordering.
+    ensureWorkspaceSidebarGroups?.();
+
+    // Phase 2: normalize panel order (within groups).
     normalizeWorkspacePanelOrder();
 
     // Phase 3: wire actions and collapse delegation.
