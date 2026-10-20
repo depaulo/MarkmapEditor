@@ -5,7 +5,7 @@
 
 ## Current required test tier
 
-**Tier: ACT 3 Slice 1 — Sidebar structural grouping (completed — targeted Sidebar/Workspace suites + rendered-DOM assertions S1–S16 + `git diff --check`).**
+**Tier: ACT 3 (all slices complete after structural correction — targeted Sidebar/Workspace suites + source-contract assertions S1–S27 + executed rendered-DOM gate S28–S34 + `git diff --check`).**
 
 ## ACT 2 — COMPLETE (all slices accepted)
 
@@ -32,7 +32,7 @@ Semantic mapping (final):
 - Protected ungrouped: Reports (unchanged)
 
 Static validation:
-- workspace-sidebar-visual-validators.cjs: 68/68 PASS (Y44 updated to 0.7.0 baseline; S1–S16 structural assertions added)
+- workspace-sidebar-visual-validators.cjs: 86/86 PASS at ACT 3 completion (S1–S16 structural assertions; Y44 updated to 0.7.0 baseline)
 - workspace-notes-sidebar-validators.cjs: 65/65 PASS (S50 updated to 0.7.0 baseline)
 - workspace-discovery-consumers-validators.cjs: 52/52 PASS
 - workspace-task-consumers-validators.cjs: 62/62 PASS
@@ -41,9 +41,89 @@ Static validation:
 
 Release gate: still CLOSED — 0.8.x activation not authorized; no service-worker/version/cache changes in this package.
 
+## ACT 3 Slice 2 — COMPLETE (Current Document Structural Area — after structural correction)
+
+ACT 3 Slice 2 — Current Document Structural Area: COMPLETE.
+
+Semantic mapping (final):
+- Workspace Controls: empty (no movable global command area; owner remains existing header/global action area)
+- Current Document: Active File
+- File Knowledge: Tasks, Related/Links
+- Workspace Knowledge: Search, Notes/Journals, Knowledge/Concepts, Tags, Projects, Index, Archive
+- Protected ungrouped: Reports (unchanged)
+
+Correction from initial implementation:
+- Initial version added `workspaceCurrentDocumentSection` wrapper + `workspaceCurrentDocumentTitle` + `workspaceActiveEditReadReserved` span, creating duplicate visible titles and a premature Edit/Read placeholder.
+- Corrected: kept existing Active File panel, changed visible title from "Active" to "Current Document", removed section wrapper and placeholder span.
+
+Implementation:
+- `js/main.js`: `ensureWorkspaceActivePanel()` keeps existing Active File panel and disclosure owner; title changed to "Current Document"; `workspaceCurrentDocumentSection` wrapper removed; `workspaceActiveEditReadReserved` span removed.
+- `css/workspace.css`: `.workspaceCurrentDocumentSection`, `.workspaceCurrentDocumentTitle`, `.workspaceActiveEditReadReserved` rules removed.
+- No panels recreated; no listeners re-wired; no domain models mutated; no Save triggered; Edit/Read owner unchanged (editor overlay).
+
+Static validation:
+- `workspace-sidebar-visual-validators.cjs`: 86/86 PASS at ACT 3 completion (S17–S22: no Edit/Read placeholder, no duplicate section wrapper, single Current Document title, no mode handler, no Save from rendering)
+- `workspace-notes-sidebar-validators.cjs`: 65/65 PASS
+- `workspace-discovery-consumers-validators.cjs`: 52/52 PASS
+- `workspace-task-consumers-validators.cjs`: 62/62 PASS
+- `node --check js/main.js`: PASS
+- `git diff --check`: clean
+
+Release gate: still CLOSED — 0.8.x activation not authorized; no service-worker/version/cache changes in this package.
+
+## ACT 3 Slice 3 — COMPLETE (Header, Badge and Disclosure Alignment)
+
+ACT 3 Slice 3 — Header, Badge and Disclosure Alignment: COMPLETE.
+
+Header grammar (ACT 3, Help deferred to ACT 5):
+- Panel headers follow: disclosure → title → action → badge. Help intentionally deferred to ACT 5 per accepted owner ruling.
+
+Implementation:
+- `js/main.js`: `ensureWorkspaceIndexPanel()` restructured — badge moved from inside the toggle button to after the action controls within `workspacePanelHeaderControls`, yielding disclosure → title → action → badge order. All other panels already conform.
+- `css/workspace.css`: no changes required for Slice 3.
+- Projects summary/body count duplication: investigated — not proven. Badge shows compact count, summary shows descriptive label; different UI purposes, not duplicative.
+- No panels recreated; no listeners re-wired; no domain models mutated; no Save triggered.
+
+Static validation:
+- `workspace-sidebar-visual-validators.cjs`: 86/86 PASS at ACT 3 completion (S23–S27: Index action-before-badge, Projects action-before-badge, no badge-before-title, chevron-before-title, Active disclosure→title→badge)
+- `workspace-notes-sidebar-validators.cjs`: 65/65 PASS
+- `workspace-discovery-consumers-validators.cjs`: 52/52 PASS
+- `workspace-task-consumers-validators.cjs`: 62/62 PASS
+- `node --check js/main.js`: PASS
+- `git diff --check`: clean
+
+Release gate: still CLOSED — 0.8.x activation not authorized; no service-worker/version/cache changes in this package.
+
+## ACT 3 pre-browser structural correction + executed rendered-DOM gate (S28–S34)
+
+Defect found by the new gate and fixed before browser acceptance:
+`ensureWorkspaceSidebarGroups()` created the four group containers but never
+attached them to the Sidebar content host — groups were detached, invisible to
+`document.getElementById`, skipped by the ordering loop, and every panel moved
+into a group would have disappeared from the rendered Sidebar as a detached
+subtree. Fixed in `js/main.js`: each new (or displaced) group is attached with
+`host.appendChild(group)` before the move/order loops. No other owner, CSS,
+listener or domain model changed.
+
+Executed rendered-DOM gate: `workspace-sidebar-visual-validators.cjs` builds a
+tree-capable DOM and executes the five real structural owners extracted
+verbatim in finalize order (`getWorkspaceSidebarContentHost`,
+`ensureWorkspaceActivePanel`, `ensureWorkspaceIndexPanel`,
+`ensureWorkspaceSidebarGroups`, `normalizeWorkspacePanelOrder`):
+S28 group attachment; S29 panel nesting + reachability; S30 single rendered
+"Current Document" title; S31 rendered group/panel order; S32 uniqueness (no
+detached or duplicated nodes); S33 Reports ungrouped after groups (protected);
+S34 idempotent second run (node identity preserved).
+
+Evidence (executed-DOM in Node — NOT browser evidence):
+- gate-first, before fix: 79/86 with S28–S34 FAILED (detached-group/panel diagnostics — the gate caught the real defect);
+- after fix: visual suite 86/86 PASS; notes 65/65; discovery 52/52; tasks 62/62; `node --check js/main.js` PASS; `git diff --check` clean.
+
 ## Pending owner checkpoints
 
-None at this stage.
+- ACT 3 integrated browser acceptance — pending owner authorization (static
+  S1–S27 and executed-DOM S28–S34 gates passed; browser gate not started;
+  ACT 4 not started).
 
 ## ACT 1 closure evidence (2026-10-18, commit 66e3b7a)
 
@@ -154,4 +234,6 @@ Browser gate: Task Board opens normally; visible exit works; Escape/close works;
 
 ## Pending owner checkpoints
 
-None at this stage.
+- ACT 3 integrated browser acceptance — pending owner authorization (static
+  S1–S27 and executed-DOM S28–S34 gates passed; browser gate not started;
+  ACT 4 not started).

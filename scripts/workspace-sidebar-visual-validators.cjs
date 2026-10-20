@@ -18,10 +18,14 @@
  *     panel-separator owner, the single panel-title owner, and the single
  *     Archive/Restore owner.
  *
- * 44 fixtures: S01-S06 separator, T07-T10 title weight, B11-B23 badges,
- * A24-A35 Active-action ownership, O36-O40 single-owner proof, Y41-Y44 safety.
- * Plus 5 mutation controls M01-M05 that revert each correction in memory and
- * prove the corresponding contract flips to the bad state.
+ * 86 fixtures: the ACT V0 visual-ownership suite (S01-Y45), 5 mutation
+ * controls M01-M05 that revert each correction in memory and prove the
+ * corresponding contract flips to the bad state, the ACT 3 source-contract
+ * checks S1-S27 (Sidebar grouping and header grammar), and the ACT 3
+ * executed rendered-DOM gate S28-S34 — the five real structural owners run
+ * verbatim against a tree-capable DOM, so attachment, nesting, ordering,
+ * uniqueness and idempotence are proven on an executed tree rather than on
+ * a source regex alone.
  *
  * Usage: node scripts/workspace-sidebar-visual-validators.cjs
  */
@@ -991,7 +995,7 @@ function buildTagsSandbox() {
     return own('workspaceProjectsTitle') === '600' && own('workspaceArchiveTitle') === '650';
   });
 
-  group('ACT 3 Slice 1 — Structural Grouping (S1-S8)');
+  group('ACT 3 — Source-contract checks (S1-S27)');
 
 // S1: exactly one Current Document group spec entry
 await check('S1', 'exactly one current-document group spec', () => {
@@ -1147,6 +1151,531 @@ await check('S15', 'simulated DOM: panel-to-group placement is correct and dupli
 await check('S16', 'Edit/Read owner remains unchanged (editor overlay, not Sidebar groups)', () => {
   return /editorBtnEditToggle/.test(MAIN_SOURCE);
 });
+
+// --- ACT 3 Slice 2 — Current Document structural area (after correction) ---
+
+// S17: No premature Edit/Read placeholder rendered in ACT 3
+await check('S17', 'no Edit/Read placeholder rendered', () => {
+  return !/workspaceActiveEditReadReserved/.test(MAIN_SOURCE);
+});
+
+// S18: No duplicate Current Document section wrapper in ACT 3
+await check('S18', 'no duplicate Current Document section wrapper', () => {
+  return !/workspaceCurrentDocumentSection/.test(MAIN_SOURCE) &&
+         !/workspaceCurrentDocumentTitle/.test(MAIN_SOURCE);
+});
+
+// S19: Active panel title is "Current Document" (single visible identity)
+await check('S19', 'Active panel title is Current Document', () => {
+  const activeStart = MAIN_SOURCE.indexOf('function ensureWorkspaceActivePanel');
+  const activeEnd = MAIN_SOURCE.indexOf('function ', activeStart + 1);
+  const activeSection = activeEnd === -1 ? MAIN_SOURCE.slice(activeStart) : MAIN_SOURCE.slice(activeStart, activeEnd);
+  const tmplStart = activeSection.indexOf('panel.innerHTML = `');
+  if (tmplStart === -1) return false;
+  const tmplEnd = activeSection.indexOf('`;', tmplStart);
+  const tmpl = tmplEnd === -1 ? activeSection.slice(tmplStart) : activeSection.slice(tmplStart, tmplEnd + 2);
+  return /workspaceActiveTitle/.test(tmpl) && /Current Document/.test(tmpl);
+});
+
+// S20: Exactly one visible Current Document title in Active panel template
+await check('S20', 'exactly one visible Current Document title', () => {
+  const activeStart = MAIN_SOURCE.indexOf('function ensureWorkspaceActivePanel');
+  const activeEnd = MAIN_SOURCE.indexOf('function ', activeStart + 1);
+  const activeSection = activeEnd === -1 ? MAIN_SOURCE.slice(activeStart) : MAIN_SOURCE.slice(activeStart, activeEnd);
+  const tmplStart = activeSection.indexOf('panel.innerHTML = `');
+  if (tmplStart === -1) return false;
+  const tmplEnd = activeSection.indexOf('`;', tmplStart);
+  const tmpl = tmplEnd === -1 ? activeSection.slice(tmplStart) : activeSection.slice(tmplStart, tmplEnd + 2);
+  const matches = tmpl.match(/Current Document/g);
+  return matches != null && matches.length === 1;
+});
+
+// S21: No mode event handler added to Active panel
+await check('S21', 'no mode event handler added to Active panel', () => {
+  const activeStart = MAIN_SOURCE.indexOf('function ensureWorkspaceActivePanel');
+  const activeEnd = MAIN_SOURCE.indexOf('function ', activeStart + 1);
+  const activeSection = activeEnd === -1 ? MAIN_SOURCE.slice(activeStart) : MAIN_SOURCE.slice(activeStart, activeEnd);
+  return !/onclick/.test(activeSection) && !/data-action/.test(activeSection) &&
+         !/addEventListener.*mode/.test(activeSection) && !/data-workspace-mode/.test(activeSection);
+});
+
+// S22: No Save triggered by Current Document rendering
+await check('S22', 'no Save triggered by Current Document rendering', () => {
+  const activeStart = MAIN_SOURCE.indexOf('function ensureWorkspaceActivePanel');
+  const activeEnd = MAIN_SOURCE.indexOf('function ', activeStart + 1);
+  const activeSection = activeEnd === -1 ? MAIN_SOURCE.slice(activeStart) : MAIN_SOURCE.slice(activeStart, activeEnd);
+  return !/\.save\(/.test(activeSection) && !/saveWorkspace/.test(activeSection) &&
+         !/MME_PROJECT/.test(activeSection);
+});
+
+// --- ACT 3 Slice 3 — Header, badge and disclosure alignment -------------
+
+// S23: Index panel header follows disclosure → title → action → badge (badge after action controls)
+await check('S23', 'Index panel: badge comes after action controls', () => {
+  const idxStart = MAIN_SOURCE.indexOf('function ensureWorkspaceIndexPanel');
+  const idxEnd = MAIN_SOURCE.indexOf('function ', idxStart + 1);
+  const idxSection = idxEnd === -1 ? MAIN_SOURCE.slice(idxStart) : MAIN_SOURCE.slice(idxStart, idxEnd);
+  const refreshIdx = idxSection.indexOf('btnRefreshWorkspaceIndex');
+  const badgeIdx = idxSection.indexOf('workspaceIndexBadge');
+  return refreshIdx !== -1 && badgeIdx !== -1 && refreshIdx < badgeIdx;
+});
+
+// S24: Projects panel header follows disclosure → title → action → badge (action before badge)
+await check('S24', 'Projects panel: action button comes before badge', () => {
+  const projStart = MAIN_SOURCE.indexOf('function ensureWorkspaceProjectsPanel');
+  const projEnd = MAIN_SOURCE.indexOf('function ', projStart + 1);
+  const projSection = projEnd === -1 ? MAIN_SOURCE.slice(projStart) : MAIN_SOURCE.slice(projStart, projEnd);
+  const actionIdx = projSection.indexOf('workspaceProjectsOpenButton');
+  const badgeIdx = projSection.indexOf('workspaceProjectsBadge');
+  return actionIdx !== -1 && badgeIdx !== -1 && actionIdx < badgeIdx;
+});
+
+// S25: No panel has its badge appearing before its title within header markup
+await check('S25', 'No panel has badge before title within its HTML template', () => {
+  // Check within each ensure* function's innerHTML template that title comes before badge
+  const panelConfigs = [
+    { name: 'Active', ensureFn: 'ensureWorkspaceActivePanel', title: 'workspaceActiveTitle', badge: 'workspaceActiveBadge' },
+    { name: 'Related', ensureFn: 'ensureWorkspaceRelatedPanel', title: 'workspaceRelatedTitle', badge: 'workspaceRelatedBadge' },
+    { name: 'Tasks', ensureFn: 'ensureWorkspaceTasksPanel', title: 'workspaceTasksTitle', badge: 'workspaceTasksBadge' },
+    { name: 'Tags', ensureFn: 'ensureWorkspaceTagsPanel', title: 'workspaceTagsTitle', badge: 'workspaceTagsBadge' },
+    { name: 'Index', ensureFn: 'ensureWorkspaceIndexPanel', title: 'workspaceIndexTitle', badge: 'workspaceIndexBadge' },
+    { name: 'Projects', ensureFn: 'ensureWorkspaceProjectsPanel', title: 'workspaceProjectsTitle', badge: 'workspaceProjectsBadge' },
+  ];
+  for (const { ensureFn, title, badge } of panelConfigs) {
+    const fnStart = MAIN_SOURCE.indexOf('function ' + ensureFn);
+    if (fnStart === -1) continue;
+    const fnEnd = MAIN_SOURCE.indexOf('\nfunction ', fnStart + 1);
+    const fnSection = fnEnd === -1 ? MAIN_SOURCE.slice(fnStart) : MAIN_SOURCE.slice(fnStart, fnEnd);
+    // Find the innerHTML template within this function
+    const tmplStart = fnSection.indexOf('panel.innerHTML = `');
+    if (tmplStart === -1) continue;
+    const tmplEnd = fnSection.indexOf('`;', tmplStart);
+    const tmpl = tmplEnd === -1 ? fnSection.slice(tmplStart) : fnSection.slice(tmplStart, tmplEnd + 2);
+    const titleIdx = tmpl.indexOf(title);
+    const badgeIdx = tmpl.indexOf(badge);
+    if (titleIdx !== -1 && badgeIdx !== -1 && badgeIdx < titleIdx) {
+      return false;
+    }
+  }
+  return true;
+});
+
+// S26: All toggle buttons have disclosure (chevron) before title within header
+await check('S26', 'All toggle buttons have chevron before title', () => {
+  const toggleSections = [
+    'workspaceActiveTitle',
+    'workspaceRelatedTitle',
+    'workspaceTasksTitle',
+    'workspaceTagsTitle',
+    'workspaceIndexTitle',
+    'workspaceJournalsTitle',
+    'workspaceConceptsTitle',
+    'workspaceArchiveTitle',
+    'workspaceProjectsTitle',
+  ];
+  for (const titleId of toggleSections) {
+    const idx = MAIN_SOURCE.indexOf(titleId);
+    if (idx === -1) continue;
+    const before = MAIN_SOURCE.slice(Math.max(0, idx - 300), idx);
+    if (!/workspacePanelChevron/.test(before)) return false;
+  }
+  return true;
+});
+
+// S27: Active panel header preserves disclosure → title → badge (no action/Help in ACT 3)
+await check('S27', 'Active panel: disclosure → title → badge order preserved', () => {
+  const activeStart = MAIN_SOURCE.indexOf('function ensureWorkspaceActivePanel');
+  const activeEnd = MAIN_SOURCE.indexOf('function ', activeStart + 1);
+  const activeSection = activeEnd === -1 ? MAIN_SOURCE.slice(activeStart) : MAIN_SOURCE.slice(activeStart, activeEnd);
+  const chevronIdx = activeSection.indexOf('workspacePanelChevron');
+  const titleIdx = activeSection.indexOf('workspaceActiveTitle');
+  const badgeIdx = activeSection.indexOf('workspaceActiveBadge');
+  return chevronIdx !== -1 && titleIdx !== -1 && badgeIdx !== -1 &&
+         chevronIdx < titleIdx && titleIdx < badgeIdx;
+});
+
+// ---------------------------------------------------------------
+// ACT 3 — executed rendered-DOM structural gate (S28-S34).
+// The source checks above (S1-S27) cannot observe whether a group container
+// is attached to the rendered tree. These checks build a tree-capable DOM
+// (real parentNode/insertBefore/appendChild, connectivity-aware
+// getElementById) and EXECUTE the real shipped structural owners — extracted
+// verbatim from main.js — in the same call order finalizeWorkspaceSidebar
+// uses. Detached groups, detached panels, wrong nesting, wrong order,
+// duplicates and non-idempotent grouping therefore fail loudly here, in
+// Node, before any browser claim is made. This is executed-DOM evidence,
+// not browser evidence.
+// ---------------------------------------------------------------
+
+function makeTreeElement(tag) {
+  const el = {
+    tagName: String(tag).toUpperCase(),
+    id: '',
+    className: '',
+    hidden: false,
+    innerHTML: '',
+    textContent: '',
+    style: {},
+    dataset: {},
+    attrs: {},
+    parentNode: null,
+    childNodes: [],
+    get firstChild() { return el.childNodes[0] || null; },
+    get nextSibling() {
+      if (!el.parentNode) return null;
+      const sibs = el.parentNode.childNodes;
+      const i = sibs.indexOf(el);
+      return i >= 0 && i + 1 < sibs.length ? sibs[i + 1] : null;
+    },
+    get nextElementSibling() { return el.nextSibling; },
+    setAttribute(k, v) { el.attrs[k] = String(v); },
+    getAttribute(k) { return k in el.attrs ? el.attrs[k] : null; },
+    appendChild(child) { return el.insertBefore(child, null); },
+    insertBefore(child, ref) {
+      if (ref !== null && ref.parentNode !== el) {
+        throw new Error('insertBefore: reference node is not a child');
+      }
+      if (child.parentNode) {
+        const old = child.parentNode.childNodes;
+        const idx = old.indexOf(child);
+        if (idx !== -1) old.splice(idx, 1);
+      }
+      child.parentNode = el;
+      if (ref === null) el.childNodes.push(child);
+      else el.childNodes.splice(el.childNodes.indexOf(ref), 0, child);
+      return child;
+    },
+    querySelector(sel) { return treeQuery(el, sel); },
+    querySelectorAll(sel) {
+      const out = [];
+      let s = sel;
+      if (s.startsWith(':scope > ')) {
+        s = s.slice(9).trim();
+        for (const c of el.childNodes) if (matchesTreeSel(c, s)) out.push(c);
+        return out;
+      }
+      const stack = [...el.childNodes];
+      while (stack.length) {
+        const n = stack.shift();
+        if (matchesTreeSel(n, s)) out.push(n);
+        stack.push(...n.childNodes);
+      }
+      return out;
+    },
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  return el;
+}
+
+function matchesTreeSel(el, sel) {
+  if (sel.startsWith('.')) return el.className.split(/\s+/).includes(sel.slice(1));
+  if (sel.startsWith('#')) return el.id === sel.slice(1);
+  return el.tagName === sel.toUpperCase();
+}
+
+function treeQuery(root, sel) {
+  let s = sel;
+  let directOnly = false;
+  if (s.startsWith(':scope > ')) {
+    s = s.slice(9).trim();
+    directOnly = true;
+  }
+  const stack = [...root.childNodes];
+  while (stack.length) {
+    const n = stack.shift();
+    if (matchesTreeSel(n, s)) return n;
+    if (!directOnly) stack.push(...n.childNodes);
+  }
+  return null;
+}
+
+function countIdInTree(root, id) {
+  let count = 0;
+  const stack = [root];
+  while (stack.length) {
+    const n = stack.shift();
+    if (n.id === id) count += 1;
+    stack.push(...n.childNodes);
+  }
+  return count;
+}
+
+function makeTreeDocument() {
+  const documentElement = makeTreeElement('html');
+  const body = makeTreeElement('body');
+  documentElement.appendChild(body);
+  const doc = {
+    documentElement,
+    body,
+    createElement: (t) => makeTreeElement(t),
+    getElementById(id) {
+      const stack = [documentElement];
+      while (stack.length) {
+        const n = stack.shift();
+        if (n.id === id) return n;
+        stack.push(...n.childNodes);
+      }
+      return null;
+    },
+    querySelector(sel) { return treeQuery(documentElement, sel); },
+    querySelectorAll(sel) { return documentElement.querySelectorAll(sel); },
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  return { doc, documentElement, body };
+}
+
+// Verbatim extraction of the ACT 3 structural owners (real shipped code).
+const STRUCTURAL_OWNER_SOURCES = [
+  'function getWorkspaceSidebarContentHost() {',
+  'function ensureWorkspaceActivePanel() {',
+  'function ensureWorkspaceIndexPanel() {',
+  'function ensureWorkspaceSidebarGroups() {',
+  'function normalizeWorkspacePanelOrder() {',
+].map((marker) => extractBlockFrom(MAIN_SOURCE, marker));
+
+const STRUCTURAL_API_FACTORY = new Function(
+  'document',
+  'log',
+  STRUCTURAL_OWNER_SOURCES.join('\n\n') +
+    '\n\nreturn { getWorkspaceSidebarContentHost, ensureWorkspaceActivePanel, ' +
+    'ensureWorkspaceIndexPanel, ensureWorkspaceSidebarGroups, normalizeWorkspacePanelOrder };'
+);
+
+const GROUP_IDS = [
+  'workspaceControlsGroup',
+  'workspaceCurrentDocumentGroup',
+  'workspaceFileKnowledgeGroup',
+  'workspaceWorkspaceKnowledgeGroup',
+];
+
+const MAPPED_PANEL_IDS = [
+  'workspaceActivePanel',
+  'workspaceSearchPanel',
+  'workspaceJournalsPanel',
+  'workspaceConceptsPanel',
+  'workspaceRelatedPanel',
+  'workspaceTasksPanel',
+  'workspaceTagsPanel',
+  'workspaceProjectsPanel',
+  'workspaceIndexPanel',
+  'workspaceArchivePanel',
+];
+
+const WORKSPACE_KNOWLEDGE_ORDER = [
+  'workspaceSearchPanel',
+  'workspaceJournalsPanel',
+  'workspaceConceptsPanel',
+  'workspaceTagsPanel',
+  'workspaceProjectsPanel',
+  'workspaceIndexPanel',
+  'workspaceArchivePanel',
+];
+
+// One full structural pass in the order finalizeWorkspaceSidebar runs the
+// owners: panels are ensured flat (first open), then grouped, then ordered.
+// The fixture mirrors index.html: header, the flat panels the earlier
+// ensure* owners leave behind, Report, and the nav controls.
+function runStructuralPipeline() {
+  const { doc, body } = makeTreeDocument();
+
+  const sidebar = makeTreeElement('div');
+  sidebar.id = 'workspaceSidebar';
+  body.appendChild(sidebar);
+
+  const scroller = makeTreeElement('div');
+  scroller.className = 'workspaceNavScroller';
+  sidebar.appendChild(scroller);
+
+  const header = makeTreeElement('div');
+  header.className = 'workspaceHeader';
+  scroller.appendChild(header);
+
+  for (const id of [
+    'workspaceSearchPanel', 'workspaceJournalsPanel', 'workspaceConceptsPanel',
+    'workspaceRelatedPanel', 'workspaceTasksPanel', 'workspaceTagsPanel',
+    'workspaceProjectsPanel', 'workspaceArchivePanel', 'workspaceReportPanel',
+  ]) {
+    const panel = makeTreeElement('div');
+    panel.id = id;
+    panel.className = 'workspaceSection';
+    scroller.appendChild(panel);
+  }
+
+  const navControls = makeTreeElement('div');
+  navControls.className = 'workspaceNavControls';
+  scroller.appendChild(navControls);
+
+  const api = STRUCTURAL_API_FACTORY(doc, null);
+
+  api.ensureWorkspaceActivePanel();
+  api.ensureWorkspaceIndexPanel();
+  api.ensureWorkspaceSidebarGroups();
+  api.normalizeWorkspacePanelOrder();
+
+  return { doc, sidebar, host: scroller, header, api };
+}
+
+  group('ACT 3 — Executed rendered-DOM structural gate (S28-S34)');
+
+let d28 = null;
+let d29 = null;
+let d30 = null;
+let d31 = null;
+let d32 = null;
+let d33 = null;
+let d34 = null;
+
+// S28: all four group containers must END UP attached to the rendered host
+await check('S28', 'executed DOM: all four groups attached to the rendered host', () => {
+  const state = runStructuralPipeline();
+  const bad = GROUP_IDS.filter((id) => {
+    const g = state.doc.getElementById(id);
+    return !g || g.parentNode !== state.host;
+  });
+  d28 = bad.length ? 'missing from host (absent or detached): ' + bad.join(', ') : null;
+  return bad.length === 0;
+}, () => d28);
+
+// S29: every mapped panel must be reachable from the document root AND
+// nested directly inside its accepted group
+await check('S29', 'executed DOM: every mapped panel nested in its group in the rendered tree', () => {
+  const state = runStructuralPipeline();
+  const expect = {
+    workspaceActivePanel: 'workspaceCurrentDocumentGroup',
+    workspaceSearchPanel: 'workspaceWorkspaceKnowledgeGroup',
+    workspaceTasksPanel: 'workspaceFileKnowledgeGroup',
+    workspaceRelatedPanel: 'workspaceFileKnowledgeGroup',
+    workspaceJournalsPanel: 'workspaceWorkspaceKnowledgeGroup',
+    workspaceConceptsPanel: 'workspaceWorkspaceKnowledgeGroup',
+    workspaceTagsPanel: 'workspaceWorkspaceKnowledgeGroup',
+    workspaceProjectsPanel: 'workspaceWorkspaceKnowledgeGroup',
+    workspaceIndexPanel: 'workspaceWorkspaceKnowledgeGroup',
+    workspaceArchivePanel: 'workspaceWorkspaceKnowledgeGroup',
+  };
+  const bad = [];
+  for (const [panelId, groupId] of Object.entries(expect)) {
+    const panel = state.doc.getElementById(panelId);
+    if (!panel) {
+      bad.push(panelId + ': not reachable from document root (detached)');
+      continue;
+    }
+    const parent = panel.parentNode;
+    if (!parent || parent.id !== groupId) {
+      bad.push(panelId + ': parent is ' + (parent ? (parent.id || parent.tagName) : 'null') + ', expected ' + groupId);
+    }
+  }
+  d29 = bad.length ? bad.join('; ') : null;
+  return bad.length === 0;
+}, () => d29);
+
+// S30: the rendered Current Document panel must expose exactly one visible
+// title, spelled "Current Document", with the removed slice-2 structures absent
+await check('S30', 'executed DOM: Current Document panel renders exactly one visible title', () => {
+  const state = runStructuralPipeline();
+  const active = state.doc.getElementById('workspaceActivePanel');
+  const html = active ? String(active.innerHTML || '') : '';
+  const titleCount = (html.match(/workspaceActiveTitle/g) || []).length;
+  const reasons = [];
+  if (!active) reasons.push('workspaceActivePanel not reachable from document root');
+  if (titleCount !== 1) reasons.push('workspaceActiveTitle occurrences: ' + titleCount);
+  if (!/<span class="workspaceActiveTitle">Current Document<\/span>/.test(html)) {
+    reasons.push('rendered title is not "Current Document"');
+  }
+  if (/workspaceCurrentDocumentSection|workspaceCurrentDocumentTitle/.test(html)) {
+    reasons.push('removed Current Document section/title markup reappeared');
+  }
+  if (/workspaceActiveEditReadReserved/.test(html)) {
+    reasons.push('Edit/Read reserved placeholder reappeared');
+  }
+  if (/workspaceActiveTitle">Active</.test(html)) reasons.push('stale "Active" title rendered');
+  d30 = reasons.length ? reasons.join('; ') : null;
+  return reasons.length === 0;
+}, () => d30);
+
+// S31: rendered order — groups right after the header in accepted order,
+// panels ordered inside each group, protected ungrouped content at the tail
+await check('S31', 'executed DOM: group order and within-group panel order match the accepted order', () => {
+  const state = runStructuralPipeline();
+  const kids = state.host.childNodes;
+  const reasons = [];
+  if (!kids[0] || kids[0].className !== 'workspaceHeader') {
+    reasons.push('first host child is not the header');
+  }
+  GROUP_IDS.forEach((gid, i) => {
+    const child = kids[i + 1];
+    if (!child || child.id !== gid) {
+      reasons.push('host child ' + (i + 1) + ' is ' + (child ? child.id || child.tagName : 'missing') + ', expected ' + gid);
+    }
+  });
+  const childIds = (gid) => {
+    const g = state.doc.getElementById(gid);
+    return g ? g.childNodes.map((n) => n.id) : null;
+  };
+  const controls = childIds('workspaceControlsGroup');
+  if (controls === null) reasons.push('Workspace Controls group absent from rendered tree');
+  else if (controls.length !== 0) reasons.push('Workspace Controls group not empty: ' + controls.join(','));
+  const currentDoc = childIds('workspaceCurrentDocumentGroup');
+  if (!currentDoc || currentDoc.join(',') !== 'workspaceActivePanel') {
+    reasons.push('Current Document children: ' + (currentDoc ? currentDoc.join(',') : 'absent'));
+  }
+  const fileK = childIds('workspaceFileKnowledgeGroup');
+  if (!fileK || fileK.join(',') !== 'workspaceTasksPanel,workspaceRelatedPanel') {
+    reasons.push('File Knowledge children: ' + (fileK ? fileK.join(',') : 'absent'));
+  }
+  const wsK = childIds('workspaceWorkspaceKnowledgeGroup');
+  if (!wsK || wsK.join(',') !== WORKSPACE_KNOWLEDGE_ORDER.join(',')) {
+    reasons.push('Workspace Knowledge children: ' + (wsK ? wsK.join(',') : 'absent'));
+  }
+  const tail = kids.slice(5).map((n) => n.id || n.className);
+  if (tail.join(',') !== 'workspaceReportPanel,workspaceNavControls') {
+    reasons.push('ungrouped tail: ' + (tail.join(',') || 'empty'));
+  }
+  d31 = reasons.length ? reasons.join('; ') : null;
+  return reasons.length === 0;
+}, () => d31);
+
+// S32: every group and mapped panel must occur EXACTLY once in the connected
+// rendered tree (catches detached subtrees and duplicated containers)
+await check('S32', 'executed DOM: no detached or duplicated groups/panels in the rendered tree', () => {
+  const state = runStructuralPipeline();
+  const all = GROUP_IDS.concat(MAPPED_PANEL_IDS).concat(['workspaceReportPanel']);
+  const bad = all.filter((id) => countIdInTree(state.doc.documentElement, id) !== 1);
+  d32 = bad.length ? 'rendered-tree occurrence != 1 for: ' + bad.join(', ') : null;
+  return bad.length === 0;
+}, () => d32);
+
+// S33: protected scope — Report stays a direct child of the host, after the groups
+await check('S33', 'executed DOM: Reports panel stays ungrouped after the groups', () => {
+  const state = runStructuralPipeline();
+  const report = state.doc.getElementById('workspaceReportPanel');
+  const wkgIdx = state.host.childNodes.findIndex((n) => n.id === 'workspaceWorkspaceKnowledgeGroup');
+  const reportIdx = report ? state.host.childNodes.indexOf(report) : -1;
+  const ok = Boolean(report) && report.parentNode === state.host && wkgIdx !== -1 && reportIdx > wkgIdx;
+  d33 = ok ? null : 'report attached=' + Boolean(report && report.parentNode === state.host) +
+    ', reportIdx=' + reportIdx + ', wkgIdx=' + wkgIdx;
+  return ok;
+}, () => d33);
+
+// S34: a second grouping pass must move nothing — same nodes, no duplicates
+await check('S34', 'executed DOM: second grouping run preserves group and panel node identity', () => {
+  const state = runStructuralPipeline();
+  const all = GROUP_IDS.concat(MAPPED_PANEL_IDS);
+  const before = all.map((id) => state.doc.getElementById(id));
+  state.api.ensureWorkspaceSidebarGroups();
+  state.api.normalizeWorkspacePanelOrder();
+  const after = all.map((id) => state.doc.getElementById(id));
+  const reasons = [];
+  before.forEach((node, i) => {
+    if (!node) reasons.push(all[i] + ': missing after first run');
+    else if (node !== after[i]) reasons.push(all[i] + ': node replaced on second run');
+  });
+  const dup = GROUP_IDS.filter((id) => countIdInTree(state.doc.documentElement, id) !== 1);
+  if (dup.length) reasons.push('group occurrence != 1 after second run: ' + dup.join(','));
+  d34 = reasons.length ? reasons.join('; ') : null;
+  return reasons.length === 0;
+}, () => d34);
 
 // ===============================================================
   const passed = results.filter((r) => !r.group && r.ok).length;

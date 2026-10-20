@@ -235,13 +235,13 @@ Sidebar Information Architecture.
 |---|---|---|
 | ACT 1 | Projects Source filtering | ACCEPTED (commit 66e3b7a) |
 | ACT 2 | Existing Expanded View behavior and state consistency | ACCEPTED (Slices 1–3) |
-| ACT 3 | Sidebar Information Architecture | Slice 1 complete (Slices 2-3 planned) |
+| ACT 3 | Sidebar Information Architecture | Slices 1–3 complete after structural correction (static + executed-DOM gates passed; integrated browser acceptance pending) |
 | ACT 4 | Current Document, Edit/Read and Document Surface | planned |
 | ACT 5 | Cross-surface visual, responsive and accessibility consistency | planned |
 | ACT 6 | Package closure and 0.8.0 release | not authorized |
 
 **Package 6 ACT 2 implementation complete.**
-**Package 6 continues with ACT 3 Sidebar Information Architecture (PLAN-0 active).**
+**Package 6 continues with ACT 3 Sidebar Information Architecture (all slices complete after structural correction; integrated browser acceptance pending).**
 
 ## ACT 3 PLAN-0 — Sidebar Information Architecture
 
@@ -398,7 +398,7 @@ Functional Edit/Read control, mode state ownership, Editor/Read synchronization,
 
 ### ACT 3 PLAN-0 status
 
-Status: **Slice 1 complete.** Implementation: Slice 1 committed on `development`; Slices 2-3 planned.
+Status: **Slices 1–3 complete after structural correction.** Implementation: Slices 1–3 on `development` (including the pre-browser group-attachment correction and executed-DOM gate S28–S34); integrated browser acceptance pending owner authorization.
 
 ### ACT 3 Slice 1 — Final Semantic Mapping (recorded 2026-10-20)
 
@@ -414,4 +414,31 @@ Corrections from initial implementation:
 - Search: Workspace Controls → Workspace Knowledge (Search is Workspace-scoped, not a global command).
 - Tags: File Knowledge → Workspace Knowledge (Tags is Workspace-scoped despite interacting with the selected document).
 
-Validation: workspace-sidebar-visual-validators.cjs 68/68 PASS; workspace-notes-sidebar-validators.cjs 65/65 PASS; workspace-discovery-consumers-validators.cjs 52/52 PASS; workspace-task-consumers-validators.cjs 62/62 PASS; `git diff --check` clean.
+Validation (at ACT 3 completion): workspace-sidebar-visual-validators.cjs 86/86 PASS; workspace-notes-sidebar-validators.cjs 65/65 PASS; workspace-discovery-consumers-validators.cjs 52/52 PASS; workspace-task-consumers-validators.cjs 62/62 PASS; `git diff --check` clean.
+
+### ACT 3 Slices 2–3 + pre-browser structural correction (recorded 2026-10-20)
+
+- **Slice 2 — Current Document structural area (after correction):** visible
+  Active title changed to "Current Document";
+  `workspaceCurrentDocumentSection` / `workspaceCurrentDocumentTitle` /
+  `workspaceActiveEditReadReserved` markup and CSS removed (grayfield
+  boundary — no Edit/Read ownership move).
+- **Slice 3 — Header, badge and disclosure alignment:**
+  `ensureWorkspaceIndexPanel()` header reordered to disclosure → title →
+  action → badge; all other panels conform; Help deferred to ACT 5; Projects
+  summary/badge count duplication investigated — ruled non-duplicative.
+- **Pre-browser structural correction:** `ensureWorkspaceSidebarGroups()`
+  now attaches each new (or displaced) group to the content host
+  (`host.appendChild(group)`) before the move/order loops — groups were
+  previously created detached, which in a real browser would have made every
+  grouped panel vanish from the rendered Sidebar (and made `getElementById`
+  and the ordering loop skip the groups).
+- **Executed rendered-DOM gate (S28–S34):** the validator builds a
+  tree-capable DOM and executes the five real structural owners verbatim —
+  group attachment (S28), panel nesting/reachability (S29), single rendered
+  "Current Document" title (S30), rendered group/panel order (S31),
+  uniqueness/no detached or duplicated nodes (S32), protected Reports tail
+  (S33), idempotent second run (S34). Gate-first evidence: 79/86 before the
+  fix (S28–S34 failed on the real defect), 86/86 after.
+- **Integrated browser acceptance:** pending owner authorization. Release
+  gate: CLOSED (0.8.x activation not authorized).

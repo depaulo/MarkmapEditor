@@ -3,12 +3,12 @@
 ## Identity
 
 - Package: P6
-- ACT: ACT 3 Slice 1
-- Name: Sidebar Structural Grouping and Deterministic Ordering
+- ACT: ACT 3 Slice 3
+- Name: Header, Badge and Disclosure Alignment
 - Branch: development
 - Released baseline: 0.7.0
 - Target release: 0.8.0
-- Status: completed
+- Status: complete (all slices + pre-browser structural correction; static and executed-DOM gates passed, browser acceptance pending)
 - Release activation: false
 
 ## Objective
@@ -255,16 +255,117 @@ Status: **completed**.
 
 ### Validation
 
-- `workspace-sidebar-visual-validators.cjs`: 68/68 PASS (Y44 updated to 0.7.0 baseline; S1–S16 structural assertions added).
+- `workspace-sidebar-visual-validators.cjs`: 86/86 PASS at ACT 3 completion (S1–S16 structural assertions; Y44 updated to 0.7.0 baseline; final ACT 3 suite = S1–S27 source-contract + S28–S34 executed rendered-DOM).
 - `workspace-notes-sidebar-validators.cjs`: 65/65 PASS (S50 updated to 0.7.0 baseline).
 - `workspace-discovery-consumers-validators.cjs`: 52/52 PASS.
 - `workspace-task-consumers-validators.cjs`: 62/62 PASS.
 - `node --check js/main.js`: PASS.
 - `git diff --check`: clean.
 
+## ACT 3 Slice 2 — Completion Record (Current Document Structural Area — after structural correction)
+
+Status: **completed**.
+
+### Semantic Mapping (final)
+
+| Group | Panels | Owner |
+|---|---|---|
+| Workspace Controls | (empty — no existing global command area is movable) | existing header/global action area; group rendered as empty, visually neutral |
+| Current Document | Active File | `js/main.js` (`ensureWorkspaceActivePanel`, `renderWorkspaceActivePanel`) |
+| File Knowledge | Tasks, Related/Links | `js/main.js` (`ensureWorkspaceTasksPanel`, `ensureWorkspaceRelatedPanel`) |
+| Workspace Knowledge | Search, Notes/Journals, Knowledge/Concepts, Tags, Projects, Index, Archive | `js/main.js` (respective ensure/render owners) |
+| Protected ungrouped | Reports | Report panel owner; no movement or redesign |
+
+### Correction from initial Slice 2 implementation
+
+The initial Slice 2 implementation added a `workspaceCurrentDocumentSection` wrapper with a `workspaceCurrentDocumentTitle` ("Current Document") and a non-interactive `workspaceActiveEditReadReserved` span. This created two visible titles ("Current Document" section title + "Active" panel title) and a premature Edit/Read placeholder — both in conflict with the accepted grayfield boundary.
+
+### Corrected implementation
+
+- `js/main.js`: `ensureWorkspaceActivePanel()` keeps the existing Active File panel and disclosure owner; visible semantic title changed from "Active" to "Current Document"; `workspaceCurrentDocumentSection` wrapper removed; `workspaceActiveEditReadReserved` span removed; no separate section header above the panel.
+- `css/workspace.css`: `.workspaceCurrentDocumentSection`, `.workspaceCurrentDocumentTitle`, `.workspaceActiveEditReadReserved` rules removed.
+- No panels recreated; no listeners re-wired; no domain models mutated; no Save triggered; Edit/Read owner unchanged (`#editorBtnEditToggle` in editor overlay).
+
+### Validation
+
+- `workspace-sidebar-visual-validators.cjs`: 86/86 PASS at ACT 3 completion (S17–S22 for no Edit/Read placeholder, no duplicate section wrapper, single Current Document title, no mode handler, no Save from rendering).
+- `workspace-notes-sidebar-validators.cjs`: 65/65 PASS (unchanged).
+- `workspace-discovery-consumers-validators.cjs`: 52/52 PASS (unchanged).
+- `workspace-task-consumers-validators.cjs`: 62/62 PASS (unchanged).
+- `node --check js/main.js`: PASS.
+- `git diff --check`: clean.
+
+## ACT 3 Slice 3 — Completion Record (Header, Badge and Disclosure Alignment)
+
+Status: **completed**.
+
+### Header grammar (ACT 3, Help deferred to ACT 5)
+
+Panel headers follow: disclosure → title → action → badge. Help is intentionally deferred to ACT 5 per accepted owner ruling.
+
+### Implementation
+
+- `js/main.js`: `ensureWorkspaceIndexPanel()` restructured — badge moved from inside the toggle button to after the action controls within `workspacePanelHeaderControls`, yielding disclosure → title → action → badge order. All other panels (Active, Related, Tasks, Tags, Projects, Journals, Concepts, Archive) already conform.
+- `css/workspace.css`: no changes required for Slice 3 (existing `.workspacePanelHeaderControls` and `.workspacePanelBadge` styles cover the restructured Index header).
+- Projects summary/body count duplication: investigated — not proven. Badge shows compact count (e.g., "0"), summary shows descriptive label (e.g., "0 Projects"); these serve different UI purposes and are not duplicative.
+- No panels recreated; no listeners re-wired; no domain models mutated; no Save triggered.
+
+### Validation
+
+- `workspace-sidebar-visual-validators.cjs`: 86/86 PASS at ACT 3 completion (S23–S27: Index action-before-badge, Projects action-before-badge, no badge-before-title, chevron-before-title, Active disclosure→title→badge).
+- All other validator suites: unchanged, all pass.
+- `node --check js/main.js`: PASS.
+- `git diff --check`: clean.
+
+## ACT 3 — Pre-browser structural correction (group attachment) + executed-DOM gate
+
+### Defect found and fixed before integrated browser acceptance
+
+`ensureWorkspaceSidebarGroups()` created the four group containers detached —
+they were never appended to the Sidebar content host. Invisible to the S1–S27
+source-contract checks, the consequences in a real browser would have been:
+`document.getElementById` could not find the groups, the ordering loop skipped
+them (`group.parentNode !== host`), and every panel moved into a group would
+have vanished from the rendered Sidebar as a detached subtree.
+
+Fix (`js/main.js`, `ensureWorkspaceSidebarGroups()`): each newly created group
+is attached with `host.appendChild(group)` immediately; an existing group whose
+`parentNode !== host` is re-homed to the host. The ordering loop then places
+the groups after the header as before. No other owner, CSS, listener or
+domain model changed.
+
+### Executed rendered-DOM gate (S28–S34)
+
+`scripts/workspace-sidebar-visual-validators.cjs` builds a tree-capable DOM
+(real parentNode/insertBefore/appendChild, connectivity-aware getElementById)
+and executes the five real structural owners extracted verbatim in finalize
+order (`getWorkspaceSidebarContentHost`, `ensureWorkspaceActivePanel`,
+`ensureWorkspaceIndexPanel`, `ensureWorkspaceSidebarGroups`,
+`normalizeWorkspacePanelOrder`):
+
+- S28 all four groups attached to the rendered host;
+- S29 every mapped panel reachable from the document root and nested in its group;
+- S30 Current Document panel renders exactly one visible title (removed slice-2 structures absent);
+- S31 group order after header, within-group panel order, ungrouped tail;
+- S32 no detached or duplicated groups/panels in the connected tree;
+- S33 Reports stays ungrouped after the groups (protected scope);
+- S34 second grouping run preserves node identity (idempotent).
+
+### Evidence
+
+- Gate-first, before the fix: 79/86 — S28–S34 all FAILED with detached-group/panel diagnostics (the gate caught the real defect).
+- After the fix: visual suite 86/86 PASS; notes 65/65; discovery 52/52; tasks 62/62; `node --check js/main.js` PASS; `git diff --check` clean.
+- Evidence class: executed-DOM in Node — not browser evidence. Integrated browser acceptance remains owner-gated.
+
 ## Current Phase
 
-ACT 3 Slice 1 complete. ACT 3 Slice 2 not yet started.
+ACT 3 complete — all slices implemented after structural correction, including
+the group-attachment correction above.
+ACT 3 static gate (S1–S27) + executed rendered-DOM gate (S28–S34, 86/86) passed; integrated browser acceptance deferred to owner authorization.
+ACT 4 not started.
+
+Package 6 release gate: closed.
+0.8.0 activation: unauthorized.
 
 ## Source-Proven Asymmetry (B2) — live-source comparison, 2026-10-18
 

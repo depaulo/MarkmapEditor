@@ -9,10 +9,6 @@
 
 - **Released version:** 0.7.0
 - **Target version:** 0.8.x
-- **Release activation:** NOT authorized
-- **Branch:** development (active Package 6 branch)
-- **Active package:** Package 6 — Expanded-View Behavior and Visual Consistency
-- **Phase:** ACT 3 PLAN-0 active (Sidebar Information Architecture)
 
 ## Where the information now lives
 
