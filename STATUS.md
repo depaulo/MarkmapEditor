@@ -1,5 +1,13 @@
 # MarkMapJournal Release Status
 
+Document status:
+- Status: HISTORICAL
+- Describes: Package 2–5 era (release 0.6.2, ACT V0, ACT 2A–2C, ACT 3A–3D)
+- Current roadmap authority: docs/ROADMAP.md
+- Current project state: project-state.json
+- Retained for: historical release evidence
+- Must not be used for: active Package/ACT/version selection
+
 ## Program Position (Gate 1)
 
 - **Release `0.6.2` — Notes Workspace Foundation**: ACCEPTED and published.

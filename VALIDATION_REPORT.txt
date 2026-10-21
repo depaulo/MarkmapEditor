@@ -1,3 +1,11 @@
+Document status:
+- Status: HISTORICAL
+- Describes: Package 2–5 era source validation report
+- Current validation authority: docs/validation/CURRENT_VALIDATION.md
+- Current project state: project-state.json
+- Retained for: historical validation evidence
+- Must not be used for: active Package/ACT/version selection
+
 FINAL SOURCE VALIDATION REPORT
 
 Repository:

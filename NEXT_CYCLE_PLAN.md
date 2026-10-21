@@ -1,5 +1,13 @@
 # MarkmapEditor Next-Cycle Plan (post-0.6.2)
 
+Document status:
+- Status: HISTORICAL
+- Describes: Package 2–5 era (ACT V0, Package 2–5, ACT 2A–2C, ACT 3A–3D)
+- Current roadmap authority: docs/ROADMAP.md
+- Current project state: project-state.json
+- Retained for: historical implementation evidence
+- Must not be used for: active Package/ACT/version selection
+
 > **This document is a roadmap, not the architecture.**
 > The canonical architecture and package contract is
 > `docs/architecture/MarkmapEditor_1.0_PRODUCT_ARCHITECTURE_AND_IMPLEMENTATION_PROGRAM.md`.

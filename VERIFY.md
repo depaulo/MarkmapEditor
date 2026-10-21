@@ -1,5 +1,13 @@
 # VERIFY.md — Verification Checklist & Procedures
 
+Document status:
+- Status: HISTORICAL
+- Describes: Package 2–5 era verification procedures (ACT V0, ACT 2A, H1–H4 Draw.io)
+- Current validation authority: docs/validation/CURRENT_VALIDATION.md
+- Current project state: project-state.json
+- Retained for: historical verification evidence
+- Must not be used for: active Package/ACT/version selection
+
 This document outlines short, repeatable verification procedures suitable for DeX/mobile and desktop validation.
 
 ---

@@ -1,5 +1,13 @@
 # TODO.md
 
+Document status:
+- Status: HISTORICAL
+- Describes: Package 2–5 era task list and Draw.io MVP forward order
+- Current roadmap authority: docs/ROADMAP.md
+- Current project state: project-state.json
+- Retained for: historical task-tracking evidence
+- Must not be used for: active Package/ACT/version selection
+
 ## Completed Core Modules (v58 Functional Recovery)
 
 - [x] Workspace Host Foundation & Registry (registered=2: Journal and Workspace-Index)

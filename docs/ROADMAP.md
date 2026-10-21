@@ -16,8 +16,23 @@
 | Package 1 (post-release defects) | DORMANT; no reproduced defect |
 | Package 2 (Tasks) | CLOSED |
 | Package 5 (Managed Project Foundation) | CLOSED — 0.7.0 released, owner-accepted 2026-10-16 |
-| Package 6 (Expanded-View Behavior and Visual Consistency) | ACTIVE on `development` — ACT 1 accepted; ACT 2 (Slices 1–3) accepted; ACT 3 ACCEPTED (Sidebar Information Architecture closed); ACT 4 PLAN-0 active — File Knowledge cards and Workspace Index consolidation |
-| ACT 4 | File Knowledge cards (Workstream A) + Workspace Index compact/full consolidation (Workstream B) | PLAN-0 — source inspection only |
+| Package 6 (Expanded-View Behavior and Visual Consistency / Consistency and Document Experience) | ACTIVE on `development` — Target 0.8.0; ACT 1 accepted; ACT 2 (Slices 1–3) accepted; ACT 3 ACCEPTED; ACT 4 PLAN-0 active — File Knowledge cards and Workspace Index consolidation |
+| ACT 4 | File Knowledge cards (Workstream A) + Workspace Index compact/full consolidation (Workstream B) | PLAN-0 — source inspection only; implementation NOT AUTHORIZED until D1 gate green |
+| ACT 5 | Current Document Edit/Read and Document Surface | PLANNED |
+| ACT 6 | Archive Participation and Final Cross-Surface Consistency | PLANNED |
+| ACT 7 | Package Closure and 0.8.0 Release | NOT AUTHORIZED |
+| Package 7 (Native Report Composer) | PLANNED — Probable target 0.9.0 |
+| Package 8 (Draw.io Adapter) | CONDITIONAL — based on validated value |
+| Package 9 (1.0 Integration and Product Acceptance) | PLANNED |
+
+## Package order after Package 5
+
+1. **Expanded-View Behavior and Visual Consistency** (current — Package 6)
+2. Native Report Composer (Package 7)
+3. Draw.io Adapter (Package 8)
+4. 1.0 Integration and Product Acceptance (Package 9)
+
+**Older Package numbering (Packages 3, 4 as described in NEXT_CYCLE_PLAN.md / STATUS.md) is HISTORICAL — do not use for active Package/ACT/version selection.**
 
 ## Package order after Package 5
 

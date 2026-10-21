@@ -1,5 +1,13 @@
 # OPERATIONAL FOUNDATION — COMPLETE
 
+Document status:
+- Status: HISTORICAL
+- Describes: Package 5 Stage A operational foundation closure (HEAD 5270b10, 2026-10-15)
+- Current validation authority: docs/validation/CURRENT_VALIDATION.md
+- Current project state: project-state.json
+- Retained for: historical Package 5 Stage A evidence
+- Must not be used for: active Package/ACT/version selection
+
 Package 5 Stage A operational foundation closure report.
 Date: 2026-10-15 · HEAD: 5270b10 (development) · dirty tree preserved · no commit/push.
 
