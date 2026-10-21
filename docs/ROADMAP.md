@@ -16,7 +16,8 @@
 | Package 1 (post-release defects) | DORMANT; no reproduced defect |
 | Package 2 (Tasks) | CLOSED |
 | Package 5 (Managed Project Foundation) | CLOSED — 0.7.0 released, owner-accepted 2026-10-16 |
-| Package 6 (Expanded-View Behavior and Visual Consistency) | ACTIVE on `development` — ACT 1 accepted; ACT 2 (Slices 1–3) accepted; ACT 3 PLAN-0 (Sidebar Information Architecture) active |
+| Package 6 (Expanded-View Behavior and Visual Consistency) | ACTIVE on `development` — ACT 1 accepted; ACT 2 (Slices 1–3) accepted; ACT 3 ACCEPTED (Sidebar Information Architecture closed); ACT 4 PLAN-0 active — File Knowledge cards and Workspace Index consolidation |
+| ACT 4 | File Knowledge cards (Workstream A) + Workspace Index compact/full consolidation (Workstream B) | PLAN-0 — source inspection only |
 
 ## Package order after Package 5
 

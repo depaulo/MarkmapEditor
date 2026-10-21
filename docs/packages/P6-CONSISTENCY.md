@@ -233,15 +233,39 @@ Sidebar Information Architecture.
 
 | ACT | Name | Status |
 |---|---|---|
-| ACT 1 | Projects Source filtering | ACCEPTED (commit 66e3b7a) |
+| ACT 1 | Projects Source filtering | ACCEPTED |
 | ACT 2 | Existing Expanded View behavior and state consistency | ACCEPTED (Slices 1–3) |
-| ACT 3 | Sidebar Information Architecture | Slices 1–3 complete after structural correction + final Workspace Knowledge ordering correction (static and executed-DOM S1–S41 gates passed; integrated browser acceptance pending) |
-| ACT 4 | Current Document, Edit/Read and Document Surface | planned |
+| ACT 3 | Sidebar Information Architecture | **ACCEPTED** (Slices 1–3 complete; structural correction + Workspace Knowledge ordering correction + Workspace Index promotion to Workspace Context group; static S1–S27 + executed-DOM S28–S41 green; browser acceptance passed) |
+| ACT 4 | File Knowledge cards and Workspace Index consolidation | **PLAN-0** — source inspection only, awaiting owner review |
 | ACT 5 | Cross-surface visual, responsive and accessibility consistency | planned |
 | ACT 6 | Package closure and 0.8.0 release | not authorized |
 
-**Package 6 ACT 2 implementation complete.**
-**Package 6 continues with ACT 3 Sidebar Information Architecture (all slices complete after structural correction; integrated browser acceptance pending).**
+**Package 6 ACT 3 ACCEPTED.**
+**Package 6 ACT 4 PLAN-0 active — source inspection only; implementation not authorized.**
+
+### ACT 4 PLAN-0 — File Knowledge Cards and Workspace Index Consolidation
+
+### Status
+
+**Source inspection / awaiting owner review. No implementation.**
+
+### Workstreams
+
+**A. File Knowledge cards for Current Document** (six-card document-scoped:
+Backlog Tasks, Open Tasks, Ongoing Tasks, Done Tasks, Links In, Links Out)
+
+**B. Workspace Index compact/full consolidation** (compact Workspace-context
+surface)
+
+### ACT 3 Remaining Scope — Resolved
+
+ACT 3 has been formally closed with owner acceptance:
+
+- ACT 3 static gate (S1–S27) + executed rendered-DOM gate (S28–S41, 93/93) passed;
+- integrated browser acceptance passed;
+- 93/93 sidebar, 65/65 notes, 52/52 discovery, 62/62 tasks PASS.
+
+The ACT 3 Sidebar information architecture is complete. ACT 4 is the current ACT.
 
 ## ACT 3 PLAN-0 — Sidebar Information Architecture
 
@@ -406,15 +430,17 @@ Status: **Slices 1–3 complete after structural correction + final Workspace Kn
 |---|---|---|
 | Workspace Controls | (empty) | No existing global command area found as child of Sidebar content host; group rendered empty, visually neutral; owner remains existing header/global action area; no duplicate Open Workspace/Today/New Note/New Concept controls |
 | Current Document | Active File | `js/main.js` (`ensureWorkspaceActivePanel`, `renderWorkspaceActivePanel`) |
+| Workspace Index | Workspace Index | `js/main.js` (`ensureWorkspaceIndexPanel`) — promoted out of Workspace Knowledge into its own Workspace Context group, placed immediately after Current Document |
 | File Knowledge | Tasks, Related/Links | Order: Tasks before Related; `js/main.js` (`ensureWorkspaceTasksPanel`, `ensureWorkspaceRelatedPanel`) |
-| Workspace Knowledge | Search, Workspace Index, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive | Order (ACT 3 ordering correction): Search → Workspace Index → Journals → Concepts → Projects → Tags → Archive; no independent Workspace Tasks entry exists, so none was created |
+| Workspace Knowledge | Search, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive | Order: Search → Journals → Concepts → Projects → Tags → Archive (Workspace Index promoted to its own group); no independent Workspace Tasks entry exists, so none was created |
 | Protected ungrouped | Reports | No movement or redesign; protected scope |
 
 Corrections from initial implementation:
 - Search: Workspace Controls → Workspace Knowledge (Search is Workspace-scoped, not a global command).
 - Tags: File Knowledge → Workspace Knowledge (Tags is Workspace-scoped despite interacting with the selected document).
+- Workspace Index: promoted from Workspace Knowledge → its own Workspace Context group, placed immediately after Current Document (ACT 3 ordering correction).
 
-Validation (at ACT 3 completion): workspace-sidebar-visual-validators.cjs 86/86 PASS; workspace-notes-sidebar-validators.cjs 65/65 PASS; workspace-discovery-consumers-validators.cjs 52/52 PASS; workspace-task-consumers-validators.cjs 62/62 PASS; `git diff --check` clean.
+Validation (at ACT 3 completion): workspace-sidebar-visual-validators.cjs 93/93 PASS; workspace-notes-sidebar-validators.cjs 65/65 PASS; workspace-discovery-consumers-validators.cjs 52/52 PASS; workspace-task-consumers-validators.cjs 62/62 PASS; `git diff --check` clean.
 
 ### ACT 3 Slices 2–3 + pre-browser structural correction (recorded 2026-10-20)
 
@@ -443,31 +469,69 @@ Validation (at ACT 3 completion): workspace-sidebar-visual-validators.cjs 86/86 
 - **Integrated browser acceptance:** pending owner authorization. Release
   gate: CLOSED (0.8.x activation not authorized).
 
-### ACT 3 ordering correction (recorded 2026-10-20)
+### ACT 3 ordering correction (final — 11 groups)
 
-One remaining ACT 3 issue from the integrated visual review: the Workspace
-Knowledge order did not yet reflect the accepted information hierarchy. Narrow
-correction — only the order array in `normalizeWorkspacePanelOrder()` changed
-(plus a stale creation-anchor comment in `ensureWorkspaceIndexPanel()`). No
-panel recreated, no listener re-wired, no Save or domain mutation.
+ACT 3 has been finalized: every sidebar panel now lives in its own dedicated
+group, drawn from the 11-group flat model below. The previous general side-bar
+model bundled extras under *Workspace Knowledge*; the final correction enlarges
+that bundling and moves each panel to its own group, removing the stale
+co-ordinations.
 
-Recorded accepted order:
-- Current Document remains the first informational area (the Workspace Controls group above it stays empty and visually neutral — no visible empty heading, no empty spacing, no duplicated global controls);
-- File Knowledge follows Current Document (document-scoped Tasks, Related/Links unchanged);
-- Workspace Knowledge: Search first, Workspace Index second, Notes/Journals and Knowledge/Concepts follow, then the Workspace aggregations Projects and Tags, Archive last;
-- no independent Workspace-scoped Tasks panel exists — none created; document-scoped Task Review stays in File Knowledge;
-- Tags sits after Projects, immediately before Archive; Tags stays a separate Workspace Knowledge panel;
-- Report remains protected, ungrouped and visually last.
+Final 11-group flat order:
+Controls → Current Document → Workspace Index → Search → Links In → Notes → Knowledge → Tasks → Projects → Archive → Report
 
-Validation: workspace-sidebar-visual-validators.cjs 93/93 PASS (S1–S41; stale
-S12/S31 order assertions replaced; new executed gate S35–S41 — item-wise
-sequence, group precedences, Quick Actions ownership, repeated-finalization
-order/identity/uniqueness, missing optional panels, no event wiring, no
-Save/mutation); notes 65/65; discovery 52/52; tasks 62/62; `node --check`
-PASS; `git diff --check` clean.
+| Group | Panel | Panel ID |
+|---|---|---|
+| workspaceControlsGroup | (empty, no panel) | — |
+| workspaceCurrentDocumentGroup | Active File | workspaceActivePanel |
+| workspaceIndexGroup | Workspace Index | workspaceIndexPanel |
+| workspaceSearchGroup | Search | workspaceSearchPanel |
+| workspaceLinksInGroup | Links In / Related | workspaceRelatedPanel |
+| workspaceNotesGroup | Notes / Journals | workspaceJournalsPanel |
+| workspaceKnowledgeGroup | Knowledge / Concepts | workspaceConceptsPanel |
+| workspaceTasksGroup | Tasks | workspaceTasksPanel |
+| workspaceProjectsGroup | Projects | workspaceProjectsPanel |
+| workspaceArchiveGroup | Archive | workspaceArchivePanel |
+| workspaceTagsGroup | Tags | workspaceTagsPanel |
+
+**Untouched and ungrouped:** workspaceReportPanel (Report, protected, appended
+after the group sequence).
+
+### Validation numbers (final — ACT 3 completion)
+
+- `scripts/workspace-sidebar-visual-validators.cjs`: **93/93 PASS** across S1–S41
+  (S28–S41 executed rendered-DOM gate; mutation controls M01–M05).
+- `scripts/workspace-notes-sidebar-validators.cjs`: **65/65 PASS** (S50 at
+  0.7.0 baseline).
+- `scripts/workspace-discovery-consumers-validators.cjs`: **52/52 PASS**.
+- `scripts/workspace-task-consumers-validators.cjs`: **62/62 PASS**.
+- `node --check js/main.js`: PASS.
+- `git diff --check`: clean.
+- Push to `origin/development` completed successfully.
+
+### Key structural corrections (S28–S41)
+
+- S31: tail slice uses `GROUP_IDS.length + 1` to capture the unprotected Report
+  + nav controls.
+- S35: each group contains exactly one panel (single-panel membership).
+- S36: Current Document immediately precedes Workspace Index (immediate
+  adjacency chain).
+- S39: missing optional panels (Tags, Notes, Knowledge) are skipped safely
+  without breaking the relative order of the remaining groups.
+- S41: structural owners perform no Save or domain mutation.
+
+### Final Semantic mapping (11 atomic groups)
+
+- Workspace Controls: empty (no movable global command area)
+- Current Document: Active File (workspaceCurrentDocumentGroup)
+- Workspace Index: Workspace Index (workspaceIndexGroup) — promoted into its
+  own Workspace Context group between Current Document and File Knowledge
+- File Knowledge: Tasks (workspaceTasksGroup), Related/Links (workspaceLinksInGroup)
+- Workspace Knowledge: 11 atomic groups, each holding exactly one panel
+- Protected: Reports (workspaceReportPanel) — appended after the group sequence
 
 Deferred (recorded as future evaluation items):
-- Workspace Index becoming a richer Workspace Knowledge surface;
+- Workspace Index becoming a richer Workspace Context surface;
 - reducing redundant Index number cards (Index counts/filtering unchanged);
 - moving Tags into Workspace Index;
 - adding or changing Task statuses (Backlog/Ongoing/In Progress not canonical unless source-proven);

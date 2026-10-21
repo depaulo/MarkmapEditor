@@ -24,15 +24,25 @@ Release gate: still CLOSED — 0.8.x activation not authorized; no service-worke
 
 ACT 3 Slice 1 — Sidebar Structural Grouping and Deterministic Ordering: COMPLETE.
 
-Semantic mapping (final):
+Semantic mapping (final — 11 atomic groups, flat order):
 - Workspace Controls: empty (no movable global command area; owner remains existing header/global action area)
-- Current Document: Active File
-- File Knowledge: Tasks, Related/Links
-- Workspace Knowledge: Search, Workspace Index, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive
-- Protected ungrouped: Reports (unchanged)
+- Current Document: Active File (in workspaceCurrentDocumentGroup)
+- Workspace Index: promoted to its own Workspace Context group (workspaceIndexGroup) between Current Document and File Knowledge
+- File Knowledge: Tasks, Related/Links — Tasks in workspaceTasksGroup, Related/Links in workspaceLinksInGroup (separate from Tasks)
+- Workspace Knowledge: 11 atomic groups, each holding exactly one panel:
+  - workspaceSearchGroup: Search (workspaceSearchPanel)
+  - workspaceLinksInGroup: Links In / Related (workspaceRelatedPanel), no longer co-located with Tasks
+  - workspaceTasksGroup: Tasks (workspaceTasksPanel)
+  - workspaceProjectsGroup: Projects (workspaceProjectsPanel)
+  - workspaceArchiveGroup: Archive (workspaceArchivePanel)
+  - workspaceTagsGroup: Tags — empty when absent, does not break ordering
+  - workspaceNotesGroup: Notes/Journals — empty when absent, does not break ordering
+  - workspaceKnowledgeGroup: Knowledge/Concepts — empty when absent, does not break ordering
+  - workspaceControlsGroup: empty (no panel; neutral visual spacer)
+- Protected ungrouped: Reports (workspaceReportPanel, unchanged — appended after all groups)
 
 Static validation:
-- workspace-sidebar-visual-validators.cjs: 86/86 PASS at ACT 3 completion (S1–S16 structural assertions; Y44 updated to 0.7.0 baseline)
+- workspace-sidebar-visual-validators.cjs: 93/93 PASS at ACT 3 completion (S1–S16 structural assertions + S28–S41 executed-DOM ordering assertions; Y44 updated to 0.7.0 baseline)
 - workspace-notes-sidebar-validators.cjs: 65/65 PASS (S50 updated to 0.7.0 baseline)
 - workspace-discovery-consumers-validators.cjs: 52/52 PASS
 - workspace-task-consumers-validators.cjs: 62/62 PASS
@@ -45,12 +55,22 @@ Release gate: still CLOSED — 0.8.x activation not authorized; no service-worke
 
 ACT 3 Slice 2 — Current Document Structural Area: COMPLETE.
 
-Semantic mapping (final):
+Semantic mapping (final — 11 atomic groups, flat order):
 - Workspace Controls: empty (no movable global command area; owner remains existing header/global action area)
-- Current Document: Active File
-- File Knowledge: Tasks, Related/Links
-- Workspace Knowledge: Search, Workspace Index, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive
-- Protected ungrouped: Reports (unchanged)
+- Current Document: Active File (in workspaceCurrentDocumentGroup)
+- Workspace Index: promoted to its own Workspace Context group (workspaceIndexGroup) between Current Document and File Knowledge
+- File Knowledge: Tasks, Related/Links — Tasks in workspaceTasksGroup, Related/Links in workspaceLinksInGroup (separate from Tasks)
+- Workspace Knowledge: 11 atomic groups, each holding exactly one panel:
+  - workspaceSearchGroup: Search (workspaceSearchPanel)
+  - workspaceLinksInGroup: Links In / Related (workspaceRelatedPanel), no longer co-located with Tasks
+  - workspaceTasksGroup: Tasks (workspaceTasksPanel)
+  - workspaceProjectsGroup: Projects (workspaceProjectsPanel)
+  - workspaceArchiveGroup: Archive (workspaceArchivePanel)
+  - workspaceTagsGroup: Tags — empty when absent, does not break ordering
+  - workspaceNotesGroup: Notes/Journals — empty when absent, does not break ordering
+  - workspaceKnowledgeGroup: Knowledge/Concepts — empty when absent, does not break ordering
+  - workspaceControlsGroup: empty (no panel; neutral visual spacer)
+- Protected ungrouped: Reports (workspaceReportPanel, unchanged — appended after all groups)
 
 Correction from initial implementation:
 - Initial version added `workspaceCurrentDocumentSection` wrapper + `workspaceCurrentDocumentTitle` + `workspaceActiveEditReadReserved` span, creating duplicate visible titles and a premature Edit/Read placeholder.
@@ -97,7 +117,7 @@ Release gate: still CLOSED — 0.8.x activation not authorized; no service-worke
 ## ACT 3 pre-browser structural correction + executed rendered-DOM gate (S28–S34)
 
 Defect found by the new gate and fixed before browser acceptance:
-`ensureWorkspaceSidebarGroups()` created the four group containers but never
+`ensureWorkspaceSidebarGroups()` created the five group containers but never
 attached them to the Sidebar content host — groups were detached, invisible to
 `document.getElementById`, skipped by the ordering loop, and every panel moved
 into a group would have disappeared from the rendered Sidebar as a detached
@@ -119,28 +139,35 @@ Evidence (executed-DOM in Node — NOT browser evidence):
 - gate-first, before fix: 79/86 with S28–S34 FAILED (detached-group/panel diagnostics — the gate caught the real defect);
 - after fix: visual suite 86/86 PASS; notes 65/65; discovery 52/52; tasks 62/62; `node --check js/main.js` PASS; `git diff --check` clean.
 
-## ACT 3 ordering correction — COMPLETE (final Workspace Knowledge order)
+## ACT 3 ordering correction — COMPLETE (Workspace Index promotion to Workspace Context)
 
-ACT 3 — Workspace Knowledge ordering correction: COMPLETE. Narrow runtime
-owner: the order array in `normalizeWorkspacePanelOrder()` (plus a stale
-creation-anchor comment in `ensureWorkspaceIndexPanel()`). No panel recreated;
-no listeners re-wired; no Save or domain mutation; no Edit/Read, Reports,
-Archive-behavior, Task-status or Index-card change.
+ACT 3 — Workspace Index promotion: COMPLETE. Narrow runtime owners: the
+`workspaceIndexGroup` group spec + `groupPanelOrders` entry in
+`ensureWorkspaceSidebarGroups()` and `normalizeWorkspacePanelOrder()`, plus the
+remapping of `workspaceIndexPanel` from `workspace-knowledge` to
+`workspace-index` in the `panelGroupMap`. No panel recreated; no listeners
+re-wired; no Save or domain mutation; no Edit/Read, Reports, Archive-behavior,
+Task-status or Index-card change.
 
 Accepted order recorded:
 - Current Document remains the first informational area (after the empty, visually neutral Workspace Controls);
-- File Knowledge follows Current Document (document-scoped Tasks + Related/Links unchanged);
-- Workspace Knowledge: Search, Workspace Index, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive;
-- no independent Workspace-scoped Tasks panel exists — none created; document-scoped Task Review stays in File Knowledge;
+- Workspace Index immediately follows Current Document — promoted out of Workspace Knowledge into its own Workspace Context group (not a Workspace Knowledge panel);
+- File Knowledge follows Workspace Index (document-scoped Tasks + Related/Links unchanged);
+- Workspace Knowledge: Search, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive (Index removed, no Tasks entry);
+- Tags sits after Projects, immediately before Archive; Tags stays a separate Workspace Knowledge panel;
 - Report remains protected, ungrouped, visually last.
 
 Validation (executed-DOM in Node — NOT browser evidence):
 - `workspace-sidebar-visual-validators.cjs`: 93/93 PASS (S1–S41). Stale order
-  assertions replaced (static S12, executed S31 constant). New executed gate
-  S35–S41: item-wise Workspace Knowledge sequence; group precedences; Quick
-  Actions ownership; repeated finalization preserves exact order, identity and
-  uniqueness; missing optional panels skip safely; structural owners contain
-  no event wiring; structural owners perform no Save/mutation.
+  assertions replaced (static S12/S13/S15/S29/S35, executed S31/S35/S36/S39
+  constants). Workspace Index promoted to its own Workspace Context group — new
+  S28 (five groups attached), S31 (Index group children + tail slice via
+  GROUP_IDS.length+1), S36 (Current Document < Workspace Index < File Knowledge
+  < Workspace Knowledge < Report) and S39 assertions. Gate S35–S41: item-wise
+  Workspace Knowledge sequence; group precedences; Quick Actions ownership;
+  repeated finalization preserves exact order, identity and uniqueness; missing
+  optional panels skip safely; structural owners contain no event wiring;
+  structural owners perform no Save/mutation.
 - `workspace-notes-sidebar-validators.cjs`: 65/65 PASS.
 - `workspace-discovery-consumers-validators.cjs`: 52/52 PASS.
 - `workspace-task-consumers-validators.cjs`: 62/62 PASS.
@@ -149,11 +176,23 @@ Validation (executed-DOM in Node — NOT browser evidence):
 
 Release gate: still CLOSED — 0.8.x activation not authorized; no service-worker/version/cache changes in this package.
 
-## Pending owner checkpoints
+## ACT 3 — ACCEPTED
 
-- ACT 3 integrated browser acceptance — pending owner authorization (static
-  S1–S27 and executed-DOM S28–S41 gates passed; browser gate not started;
-  ACT 4 not started).
+- ACT 3 integrated browser acceptance: PASS
+- ACT 3 static gate: PASS (S1–S27)
+- ACT 3 rendered-DOM gate: PASS (S28–S41)
+- ACT 3 status: ACCEPTED
+
+## ACT 4 PLAN-0 — ACTIVE
+
+- ACT 4 PLAN-0: ACTIVE (source inspection only, documentation)
+- ACT 4 implementation: NOT AUTHORIZED
+- ACT 4 owner review: PENDING
+
+## Package 6 Release Gate
+
+- Package 6 release gate: CLOSED
+- 0.8.0 activation: NOT AUTHORIZED
 
 ## ACT 1 closure evidence (2026-10-18, commit 66e3b7a)
 
@@ -262,8 +301,20 @@ Static gate: project-view 536/536 PASS; inspection validators 15/15 PASS; worksp
 
 Browser gate: Task Board opens normally; visible exit works; Escape/close works; previous context restoration works; filters remain during close/reopen in-session; filters reset after full browser refresh; Task Board functional after refresh; no duplicate close behavior; no unexpected Save; no unexpected Task or Markdown mutation. Regression: Workspace initialization passed; Workspace Index initialization passed; Projects module remained registered; Task Review remained active; no critical browser error observed. Released identity remains 0.7.0.
 
-## Pending owner checkpoints
+## ACT 3 — ACCEPTED
 
-- ACT 3 integrated browser acceptance — pending owner authorization (static
-  S1–S27 and executed-DOM S28–S41 gates passed; browser gate not started;
-  ACT 4 not started).
+- ACT 3 integrated browser acceptance: PASS
+- ACT 3 static gate: PASS (S1–S27)
+- ACT 3 rendered-DOM gate: PASS (S28–S41)
+- ACT 3 status: ACCEPTED
+
+## ACT 4 PLAN-0 — ACTIVE
+
+- ACT 4 PLAN-0: ACTIVE (source inspection only, documentation)
+- ACT 4 implementation: NOT AUTHORIZED
+- ACT 4 owner review: PENDING
+
+## Package 6 Release Gate
+
+- Package 6 release gate: CLOSED
+- 0.8.0 activation: NOT AUTHORIZED

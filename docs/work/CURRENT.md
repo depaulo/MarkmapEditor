@@ -3,13 +3,12 @@
 ## Identity
 
 - Package: P6
-- ACT: ACT 3 (Workspace Knowledge ordering correction)
-- Name: Sidebar Information Architecture — final panel order
+- ACT: ACT 4 PLAN-0 — File Knowledge Cards and Workspace Index Consolidation
+- Name: File Knowledge Cards and Workspace Index Consolidation — source inspection only
 - Branch: development
 - Released baseline: 0.7.0
 - Target release: 0.8.0
-- Status: ordering correction complete (static and executed-DOM gates passed, integrated browser acceptance pending)
-- Release activation: false
+- Status: ACT 3 ACCEPTED; ACT 4 PLAN-0 active (source inspection only, documentation); no implementation; release activation false
 
 ## Objective
 
@@ -98,7 +97,7 @@ No runtime Sidebar reorganization; no Edit/Read changes; no Document Surface cha
 - every named owner is source-proven
 - layer classification is complete; no panel classified in two primary layers without explanation
 - Search is Workspace-scoped; Reports is protected
-- ACT 4 boundaries are explicit
+- ACT 4 PLAN-0 active (source inspection only, documentation); no implementation
 - no runtime file changed; no version/cache file changed
 
 ### Stop Conditions
@@ -237,14 +236,16 @@ Status: **completed**.
 |---|---|---|
 | Workspace Controls | (empty — no existing global command area is movable) | existing header/global action area; group rendered as empty, visually neutral |
 | Current Document | Active File | `js/main.js` (`ensureWorkspaceActivePanel`, `renderWorkspaceActivePanel`) |
+| Workspace Index | Workspace Index | `js/main.js` (`ensureWorkspaceIndexPanel`) — promoted out of Workspace Knowledge into its own Workspace Context group |
 | File Knowledge | Tasks, Related/Links | `js/main.js` (`ensureWorkspaceTasksPanel`, `ensureWorkspaceRelatedPanel`) |
-| Workspace Knowledge | Search, Workspace Index, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive | `js/main.js` (respective ensure/render owners) |
+| Workspace Knowledge | Search, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive | `js/main.js` (respective ensure/render owners) |
 | Protected ungrouped | Reports | Report panel owner; no movement or redesign |
 
 ### Corrections from initial implementation
 
 - Search: moved from Workspace Controls → Workspace Knowledge (Search is Workspace-scoped, not a global command).
 - Tags: moved from File Knowledge → Workspace Knowledge (Tags is Workspace-scoped despite interacting with the selected document).
+- Workspace Index: promoted from Workspace Knowledge → its own Workspace Context group, placed immediately after Current Document.
 - Workspace Controls: no existing global command area found as a child of the Sidebar content host; group remains empty; no duplicate Open Workspace/Today/New Note/New Concept controls created.
 
 ### Implementation
@@ -255,7 +256,7 @@ Status: **completed**.
 
 ### Validation
 
-- `workspace-sidebar-visual-validators.cjs`: 86/86 PASS at ACT 3 completion (S1–S16 structural assertions; Y44 updated to 0.7.0 baseline; final ACT 3 suite = S1–S27 source-contract + S28–S34 executed rendered-DOM).
+- `workspace-sidebar-visual-validators.cjs`: 93/93 PASS at ACT 3 completion (S1–S16 structural assertions; Y44 updated to 0.7.0 baseline; final ACT 3 suite = S1–S27 source-contract + S28–S41 executed rendered-DOM).
 - `workspace-notes-sidebar-validators.cjs`: 65/65 PASS (S50 updated to 0.7.0 baseline).
 - `workspace-discovery-consumers-validators.cjs`: 52/52 PASS.
 - `workspace-task-consumers-validators.cjs`: 62/62 PASS.
@@ -273,7 +274,7 @@ Status: **completed**.
 | Workspace Controls | (empty — no existing global command area is movable) | existing header/global action area; group rendered as empty, visually neutral |
 | Current Document | Active File | `js/main.js` (`ensureWorkspaceActivePanel`, `renderWorkspaceActivePanel`) |
 | File Knowledge | Tasks, Related/Links | `js/main.js` (`ensureWorkspaceTasksPanel`, `ensureWorkspaceRelatedPanel`) |
-| Workspace Knowledge | Search, Workspace Index, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive | `js/main.js` (respective ensure/render owners) |
+| Workspace Knowledge | Search, Notes/Journals, Knowledge/Concepts, Projects, Tags, Archive | `js/main.js` (respective ensure/render owners) |
 | Protected ungrouped | Reports | Report panel owner; no movement or redesign |
 
 ### Correction from initial Slice 2 implementation
@@ -288,7 +289,7 @@ The initial Slice 2 implementation added a `workspaceCurrentDocumentSection` wra
 
 ### Validation
 
-- `workspace-sidebar-visual-validators.cjs`: 86/86 PASS at ACT 3 completion (S17–S22 for no Edit/Read placeholder, no duplicate section wrapper, single Current Document title, no mode handler, no Save from rendering).
+- `workspace-sidebar-visual-validators.cjs`: 93/93 PASS at ACT 3 completion (S17–S22 for no Edit/Read placeholder, no duplicate section wrapper, single Current Document title, no mode handler, no Save from rendering).
 - `workspace-notes-sidebar-validators.cjs`: 65/65 PASS (unchanged).
 - `workspace-discovery-consumers-validators.cjs`: 52/52 PASS (unchanged).
 - `workspace-task-consumers-validators.cjs`: 62/62 PASS (unchanged).
@@ -312,7 +313,7 @@ Panel headers follow: disclosure → title → action → badge. Help is intenti
 
 ### Validation
 
-- `workspace-sidebar-visual-validators.cjs`: 86/86 PASS at ACT 3 completion (S23–S27: Index action-before-badge, Projects action-before-badge, no badge-before-title, chevron-before-title, Active disclosure→title→badge).
+- `workspace-sidebar-visual-validators.cjs`: 93/93 PASS at ACT 3 completion (S23–S27: Index action-before-badge, Projects action-before-badge, no badge-before-title, chevron-before-title, Active disclosure→title→badge).
 - All other validator suites: unchanged, all pass.
 - `node --check js/main.js`: PASS.
 - `git diff --check`: clean.
@@ -354,7 +355,7 @@ order (`getWorkspaceSidebarContentHost`, `ensureWorkspaceActivePanel`,
 ### Evidence
 
 - Gate-first, before the fix: 79/86 — S28–S34 all FAILED with detached-group/panel diagnostics (the gate caught the real defect).
-- After the fix: visual suite 86/86 PASS; notes 65/65; discovery 52/52; tasks 62/62; `node --check js/main.js` PASS; `git diff --check` clean.
+- After the fix: visual suite 93/93 PASS; notes 65/65; discovery 52/52; tasks 62/62; `node --check js/main.js` PASS; `git diff --check` clean.
 - Evidence class: executed-DOM in Node — not browser evidence. Integrated browser acceptance remains owner-gated.
 
 ## ACT 3 — Final Sidebar ordering correction (Workspace Knowledge order)
@@ -408,10 +409,56 @@ change.
 
 ## Current Phase
 
-ACT 3 complete — all slices, group-attachment correction and the final
-Workspace Knowledge ordering correction above.
-ACT 3 static gate (S1–S27) + executed rendered-DOM gate (S28–S41, 93/93) passed; integrated browser acceptance deferred to owner authorization.
-ACT 4 not started.
+ACT 3 ACCEPTED — all slices, group-attachment correction and the final Workspace Knowledge ordering correction above.
+
+- ACT 3 static gate (S1–S27) + executed rendered-DOM gate (S28–S41, 93/93) passed;
+- integrated browser acceptance passed;
+- 93/93 sidebar, 65/65 notes, 52/52 discovery, 62/62 tasks PASS.
+
+ACT 4 PLAN-0 active — source inspection only, documentation; no implementation.
+
+Package 6 release gate: closed.
+0.8.0 activation: unauthorized.
+## ACT 4 PLAN-0 — File Knowledge Cards and Workspace Index Consolidation
+
+### Status
+
+**Source inspection / awaiting owner review. No implementation.**
+
+### Workstreams
+
+**A. File Knowledge cards for Current Document** (six-card document-scoped:
+Backlog Tasks, Open Tasks, Ongoing Tasks, Done Tasks, Links In, Links Out)
+
+**B. Workspace Index compact/full consolidation** (compact Workspace-context
+surface)
+
+### Proposed Cards (target hypothesis — source inspection pending)
+
+| Card | Owner | Status |
+|---|---|---|
+| Backlog Tasks | Task-state parser | PLAN-0 |
+| Open Tasks | Task-state parser | PLAN-0 |
+| Ongoing Tasks | Task-state/started field | PLAN-0 |
+| Done Tasks | Task completion owner | PLAN-0 |
+| Links In | Related/Links owner | PLAN-0 |
+| Links Out | Links-out owner | PLAN-0 |
+
+### Source Inspection Status
+
+- Task-state fields: pending source verification
+- Backlog explicit/derived: pending source verification
+- Ongoing explicit/derived: pending source verification
+- started already supported: pending source verification
+- No six-card runtime layout assumed
+- No new Task metadata
+- No Tags movement
+- No Archive exclusion
+- No Edit/Read
+
+### Recommended Next Step
+
+Feature-parity source-proven matrix; then owner agreement on Slice 1 before any implementation.
 
 Package 6 release gate: closed.
 0.8.0 activation: unauthorized.
