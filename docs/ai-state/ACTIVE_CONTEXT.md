@@ -8,7 +8,7 @@
 ## Current state (from project-state.json)
 
 - **Released version:** 0.7.0
-- **Target version:** 0.8.x
+- **Target version:** 0.8.0
 
 ## Where the information now lives
 

@@ -1,36 +1,9 @@
 # Current ACT (CONSOLIDATED — compatibility pointer)
 
 > **Status:** This file has been consolidated into the MarkmapEditor knowledge
-> system. The operational continuity fields below are maintained for
-> compatibility. Canonical locations are listed under "Where the information
-> now lives."
-
-## Current ACT status
-
-- **Package:** Package 6 — Expanded-View Behavior and Visual Consistency
-- **Stage:** ACT 3 PLAN-0 active (Sidebar Information Architecture), on
-  `development`
-- **Mission:** Sidebar Information Architecture source inspection only —
-  classify existing content into Current Document / File Knowledge /
-  Workspace Knowledge; implementation not authorized during PLAN-0
-- **Slice 1 status:** `js/workspace/workspace-index-workspace.js` — real
-  `escapeIndexLabel()` on the Return label, `aria-label="Return to …"`,
-  module-local scroll preservation (Projects-style clamp grammar) across
-  no-anchor rerenders, refresh and close/reopen. Static gate + Tier M green.
-  Owner browser checkpoint pending before acceptance; further slices need
-  owner rulings (Q1 visible return grammar, B2 inspection recovery).
-- **Authorized scope:** production edits limited to the slice's current
-  owners (`js/workspace/projects-view.js`,
-  `js/workspace/workspace-index-workspace.js`, `-document.js` only if its
-  proven inconsistencies are in-slice, validators, CSS only if a proven
-  inconsistency requires it); docs updates at ACT boundary
-- **Protected files/areas:** Reports owners; Task Board overlay conversion
-  (`js/tasks/task-board.js` stays an overlay); `js/release/release.js`,
-  `sw.js`, cache identity; 0.8.x activation; persistent filter storage; the
-  untracked artifact `re`; generic expanded-view frameworks
-- **Stop conditions:** slice would expand beyond proven inconsistencies;
-  a PLAN-0 question (Q1–Q8) requires an owner ruling to proceed; any
-  protected file would change
+> system. It no longer owns current operational ACT state. Canonical locations
+> are listed under "Where the information now lives." Agents must not add
+> duplicated ACT, Git, or validation state here.
 
 ## Where the information now lives
 
@@ -40,6 +13,7 @@
 | AI agent entry point | `AGENTS.md` |
 | Current work summary | `docs/work/CURRENT.md` |
 | Current validation | `docs/validation/CURRENT_VALIDATION.md` |
+| Active Package document | `docs/packages/P6-CONSISTENCY.md` |
 | Original content (archived) | `docs/archive/ai-state-CURRENT_ACT.original.md` |
 
 ## Authority order

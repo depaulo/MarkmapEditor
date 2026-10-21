@@ -236,18 +236,19 @@ Sidebar Information Architecture.
 | ACT 1 | Projects Source filtering | ACCEPTED |
 | ACT 2 | Existing Expanded View behavior and state consistency | ACCEPTED (Slices 1–3) |
 | ACT 3 | Sidebar Information Architecture | **ACCEPTED** (Slices 1–3 complete; structural correction + Workspace Knowledge ordering correction + Workspace Index promotion to Workspace Context group; static S1–S27 + executed-DOM S28–S41 green; browser acceptance passed) |
-| ACT 4 | File Knowledge cards and Workspace Index consolidation | **PLAN-0** — source inspection only, awaiting owner review |
-| ACT 5 | Cross-surface visual, responsive and accessibility consistency | planned |
-| ACT 6 | Package closure and 0.8.0 release | not authorized |
+| ACT 4 | File Knowledge cards and Workspace Index consolidation | **PLAN-0** — source inspection only; D1 documentation gate complete; implementation NOT AUTHORIZED until D1 gate green |
+| ACT 5 | Current Document Edit/Read and Document Surface | PLANNED |
+| ACT 6 | Archive Participation and Final Cross-Surface Consistency | PLANNED |
+| ACT 7 | Package Closure and 0.8.0 Release | NOT AUTHORIZED |
 
 **Package 6 ACT 3 ACCEPTED.**
-**Package 6 ACT 4 PLAN-0 active — source inspection only; implementation not authorized.**
+**Package 6 ACT 4 PLAN-0 active — source inspection only; D1 documentation gate complete; implementation NOT AUTHORIZED until D1 gate green.**
 
 ### ACT 4 PLAN-0 — File Knowledge Cards and Workspace Index Consolidation
 
 ### Status
 
-**Source inspection / awaiting owner review. No implementation.**
+**Source inspection / D1 documentation gate complete. Implementation NOT AUTHORIZED until D1 gate green. No implementation.**
 
 ### Workstreams
 
