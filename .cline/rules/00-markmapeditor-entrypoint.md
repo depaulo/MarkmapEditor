@@ -6,20 +6,35 @@ This is the single project Rule entrypoint. Do not duplicate this content in
 Every new coding agent MUST complete this entry sequence BEFORE planning,
 editing, running broad tests or making architecture claims.
 
-## 1. Read completely
+## 1. Session entry — required reading sequence
 
-- docs/AI_DEVELOPMENT_WORKFLOW.md
-- docs/AI_DEVELOPMENT_ENVIRONMENT.md
-- docs/ai-state/README.md
-- docs/ai-state/ACTIVE_CONTEXT.md
-- docs/ai-state/CURRENT_ACT.md
-- docs/ai-state/VALIDATION_STATE.md
+Read in order:
+
+1. `.cline/rules/00-markmapeditor-entrypoint.md` — this entrypoint;
+2. `docs/AI_DEVELOPMENT_WORKFLOW.md` — workflow, authority hierarchy,
+   validation tiers, Final Work Report Standard (§36);
+3. `docs/AI_DEVELOPMENT_ENVIRONMENT.md` — environment and tooling;
+4. `project-state.json` — machine-readable project state (HEAD, branch,
+   released/target version, ACT statuses);
+5. `docs/work/CURRENT.md` — current human-readable work summary;
+6. `docs/validation/CURRENT_VALIDATION.md` — current validation evidence;
+7. the active Package document (for Package 6: `docs/packages/P6-CONSISTENCY.md`);
+8. only the architecture and ADR documents referenced by the current work or
+   active Package — do not read every architecture file;
+9. inspect Git state: `git branch --show-current`, `git status --short`,
+   `git diff --stat`, `git diff --check`, `git diff --name-only`;
+10. inspect relevant live source and executable validators.
+
+Record branch, HEAD, modified/untracked files and preserve the dirty working
+tree.
 
 ## 2. Read architecture — targeted, not everything
 
 Read only the canonical architecture documents explicitly listed under
-"Required Architecture" in docs/ai-state/ACTIVE_CONTEXT.md. Use symbol-level
-search and small source ranges; do not read whole large files repeatedly.
+"Required Architecture" in the active work context. Use symbol-level search
+and small source ranges; do not read whole large files repeatedly.
+
+Do not require Repomix when the repository is available.
 
 ## 3. Inspect repository state
 
@@ -34,12 +49,39 @@ tree.
 
 ## 4. Authority order
 
-1. accepted canonical architecture;
-2. roadmap and Package mapping;
-3. checked-out source and executable validators;
-4. compact AI-state documents;
-5. previous reports and conversations;
-6. Repomix snapshots.
+### Procedural authority
+1. `.cline/rules/00-markmapeditor-entrypoint.md` — concise entrypoint only;
+2. `docs/AI_DEVELOPMENT_WORKFLOW.md` — detailed workflow and reporting;
+3. `docs/AI_DEVELOPMENT_ENVIRONMENT.md` — environment and tooling.
+
+### Current operational authority
+4. `project-state.json` — machine-readable project state;
+5. `docs/work/CURRENT.md` — current human-readable work;
+6. `docs/validation/CURRENT_VALIDATION.md` — current validation evidence;
+7. `docs/packages/P6-CONSISTENCY.md` — active Package scope, decisions,
+   history.
+
+### Current product direction
+8. `docs/ROADMAP.md` — current Package sequence through 1.0;
+9. `docs/PRODUCT_PRINCIPLES.md` — durable product principles.
+
+### Durable technical authority
+10. `docs/architecture/*` — stable architecture, completed Package
+    architecture, archived experiments, historical proposals with explicit
+    status;
+11. `docs/decisions/*` — durable cross-Package decisions.
+
+### Compatibility only (concise pointers, no operational state)
+12. `docs/ai-state/*` — former operational-state files, now compatibility
+    pointers only; no active ACT details, no branch or HEAD, no validator
+    counts, no Package history, no roadmap duplication. Agents must not add
+    duplicated ACT, Git or validation state here.
+
+### Historical / supporting (do not use for current state)
+13. `NEXT_CYCLE_PLAN.md`, `STATUS.md`, `TODO.md`, `VERIFY.md`,
+    `VALIDATION_REPORT.txt`, `docs/validation/OPERATIONAL_FOUNDATION_COMPLETE.md`
+    — describe earlier Package eras; classify each as HISTORICAL or
+    SUPERSEDED; must not be used for active Package/ACT/version selection.
 
 AI-state can never override architecture or current source. When the
 checked-out repository is available, Repomix snapshots are secondary and must
@@ -76,4 +118,4 @@ not be loaded as the primary source.
 One Cline task has one clear goal or one bounded staged ACT. Do not start a
 new Package, redesign, or deferred roadmap item without explicit owner
 authorization. Stage boundaries and stop conditions live in
-docs/ai-state/CURRENT_ACT.md.
+`docs/work/CURRENT.md` and `docs/validation/CURRENT_VALIDATION.md`.

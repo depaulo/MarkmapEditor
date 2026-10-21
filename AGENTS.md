@@ -12,19 +12,18 @@ authoritative sources.
    scope guard).
 2. **docs/AI_DEVELOPMENT_WORKFLOW.md** — full development workflow: PLAN mode,
    PLAN handoff, ACT execution, validation tiers, mutation-control isolation,
-   owner acceptance, package closure.
+   owner acceptance, package closure, Final Work Report Standard (§36).
 3. **docs/AI_DEVELOPMENT_ENVIRONMENT.md** — native Termux on Android; verified
    command set; commands known to be missing; do not assume conventional Linux
    paths.
-4. **docs/ai-state/README.md** — AI-state file responsibilities, source-authority
-   precedence, update ownership, cleanup lifecycle, document classes.
-5. **docs/ai-state/ACTIVE_CONTEXT.md** — current package, phase, branch/HEAD,
-   accepted evidence, working-tree boundary, immediate next action.
-6. **docs/ai-state/CURRENT_ACT.md** — the single authorized ACT: status, mission,
-   stage, allowed/protected files, stop conditions.
-7. **docs/ai-state/VALIDATION_STATE.md** — current required tier, selected suites,
-   evidence classes, pending owner checkpoints.
-8. **docs/ai-state/DECISION_LOG.md** — durable decisions with canonical pointers.
+4. **project-state.json** — machine-readable project state (HEAD, branch,
+   released/target version, ACT statuses).
+5. **docs/work/CURRENT.md** — current human-readable work summary.
+6. **docs/validation/CURRENT_VALIDATION.md** — current validation evidence.
+7. **docs/packages/P6-CONSISTENCY.md** — active Package scope, decisions,
+   history (Package 6).
+8. Only the architecture and ADR documents referenced by the current work or
+   active Package — do not read every architecture file.
 
 ## Canonical architecture (durable truth)
 
@@ -50,22 +49,20 @@ authoritative sources.
 
 ## State files (operational continuity — do not treat as architecture)
 
-- `docs/ai-state/ACTIVE_CONTEXT.md`
-- `docs/ai-state/CURRENT_ACT.md`
-- `docs/ai-state/VALIDATION_STATE.md`
-- `docs/ai-state/DECISION_LOG.md`
-- `project-state.json` — machine-readable project state
-- `docs/work/CURRENT.md` — current work summary
-- `docs/validation/CURRENT_VALIDATION.md` — current validation summary
+- `project-state.json` — machine-readable project state;
+- `docs/work/CURRENT.md` — current work summary;
+- `docs/validation/CURRENT_VALIDATION.md` — current validation summary;
+- `docs/ai-state/*` — compatibility pointers only (no operational state).
 
 ## Authority order (never invert)
 
 1. accepted canonical architecture
 2. roadmap and Package mapping
 3. checked-out source and executable validators
-4. compact AI-state documents
-5. previous reports and conversations
-6. Repomix snapshots
+4. `project-state.json` + `docs/work/CURRENT.md` + `docs/validation/CURRENT_VALIDATION.md` + `docs/packages/P6-CONSISTENCY.md`
+5. `docs/ai-state/*` — compatibility pointers only, never operational state
+6. previous reports and conversations
+7. Repomix snapshots
 
 AI-state can never override architecture or current source.
 
@@ -77,8 +74,15 @@ AI-state can never override architecture or current source.
 - Release integration branch: `main` (do not advance until the accepted
   0.8.0 release boundary; never push `main` during development)
 - Active package: Package 6 — Expanded-View Behavior and Visual Consistency
-- PLAN-0: complete (source-proven surface inventory delivered)
-- ACT 1 and ACT 2 Slice 1: accepted
+- Package 6 status: ACTIVE
+- ACT 1 (Projects Source filtering): ACCEPTED
+- ACT 2 (Expanded-View Behavior and State Consistency, slices 1–3): ACCEPTED
+- ACT 3 (Sidebar Information Architecture): ACCEPTED
+- ACT 4 (File Knowledge Cards and Workspace Index Consolidation): PLAN-0 active —
+  source inspection only, implementation NOT AUTHORIZED until D1 gate green
+- ACT 5 (Cross-surface consistency): PLANNED
+- ACT 6 (Archive participation and final cross-surface consistency): PLANNED
+- ACT 7 (Package closure and 0.8.0 release): NOT AUTHORIZED
 - Release activation: NOT authorized
 - Untracked artifact `re`: present — do not touch
 

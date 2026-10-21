@@ -918,15 +918,17 @@ reminder recurrence.
 Every new coding agent must, before planning, editing, running broad tests or
 making architecture claims:
 
-1. read completely: docs/AI_DEVELOPMENT_WORKFLOW.md,
-   docs/AI_DEVELOPMENT_ENVIRONMENT.md, docs/ai-state/README.md,
-   docs/ai-state/ACTIVE_CONTEXT.md, docs/ai-state/CURRENT_ACT.md,
-   docs/ai-state/VALIDATION_STATE.md;
-2. read only the canonical architecture documents explicitly listed under
-   "Required Architecture" in ACTIVE_CONTEXT.md;
-3. inspect `git branch --show-current`, `git status --short`,
-   `git diff --stat`, `git diff --check` and `git diff --name-only`;
-4. consult docs/validation/OWNER_TEST_MATRIX.md before selecting tests.
+1. read `.cline/rules/00-markmapeditor-entrypoint.md`;
+2. read `docs/AI_DEVELOPMENT_WORKFLOW.md`;
+3. read `docs/AI_DEVELOPMENT_ENVIRONMENT.md`;
+4. read `project-state.json`;
+5. read `docs/work/CURRENT.md`;
+6. read `docs/validation/CURRENT_VALIDATION.md`;
+7. read the active Package document (`docs/packages/P6-CONSISTENCY.md` for Package 6);
+8. read only the architecture and ADR documents referenced by the current work or active Package;
+9. inspect Git state: `git branch --show-current`, `git status --short`,
+   `git diff --stat`, `git diff --check`, `git diff --name-only`;
+10. inspect relevant live source and executable validators.
 
 The concise project entrypoint rule lives in
 .cline/rules/00-markmapeditor-entrypoint.md and must not be duplicated
@@ -937,9 +939,10 @@ elsewhere.
 1. accepted canonical architecture;
 2. roadmap and Package mapping;
 3. checked-out source and executable validators;
-4. compact AI-state documents;
-5. previous reports and conversations;
-6. Repomix snapshots.
+4. `project-state.json` + `docs/work/CURRENT.md` + `docs/validation/CURRENT_VALIDATION.md` + `docs/packages/P6-CONSISTENCY.md`;
+5. `docs/ai-state/*` — compatibility pointers only, never operational state;
+6. previous reports and conversations;
+7. Repomix snapshots.
 
 Current source may expose an implementation defect, but accepted architecture
 remains the authority for intended behavior. Contradictions between source,
@@ -959,30 +962,35 @@ resolved.
 
 ## 30. Model Switch and Context-Compaction Handoff
 
-- A replacement model must read the AI-state documents first, before any
+- A replacement model must read the canonical state files first, before any
   planning or editing.
 - Agents must not reconstruct active state from conversation history when
   repository state files exist.
-- CURRENT_ACT.md carries the current authorization: stage, allowed and
+- `docs/work/CURRENT.md` carries the current authorization: stage, allowed and
   protected files, stop conditions.
-- VALIDATION_STATE.md carries inherited static, browser and device evidence,
-  kept as separate evidence classes.
-- ACTIVE_CONTEXT.md carries the current phase, working-tree boundary and the
-  list of architecture documents that are required right now.
+- `docs/validation/CURRENT_VALIDATION.md` carries inherited static, browser
+  and device evidence, kept as separate evidence classes.
+- `project-state.json` carries the current phase, working-tree boundary and
+  the list of architecture documents that are required right now.
 - A context-compaction handoff is complete only when no tool_call_ids remain
-  unresolved and any partial work is recorded in CURRENT_ACT.md.
+  unresolved and any partial work is recorded in `docs/work/CURRENT.md`.
 - One Cline task has one clear goal or one bounded staged ACT; a replacement
   model continues that ACT rather than starting a new broad one.
 
 ### AI-state update responsibilities
 
-- Update CURRENT_ACT.md at every stage change within the authorized ACT.
-- Update VALIDATION_STATE.md with concise evidence (command, exit, summary
-  count, failure-log path) after each accepted validation run.
-- Update ACTIVE_CONTEXT.md at owner-acceptance and closure boundaries.
-- Migrate durable decisions into canonical architecture via DECISION_LOG.md
-  pointers; clean stale operational detail at Package closure.
-- Full terminal logs and source dumps never belong in AI-state.
+`docs/ai-state/*` files are compatibility pointers only; they are NOT updated
+at every ACT. Update the canonical files instead:
+
+- Update `project-state.json` at every ACT boundary (HEAD, branch, ACT statuses);
+- Update `docs/work/CURRENT.md` at every ACT boundary;
+- Update `docs/validation/CURRENT_VALIDATION.md` with concise evidence
+  (command, exit, summary count, failure-log path) after each accepted
+  validation run;
+- Update the active Package document at ACT boundary;
+- Migrate durable decisions into canonical architecture via
+  `docs/decisions/`; clean stale operational detail at Package closure.
+- Full terminal logs and source dumps never belong in ai-state.
 
 ---
 
@@ -1075,17 +1083,18 @@ validators must be non-mutating against the served tree.
 
 ### ACT lifecycle
 
-- CURRENT_ACT.md is updated at every stage change (A/B/C/owner acceptance/
-  closed) and must reflect the actual state, never intent.
-- On ACT completion, VALIDATION_STATE.md records concise evidence per suite:
-  command, exit code, summary count, failure-log path — no pasted output.
-- ACTIVE_CONTEXT.md is updated when the owner accepts a checkpoint and at
+- `docs/work/CURRENT.md` is updated at every stage change (A/B/C/owner
+  acceptance/closed) and must reflect the actual state, never intent.
+- On ACT completion, `docs/validation/CURRENT_VALIDATION.md` records concise
+  evidence per suite: command, exit code, summary count, failure-log path —
+  no pasted output.
+- `project-state.json` is updated when the owner accepts a checkpoint and at
   Package closure.
 
 ### Owner acceptance
 
-- Owner-accepted evidence is summarized compactly in ACTIVE_CONTEXT.md and
-  never rewritten or re-labeled later.
+- Owner-accepted evidence is summarized compactly in `project-state.json` and
+  `docs/work/CURRENT.md` and never rewritten or re-labeled later.
 - Browser/device acceptance is labeled as such and is not claimed from Node
   fixtures.
 
@@ -1110,3 +1119,103 @@ Preserve existing work.
 Reuse valid same-conversation context.
 Start fresh when context or work-package ownership changes.
 Never claim more than the evidence proves.
+
+---
+
+## 36. Final Work Report Standard
+
+Every ACT completion report must follow this standard. The report is the
+durable engineering record of what was done, why, and what evidence supports
+it. Future agents must be able to reconstruct the ACT from the report without
+re-examining Git.
+
+### Required sections (in order)
+
+1. **Executive Summary** — one paragraph: what changed, why, and the outcome.
+2. **Initial State and Authorized Scope** — starting HEAD, branch, active
+   Package/ACT status, release activation state, and the exact scope the
+   owner authorized.
+3. **Source-Proven Findings** — what the inspected source, validators, and
+   evidence showed before implementation; exact validator counts where
+   applicable.
+4. **Previous Behavior and Root Cause** — the behavior before the change and
+   the root cause of the defect or gap being addressed.
+5. **Implementation Detail** — what was changed, in which files, and why those
+   files; meaningful behavioral explanation, not just file lists.
+6. **Files Changed** — each file with an explanation of its role; no bare file
+   lists.
+7. **Ownership and Data Flow** — which domain owns each changed file and how
+   data moves through it after the change.
+8. **User-Visible Result** — what a user can observe differently after the
+   change.
+9. **Preserved Behavior and Regression Guards** — what intentionally remains
+   unchanged and what guards prevent regression.
+10. **Validation Evidence** — exact validator counts (e.g. `93/93 PASS`),
+    separate static/browser/device evidence, exit codes, and log paths.
+11. **Browser and Device Evidence** — physically observed evidence labeled as
+    such; never claim browser behavior from Node fixtures.
+12. **Documentation Updated** — which documents changed and why each was in
+    scope.
+13. **Git and Checkpoint** — starting and ending HEAD, branch, dirty state,
+    commit/push status.
+14. **Deferred and Protected Work** — owner-deferred items and protected scope
+    that was not touched.
+15. **Known Limitations and Open Questions** — what remains unverified or
+    unresolved.
+16. **Release State** — releasedVersion, targetVersion, releaseActivation
+    state, cache/version/service-worker change status.
+17. **Recommended Next Step** — the owner-approved next action, or "none" if
+    none is authorized.
+
+### Requirements
+
+- Include exact validator counts (e.g. `93/93 PASS`, not "all green").
+- Name relevant owners (e.g. `js/workspace/workspace-parser.js`, `MME_TASK_LIFECYCLE`).
+- Provide meaningful behavioral explanation for every changed file.
+- Record starting and ending HEAD explicitly.
+- Separate static, browser, and device evidence; never mix classes.
+- List explicit unperformed tests (tests that were considered but not run).
+- Record deferred owner-approved work and protected scope.
+- State release activation state (`true`/`false`).
+
+### Prohibited
+
+- Raw successful terminal dumps — summarize passes, inspect failures through
+  targeted log ranges only.
+- Huge copied diffs — explain what changed, do not paste full diffs.
+- "All green" without counts — every pass claim must carry a count.
+- Unsupported browser claims — browser/device claims require physical
+  observation, labeled as such.
+- File lists without explanation — every listed file needs a role.
+- Presenting PLAN targets as implemented — PLAN status is not implementation.
+- Claiming closure with a pending browser checkpoint — closure requires all
+  authorized checkpoints to pass.
+- Omitting protected or deferred work — both must be listed explicitly.
+
+---
+
+## 37. Documentation Update Discipline
+
+During a normal implementation ACT, agents normally update only:
+
+- `project-state.json` — machine-readable project state (HEAD, branch,
+  version, ACT statuses);
+- `docs/work/CURRENT.md` — current human-readable work summary;
+- `docs/validation/CURRENT_VALIDATION.md` — current validation evidence;
+- the active Package document (for Package 6: `docs/packages/P6-CONSISTENCY.md`).
+
+Other documents change only when their owned information changes:
+
+- Roadmap — Package sequence or scope change;
+- Architecture — durable architecture change;
+- ADR — durable cross-Package decision;
+- Test catalog/matrix — suite or ownership change;
+- Help — accepted user-visible behavior;
+- Release Notes — release boundary only;
+- version/cache/service worker — accepted activation only.
+
+Do not update historical or compatibility files at every ACT. Historical
+documents (`NEXT_CYCLE_PLAN.md`, `STATUS.md`, `TODO.md`, `VERIFY.md`,
+`VALIDATION_REPORT.txt`, `docs/validation/OPERATIONAL_FOUNDATION_COMPLETE.md`)
+describe earlier Package eras and must not be rewritten to match current
+Package numbers.
