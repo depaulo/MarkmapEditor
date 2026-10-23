@@ -1714,6 +1714,11 @@ const WORKSPACE_PANEL_DEFAULT_COLLAPSED = {
   projects: false,
 };
 
+// ACT 4 Slice 2 — Links detail panel mode: 'in' shows incoming references
+// (Links In), 'out' shows outgoing references (Links Out). Shared by the
+// Links In and Links Out cards via the existing workspaceRelatedPanel owner.
+let workspaceLinksMode = 'in';
+
 function getWorkspacePanelCollapsedState() {
   try {
     const raw = localStorage.getItem(WORKSPACE_PANEL_COLLAPSE_STORAGE_KEY);
@@ -2037,43 +2042,50 @@ function applyWorkspacePanelCollapsed(panelEl, panelId, collapsed) {
   }
 }
 
-function toggleWorkspacePanel(panelId) {
-  const panelEl =
-    panelId === 'active'
-      ? document.getElementById('workspaceActivePanel')
-      : panelId === 'index'
-        ? document.getElementById('workspaceIndexPanel')
-        : panelId === 'related'
-          ? document.getElementById('workspaceRelatedPanel')
-          : panelId === 'tasks'
-            ? document.getElementById('workspaceTasksPanel')
-            : panelId === 'tags'
-              ? document.getElementById('workspaceTagsPanel')
-              : panelId === 'journals'
-                ? document.getElementById('workspaceJournalsPanel')
-                : panelId === 'concepts'
-                  ? document.getElementById('workspaceConceptsPanel')
-                  : // ACT 6: without this mapping, clicking the Archive header
-                    // resolved to null and toggleWorkspacePanel() returned before
-                    // touching any state, so the panel could never collapse.
-                    panelId === 'archive'
-                    ? document.getElementById('workspaceArchivePanel')
-                    : panelId === 'projects'
-                      ? document.getElementById('workspaceProjectsPanel')
-                      : panelId === 'report'
-                        ? document.getElementById('workspaceReportPanel')
-                        : null;
+// ACT 4 Slice 2 — shared panel-element lookup so toggleWorkspacePanel() and
+// ensureWorkspacePanelExpanded() never duplicate the mapping.
+function getWorkspacePanelElement(panelId) {
+  if (panelId === 'active') return document.getElementById('workspaceActivePanel');
+  if (panelId === 'index') return document.getElementById('workspaceIndexPanel');
+  if (panelId === 'related') return document.getElementById('workspaceRelatedPanel');
+  if (panelId === 'tasks') return document.getElementById('workspaceTasksPanel');
+  if (panelId === 'tags') return document.getElementById('workspaceTagsPanel');
+  if (panelId === 'journals') return document.getElementById('workspaceJournalsPanel');
+  if (panelId === 'concepts') return document.getElementById('workspaceConceptsPanel');
+  if (panelId === 'archive') return document.getElementById('workspaceArchivePanel');
+  if (panelId === 'projects') return document.getElementById('workspaceProjectsPanel');
+  if (panelId === 'report') return document.getElementById('workspaceReportPanel');
+  return null;
+}
 
+// Shared state application: persists the collapse state and applies the
+// collapsed/expanded CSS class to the panel element.
+function applyWorkspacePanelCollapsedState(panelId, collapsed) {
+  const panelEl = getWorkspacePanelElement(panelId);
+  if (!panelEl) return;
+  setWorkspacePanelCollapsedState(panelId, collapsed);
+  applyWorkspacePanelCollapsed(panelEl, panelId, collapsed);
+}
+
+function toggleWorkspacePanel(panelId) {
+  const panelEl = getWorkspacePanelElement(panelId);
   if (!panelEl) return;
 
   const nextCollapsed = !panelEl.classList.contains('workspacePanelCollapsed');
-
-  setWorkspacePanelCollapsedState(panelId, nextCollapsed);
-  applyWorkspacePanelCollapsed(panelEl, panelId, nextCollapsed);
+  applyWorkspacePanelCollapsedState(panelId, nextCollapsed);
 
   try {
     log?.(`Workspace Panels: toggled ${panelId} collapsed=${String(nextCollapsed)}`);
   } catch {}
+}
+
+// ACT 4 Slice 2 — idempotent expand-only: expands when collapsed, no-ops when
+// already expanded. Never toggles back to collapsed; never triggers a Save.
+function ensureWorkspacePanelExpanded(panelId) {
+  const panelEl = getWorkspacePanelElement(panelId);
+  if (!panelEl) return;
+  if (!panelEl.classList.contains('workspacePanelCollapsed')) return;
+  applyWorkspacePanelCollapsedState(panelId, false);
 }
 
 function ensureWorkspaceRelatedPanel() {
@@ -2101,7 +2113,7 @@ function ensureWorkspaceRelatedPanel() {
       >
         <span class="workspacePanelHeaderLeft">
           <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-          <span class="workspaceRelatedTitle">Links In</span>
+          <span class="workspaceRelatedTitle" id="workspaceRelatedTitle">Links In</span>
         </span>
       </button>
       <span class="workspacePanelHeaderControls">
@@ -3547,11 +3559,15 @@ function wireWorkspaceProjectsPanel() {
 //   workspace-controls:  (empty — no existing global command area is movable;
 //                         owner remains the existing header/global action area)
 //   current-document:    workspaceActivePanel
-//   file-knowledge:      workspaceTasksPanel, workspaceRelatedPanel
-//   workspace-knowledge: workspaceSearchPanel, workspaceJournalsPanel,
-//                        workspaceConceptsPanel, workspaceTagsPanel,
-//                        workspaceProjectsPanel, workspaceIndexPanel,
-//                        workspaceArchivePanel
+//   workspace-index:     workspaceIndexPanel
+//   tags:                workspaceTagsPanel
+//   search:              workspaceSearchPanel
+//   links-in:            workspaceRelatedPanel
+//   notes:               workspaceJournalsPanel
+//   knowledge:           workspaceConceptsPanel
+//   tasks:               workspaceTasksPanel
+//   projects:            workspaceProjectsPanel
+//   archive:             workspaceArchivePanel
 // Report stays ungrouped (protected scope: no Reports movement or redesign).
 function ensureWorkspaceSidebarGroups() {
   const host = getWorkspaceSidebarContentHost();
@@ -3560,8 +3576,15 @@ function ensureWorkspaceSidebarGroups() {
   const spec = [
     { id: 'workspaceControlsGroup', key: 'workspace-controls', label: 'Workspace Controls' },
     { id: 'workspaceCurrentDocumentGroup', key: 'current-document', label: 'Current Document' },
-    { id: 'workspaceFileKnowledgeGroup', key: 'file-knowledge', label: 'File Knowledge' },
-    { id: 'workspaceWorkspaceKnowledgeGroup', key: 'workspace-knowledge', label: 'Workspace Knowledge' },
+    { id: 'workspaceIndexGroup', key: 'workspace-index', label: 'Workspace Index' },
+    { id: 'workspaceTagsGroup', key: 'tags', label: 'Tags' },
+    { id: 'workspaceSearchGroup', key: 'search', label: 'Search' },
+    { id: 'workspaceLinksInGroup', key: 'links-in', label: 'Links In' },
+    { id: 'workspaceNotesGroup', key: 'notes', label: 'Notes' },
+    { id: 'workspaceKnowledgeGroup', key: 'knowledge', label: 'Knowledge' },
+    { id: 'workspaceTasksGroup', key: 'tasks', label: 'Tasks' },
+    { id: 'workspaceProjectsGroup', key: 'projects', label: 'Projects' },
+    { id: 'workspaceArchiveGroup', key: 'archive', label: 'Archive' },
   ];
 
   const groups = {};
@@ -3592,16 +3615,16 @@ function ensureWorkspaceSidebarGroups() {
   // appendChild preserves listeners and collapse state; panels already in the
   // correct group are left untouched.
   const panelGroupMap = {
-    workspaceSearchPanel: 'workspace-knowledge',
+    workspaceSearchPanel: 'search',
     workspaceActivePanel: 'current-document',
-    workspaceTasksPanel: 'file-knowledge',
-    workspaceRelatedPanel: 'file-knowledge',
-    workspaceJournalsPanel: 'workspace-knowledge',
-    workspaceConceptsPanel: 'workspace-knowledge',
-    workspaceTagsPanel: 'workspace-knowledge',
-    workspaceProjectsPanel: 'workspace-knowledge',
-    workspaceIndexPanel: 'workspace-knowledge',
-    workspaceArchivePanel: 'workspace-knowledge',
+    workspaceTasksPanel: 'tasks',
+    workspaceRelatedPanel: 'links-in',
+    workspaceJournalsPanel: 'notes',
+    workspaceConceptsPanel: 'knowledge',
+    workspaceTagsPanel: 'tags',
+    workspaceProjectsPanel: 'projects',
+    workspaceIndexPanel: 'workspace-index',
+    workspaceArchivePanel: 'archive',
   };
 
   for (const [panelId, groupKey] of Object.entries(panelGroupMap)) {
@@ -3614,11 +3637,21 @@ function ensureWorkspaceSidebarGroups() {
 
   // Order groups deterministically inside the host (after the header, before
   // any ungrouped content such as Report and Navigation History).
+  // Final flat owner-approved order:
+  //   Controls → Current Document → Workspace Index → Tags → Search
+  //   → Links In → Notes → Knowledge → Tasks → Projects → Archive
   const groupOrder = [
     'workspaceControlsGroup',
     'workspaceCurrentDocumentGroup',
-    'workspaceFileKnowledgeGroup',
-    'workspaceWorkspaceKnowledgeGroup',
+    'workspaceIndexGroup',
+    'workspaceTagsGroup',
+    'workspaceSearchGroup',
+    'workspaceLinksInGroup',
+    'workspaceNotesGroup',
+    'workspaceKnowledgeGroup',
+    'workspaceTasksGroup',
+    'workspaceProjectsGroup',
+    'workspaceArchiveGroup',
   ];
   let groupAnchor = host.querySelector('.workspaceHeader') || null;
   for (const groupId of groupOrder) {
@@ -3642,45 +3675,45 @@ function ensureWorkspaceSidebarGroups() {
 // ACT A: Idempotent panel order normalizer.
 // Moves existing nodes into canonical order using insertBefore/appendChild.
 // Tolerates absent panels; preserves listeners and collapse state.
-// ACT 3 Slice 1: panels are ordered within their semantic groups; groups are
-// ordered deterministically in the host. Ungrouped panels (e.g. Report,
-// protected scope) remain outside groups at the end.
+// ACT 3 final: each panel lives in its own group; groups are ordered
+// deterministically in the host to achieve the flat owner-approved sequence.
+// Ungrouped panels (e.g. Report, protected scope) remain outside groups at
+// the end.
 function normalizeWorkspacePanelOrder() {
   const host = getWorkspaceSidebarContentHost();
   if (!host) return;
 
-  // Panel order within each group (by panel ID).
+  // Panel order within each group (by panel ID). Each group holds exactly
+  // one panel for the accepted flat visible order:
+  //   Controls → Current Document → Workspace Index → Tags → Search
+  //   → Links In → Notes → Knowledge → Tasks → Projects → Archive
   const groupPanelOrders = {
     workspaceControlsGroup: [],
     workspaceCurrentDocumentGroup: ['workspaceActivePanel'],
-    workspaceFileKnowledgeGroup: [
-      'workspaceTasksPanel',
-      'workspaceRelatedPanel',
-    ],
-    workspaceWorkspaceKnowledgeGroup: [
-      // Accepted hierarchy (ACT 3 ordering correction): document-oriented
-      // panels first (Search, then the Workspace Index Expanded-View entry,
-      // then Notes and Knowledge), followed by the Workspace aggregations
-      // Projects and Tags, with Archive last. There is no independent
-      // Workspace-scoped Tasks panel: workspaceTasksPanel is the
-      // document-scoped Task Review owned by File Knowledge, so no Tasks
-      // entry is created here.
-      'workspaceSearchPanel',
-      'workspaceIndexPanel',
-      'workspaceJournalsPanel',
-      'workspaceConceptsPanel',
-      'workspaceProjectsPanel',
-      'workspaceTagsPanel',
-      'workspaceArchivePanel',
-    ],
+    workspaceIndexGroup: ['workspaceIndexPanel'],
+    workspaceTagsGroup: ['workspaceTagsPanel'],
+    workspaceSearchGroup: ['workspaceSearchPanel'],
+    workspaceLinksInGroup: ['workspaceRelatedPanel'],
+    workspaceNotesGroup: ['workspaceJournalsPanel'],
+    workspaceKnowledgeGroup: ['workspaceConceptsPanel'],
+    workspaceTasksGroup: ['workspaceTasksPanel'],
+    workspaceProjectsGroup: ['workspaceProjectsPanel'],
+    workspaceArchiveGroup: ['workspaceArchivePanel'],
   };
 
   // Group order in the host (after header, before ungrouped content).
   const groupOrder = [
     'workspaceControlsGroup',
     'workspaceCurrentDocumentGroup',
-    'workspaceFileKnowledgeGroup',
-    'workspaceWorkspaceKnowledgeGroup',
+    'workspaceIndexGroup',
+    'workspaceTagsGroup',
+    'workspaceSearchGroup',
+    'workspaceLinksInGroup',
+    'workspaceNotesGroup',
+    'workspaceKnowledgeGroup',
+    'workspaceTasksGroup',
+    'workspaceProjectsGroup',
+    'workspaceArchiveGroup',
   ];
 
   // Order groups in the host (after header, before ungrouped content).
@@ -4046,25 +4079,42 @@ function renderWorkspaceActivePanel() {
     return;
   }
 
-  const stats = getWorkspaceActiveStats(parsed);
-
   const tagHtml = (parsed.tags || [])
     .slice(0, 8)
     .map((tag) => {
-      return `<span class="workspaceActiveTag">#${escapeHtml(tag)}</span>`;
+      return `<span class=\"workspaceActiveTag\">#${escapeHtml(tag)}</span>`;
     })
     .join('');
 
-  // ACT 2A — one unified row set: Related is now meaningful for every Note,
-  // so the concepts-variant (with Related) becomes the single variant. The
-  // journals-variant Tags row is retired with the kind split; per-note tags
-  // remain visible as chips above (tagHtml).
-  const statsRows = [
-    ['Open', stats.openTasks],
-    ['Done', stats.doneTasks],
-    ['Related', stats.related],
-    ['Links out', stats.linksOut],
-  ];
+  // ACT 4 Slice 2 — single projection call yields all six cards.
+  const fk =
+    globalThis.MME_FILE_KNOWLEDGE?.projectFileKnowledge(
+      WORKSPACE_INDEX_STATE,
+      active.path,
+      String(md?.value ?? ''),
+      displayName
+    ) || {
+      tasks: { backlog: [], open: [], ongoing: [], done: [] },
+      links: {
+        linksIn: { available: false, rows: [], relationships: [] },
+        linksOut: { available: false, relationships: [] },
+      },
+    };
+
+  const taskCounts = {
+    backlog: (fk.tasks?.backlog || []).length,
+    open: (fk.tasks?.open || []).length,
+    ongoing: (fk.tasks?.ongoing || []).length,
+    done: (fk.tasks?.done || []).length,
+  };
+
+  // ACT 4 Slice 2 — Links counts: null when unavailable (not a false zero).
+  const linksInCount = fk.links?.linksIn?.available
+    ? (fk.links.linksIn.rows || []).length
+    : null;
+  const linksOutCount = fk.links?.linksOut?.available
+    ? (fk.links.linksOut.relationships || []).length
+    : null;
 
   body.innerHTML = `
     <div class="workspaceActiveName">
@@ -4093,17 +4143,13 @@ function renderWorkspaceActivePanel() {
         : '<div class="workspaceActiveMeta">No tags</div>'
     }
 
-    <div class="workspaceActiveStats">
-      ${statsRows
-        .map(([label, value]) => {
-          return `
-            <div class="workspaceActiveStat">
-              <span class="workspaceActiveStatLabel">${escapeHtml(label)}</span>
-              <span class="workspaceActiveStatValue">${escapeHtml(String(value))}</span>
-            </div>
-          `;
-        })
-        .join('')}
+    <div class="workspaceActiveCards">
+      ${taskCard('backlog', 'Backlog', taskCounts.backlog)}
+      ${taskCard('open', 'Open', taskCounts.open)}
+      ${taskCard('ongoing', 'Ongoing', taskCounts.ongoing)}
+      ${taskCard('done', 'Done', taskCounts.done)}
+      ${linksCard('linksIn', 'Links In', linksInCount)}
+      ${linksCard('linksOut', 'Links Out', linksOutCount)}
     </div>
   `;
 

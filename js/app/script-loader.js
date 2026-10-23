@@ -133,6 +133,12 @@ function appendStylesheet(href) {
   // R-LINK1 — wiki links. Load after workspace index and editor are ready.
   appendScript('./js/links/wiki-links.js');
 
+  // ACT 4 Slice 1 — Canonical File Knowledge Projection. Pure projection over
+  // the saved Workspace Index and live editor text; reuses MME_TASK_LIFECYCLE
+  // and MME_WIKI_LINKS. Loads after wiki-links.js so MME_WIKI_LINKS is
+  // available at call time.
+  appendScript('./js/workspace/file-knowledge-projection.js');
+
   // R-TASK2 + R-TASK3 — task search, filters, and priority.
   appendScript('./js/workspace/task-review.js');
 

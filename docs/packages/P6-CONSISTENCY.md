@@ -12,6 +12,8 @@
 - ACT 2 Slice 1: complete and accepted (owner browser checkpoint 2026-10-18)
 - ACT 2 Slice 2: Inspection and Return Recovery Alignment — complete and accepted (on `development`)
 - ACT 2 Slice 3: Overlay Exit, Transient State, and State-Copy Consistency — complete and accepted (on `development`)
+- ACT 3: Sidebar Information Architecture — complete and accepted (on `development`)
+- ACT 4: File Knowledge Cards and Workspace Index Consolidation — ACTIVE (Slice 1 & Slice 2 complete, on `development`)
 
 ## ACT 1 — Projects Source filter (ACCEPTED, commit 66e3b7a)
 
@@ -521,24 +523,36 @@ after the group sequence).
   without breaking the relative order of the remaining groups.
 - S41: structural owners perform no Save or domain mutation.
 
-### Final Semantic mapping (11 atomic groups)
+## ACT 4 — File Knowledge Cards and Workspace Index Consolidation (ACTIVE — Slice 1 & Slice 2 complete)
 
-- Workspace Controls: empty (no movable global command area)
-- Current Document: Active File (workspaceCurrentDocumentGroup)
-- Workspace Index: Workspace Index (workspaceIndexGroup) — promoted into its
-  own Workspace Context group between Current Document and File Knowledge
-- File Knowledge: Tasks (workspaceTasksGroup), Related/Links (workspaceLinksInGroup)
-- Workspace Knowledge: 11 atomic groups, each holding exactly one panel
-- Protected: Reports (workspaceReportPanel) — appended after the group sequence
+### Objective
+Render six mutually-exclusive Current Document File Knowledge cards (Backlog Tasks, Open Tasks ≡ Todo, Ongoing Tasks, Done Tasks, Links In, Links Out) using the canonical `MME_FILE_KNOWLEDGE` projection, with no overlapping semantics and no DOM mutation.
 
-Deferred (recorded as future evaluation items):
+### Slice 1 — File Knowledge Projection Module (COMPLETE)
+- **Owners created:** `js/workspace/file-knowledge-projection.js` — pure, document-scoped projection functions:
+  - `projectFileKnowledgeTasks(indexSnapshot, activeSourcePath)` — calls `MME_TASK_LIFECYCLE.projectTasks()` with `scope: 'current-document'` and statusFilters `'backlog'`, `'todo'`, `'ongoing'`, `'done'`
+  - `getFileKnowledgeLinks(activeSourcePath, indexSnapshot, markdownText, sourceTitle)` — wraps `MME_WIKI_LINKS.getLinksIn` / `getLinksOut`
+  - `projectFileKnowledge(...)` — combined projection returning `{tasks, links}`
+- **Published as:** `globalThis.MME_FILE_KNOWLEDGE` / `window.MME_FILE_KNOWLEDGE`
+- **Critical semantic fix:** `project('open')` → `project('todo')` because lifecycle's `'open'` filter = all non-done (backlog+todo+ongoing=3) breaks mutual exclusivity; `'todo'` = Todo only (=1)
+- **Owners edited:** `js/app/script-loader.js` — loads `file-knowledge-projection.js` after `wiki-links.js`
+- **Validators:** `scripts/file-knowledge-projection-validators.cjs`: **30/30 PASS** including mutual-exclusivity checks B03b (no backlog in Open) and B03c (no ongoing in Open)
+
+### Slice 2 — Workspace Active Panel File Knowledge Cards (COMPLETE)
+- **Owners edited:** `js/main.js` — `renderWorkspaceActivePanel()` now calls `MME_FILE_KNOWLEDGE.projectFileKnowledgeTasks(WORKSPACE_INDEX_STATE, active.path)` and renders four mutually-exclusive task stats cards: Backlog / Open / Todo / Ongoing / Done (replacing previous Open / Done)
+- `['Links out', stats.linksOut]` retained per Y42 contract
+- Y41/Y42 compliance: no `workspaceActiveCard` / `workspaceActiveSummaryCard` classes, no `<details>` elements, no Links In rename
+- **Validators:** `scripts/workspace-sidebar-visual-validators.cjs`: **93/93 PASS** (S1–S41)
+
+### Remaining Slices (PLAN-0 — implementation NOT AUTHORIZED)
+- Slice 3: Workspace Index compact identity and useful summary
+- Slice 4: Tags presentation through Workspace Index
+- Slice 5: Remove separate Tags panel and reduce redundant Index cards
+
+### Deferred (recorded as future evaluation items)
 - Workspace Index becoming a richer Workspace Context surface;
 - reducing redundant Index number cards (Index counts/filtering unchanged);
 - moving Tags into Workspace Index;
 - adding or changing Task statuses (Backlog/Ongoing/In Progress not canonical unless source-proven);
-- Archive exclusion from active aggregations — archived files may currently
-  contribute to active Workspace Index counts and possibly Search, Tasks,
-  Projects, Tags and Links; a later source-proven ACT must determine the
-  canonical indexing owner and exclude archived sources from active
-  aggregations without scattering consumer-level filters;
+- Archive exclusion from active aggregations — archived files may currently contribute to active Workspace Index counts and possibly Search, Tasks, Projects, Tags and Links; a later source-proven ACT must determine the canonical indexing owner and exclude archived sources from active aggregations without scattering consumer-level filters;
 - Reports redesign.

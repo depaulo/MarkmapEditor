@@ -3,12 +3,12 @@
 ## Identity
 
 - Package: P6
-- ACT: ACT 4 PLAN-0 — File Knowledge Cards and Workspace Index Consolidation
-- Name: File Knowledge Cards and Workspace Index Consolidation — source inspection only
+- ACT: ACT 4 ACTIVE — File Knowledge Cards and Workspace Index Consolidation
+- Name: File Knowledge Cards and Workspace Index Consolidation — Slice 1 & Slice 2 complete
 - Branch: development
 - Released baseline: 0.7.0
 - Target release: 0.8.0
-- Status: ACT 3 ACCEPTED; ACT 4 PLAN-0 active (source inspection only, documentation); no implementation; release activation false
+- Status: ACT 3 ACCEPTED; ACT 4 ACTIVE — Slice 1 (projection module: `js/workspace/file-knowledge-projection.js`, `globalThis.MME_FILE_KNOWLEDGE`) complete; Slice 2 (Workspace Active panel statsRows wired to `MME_FILE_KNOWLEDGE.projectFileKnowledgeTasks`) complete; remaining slices PLAN-0; release activation false
 
 ## Objective
 

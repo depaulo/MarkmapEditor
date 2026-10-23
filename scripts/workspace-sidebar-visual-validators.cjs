@@ -1006,22 +1006,22 @@ await check('S1', 'exactly one current-document group spec', () => {
   return (sec.match(/workspaceCurrentDocumentGroup/g) || []).length === 1;
 });
 
-// S2: exactly one File Knowledge group spec entry
-await check('S2', 'exactly one file-knowledge group spec', () => {
+// S2: exactly one Tags group spec entry
+await check('S2', 'exactly one tags group spec', () => {
   const sec = MAIN_SOURCE.slice(
     MAIN_SOURCE.indexOf('const spec = ['),
     MAIN_SOURCE.indexOf('];', MAIN_SOURCE.indexOf('const spec = [')) + 2
   );
-  return (sec.match(/workspaceFileKnowledgeGroup/g) || []).length === 1;
+  return (sec.match(/workspaceTagsGroup/g) || []).length === 1;
 });
 
-// S3: exactly one Workspace Knowledge group spec entry
-await check('S3', 'exactly one workspace-knowledge group spec', () => {
+// S3: exactly one Knowledge group spec entry
+await check('S3', 'exactly one knowledge group spec', () => {
   const sec = MAIN_SOURCE.slice(
     MAIN_SOURCE.indexOf('const spec = ['),
     MAIN_SOURCE.indexOf('];', MAIN_SOURCE.indexOf('const spec = [')) + 2
   );
-  return (sec.match(/workspaceWorkspaceKnowledgeGroup/g) || []).length === 1;
+  return (sec.match(/workspaceKnowledgeGroup/g) || []).length === 1;
 });
 
 // S4: no more than one Workspace Controls group spec entry
@@ -1033,26 +1033,26 @@ await check('S4', 'at most one workspace-controls group spec', () => {
   return (sec.match(/workspaceControlsGroup/g) || []).length <= 1;
 });
 
-// S5: Search panel belongs to Workspace Knowledge (not Workspace Controls)
-await check('S5', 'Search panel is in Workspace Knowledge group', () => {
-  return /workspaceSearchPanel:\s*'workspace-knowledge'/.test(MAIN_SOURCE) &&
-    !/workspaceSearchPanel:\s*'workspace-controls'/.test(MAIN_SOURCE);
+// S5: Search panel belongs to its own Search group (not Workspace Knowledge)
+await check('S5', 'Search panel is in Search group', () => {
+  return /workspaceSearchPanel:\s*'search'/.test(MAIN_SOURCE) &&
+    !/workspaceSearchPanel:\s*'workspace-knowledge'/.test(MAIN_SOURCE);
 });
 
-// S6: Tags panel belongs to Workspace Knowledge (not File Knowledge)
-await check('S6', 'Tags panel is in Workspace Knowledge group', () => {
-  return /workspaceTagsPanel:\s*'workspace-knowledge'/.test(MAIN_SOURCE) &&
-    !/workspaceTagsPanel:\s*'file-knowledge'/.test(MAIN_SOURCE);
+// S6: Tags panel belongs to its own Tags group (not Workspace Knowledge)
+await check('S6', 'Tags panel is in Tags group', () => {
+  return /workspaceTagsPanel:\s*'tags'/.test(MAIN_SOURCE) &&
+    !/workspaceTagsPanel:\s*'workspace-knowledge'/.test(MAIN_SOURCE);
 });
 
-// S7: Tasks panel belongs to File Knowledge
-await check('S7', 'Tasks panel is in File Knowledge group', () => {
-  return /workspaceTasksPanel:\s*'file-knowledge'/.test(MAIN_SOURCE);
+// S7: Tasks panel belongs to its own Tasks group
+await check('S7', 'Tasks panel is in Tasks group', () => {
+  return /workspaceTasksPanel:\s*'tasks'/.test(MAIN_SOURCE);
 });
 
-// S8: Related panel belongs to File Knowledge
-await check('S8', 'Related panel is in File Knowledge group', () => {
-  return /workspaceRelatedPanel:\s*'file-knowledge'/.test(MAIN_SOURCE);
+// S8: Related panel belongs to Links In group
+await check('S8', 'Related panel is in Links In group', () => {
+  return /workspaceRelatedPanel:\s*'links-in'/.test(MAIN_SOURCE);
 });
 
 // S9: Reports panel is not assigned to any group (protected, ungrouped)
@@ -1065,45 +1065,54 @@ await check('S10', 'Workspace Controls group has no panels', () => {
   return /workspaceControlsGroup:\s*\[\s*\]/.test(MAIN_SOURCE);
 });
 
-// S11: File Knowledge panel order: Tasks before Related
-await check('S11', 'File Knowledge orders Tasks before Related', () => {
+// S11: Tags group is placed immediately after Workspace Index group in the
+// source groupOrder array
+await check('S11', 'Tags group follows Workspace Index group in groupOrder', () => {
   const sec = MAIN_SOURCE.slice(
-    MAIN_SOURCE.indexOf('workspaceFileKnowledgeGroup: ['),
-    MAIN_SOURCE.indexOf(']', MAIN_SOURCE.indexOf('workspaceFileKnowledgeGroup: [')) + 1
+    MAIN_SOURCE.indexOf("const groupOrder = ["),
+    MAIN_SOURCE.indexOf('];', MAIN_SOURCE.indexOf("const groupOrder = [")) + 2
   );
-  const tasksIdx = sec.indexOf('workspaceTasksPanel');
-  const relatedIdx = sec.indexOf('workspaceRelatedPanel');
-  return tasksIdx >= 0 && relatedIdx >= 0 && tasksIdx < relatedIdx;
+  const idxIdx = sec.indexOf('workspaceIndexGroup');
+  const tagsIdx = sec.indexOf('workspaceTagsGroup');
+  return idxIdx >= 0 && tagsIdx >= 0 && tagsIdx > idxIdx;
 });
 
-// S12: Workspace Knowledge panel order: Search, Workspace Index, Notes,
-// Knowledge, Projects, Tags, Archive (ACT 3 ordering correction)
-await check('S12', 'Workspace Knowledge order: Search → Workspace Index → Notes → Knowledge → Projects → Tags → Archive', () => {
+// S12: groupOrder follows the flat accepted sequence:
+//   Controls → Current Document → Workspace Index → Tags → Search
+//   → Links In → Notes → Knowledge → Tasks → Projects → Archive
+await check('S12', 'groupOrder follows the flat accepted sequence', () => {
   const sec = MAIN_SOURCE.slice(
-    MAIN_SOURCE.indexOf('workspaceWorkspaceKnowledgeGroup: ['),
-    MAIN_SOURCE.indexOf(']', MAIN_SOURCE.indexOf('workspaceWorkspaceKnowledgeGroup: [')) + 1
+    MAIN_SOURCE.indexOf("const groupOrder = ["),
+    MAIN_SOURCE.indexOf('];', MAIN_SOURCE.indexOf("const groupOrder = [")) + 2
   );
-  const expected = ['workspaceSearchPanel', 'workspaceIndexPanel',
-                    'workspaceJournalsPanel', 'workspaceConceptsPanel',
-                    'workspaceProjectsPanel', 'workspaceTagsPanel',
-                    'workspaceArchivePanel'];
+  const expected = ['workspaceControlsGroup', 'workspaceCurrentDocumentGroup',
+                    'workspaceIndexGroup', 'workspaceTagsGroup',
+                    'workspaceSearchGroup', 'workspaceLinksInGroup',
+                    'workspaceNotesGroup', 'workspaceKnowledgeGroup',
+                    'workspaceTasksGroup', 'workspaceProjectsGroup',
+                    'workspaceArchiveGroup'];
   let lastIdx = -1;
-  for (const panel of expected) {
-    const idx = sec.indexOf(panel);
+  for (const id of expected) {
+    const idx = sec.indexOf(id);
     if (idx === -1 || idx <= lastIdx) return false;
     lastIdx = idx;
   }
   return true;
 });
 
-// S13: Group order in host: Controls → Current Document → File Knowledge → Workspace Knowledge
-await check('S13', 'group order is deterministic (Controls → Current Document → File Knowledge → Workspace Knowledge)', () => {
+// S13: Group order in host: Controls → Current Document → Workspace Index →
+//   Tags → Search → Links In → Notes → Knowledge → Tasks → Projects → Archive
+await check('S13', 'group order is deterministic (Controls → Current Document → Workspace Index → Tags → Search → Links In → Notes → Knowledge → Tasks → Projects → Archive)', () => {
   const sec = MAIN_SOURCE.slice(
     MAIN_SOURCE.indexOf("const groupOrder = ["),
     MAIN_SOURCE.indexOf('];', MAIN_SOURCE.indexOf("const groupOrder = [")) + 2
   );
   const expected = ['workspaceControlsGroup', 'workspaceCurrentDocumentGroup',
-                    'workspaceFileKnowledgeGroup', 'workspaceWorkspaceKnowledgeGroup'];
+                    'workspaceIndexGroup', 'workspaceTagsGroup',
+                    'workspaceSearchGroup', 'workspaceLinksInGroup',
+                    'workspaceNotesGroup', 'workspaceKnowledgeGroup',
+                    'workspaceTasksGroup', 'workspaceProjectsGroup',
+                    'workspaceArchiveGroup'];
   let lastIdx = -1;
   for (const id of expected) {
     const idx = sec.indexOf(id);
@@ -1129,16 +1138,16 @@ await check('S15', 'simulated DOM: panel-to-group placement is correct and dupli
     map[m[1]] = m[2];
   }
   const required = {
-    Search: 'workspace-knowledge',
+    Search: 'search',
     Active: 'current-document',
-    Tasks: 'file-knowledge',
-    Related: 'file-knowledge',
-    Tags: 'workspace-knowledge',
-    Journals: 'workspace-knowledge',
-    Concepts: 'workspace-knowledge',
-    Projects: 'workspace-knowledge',
-    Index: 'workspace-knowledge',
-    Archive: 'workspace-knowledge',
+    Tasks: 'tasks',
+    Related: 'links-in',
+    Tags: 'tags',
+    Journals: 'notes',
+    Concepts: 'knowledge',
+    Projects: 'projects',
+    Index: 'workspace-index',
+    Archive: 'archive',
   };
   for (const [panel, expectedGroup] of Object.entries(required)) {
     if (map[panel] !== expectedGroup) return `Panel ${panel} is in group ${map[panel]}, expected ${expectedGroup}`;
@@ -1448,8 +1457,15 @@ const STRUCTURAL_API_FACTORY = new Function(
 const GROUP_IDS = [
   'workspaceControlsGroup',
   'workspaceCurrentDocumentGroup',
-  'workspaceFileKnowledgeGroup',
-  'workspaceWorkspaceKnowledgeGroup',
+  'workspaceIndexGroup',
+  'workspaceTagsGroup',
+  'workspaceSearchGroup',
+  'workspaceLinksInGroup',
+  'workspaceNotesGroup',
+  'workspaceKnowledgeGroup',
+  'workspaceTasksGroup',
+  'workspaceProjectsGroup',
+  'workspaceArchiveGroup',
 ];
 
 const MAPPED_PANEL_IDS = [
@@ -1465,14 +1481,19 @@ const MAPPED_PANEL_IDS = [
   'workspaceArchivePanel',
 ];
 
-const WORKSPACE_KNOWLEDGE_ORDER = [
-  'workspaceSearchPanel',
-  'workspaceIndexPanel',
-  'workspaceJournalsPanel',
-  'workspaceConceptsPanel',
-  'workspaceProjectsPanel',
-  'workspaceTagsPanel',
-  'workspaceArchivePanel',
+// Accepted flat visible order (every mapped panel in rendered-tree order).
+const FLAT_PANEL_ORDER = [
+  'workspaceActivePanel',          // Current Document
+  'workspaceIndexPanel',           // Workspace Index
+  'workspaceTagsPanel',            // Tags
+  'workspaceSearchPanel',          // Search
+  'workspaceRelatedPanel',         // Links In
+  'workspaceJournalsPanel',        // Notes
+  'workspaceConceptsPanel',        // Knowledge
+  'workspaceTasksPanel',           // Tasks
+  'workspaceProjectsPanel',        // Projects
+  'workspaceArchivePanel',         // Archive
+  'workspaceReportPanel',          // Report (ungrouped, protected)
 ];
 
 // One full structural pass in the order finalizeWorkspaceSidebar runs the
@@ -1480,9 +1501,10 @@ const WORKSPACE_KNOWLEDGE_ORDER = [
 // The fixture mirrors index.html: header, the flat panels the earlier
 // ensure* owners leave behind, Report, and the nav controls.
 const DEFAULT_FIXTURE_PANELS = [
-  'workspaceSearchPanel', 'workspaceJournalsPanel', 'workspaceConceptsPanel',
-  'workspaceRelatedPanel', 'workspaceTasksPanel', 'workspaceTagsPanel',
-  'workspaceProjectsPanel', 'workspaceArchivePanel', 'workspaceReportPanel',
+  'workspaceSearchPanel', 'workspaceTagsPanel', 'workspaceRelatedPanel',
+  'workspaceJournalsPanel', 'workspaceConceptsPanel',
+  'workspaceTasksPanel', 'workspaceProjectsPanel', 'workspaceArchivePanel',
+  'workspaceReportPanel',
 ];
 
 function runStructuralPipeline(fixturePanels) {
@@ -1538,8 +1560,8 @@ let d39 = null;
 let d40 = null;
 let d41 = null;
 
-// S28: all four group containers must END UP attached to the rendered host
-await check('S28', 'executed DOM: all four groups attached to the rendered host', () => {
+// S28: all eleven group containers must END UP attached to the rendered host
+await check('S28', 'executed DOM: all eleven groups attached to the rendered host', () => {
   const state = runStructuralPipeline();
   const bad = GROUP_IDS.filter((id) => {
     const g = state.doc.getElementById(id);
@@ -1555,15 +1577,15 @@ await check('S29', 'executed DOM: every mapped panel nested in its group in the 
   const state = runStructuralPipeline();
   const expect = {
     workspaceActivePanel: 'workspaceCurrentDocumentGroup',
-    workspaceSearchPanel: 'workspaceWorkspaceKnowledgeGroup',
-    workspaceTasksPanel: 'workspaceFileKnowledgeGroup',
-    workspaceRelatedPanel: 'workspaceFileKnowledgeGroup',
-    workspaceJournalsPanel: 'workspaceWorkspaceKnowledgeGroup',
-    workspaceConceptsPanel: 'workspaceWorkspaceKnowledgeGroup',
-    workspaceTagsPanel: 'workspaceWorkspaceKnowledgeGroup',
-    workspaceProjectsPanel: 'workspaceWorkspaceKnowledgeGroup',
-    workspaceIndexPanel: 'workspaceWorkspaceKnowledgeGroup',
-    workspaceArchivePanel: 'workspaceWorkspaceKnowledgeGroup',
+    workspaceSearchPanel: 'workspaceSearchGroup',
+    workspaceTasksPanel: 'workspaceTasksGroup',
+    workspaceRelatedPanel: 'workspaceLinksInGroup',
+    workspaceJournalsPanel: 'workspaceNotesGroup',
+    workspaceConceptsPanel: 'workspaceKnowledgeGroup',
+    workspaceTagsPanel: 'workspaceTagsGroup',
+    workspaceProjectsPanel: 'workspaceProjectsGroup',
+    workspaceIndexPanel: 'workspaceIndexGroup',
+    workspaceArchivePanel: 'workspaceArchiveGroup',
   };
   const bad = [];
   for (const [panelId, groupId] of Object.entries(expect)) {
@@ -1606,7 +1628,8 @@ await check('S30', 'executed DOM: Current Document panel renders exactly one vis
 }, () => d30);
 
 // S31: rendered order — groups right after the header in accepted order,
-// panels ordered inside each group, protected ungrouped content at the tail
+// each group containing exactly its single member panel, protected
+// ungrouped content at the tail
 await check('S31', 'executed DOM: group order and within-group panel order match the accepted order', () => {
   const state = runStructuralPipeline();
   const kids = state.host.childNodes;
@@ -1624,22 +1647,25 @@ await check('S31', 'executed DOM: group order and within-group panel order match
     const g = state.doc.getElementById(gid);
     return g ? g.childNodes.map((n) => n.id) : null;
   };
-  const controls = childIds('workspaceControlsGroup');
-  if (controls === null) reasons.push('Workspace Controls group absent from rendered tree');
-  else if (controls.length !== 0) reasons.push('Workspace Controls group not empty: ' + controls.join(','));
-  const currentDoc = childIds('workspaceCurrentDocumentGroup');
-  if (!currentDoc || currentDoc.join(',') !== 'workspaceActivePanel') {
-    reasons.push('Current Document children: ' + (currentDoc ? currentDoc.join(',') : 'absent'));
+  const checks = [
+    ['workspaceControlsGroup', []],
+    ['workspaceCurrentDocumentGroup', ['workspaceActivePanel']],
+    ['workspaceIndexGroup', ['workspaceIndexPanel']],
+    ['workspaceTagsGroup', ['workspaceTagsPanel']],
+    ['workspaceSearchGroup', ['workspaceSearchPanel']],
+    ['workspaceLinksInGroup', ['workspaceRelatedPanel']],
+    ['workspaceNotesGroup', ['workspaceJournalsPanel']],
+    ['workspaceKnowledgeGroup', ['workspaceConceptsPanel']],
+    ['workspaceTasksGroup', ['workspaceTasksPanel']],
+    ['workspaceProjectsGroup', ['workspaceProjectsPanel']],
+    ['workspaceArchiveGroup', ['workspaceArchivePanel']],
+  ];
+  for (const [gid, expected] of checks) {
+    const actual = childIds(gid);
+    if (actual === null) reasons.push(gid + ': absent from rendered tree');
+    else if (actual.join(',') !== expected.join(',')) reasons.push(gid + ' children: ' + actual.join(',') + ', expected ' + expected.join(','));
   }
-  const fileK = childIds('workspaceFileKnowledgeGroup');
-  if (!fileK || fileK.join(',') !== 'workspaceTasksPanel,workspaceRelatedPanel') {
-    reasons.push('File Knowledge children: ' + (fileK ? fileK.join(',') : 'absent'));
-  }
-  const wsK = childIds('workspaceWorkspaceKnowledgeGroup');
-  if (!wsK || wsK.join(',') !== WORKSPACE_KNOWLEDGE_ORDER.join(',')) {
-    reasons.push('Workspace Knowledge children: ' + (wsK ? wsK.join(',') : 'absent'));
-  }
-  const tail = kids.slice(5).map((n) => n.id || n.className);
+  const tail = kids.slice(GROUP_IDS.length + 1).map((n) => n.id || n.className);
   if (tail.join(',') !== 'workspaceReportPanel,workspaceNavControls') {
     reasons.push('ungrouped tail: ' + (tail.join(',') || 'empty'));
   }
@@ -1661,11 +1687,11 @@ await check('S32', 'executed DOM: no detached or duplicated groups/panels in the
 await check('S33', 'executed DOM: Reports panel stays ungrouped after the groups', () => {
   const state = runStructuralPipeline();
   const report = state.doc.getElementById('workspaceReportPanel');
-  const wkgIdx = state.host.childNodes.findIndex((n) => n.id === 'workspaceWorkspaceKnowledgeGroup');
+  const archiveIdx = state.host.childNodes.findIndex((n) => n.id === 'workspaceArchiveGroup');
   const reportIdx = report ? state.host.childNodes.indexOf(report) : -1;
-  const ok = Boolean(report) && report.parentNode === state.host && wkgIdx !== -1 && reportIdx > wkgIdx;
+  const ok = Boolean(report) && report.parentNode === state.host && archiveIdx !== -1 && reportIdx > archiveIdx;
   d33 = ok ? null : 'report attached=' + Boolean(report && report.parentNode === state.host) +
-    ', reportIdx=' + reportIdx + ', wkgIdx=' + wkgIdx;
+    ', reportIdx=' + reportIdx + ', archiveIdx=' + archiveIdx;
   return ok;
 }, () => d33);
 
@@ -1688,68 +1714,62 @@ await check('S34', 'executed DOM: second grouping run preserves group and panel 
   return reasons.length === 0;
 }, () => d34);
 
-// S35: accepted Workspace Knowledge semantic sequence, asserted item by item —
-// Search first, Workspace Index immediately after, Notes and Knowledge next,
-// then the Workspace aggregations Projects and Tags, Archive final; no
-// Workspace Tasks entry (the only tasks panel is the document-scoped Task
-// Review, owned by File Knowledge)
-await check('S35', 'executed DOM: item-wise Workspace Knowledge sequence (Search, Index, Notes, Knowledge, Projects, Tags, Archive)', () => {
+// S35: semantic flat sequence across groups — each panel occupies its own
+// group at the correct depth, proving no panel drifted into a neighbour's
+// group
+await check('S35', 'executed DOM: per-group single-panel membership and flat sequence', () => {
   const state = runStructuralPipeline();
-  const g = state.doc.getElementById('workspaceWorkspaceKnowledgeGroup');
-  const ids = g ? g.childNodes.map((n) => n.id) : [];
-  const at = (id) => ids.indexOf(id);
+  const childIds = (gid) => {
+    const g = state.doc.getElementById(gid);
+    return g ? g.childNodes.map((n) => n.id) : [];
+  };
   const reasons = [];
-  if (!g) {
-    reasons.push('Workspace Knowledge group absent from rendered tree');
-  } else {
-    if (at('workspaceSearchPanel') !== 0) reasons.push('Search not first (index ' + at('workspaceSearchPanel') + ')');
-    if (at('workspaceIndexPanel') !== 1) reasons.push('Workspace Index does not immediately follow Search (index ' + at('workspaceIndexPanel') + ')');
-    const j = at('workspaceJournalsPanel');
-    if (j !== -1 && j !== 2) reasons.push('Notes/Journals should follow Workspace Index (expected 2, got ' + j + ')');
-    const c = at('workspaceConceptsPanel');
-    if (c !== -1 && (j === -1 ? c !== 2 : c !== j + 1)) {
-      reasons.push('Knowledge/Concepts should follow Notes (expected ' + (j === -1 ? 2 : j + 1) + ', got ' + c + ')');
+  const expected = [
+    ['workspaceControlsGroup', []],
+    ['workspaceCurrentDocumentGroup', ['workspaceActivePanel']],
+    ['workspaceIndexGroup', ['workspaceIndexPanel']],
+    ['workspaceTagsGroup', ['workspaceTagsPanel']],
+    ['workspaceSearchGroup', ['workspaceSearchPanel']],
+    ['workspaceLinksInGroup', ['workspaceRelatedPanel']],
+    ['workspaceNotesGroup', ['workspaceJournalsPanel']],
+    ['workspaceKnowledgeGroup', ['workspaceConceptsPanel']],
+    ['workspaceTasksGroup', ['workspaceTasksPanel']],
+    ['workspaceProjectsGroup', ['workspaceProjectsPanel']],
+    ['workspaceArchiveGroup', ['workspaceArchivePanel']],
+  ];
+  for (const [gid, want] of expected) {
+    const got = childIds(gid);
+    if (got.join(',') !== want.join(',')) {
+      reasons.push(gid + ' children: [' + got.join(',') + '] expected [' + want.join(',') + ']');
     }
-    const p = at('workspaceProjectsPanel');
-    const lastDocPanel = c !== -1 ? c : j;
-    if (p === -1) reasons.push('Projects missing from Workspace Knowledge');
-    else if (p <= lastDocPanel) reasons.push('Projects does not follow the document-oriented panels (index ' + p + ')');
-    const t = at('workspaceTagsPanel');
-    if (t === -1) reasons.push('Tags missing from Workspace Knowledge');
-    else if (p !== -1 && t !== p + 1) reasons.push('Tags does not immediately follow Projects (index ' + t + ')');
-    const a = at('workspaceArchivePanel');
-    if (a === -1 || a !== ids.length - 1) {
-      reasons.push('Archive is not the final Workspace Knowledge panel (index ' + a + ' of ' + ids.length + ')');
-    }
-    if (ids.includes('workspaceTasksPanel')) reasons.push('document-scoped Task Review leaked into Workspace Knowledge');
-    if (ids.some((id) => !id)) reasons.push('unnamed child node inside Workspace Knowledge');
   }
   d35 = reasons.length ? reasons.join('; ') : null;
   return reasons.length === 0;
 }, () => d35);
 
-// S36: group precedences — Current Document precedes File Knowledge, File
-// Knowledge precedes Workspace Knowledge, and Report stays outside Workspace
-// Knowledge while following it
-await check('S36', 'executed DOM: group precedences (Current Document < File Knowledge < Workspace Knowledge < Report)', () => {
+// S36: full group precedence chain — Controls → Current Document →
+// Workspace Index → Tags → Search → Links In → Notes → Knowledge
+// → Tasks → Projects → Archive → Report
+// Every adjacent pair must be consecutive on the host; Report stays outside
+// all knowledge groups while following Archive
+await check('S36', 'executed DOM: full group precedence chain with immediate adjacency', () => {
   const state = runStructuralPipeline();
   const pos = (id) => state.host.childNodes.findIndex((n) => n.id === id);
-  const cd = pos('workspaceCurrentDocumentGroup');
-  const fk = pos('workspaceFileKnowledgeGroup');
-  const wk = pos('workspaceWorkspaceKnowledgeGroup');
-  const rp = pos('workspaceReportPanel');
+  const chain = ['workspaceControlsGroup','workspaceCurrentDocumentGroup','workspaceIndexGroup',
+                 'workspaceTagsGroup','workspaceSearchGroup','workspaceLinksInGroup',
+                 'workspaceNotesGroup','workspaceKnowledgeGroup','workspaceTasksGroup',
+                 'workspaceProjectsGroup','workspaceArchiveGroup','workspaceReportPanel'];
+  const positions = chain.map(pos);
   const reasons = [];
-  if (cd === -1 || fk === -1 || wk === -1 || rp === -1) {
-    reasons.push('missing from host: currentDoc=' + cd + ' fileK=' + fk + ' wsK=' + wk + ' report=' + rp);
-  } else {
-    if (!(cd < fk)) reasons.push('Current Document does not precede File Knowledge');
-    if (!(fk < wk)) reasons.push('File Knowledge does not precede Workspace Knowledge');
-    if (!(wk < rp)) reasons.push('Report does not follow Workspace Knowledge');
-    const report = state.doc.getElementById('workspaceReportPanel');
-    const wsg = state.doc.getElementById('workspaceWorkspaceKnowledgeGroup');
-    if (report && wsg && report.parentNode === wsg) reasons.push('Report is inside Workspace Knowledge');
-    if (report && report.parentNode !== state.host) reasons.push('Report is not a direct child of the host');
+  for (let i = 0; i < positions.length; i++) {
+    if (positions[i] === -1) {
+      reasons.push(chain[i] + ' missing from host');
+    } else if (i > 0 && positions[i] !== positions[i-1] + 1) {
+      reasons.push(chain[i] + ' is not immediately after ' + chain[i-1] + ' (pos ' + positions[i] + ' vs ' + (positions[i-1]+1) + ')');
+    }
   }
+  const report = state.doc.getElementById('workspaceReportPanel');
+  if (report && report.parentNode !== state.host) reasons.push('Report is not a direct child of the host');
   d36 = reasons.length ? reasons.join('; ') : null;
   return reasons.length === 0;
 }, () => d36);
@@ -1818,8 +1838,8 @@ await check('S38', 'executed DOM: repeated finalization preserves exact order, n
   return reasons.length === 0;
 }, () => d38);
 
-// S39: absent inert/optional panels (Notes, Knowledge, Tags) must not break
-// grouping or ordering — the remaining panels keep the accepted relative order
+// S39: absent inert/optional panels (Tags, Notes, Knowledge) must not break
+// grouping or ordering — the remaining groups keep the accepted relative order
 await check('S39', 'executed DOM: missing optional panels are skipped without breaking ordering', () => {
   const state = runStructuralPipeline([
     'workspaceSearchPanel', 'workspaceRelatedPanel', 'workspaceTasksPanel',
@@ -1834,15 +1854,28 @@ await check('S39', 'executed DOM: missing optional panels are skipped without br
     const g = state.doc.getElementById(gid);
     if (!g || g.parentNode !== state.host) reasons.push(gid + ' not attached to host');
   });
-  const cd = childIds('workspaceCurrentDocumentGroup');
-  if (!cd || cd.join(',') !== 'workspaceActivePanel') reasons.push('Current Document children: ' + (cd ? cd.join(',') : 'absent'));
-  const fk = childIds('workspaceFileKnowledgeGroup');
-  if (!fk || fk.join(',') !== 'workspaceTasksPanel,workspaceRelatedPanel') reasons.push('File Knowledge children: ' + (fk ? fk.join(',') : 'absent'));
-  const wk = childIds('workspaceWorkspaceKnowledgeGroup');
-  if (!wk || wk.join(',') !== 'workspaceSearchPanel,workspaceIndexPanel,workspaceProjectsPanel,workspaceArchivePanel') {
-    reasons.push('Workspace Knowledge children: ' + (wk ? wk.join(',') : 'absent'));
+  // Groups with required panels
+  const checks = [
+    ['workspaceCurrentDocumentGroup', ['workspaceActivePanel']],
+    ['workspaceIndexGroup', ['workspaceIndexPanel']],
+    ['workspaceSearchGroup', ['workspaceSearchPanel']],
+    ['workspaceLinksInGroup', ['workspaceRelatedPanel']],
+    ['workspaceTasksGroup', ['workspaceTasksPanel']],
+    ['workspaceProjectsGroup', ['workspaceProjectsPanel']],
+    ['workspaceArchiveGroup', ['workspaceArchivePanel']],
+  ];
+  for (const [gid, expected] of checks) {
+    const actual = childIds(gid);
+    if (actual === null) reasons.push(gid + ': absent from rendered tree');
+    else if (actual.join(',') !== expected.join(',')) reasons.push(gid + ' children: ' + actual.join(',') + ', expected ' + expected.join(','));
   }
-  const tail = state.host.childNodes.slice(5).map((n) => n.id || n.className);
+  // Groups with missing optional panels must be empty
+  const emptyGroups = ['workspaceControlsGroup', 'workspaceTagsGroup', 'workspaceNotesGroup', 'workspaceKnowledgeGroup'];
+  for (const gid of emptyGroups) {
+    const actual = childIds(gid);
+    if (actual !== null && actual.length !== 0) reasons.push(gid + ' should be empty but has: ' + actual.join(','));
+  }
+  const tail = state.host.childNodes.slice(GROUP_IDS.length + 1).map((n) => n.id || n.className);
   if (tail.join(',') !== 'workspaceReportPanel,workspaceNavControls') {
     reasons.push('ungrouped tail: ' + (tail.join(',') || 'empty'));
   }

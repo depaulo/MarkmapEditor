@@ -183,11 +183,28 @@ Release gate: still CLOSED — 0.8.x activation not authorized; no service-worke
 - ACT 3 rendered-DOM gate: PASS (S28–S41)
 - ACT 3 status: ACCEPTED
 
-## ACT 4 PLAN-0 — ACTIVE
+## ACT 4 — ACTIVE (Slice 1 & Slice 2 complete)
 
-- ACT 4 PLAN-0: ACTIVE (source inspection only, documentation)
-- ACT 4 implementation: NOT AUTHORIZED
-- ACT 4 owner review: PENDING
+### ACT 4 Slice 1 — File Knowledge Projection Module (COMPLETE)
+- Created `js/workspace/file-knowledge-projection.js` — pure, document-scoped projection functions:
+  - `projectFileKnowledgeTasks(indexSnapshot, activeSourcePath)` — calls `MME_TASK_LIFECYCLE.projectTasks()` with `scope: 'current-document'` and statusFilters `'backlog'`, `'todo'`, `'ongoing'`, `'done'`
+  - `getFileKnowledgeLinks(activeSourcePath, indexSnapshot, markdownText, sourceTitle)` — wraps `MME_WIKI_LINKS.getLinksIn` / `getLinksOut`
+  - `projectFileKnowledge(...)` — combined projection returning `{tasks, links}`
+- Published as `globalThis.MME_FILE_KNOWLEDGE` / `window.MME_FILE_KNOWLEDGE`
+- Critical semantic fix: `project('open')` → `project('todo')` because lifecycle's `'open'` filter = all non-done (backlog+todo+ongoing=3) breaks mutual exclusivity; `'todo'` = Todo only (=1)
+- `js/app/script-loader.js` — updated to load `file-knowledge-projection.js` after `wiki-links.js`
+- Static gate: `scripts/file-knowledge-projection-validators.cjs`: **30/30 PASS** including mutual-exclusivity checks B03b (no backlog in Open) and B03c (no ongoing in Open)
+- `node --check js/main.js`: PASS
+- `git diff --check`: clean
+
+### ACT 4 Slice 2 — Workspace Active Panel File Knowledge Cards (COMPLETE)
+- Wired `MME_FILE_KNOWLEDGE.projectFileKnowledgeTasks(WORKSPACE_INDEX_STATE, active.path)` into `renderWorkspaceActivePanel()` in `js/main.js`
+- Four mutually-exclusive task stats cards: Backlog / Open / Todo / Ongoing / Done (replacing previous Open / Done)
+- `['Links out', stats.linksOut]` retained per Y42 contract (no Links In rename, no Task/Wiki Links/Projects/Report change)
+- Y41: no expandable Active cards, no Workspace Index disclosures — no `workspaceActiveCard` / `workspaceActiveSummaryCard` classes added, no `<details>` elements
+- Static gate: `scripts/workspace-sidebar-visual-validators.cjs`: **93/93 PASS** (S1–S41)
+- `node --check js/main.js`: PASS
+- `git diff --check`: clean
 
 ## Package 6 Release Gate
 
@@ -308,11 +325,28 @@ Browser gate: Task Board opens normally; visible exit works; Escape/close works;
 - ACT 3 rendered-DOM gate: PASS (S28–S41)
 - ACT 3 status: ACCEPTED
 
-## ACT 4 PLAN-0 — ACTIVE
+## ACT 4 — ACTIVE (Slice 1 & Slice 2 complete)
 
-- ACT 4 PLAN-0: ACTIVE (source inspection only, documentation)
-- ACT 4 implementation: NOT AUTHORIZED
-- ACT 4 owner review: PENDING
+### ACT 4 Slice 1 — File Knowledge Projection Module (COMPLETE)
+- Created `js/workspace/file-knowledge-projection.js` — pure, document-scoped projection functions:
+  - `projectFileKnowledgeTasks(indexSnapshot, activeSourcePath)` — calls `MME_TASK_LIFECYCLE.projectTasks()` with `scope: 'current-document'` and statusFilters `'backlog'`, `'todo'`, `'ongoing'`, `'done'`
+  - `getFileKnowledgeLinks(activeSourcePath, indexSnapshot, markdownText, sourceTitle)` — wraps `MME_WIKI_LINKS.getLinksIn` / `getLinksOut`
+  - `projectFileKnowledge(...)` — combined projection returning `{tasks, links}`
+- Published as `globalThis.MME_FILE_KNOWLEDGE` / `window.MME_FILE_KNOWLEDGE`
+- Critical semantic fix: `project('open')` → `project('todo')` because lifecycle's `'open'` filter = all non-done (backlog+todo+ongoing=3) breaks mutual exclusivity; `'todo'` = Todo only (=1)
+- `js/app/script-loader.js` — updated to load `file-knowledge-projection.js` after `wiki-links.js`
+- Static gate: `scripts/file-knowledge-projection-validators.cjs`: **30/30 PASS** including mutual-exclusivity checks B03b (no backlog in Open) and B03c (no ongoing in Open)
+- `node --check js/main.js`: PASS
+- `git diff --check`: clean
+
+### ACT 4 Slice 2 — Workspace Active Panel File Knowledge Cards (COMPLETE)
+- Wired `MME_FILE_KNOWLEDGE.projectFileKnowledgeTasks(WORKSPACE_INDEX_STATE, active.path)` into `renderWorkspaceActivePanel()` in `js/main.js`
+- Four mutually-exclusive task stats cards: Backlog / Open / Todo / Ongoing / Done (replacing previous Open / Done)
+- `['Links out', stats.linksOut]` retained per Y42 contract (no Links In rename, no Task/Wiki Links/Projects/Report change)
+- Y41: no expandable Active cards, no Workspace Index disclosures — no `workspaceActiveCard` / `workspaceActiveSummaryCard` classes added, no `<details>` elements
+- Static gate: `scripts/workspace-sidebar-visual-validators.cjs`: **93/93 PASS** (S1–S41)
+- `node --check js/main.js`: PASS
+- `git diff --check`: clean
 
 ## Package 6 Release Gate
 

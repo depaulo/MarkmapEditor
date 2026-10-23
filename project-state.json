@@ -101,9 +101,9 @@
         {"id": "ACT 3", "name": "Sidebar Information Architecture", "status": "ACCEPTED", "slices": [
           {"slice": 1, "name": "Sidebar Structural Grouping and Deterministic Ordering", "status": "complete"}
         ]},
-        {"id": "ACT 4", "name": "File Knowledge cards and Workspace Index consolidation", "status": "PLAN-0 - source inspection only; D1 documentation gate complete; ACT 4 AUTHORIZED AFTER D1 GATE; implementation NOT AUTHORIZED until D1 gate green", "slices": [
-          {"slice": 1, "name": "Task-state semantics and canonical projections", "status": "PLAN-0"},
-          {"slice": 2, "name": "Six File Knowledge cards (source-proven states only)", "status": "PLAN-0"},
+        {"id": "ACT 4", "name": "File Knowledge cards and Workspace Index consolidation", "status": "ACTIVE — Slice 1 complete (projection module), Slice 2 complete (Workspace Active panel rendering wired via MME_FILE_KNOWLEDGE); remaining slices PLAN-0", "slices": [
+          {"slice": 1, "name": "Task-state semantics and canonical projections", "status": "complete"},
+          {"slice": 2, "name": "File Knowledge cards rendered in Workspace Active panel (Backlog / Open-Todo / Ongoing / Done)", "status": "complete"},
           {"slice": 3, "name": "Workspace Index compact identity and useful summary", "status": "PLAN-0"},
           {"slice": 4, "name": "Tags presentation through Workspace Index", "status": "PLAN-0"},
           {"slice": 5, "name": "Remove separate Tags panel and reduce redundant Index cards", "status": "PLAN-0"}
@@ -124,15 +124,15 @@
     }
   },
   "workflow": {
-    "planningMode": "ACT D1 COMPLETE (documentation consolidation); Package 6 ACTIVE; ACT 1 ACCEPTED; ACT 2 (slices 1-3) ACCEPTED; ACT 3 ACCEPTED; ACT 4 PLAN-0 active — source inspection only, implementation NOT AUTHORIZED until D1 gate green; release activation = false",
-    "validationTier": "ACT 3: 93/93 sidebar (S1-S41), 65/65 notes, 52/52 discovery, 62/62 tasks; static S1-S27 + executed-DOM S28-S41 gates green; git diff --check clean; ACT 4 PLAN-0 documentation only, no implementation validators required",
+    "planningMode": "ACT D1 COMPLETE (documentation consolidation); Package 6 ACTIVE; ACT 1 ACCEPTED; ACT 2 (slices 1-3) ACCEPTED; ACT 3 ACCEPTED; ACT 4 ACTIVE — Slice 1 complete (projection module), Slice 2 complete (Workspace Active panel rendering wired via MME_FILE_KNOWLEDGE); release activation = false",
+    "validationTier": "ACT 3: 93/93 sidebar (S1-S41), 65/65 notes, 52/52 discovery, 62/62 tasks; static S1-S27 + executed-DOM S28-S41 gates green; git diff --check clean; ACT 4 Slice 1: 30/30 projection validators pass; ACT 4 Slice 2: 93/93 sidebar visual validators pass",
     "prohibitedCommands": ["git reset", "git restore", "git clean", "git stash", "git commit --amend", "git push", "git checkout -b", "branch switching"],
     "protectedFiles": ["js/**", "css/**", "index.html", "sw.js"]
   },
   "nextActions": [
-    "ACT 4 PLAN-0 source inspection: Task-state semantics, File Knowledge card contract, Workspace Index summary audit, Tags convergence analysis",
-    "No implementation during PLAN-0; no six-card runtime layout assumed; no Tags movement; no Archive exclusion; no Edit/Read",
-    "Do NOT activate 0.8.0; no service-worker/version/cache changes",
-    "D1 documentation consolidation complete — ACT 4 authorized after D1 gate green"
+    "ACT 4 Slice 3: Workspace Index compact identity and useful summary",
+    "ACT 4 Slice 4: Tags presentation through Workspace Index",
+    "ACT 4 Slice 5: Remove separate Tags panel and reduce redundant Index cards",
+    "Do NOT activate 0.8.0; no service-worker/version/cache changes"
   ]
 }
