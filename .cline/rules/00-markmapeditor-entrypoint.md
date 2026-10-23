@@ -110,8 +110,12 @@ not be loaded as the primary source.
   passes and inspect failures through targeted log ranges only.
 - Report actual tool failures; never invent results; never leave unresolved
   tool_call_ids.
-- Update docs/ai-state/ at every accepted ACT boundary and whenever the owner
-  checkpoint changes.
+- Do not update `docs/ai-state/*` during normal PLAN, ACT, validation or
+  closure work.
+- Update a compatibility file only when its pointer is broken, an authority
+  path changes, or the compatibility statement itself becomes inaccurate.
+- Never add active ACT, branch, HEAD, validator counts, checkpoint status,
+  Package history or roadmap state to `docs/ai-state/*`.
 
 ## 6. Scope guard
 
