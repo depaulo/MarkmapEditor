@@ -1718,6 +1718,7 @@ const WORKSPACE_PANEL_DEFAULT_COLLAPSED = {
 // (Links In), 'out' shows outgoing references (Links Out). Shared by the
 // Links In and Links Out cards via the existing workspaceRelatedPanel owner.
 let workspaceLinksMode = 'in';
+let workspaceActiveDetail = null; // null or { path, mode } — ACT 4.2C-A local detail state
 
 function getWorkspacePanelCollapsedState() {
   try {
@@ -2113,7 +2114,7 @@ function ensureWorkspaceRelatedPanel() {
       >
         <span class="workspacePanelHeaderLeft">
           <span class="workspacePanelChevron" aria-hidden="true">▶</span>
-          <span class="workspaceRelatedTitle" id="workspaceRelatedTitle">Links In</span>
+          <span class="workspaceRelatedTitle" id="workspaceRelatedTitle">${workspaceLinksMode === 'out' ? 'Links Out' : 'Links In'}</span>
         </span>
       </button>
       <span class="workspacePanelHeaderControls">
@@ -2565,6 +2566,152 @@ function renderWorkspaceRelatedPanel() {
 
   panel.hidden = false;
   summary.textContent = `Current note: ${activeLabel || activePath}`;
+
+  // Keep the visible panel title in sync with the active links mode.
+  const titleEl = document.getElementById('workspaceRelatedTitle');
+  if (titleEl) {
+    titleEl.textContent = workspaceLinksMode === 'out' ? 'Links Out' : 'Links In';
+  }
+
+  if (workspaceLinksMode === 'out') {
+    // ACT 4 Slice 2 — Links Out via the existing MME_WIKI_LINKS.getLinksOut
+    // projection. Preserves resolved / missing / ambiguous / not-ready
+    // distinctions; no second parser, resolver, or relationship store.
+    const mdText = String(
+      (typeof md !== 'undefined' && md && typeof md.value !== 'undefined'
+        ? md.value
+        : '') || ''
+    );
+    const linksOutResult =
+      typeof globalThis.MME_WIKI_LINKS?.getLinksOut === 'function'
+        ? globalThis.MME_WIKI_LINKS.getLinksOut({
+            markdown: mdText,
+            sourcePath: activePath,
+            sourceTitle: activeLabel || '',
+            indexSnapshot: WORKSPACE_INDEX_STATE,
+          })
+        : { available: false, sourcePath: activePath, relationships: [] };
+
+    if (!linksOutResult.available) {
+      badge.textContent = '—';
+      list.innerHTML =
+        '<div class="workspaceRelatedEmpty">Links Out unavailable — wiki-link grammar not ready</div>';
+      applyWorkspacePanelCollapsed(panel, 'related', isWorkspacePanelCollapsed('related'));
+      return;
+    }
+
+    const relationships = linksOutResult.relationships || [];
+    badge.textContent = `${relationships.length}`;
+
+    if (!relationships.length) {
+      list.innerHTML = '<div class="workspaceRelatedEmpty">No Links Out.</div>';
+      applyWorkspacePanelCollapsed(panel, 'related', isWorkspacePanelCollapsed('related'));
+      return;
+    }
+
+    const resolved = relationships.filter((r) => r.status === 'resolved');
+    const missing = relationships.filter((r) => r.status === 'missing');
+    const ambiguous = relationships.filter((r) => r.status === 'ambiguous');
+    const notReady = relationships.filter((r) => r.status === 'not-ready');
+
+    const rows = [];
+
+    for (const rel of resolved) {
+      const path = escapeHtml(String(rel.targetPath || ''));
+      const name = escapeHtml(
+        String(rel.targetTitle || rel.displayLabel || rel.rawTarget || path)
+      );
+      const kind = String(rel.resolutionKind || 'notes');
+      const icon = getWorkspaceSearchIcon(kind);
+      const meta = escapeHtml(
+        [getWorkspaceSearchKindLabel(kind), 'resolved'].filter(Boolean).join(' · ')
+      );
+      rows.push(`
+        <button
+          type="button"
+          class="workspaceRelatedItem"
+          data-workspace-related-item="1"
+          data-path="${path}"
+          data-kind="${escapeHtml(kind)}"
+          title="${path}"
+        >
+          <span class="workspaceRelatedIcon" aria-hidden="true">${icon}</span>
+          <span class="workspaceRelatedBody">
+            <span class="workspaceRelatedName">${name}</span>
+            <span class="workspaceRelatedMeta">${meta}</span>
+          </span>
+        </button>
+      `);
+    }
+
+    for (const rel of missing) {
+      const raw = escapeHtml(String(rel.rawTarget || rel.displayLabel || ''));
+      rows.push(`
+        <button
+          type="button"
+          class="workspaceRelatedItem workspaceRelatedItem--missing"
+          data-workspace-related-item="1"
+          data-path=""
+          data-kind="notes"
+          title="${raw}"
+          disabled
+        >
+          <span class="workspaceRelatedIcon" aria-hidden="true">📄</span>
+          <span class="workspaceRelatedBody">
+            <span class="workspaceRelatedName">${raw}</span>
+            <span class="workspaceRelatedMeta">missing</span>
+          </span>
+        </button>
+      `);
+    }
+
+    for (const rel of ambiguous) {
+      const raw = escapeHtml(String(rel.rawTarget || rel.displayLabel || ''));
+      const candCount = Number(rel.candidates?.length || 0);
+      rows.push(`
+        <button
+          type="button"
+          class="workspaceRelatedItem workspaceRelatedItem--ambiguous"
+          data-workspace-related-item="1"
+          data-path=""
+          data-kind="notes"
+          title="${raw}"
+          disabled
+        >
+          <span class="workspaceRelatedIcon" aria-hidden="true">📄</span>
+          <span class="workspaceRelatedBody">
+            <span class="workspaceRelatedName">${raw}</span>
+            <span class="workspaceRelatedMeta">ambiguous (${candCount} candidates)</span>
+          </span>
+        </button>
+      `);
+    }
+
+    for (const rel of notReady) {
+      const raw = escapeHtml(String(rel.rawTarget || rel.displayLabel || ''));
+      rows.push(`
+        <button
+          type="button"
+          class="workspaceRelatedItem workspaceRelatedItem--not-ready"
+          data-workspace-related-item="1"
+          data-path=""
+          data-kind="notes"
+          title="${raw}"
+          disabled
+        >
+          <span class="workspaceRelatedIcon" aria-hidden="true">📄</span>
+          <span class="workspaceRelatedBody">
+            <span class="workspaceRelatedName">${raw}</span>
+            <span class="workspaceRelatedMeta">not ready</span>
+          </span>
+        </button>
+      `);
+    }
+
+    list.innerHTML = rows.join('');
+    applyWorkspacePanelCollapsed(panel, 'related', isWorkspacePanelCollapsed('related'));
+    return;
+  }
 
   // ACT 3C — canonical Links In. `available` is false when the saved Workspace
   // Index cannot answer, which is DIFFERENT from a confirmed zero: an
@@ -4020,6 +4167,318 @@ function getWorkspaceKindIcon(kind) {
   return '📄';
 }
 
+// ---------------------------------------------------------------------------
+// ACT 4 Slice 2 — Current Document knowledge card markup
+// ---------------------------------------------------------------------------
+
+/**
+ * Render one Task-status card as an actual <button> with ARIA semantics.
+ * statusKey is the canonical MME_TASK_REVIEW filter value ('backlog' | 'todo' | 'ongoing' | 'done').
+ * label is the visible card label ('Backlog' | 'Open' | 'Ongoing' | 'Done').
+ */
+function taskCard(statusKey, label, count, selected = false) {
+  const disabled = count === 0;
+  const ariaLabel = `${label}, ${count} task${count !== 1 ? 's' : ''} in current document`;
+  return `
+    <button
+      type="button"
+      class="workspaceActiveCard workspaceActiveCard--task${disabled ? ' workspaceActiveCard--disabled' : ''}${selected ? ' workspaceActiveCard--selected' : ''}"
+      data-card="task"
+      data-status="${statusKey}"
+      aria-label="${escapeHtml(ariaLabel)}"
+      aria-disabled="${disabled}"
+      aria-pressed="${selected}"
+      ${disabled ? 'disabled' : ''}
+    >
+      <span class="workspaceActiveCardLabel">${escapeHtml(label)}</span>
+      <span class="workspaceActiveCardCount">${count}</span>
+    </button>
+  `;
+}
+
+/**
+ * Render one Links card as an actual <button> with ARIA semantics.
+ * modeKey is 'linksIn' | 'linksOut'. label is 'Links In' | 'Links Out'.
+ * count is the numeric count; available is false when the data source cannot answer.
+ */
+function linksCard(modeKey, label, count, available, selected = false) {
+  const disabled = count === 0 || !available;
+  const displayCount = available ? count : '—';
+  const direction = modeKey === 'linksIn' ? 'documents linking to' : 'links from';
+  const ariaLabel = available
+    ? `${label}, ${count} ${direction} current document`
+    : `${label}, unavailable`;
+  return `
+    <button
+      type="button"
+      class="workspaceActiveCard workspaceActiveCard--links${disabled ? ' workspaceActiveCard--disabled' : ''}${selected ? ' workspaceActiveCard--selected' : ''}"
+      data-card="links"
+      data-mode="${modeKey}"
+      aria-label="${escapeHtml(ariaLabel)}"
+      aria-disabled="${disabled}"
+      aria-pressed="${selected}"
+      ${disabled ? 'disabled' : ''}
+    >
+      <span class="workspaceActiveCardLabel">${escapeHtml(label)}</span>
+      <span class="workspaceActiveCardCount">${displayCount}</span>
+    </button>
+  `;
+}
+function renderWorkspaceActiveDetail(active, fk, displayName) {
+  const detail = workspaceActiveDetail;
+  if (!detail || detail.path !== active.path) {
+    if (detail && detail.path !== active.path) {
+      workspaceActiveDetail = null;
+    }
+    return '';
+  }
+
+  const mode = detail.mode;
+  const closeBtn = '<button type="button" class="workspaceActiveDetailClose" data-workspace-active-detail-close="1" aria-label="Close file knowledge details" title="Close">&times;</button>';
+
+  if (mode === 'backlog' || mode === 'todo' || mode === 'ongoing' || mode === 'done') {
+    const statusMap = { backlog: 'backlog', todo: 'open', ongoing: 'ongoing', done: 'done' };
+    const fkKey = statusMap[mode];
+    const tasks = fk.tasks?.[fkKey] || [];
+    const labelMap = { backlog: 'Backlog Tasks', todo: 'Open Tasks', ongoing: 'Ongoing Tasks', done: 'Done Tasks' };
+    const label = labelMap[mode] || mode;
+    const count = tasks.length;
+
+    if (tasks.length === 0) {
+      return `
+        <div class="workspaceActiveDetailHeader">
+          <span class="workspaceActiveDetailTitle">${escapeHtml(label)} (${count})</span>
+          ${closeBtn}
+        </div>
+        <div class="workspaceActiveDetailEmpty">No ${escapeHtml(label.toLowerCase())} tasks in this document</div>
+      `;
+    }
+
+    const rows = tasks.map((t, idx) => {
+      const text = t.text || t.title || '';
+      const priority = t.priority || '';
+      const line = t.line || t.sourceLine || null;
+      const completed = (mode === 'done');
+      const indicator = completed ? '[x]' : '[ ]';
+      const statusLabel = completed ? 'Completed' : 'Not completed';
+      const sourcePath = t.sourcePath || t.path || activeFile.path;
+      const baseName = String(sourcePath).split('/').pop() || sourcePath;
+      const icon = getWorkspaceKindIcon('notes');
+      const parts = [];
+      if (priority) parts.push(priority);
+      parts.push(`${icon} ${baseName}${line ? ` · line ${line}` : ''}`);
+      const secondary = parts.join('  ');
+      return `
+        <button type="button" class="workspaceActiveDetailRow" data-workspace-active-detail-nav="task" data-line="${escapeHtml(String(line))}" aria-label="Open task source, ${escapeHtml(statusLabel)}">
+          <span class="workspaceActiveDetailContent">
+            <span class="workspaceActiveDetailTitle">${escapeHtml(indicator)} ${escapeHtml(text)}</span>
+            <span class="workspaceActiveDetailMeta">${escapeHtml(secondary)}</span>
+          </span>
+          <span class="workspaceActiveDetailChevron" aria-hidden="true">›</span>
+        </button>
+      `;
+    }).join('');
+
+    return `
+      <div class="workspaceActiveDetailHeader">
+        <span class="workspaceActiveDetailTitle">${escapeHtml(label)}</span>
+        ${closeBtn}
+      </div>
+      <div class="workspaceActiveDetailList">${rows}</div>
+    `;
+  }
+
+  if (mode === 'links-in') {
+    const linksIn = fk.links?.linksIn;
+    const linksInCount = linksIn?.rows?.length || 0;
+    if (!linksIn?.available) {
+      return `
+        <div class="workspaceActiveDetailHeader">
+          <span class="workspaceActiveDetailTitle">Links In (0)</span>
+          ${closeBtn}
+        </div>
+        <div class="workspaceActiveDetailEmpty">Links In unavailable</div>
+      `;
+    }
+    const rows = (linksIn.rows || []).map((r) => {
+      const title = r.sourceTitle || r.sourceName || r.sourcePath || '';
+      const path = r.sourcePath || '';
+      const icon = getWorkspaceKindIcon('notes');
+      return `
+        <button type="button" class="workspaceActiveDetailRow" data-workspace-active-detail-nav="links-in" data-path="${escapeHtml(path)}" aria-label="Open source">
+          <span class="workspaceActiveDetailContent">
+            <span class="workspaceActiveDetailTitle">${escapeHtml(title)}</span>
+            <span class="workspaceActiveDetailMeta">${escapeHtml(icon)} ${escapeHtml(path)}</span>
+          </span>
+          <span class="workspaceActiveDetailChevron" aria-hidden="true">›</span>
+        </button>
+      `;
+    }).join('');
+
+    if (rows === '') {
+      return `
+        <div class="workspaceActiveDetailHeader">
+          <span class="workspaceActiveDetailTitle">Links In (${linksInCount})</span>
+          ${closeBtn}
+        </div>
+        <div class="workspaceActiveDetailEmpty">No links in</div>
+      `;
+    }
+
+    return `
+      <div class="workspaceActiveDetailHeader">
+        <span class="workspaceActiveDetailTitle">Links In (${linksInCount})</span>
+        ${closeBtn}
+      </div>
+      <div class="workspaceActiveDetailList">${rows}</div>
+    `;
+  }
+
+  if (mode === 'links-out') {
+    const linksOut = fk.links?.linksOut;
+    const linksOutCount = linksOut?.relationships?.length || 0;
+    if (!linksOut?.available) {
+      return `
+        <div class="workspaceActiveDetailHeader">
+          <span class="workspaceActiveDetailTitle">Links Out (0)</span>
+          ${closeBtn}
+        </div>
+        <div class="workspaceActiveDetailEmpty">Links Out unavailable</div>
+      `;
+    }
+    const rows = (linksOut.relationships || []).map((r) => {
+      const label = r.label || r.targetPath || '';
+      const state = r.state || 'resolved';
+      const targetPath = r.targetPath || '';
+      const resolved = state === 'resolved' && targetPath;
+      const icon = getWorkspaceKindIcon('notes');
+      const secondary = resolved ? `${icon} ${targetPath}` : `${targetPath || label} (${state})`;
+      if (resolved) {
+        return `
+          <button type="button" class="workspaceActiveDetailRow" data-workspace-active-detail-nav="links-out" data-path="${escapeHtml(targetPath)}" aria-label="Open target">
+            <span class="workspaceActiveDetailContent">
+              <span class="workspaceActiveDetailTitle">${escapeHtml(label)}</span>
+              <span class="workspaceActiveDetailMeta">${escapeHtml(secondary)}</span>
+            </span>
+            <span class="workspaceActiveDetailChevron" aria-hidden="true">›</span>
+          </button>
+        `;
+      }
+      return `
+        <div class="workspaceActiveDetailRow">
+          <span class="workspaceActiveDetailContent">
+            <span class="workspaceActiveDetailTitle">${escapeHtml(label)}</span>
+            <span class="workspaceActiveDetailMeta">${escapeHtml(secondary)}</span>
+          </span>
+        </div>
+      `;
+    }).join('');
+
+    if (rows === '') {
+      return `
+        <div class="workspaceActiveDetailHeader">
+          <span class="workspaceActiveDetailTitle">Links Out (${linksOutCount})</span>
+          ${closeBtn}
+        </div>
+        <div class="workspaceActiveDetailEmpty">No links out</div>
+      `;
+    }
+
+    return `
+      <div class="workspaceActiveDetailHeader">
+        <span class="workspaceActiveDetailTitle">Links Out (${linksOutCount})</span>
+        ${closeBtn}
+      </div>
+      <div class="workspaceActiveDetailList">${rows}</div>
+    `;
+  }
+
+  return '';
+}
+
+
+function wireWorkspaceActivePanelCards() {
+  const body = document.getElementById('workspaceActiveBody');
+  if (!body) return;
+  if (body.__workspaceActiveCardsBound) return;
+
+  body.addEventListener('click', (event) => {
+    const activeFile = WORKSPACE_STATE?.activeFile;
+    if (!activeFile?.path) return;
+
+    // 1. Close
+    const closeBtn = event.target?.closest?.('[data-workspace-active-detail-close]');
+    if (closeBtn && body.contains(closeBtn)) {
+      event.preventDefault();
+      workspaceActiveDetail = null;
+      renderWorkspaceActivePanel();
+      return;
+    }
+
+    // 2. Task-row navigation
+    const taskNav = event.target?.closest?.('[data-workspace-active-detail-nav="task"]');
+    if (taskNav && body.contains(taskNav)) {
+      event.preventDefault();
+      const line = parseInt(taskNav.dataset.line, 10);
+      if (typeof MME_TASK_REVIEW?.openTaskSource === 'function') {
+        MME_TASK_REVIEW.openTaskSource(activeFile.path, 'notes', isNaN(line) ? null : line);
+      } else if (typeof window.openTaskSource === 'function') {
+        window.openTaskSource(activeFile.path, 'notes', isNaN(line) ? null : line);
+      }
+      return;
+    }
+
+    // 3. Link-row navigation
+    const linkNav = event.target?.closest?.('[data-workspace-active-detail-nav^="links-"]');
+    if (linkNav && body.contains(linkNav)) {
+      event.preventDefault();
+      const path = linkNav.dataset.path;
+      if (!path) return;
+      const file = (typeof findWorkspaceFileByPath === 'function')
+        ? findWorkspaceFileByPath(path, 'notes')
+        : null;
+      if (file && typeof openWorkspaceFile === 'function') {
+        openWorkspaceFile(file, 'notes', 'Current Document detail');
+      }
+      return;
+    }
+
+    // 4. Card selection
+    const btn = event.target?.closest?.('button.workspaceActiveCard');
+    if (!btn || !body.contains(btn)) return;
+    if (btn.matches('[disabled], [aria-disabled="true"]')) return;
+
+    event.preventDefault();
+
+    const cardType = btn.dataset.card;
+
+    if (cardType === 'task') {
+      const statusKey = btn.dataset.status;
+      const modeMap = { backlog: 'backlog', todo: 'todo', ongoing: 'ongoing', done: 'done' };
+      const mode = modeMap[statusKey];
+      if (mode) {
+        if (!(workspaceActiveDetail?.path === activeFile.path && workspaceActiveDetail?.mode === mode)) {
+          workspaceActiveDetail = { path: activeFile.path, mode };
+        }
+        renderWorkspaceActivePanel();
+        const selectedBtn = document.querySelector(`button.workspaceActiveCard[data-status="${statusKey}"]`);
+        if (selectedBtn) selectedBtn.focus();
+      }
+    } else if (cardType === 'links') {
+      const modeKey = btn.dataset.mode;
+      const mode = modeKey === 'linksIn' ? 'links-in' : 'links-out';
+      if (!(workspaceActiveDetail?.path === activeFile.path && workspaceActiveDetail?.mode === mode)) {
+        workspaceActiveDetail = { path: activeFile.path, mode };
+      }
+      renderWorkspaceActivePanel();
+      const selectedBtn = document.querySelector(`button.workspaceActiveCard[data-mode="${modeKey}"]`);
+      if (selectedBtn) selectedBtn.focus();
+    }
+  });
+
+  body.__workspaceActiveCardsBound = true;
+}
+
 function renderWorkspaceActivePanel() {
   const panel = ensureWorkspaceActivePanel();
   const badge = document.getElementById('workspaceActiveBadge');
@@ -4052,6 +4511,11 @@ function renderWorkspaceActivePanel() {
     applyWorkspacePanelCollapsed(panel, 'active', isWorkspacePanelCollapsed('active'));
 
     return;
+  }
+
+  // ACT 4.2C-A — clear stale detail on file switch
+  if (workspaceActiveDetail && workspaceActiveDetail.path !== active?.path) {
+    workspaceActiveDetail = null;
   }
 
   const parsed = getWorkspaceParsedActiveFile();
@@ -4144,13 +4608,14 @@ function renderWorkspaceActivePanel() {
     }
 
     <div class="workspaceActiveCards">
-      ${taskCard('backlog', 'Backlog', taskCounts.backlog)}
-      ${taskCard('open', 'Open', taskCounts.open)}
-      ${taskCard('ongoing', 'Ongoing', taskCounts.ongoing)}
-      ${taskCard('done', 'Done', taskCounts.done)}
-      ${linksCard('linksIn', 'Links In', linksInCount)}
-      ${linksCard('linksOut', 'Links Out', linksOutCount)}
+      ${taskCard('backlog', 'Backlog', taskCounts.backlog, workspaceActiveDetail?.mode === 'backlog' && workspaceActiveDetail?.path === active.path)}
+      ${taskCard('todo', 'Open', taskCounts.open, workspaceActiveDetail?.mode === 'todo' && workspaceActiveDetail?.path === active.path)}
+      ${taskCard('ongoing', 'Ongoing', taskCounts.ongoing, workspaceActiveDetail?.mode === 'ongoing' && workspaceActiveDetail?.path === active.path)}
+      ${taskCard('done', 'Done', taskCounts.done, workspaceActiveDetail?.mode === 'done' && workspaceActiveDetail?.path === active.path)}
+      ${linksCard('linksIn', 'Links In', linksInCount, fk.links?.linksIn?.available, workspaceActiveDetail?.mode === 'links-in' && workspaceActiveDetail?.path === active.path)}
+      ${linksCard('linksOut', 'Links Out', linksOutCount, fk.links?.linksOut?.available, workspaceActiveDetail?.mode === 'links-out' && workspaceActiveDetail?.path === active.path)}
     </div>
+    ${workspaceActiveDetail && workspaceActiveDetail.path === active.path ? `<div id="workspaceActiveDetail" class="workspaceActiveDetail">${renderWorkspaceActiveDetail(active, fk, displayName)}</div>` : ''}
   `;
 
   log?.(`Workspace Active: rendered path=${active?.path || '(none)'}`);
@@ -4160,6 +4625,9 @@ function renderWorkspaceActivePanel() {
   renderWorkspaceActiveNoteActions();
 
   applyWorkspacePanelCollapsed(panel, 'active', isWorkspacePanelCollapsed('active'));
+
+  // Wire the delegated card click handler exactly once (idempotent).
+  wireWorkspaceActivePanelCards();
 }
 
 function wireWorkspaceActivePanel() {

@@ -1,3 +1,107 @@
+/* ACT 4.2C-A — Current Document detail region */
+.workspaceActiveDetail {
+  margin-top: 8px;
+  border: 1px solid var(--menu-border, #ccc);
+  border-radius: 4px;
+  padding: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.workspaceActiveDetailHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.workspaceActiveDetailTitle {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.workspaceActiveDetailClose {
+  background: none;
+  border: 1px solid var(--menu-border, #ccc);
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.workspaceActiveDetailList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workspaceActiveDetailRow:hover,
+.workspaceActiveDetailRow:focus-visible {
+  background: var(--surface-hover, #dcdce0);
+}
+
+.workspaceActiveDetailRow:focus-visible {
+  outline: 2px solid var(--accent, #16a34a);
+  outline-offset: 1px;
+}
+
+.workspaceActiveDetailRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  white-space: normal;
+  background: transparent;
+  border: 1px solid var(--border-subtle, #d4d4d8);
+  border-radius: 4px;
+}
+
+.workspaceActiveDetailContent {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  min-width: 0;
+}
+
+.workspaceActiveDetailTitle,
+.workspaceActiveDetailMeta {
+  display: block;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.workspaceActiveDetailMeta {
+  font-size: 0.85em;
+  color: var(--text-secondary, #666);
+}
+
+.workspaceActiveDetailChevron {
+  font-size: 14px;
+  color: var(--text-secondary, #666);
+}
+
+.workspaceActiveDetailEmpty {
+  font-size: 13px;
+  color: var(--text-secondary, #666);
+  padding: 8px 0;
+}
+
+.workspaceActiveCard--selected {
+  outline: 2px solid var(--accent, #16a34a);
+  outline-offset: 1px;
+}
+
+
 /* =========================== */
 /* Workspace / Journal Sidebar */
 /* =========================== */
@@ -450,6 +554,62 @@ html.dark .workspaceActiveTag {
 
 .workspaceActiveStatValue {
   font-weight: 700;
+}
+
+/* ACT 4 Slice 2 — actionable knowledge cards (Backlog / Open / Ongoing / Done / Links In / Links Out). */
+.workspaceActiveCards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 6px;
+  margin-top: 6px;
+}
+
+.workspaceActiveCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+
+  padding: 4px 6px;
+
+  border-radius: 6px;
+  border: 1px solid var(--menu-border);
+  background: rgba(127, 127, 127, 0.05);
+
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+
+  cursor: pointer;
+  text-align: left;
+}
+
+.workspaceActiveCard:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.workspaceActiveCard:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--border-subtle);
+  background: rgba(127, 127, 127, 0.03);
+}
+
+.workspaceActiveCardLabel {
+  opacity: 0.68;
+}
+
+.workspaceActiveCardCount {
+  font-weight: 700;
+}
+
+.workspaceActiveCard--task {
+  border-color: var(--menu-border);
+}
+
+.workspaceActiveCard--links {
+  border-color: var(--menu-border);
 }
 
 .workspaceActiveEmpty {
