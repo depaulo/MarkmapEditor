@@ -298,19 +298,10 @@
       </div>
     `;
 
-    const tagsPanel = document.getElementById('workspaceTagsPanel');
-    const tasksPanel = document.getElementById('workspaceTasksPanel');
-    let insertAfter = null;
+    const archivePanel = document.getElementById('workspaceArchivePanel');
 
-    if (tagsPanel && tagsPanel.parentNode === host) {
-      host.insertBefore(panel, tagsPanel);
-      insertAfter = tagsPanel.previousSibling;
-    } else if (tasksPanel && tasksPanel.parentNode === host) {
-      if (tasksPanel.nextSibling && tasksPanel.nextSibling.parentNode === host) {
-        host.insertBefore(panel, tasksPanel.nextSibling);
-      } else {
-        host.appendChild(panel);
-      }
+    if (archivePanel && archivePanel.parentNode === host) {
+      host.insertBefore(panel, archivePanel.nextSibling);
     } else {
       host.appendChild(panel);
     }

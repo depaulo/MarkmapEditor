@@ -1242,31 +1242,7 @@ html.journal-sidebar-collapsed #workspaceTasksPanel {
   display: none;
 }
 
-.workspaceIndexMetrics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
 
-.workspaceIndexMetricItem {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid var(--menu-border);
-  background: var(--toolbar-bg);
-}
-
-.workspaceIndexMetricValue {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.workspaceIndexMetricLabel {
-  font-size: 11px;
-  opacity: 0.7;
-}
 
 html.journal-sidebar-collapsed #workspaceIndexPanel {
   display: none;
@@ -5032,4 +5008,293 @@ html.projects-view-active .splitter::before { content: none; }
   .projectsDetailsFields { grid-template-columns: minmax(0, 1fr); }
   .projectsDetailsReadOnly { flex-direction: column; gap: 4px; }
   .projectsChangeBar { position: sticky; bottom: 0; }
+}
+
+/* Index metric grid container — owned by the standard .workspaceActiveCards
+   rule (same as Current Document cards). No one-column @media fallback. */
+#workspaceIndexPanel .workspaceIndexMetrics { margin-top: 6px; }
+
+/* Index metric cards are non-interactive (counts only) */
+#workspaceIndexPanel .workspaceIndexMetricItem {
+  cursor: default;
+  pointer-events: none;
+}
+
+#workspaceIndexPanel .workspaceIndexMetricItem:hover {
+  background: rgba(127, 127, 127, 0.05);
+}
+
+/* Find Files section inside Workspace Knowledge */
+#workspaceKnowledgeFindFilesSection {
+  margin-top: 10px;
+  border-top: 1px solid var(--border-subtle, #d4d4d8);
+  padding-top: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#workspaceKnowledgeFindFilesSection .workspaceKnowledgeSectionLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  margin-bottom: 4px;
+}
+
+/* Search input full width inside Find Files */
+#workspaceKnowledgeFindFilesSection #workspaceSearchInput {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#workspaceKnowledgeFindFilesSection #workspaceSearchLabel {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+}
+
+/* Tag chips wrap naturally inside Find Files */
+#workspaceKnowledgeFindFilesSection .workspaceTagsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: flex-start;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  margin: 0;
+}
+
+/* Shared result list: bounded vertical scrolling, compact file rows */
+#workspaceKnowledgeFindFilesSection #workspaceSearchResults {
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid var(--border-subtle, #d4d4d8);
+  border-radius: 4px;
+  background: var(--surface-page, #f4f4f5);
+}
+
+#workspaceKnowledgeFindFilesSection .workspaceSearchResultItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.3;
+  width: 100%;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+#workspaceKnowledgeFindFilesSection .workspaceSearchResultItem:hover {
+  background: var(--surface-hover, #dcdce0);
+}
+
+#workspaceKnowledgeFindFilesSection .workspaceSearchResultItem:focus-visible {
+  outline: 2px solid var(--accent, #16a34a);
+  outline-offset: 1px;
+}
+
+#workspaceKnowledgeFindFilesSection .workspaceSearchResultIcon {
+  flex: 0 0 auto;
+  width: 18px;
+  display: inline-flex;
+  justify-content: center;
+}
+
+#workspaceKnowledgeFindFilesSection .workspaceSearchResultMeta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+#workspaceKnowledgeFindFilesSection .workspaceSearchResultName {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#workspaceKnowledgeFindFilesSection .workspaceSearchResultKind {
+  font-size: 10px;
+  opacity: 0.65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#workspaceKnowledgeFindFilesSection .workspaceSearchResultPath {
+  flex: 0 0 auto;
+  font-size: 10px;
+  opacity: 0.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* No duplicate borders around embedded Search/Tags owners inside Find Files */
+#workspaceKnowledgeFindFilesSection #workspaceSearchPanel {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+#workspaceKnowledgeFindFilesSection #workspaceTagsPanel {
+  border-top: none;
+  padding: 0;
+  margin: 0;
+  gap: 0;
+}
+
+#workspaceKnowledgeFindFilesSection #workspaceTagsPanel.workspacePanelCollapsed {
+  display: block !important;
+}
+
+#workspaceKnowledgeFindFilesSection #workspaceTagsPanel[hidden] {
+  display: block !important;
+}
+
+#workspaceKnowledgeFindFilesSection .workspaceTagsHeader {
+  display: none !important;
+}
+
+/* Readable at approximately 280px sidebar width */
+#workspaceKnowledgeFindFilesSection .workspaceSearchResultPath,
+#workspaceKnowledgeFindFilesSection .workspaceSearchResultName {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* =========================== */
+/* Workspace Knowledge sections */
+/* =========================== */
+
+/* Spacing between Index metrics and embedded Search/Tags sections */
+.workspaceKnowledgeSection {
+  margin-top: 10px;
+  border-top: 1px solid var(--border-subtle, #d4d4d8);
+  padding-top: 8px;
+}
+
+.workspaceKnowledgeSection + .workspaceKnowledgeSection {
+  margin-top: 10px;
+}
+
+/* Full-width Search input inside the embedded Search section */
+#workspaceKnowledgeSearchSection #workspaceSearchInput {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#workspaceKnowledgeSearchSection #workspaceSearchLabel {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+}
+
+/* Hide the embedded Tags header (the standalone Tags header remains visible) */
+#workspaceKnowledgeTagsSection .workspaceTagsHeader {
+  display: none !important;
+}
+
+/* Chip wrapping for embedded Tags list */
+#workspaceKnowledgeTagsSection .workspaceTagsList {
+  max-height: none;
+  overflow: visible;
+}
+
+/* Prevent nested collapse/border on embedded Tags panel */
+#workspaceKnowledgeTagsSection #workspaceTagsPanel {
+  border-top: none;
+  padding: 0;
+  gap: 0;
+}
+
+#workspaceKnowledgeTagsSection #workspaceTagsPanel.workspacePanelCollapsed {
+  display: block !important;
+}
+
+#workspaceKnowledgeTagsSection #workspaceTagsPanel[hidden] {
+  display: block !important;
+}
+
+/* =========================== */
+/* Workspace Knowledge — Find Files selected-tags & toggle UI */
+/* =========================== */
+
+/* Selected tags summary row (above the collapsed chip list) */
+#workspaceKnowledgeFindFilesSection .workspaceSelectedTags {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  margin-bottom: 4px;
+}
+
+/* Individual tag chip */
+#workspaceKnowledgeFindFilesSection .workspaceTagItem {
+  padding: 2px 6px;
+  border: 1px solid var(--menu-border);
+  border-radius: 12px;
+  background: var(--surface-panel);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#workspaceKnowledgeFindFilesSection .workspaceTagItem.__active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+
+/* Clear-all tags button */
+#workspaceKnowledgeFindFilesSection .workspaceFindFilesClearTags {
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid var(--menu-border);
+  border-radius: 12px;
+  background: var(--surface-panel);
+  cursor: pointer;
+}
+
+/* Results host container */
+#workspaceKnowledgeFindFilesSection #workspaceFindFilesResultsHost {
+  margin-top: 8px;
+  padding: 0;
+}
+
+/* Tags toggle link (shown when list is collapsed) */
+#workspaceKnowledgeFindFilesSection .workspaceTagsToggle {
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--accent);
+}
+
+#workspaceKnowledgeFindFilesSection .workspaceTagsToggle[hidden] {
+  display: none;
+}
+
+/* Collapsed / expanded tag list */
+#workspaceKnowledgeFindFilesSection:not(.workspaceTagsExpanded) #workspaceTagsList {
+  max-height: 58px;
+  overflow: hidden;
+}
+
+#workspaceKnowledgeFindFilesSection.workspaceTagsExpanded #workspaceTagsList {
+  max-height: none;
+  overflow: visible;
 }
