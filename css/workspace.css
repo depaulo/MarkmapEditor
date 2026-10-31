@@ -5238,15 +5238,105 @@ html.projects-view-active .splitter::before { content: none; }
 /* =========================== */
 
 /* Selected tags summary row (above the collapsed chip list) */
-#workspaceKnowledgeFindFilesSection .workspaceSelectedTags {
+#workspaceRelatedPanel[data-standalone-retired="1"] {
+  display: none !important;
+}
+
+#workspaceKnowledgeFindFilesSection #workspaceTagsSummary {
+  display: none;
+}
+
+#workspaceIndexPanel .workspaceKnowledgeFindFilesSection {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--menu-border);
+  min-width: 0;
+}
+
+#workspaceIndexPanel .workspaceKnowledgeSectionLabel {
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-secondary, #666);
-  margin-bottom: 4px;
+  letter-spacing: 0.04em;
+  color: inherit;
+  opacity: 0.72;
+}
+
+#workspaceIndexPanel .workspaceKnowledgeSectionDescription {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: inherit;
+  opacity: 0.6;
+}
+
+#workspaceKnowledgeFindFilesSection #workspaceSearchLabel {
+  display: block;
+  margin: 0 0 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: inherit;
+  opacity: 0.62;
+}
+
+#workspaceKnowledgeFindFilesSection #workspaceSearchInput {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+/* Individual tag chip */
+#workspaceKnowledgeFindFilesSection,
+#workspaceKnowledgeFindFilesSection #workspaceFindFilesTagsHost,
+#workspaceKnowledgeFindFilesSection #workspaceTagsPanel,
+#workspaceKnowledgeFindFilesSection
+  #workspaceTagsPanel .workspacePanelBody {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#workspaceKnowledgeFindFilesSection #workspaceTagsList {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 4px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Collapsed / expanded tag list */
+#workspaceKnowledgeFindFilesSection:not(.workspaceTagsExpanded)
+  #workspaceTagsList {
+  max-height: 58px;
+  overflow-y: hidden;
+  overflow-x: hidden;
+}
+
+#workspaceKnowledgeFindFilesSection.workspaceTagsExpanded
+  #workspaceTagsList {
+  max-height: none;
+  overflow-y: visible;
+  overflow-x: hidden;
 }
 
 /* Individual tag chip */
 #workspaceKnowledgeFindFilesSection .workspaceTagItem {
+  position: static;
+  flex: 0 1 auto;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  transform: none;
   padding: 2px 6px;
   border: 1px solid var(--menu-border);
   border-radius: 12px;
@@ -5256,45 +5346,48 @@ html.projects-view-active .splitter::before { content: none; }
 }
 
 #workspaceKnowledgeFindFilesSection .workspaceTagItem.__active {
-  background: var(--accent);
-  color: var(--text-on-accent);
-  border-color: var(--accent);
+  position: static;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  transform: none;
+  color: inherit;
+  background: color-mix(
+    in srgb,
+    var(--accent) 18%,
+    transparent
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--accent) 55%,
+    var(--menu-border)
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(
+      in srgb,
+      var(--accent) 18%,
+      transparent
+    );
 }
 
-/* Clear-all tags button */
-#workspaceKnowledgeFindFilesSection .workspaceFindFilesClearTags {
-  font-size: 11px;
-  padding: 2px 6px;
-  border: 1px solid var(--menu-border);
-  border-radius: 12px;
-  background: var(--surface-panel);
-  cursor: pointer;
-}
-
-/* Results host container */
-#workspaceKnowledgeFindFilesSection #workspaceFindFilesResultsHost {
-  margin-top: 8px;
-  padding: 0;
-}
-
-/* Tags toggle link (shown when list is collapsed) */
-#workspaceKnowledgeFindFilesSection .workspaceTagsToggle {
-  font-size: 11px;
-  cursor: pointer;
-  color: var(--accent);
-}
-
-#workspaceKnowledgeFindFilesSection .workspaceTagsToggle[hidden] {
-  display: none;
-}
-
-/* Collapsed / expanded tag list */
-#workspaceKnowledgeFindFilesSection:not(.workspaceTagsExpanded) #workspaceTagsList {
-  max-height: 58px;
+#workspaceKnowledgeFindFilesSection .workspaceTagName {
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-#workspaceKnowledgeFindFilesSection.workspaceTagsExpanded #workspaceTagsList {
-  max-height: none;
-  overflow: visible;
+#workspaceKnowledgeFindFilesSection .workspaceTagCount {
+  flex: 0 0 auto;
+}
+
+#workspaceKnowledgeFindFilesSection #workspaceSearchResults {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }

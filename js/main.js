@@ -1211,7 +1211,6 @@ async function buildWorkspaceIndex() {
   renderWorkspaceIndexSummary();
   renderWorkspaceActivePanel?.();
   renderWorkspaceTasksPanel();
-  renderWorkspaceRelatedPanel?.();
   renderWorkspaceTagsPanel?.();
   updateWorkspaceJournalSidebarTitlesFromIndex?.();
   renderWorkspaceJournalTimeline?.();
@@ -2005,12 +2004,14 @@ function ensureWorkspaceIndexPanel() {
         class="workspaceKnowledgeSection workspaceKnowledgeFindFilesSection"
       >
         <div class="workspaceKnowledgeSectionLabel">Find Files</div>
+        <div class="workspaceKnowledgeSectionDescription">
+          Search by file name or narrow the results with tags.
+        </div>
 
         <div id="workspaceFindFilesSearchHost"></div>
 
         <div
           id="workspaceFindFilesSelectedTags"
-          class="workspaceFindFilesSelectedTags"
           hidden
         ></div>
 
@@ -2106,6 +2107,7 @@ function integrateWorkspaceKnowledge() {
   }
 
   // Render the shared Find Files result list based on current query/tag state.
+  normalizeWorkspaceFindFilesOrder();
   renderWorkspaceFindFiles();
 
   return true;
@@ -2201,7 +2203,12 @@ function ensureWorkspaceRelatedPanel() {
 
   panel = document.createElement('div');
   panel.id = 'workspaceRelatedPanel';
+  panel.dataset.standaloneRetired = '1';
   panel.hidden = true;
+  panel.setAttribute('aria-hidden', 'true');
+  try {
+    panel.inert = true;
+  } catch (e) {}
 
   panel.innerHTML = `
     <div class="workspaceRelatedHeader">
@@ -2631,6 +2638,14 @@ function getActiveConceptName() {
 
 function renderWorkspaceRelatedPanel() {
   const panel = ensureWorkspaceRelatedPanel();
+  if (panel) {
+    panel.dataset.standaloneRetired = '1';
+    panel.hidden = true;
+    panel.setAttribute('aria-hidden', 'true');
+    try {
+      panel.inert = true;
+    } catch (e) {}
+  }
   const badge = document.getElementById('workspaceRelatedBadge');
   const summary = document.getElementById('workspaceRelatedSummary');
   const list = document.getElementById('workspaceRelatedList');
@@ -3181,7 +3196,7 @@ let __workspaceActiveTag = '';
 const workspaceSelectedTags = new Set();
 let workspaceTagsExpanded = false;
 
-function renderWorkspaceTagsPanel() {
+function renderWorkspaceTagsPanel(options = {}) {
   const panel = ensureWorkspaceTagsPanel();
   const badge = document.getElementById('workspaceTagsBadge');
   const summary = document.getElementById('workspaceTagsSummary');
@@ -3247,7 +3262,7 @@ function renderWorkspaceTagsPanel() {
   list.innerHTML = tags
     .map((row) => {
       const tag = escapeHtml(row.tag || '');
-      const activeClass = String(row.tag || '') === __workspaceActiveTag ? ' __active' : '';
+      const activeClass = workspaceSelectedTags.has(row.tag) ? ' __active' : '';
 
       return `
         <button
@@ -3265,46 +3280,130 @@ function renderWorkspaceTagsPanel() {
     .join('');
 
   // Render tag results into the dedicated results host.
-  // renderWorkspaceFindFiles() (the shared Search + Tag coordinator) is invoked
-  // separately from wireWorkspaceSearch() and the chip-click handler.
+  normalizeWorkspaceFindFilesOrder();
   renderWorkspaceTagResults(__workspaceActiveTag);
+
+  if (!options.skipFindFiles) {
+    renderWorkspaceFindFiles();
+  }
 }
 
 // ACT 4 — render the selected-tags summary row above the tag chip list.
 // Shows "#tag" with a clear button, or hides when no tag is selected.
-function renderWorkspaceSelectedTags(container, tagKey) {
-  if (!container) return;
+function renderWorkspaceSelectedTags() {
+  const host = document.getElementById('workspaceFindFilesSelectedTags');
 
-  const tag = String(tagKey || '').trim();
-
-  if (!tag) {
-    container.hidden = true;
-    container.innerHTML = '';
+  if (!host) {
     return;
   }
 
-  const tagDisplay = escapeHtml(tag);
-  container.hidden = false;
-  container.innerHTML = `
-    <span class="workspaceFindFilesSelectedTag">#${tagDisplay}</span>
-    <button
-      type="button"
-      class="workspaceFindFilesClearTags"
-      data-workspace-clear-tag="1"
-      title="Clear tag filter"
-      aria-label="Clear tag filter"
-    >✕</button>
-  `;
+  host.hidden = true;
+  host.innerHTML = '';
+}
+
+function normalizeWorkspaceFindFilesOrder() {
+  const section =
+    document.getElementById('workspaceKnowledgeFindFilesSection');
+
+  const label =
+    section?.querySelector('.workspaceKnowledgeSectionLabel');
+
+  const description =
+    section?.querySelector('.workspaceKnowledgeSectionDescription');
+
+  const searchHost =
+    document.getElementById('workspaceFindFilesSearchHost');
+
+  const selectedHost =
+    document.getElementById('workspaceFindFilesSelectedTags');
+
+  const tagsHost =
+    document.getElementById('workspaceFindFilesTagsHost');
+
+  const tagsToggle =
+    document.getElementById('workspaceFindFilesTagsToggle');
+
+  const resultsHost =
+    document.getElementById('workspaceFindFilesResultsHost');
+
+  const searchPanel =
+    document.getElementById('workspaceSearchPanel');
+
+  const tagsPanel =
+    document.getElementById('workspaceTagsPanel');
+
+  const searchResults =
+    document.getElementById('workspaceSearchResults');
+
+  if (
+    !section ||
+    !label ||
+    !description ||
+    !searchHost ||
+    !tagsHost ||
+    !tagsToggle ||
+    !resultsHost ||
+    !searchPanel ||
+    !tagsPanel ||
+    !searchResults
+  ) {
+    return false;
+  }
+
+  searchHost.appendChild(searchPanel);
+  tagsHost.appendChild(tagsPanel);
+  resultsHost.appendChild(searchResults);
+
+  const orderedNodes = [
+    label,
+    description,
+    searchHost,
+  ];
+
+  if (selectedHost) {
+    selectedHost.hidden = true;
+    selectedHost.innerHTML = '';
+    orderedNodes.push(selectedHost);
+  }
+
+  orderedNodes.push(
+    tagsHost,
+    tagsToggle,
+    resultsHost
+  );
+
+  section.append(...orderedNodes);
+
+  return true;
 }
 
 // ACT 4 — show/hide the "Show more tags" toggle based on the number of tags.
-function updateWorkspaceTagsToggleVisibility(toggleEl, tagCount) {
-  if (!toggleEl) return;
+function updateWorkspaceTagsToggleVisibility() {
+  requestAnimationFrame(() => {
+    const list = document.getElementById('workspaceTagsList');
+    const toggle = document.getElementById('workspaceFindFilesTagsToggle');
+    const section = document.getElementById('workspaceKnowledgeFindFilesSection');
 
-  // Threshold: when there are more than 6 tags, show the toggle to collapse
-  // the chip list (the container has a max-height via CSS).
-  const shouldShow = tagCount > 6;
-  toggleEl.hidden = !shouldShow;
+    if (!list || !toggle || !section) {
+      return;
+    }
+
+    section.classList.toggle(
+      'workspaceTagsExpanded',
+      workspaceTagsExpanded
+    );
+
+    const overflows = list.scrollHeight > list.clientHeight + 1;
+
+    toggle.hidden = !workspaceTagsExpanded && !overflows;
+
+    toggle.textContent = workspaceTagsExpanded ? 'Show less' : 'Show more';
+
+    toggle.setAttribute(
+      'aria-expanded',
+      workspaceTagsExpanded ? 'true' : 'false'
+    );
+  });
 }
 
 // ACT 4 — shared Find Files result coordinator. Reuses existing Search query
@@ -3313,6 +3412,8 @@ function updateWorkspaceTagsToggleVisibility(toggleEl, tagCount) {
 // shared file results into #workspaceSearchResults, the one visible
 // file-result list inside Find Files.
 function renderWorkspaceFindFiles() {
+  normalizeWorkspaceFindFilesOrder();
+
   const input = document.getElementById('workspaceSearchInput');
   const resultsEl = document.getElementById('workspaceSearchResults');
   const chipsContainer = document.getElementById('workspaceTagsList');
@@ -3323,10 +3424,9 @@ function renderWorkspaceFindFiles() {
 
   const query = String(input.value || '').trim();
   const normalized = normalizeWorkspaceSearchQuery(query);
-  const tagKey = String(__workspaceActiveTag || '').trim();
 
   // --- Render selected-tags summary above the chip list ---
-  renderWorkspaceSelectedTags(selectedTagsContainer, __workspaceActiveTag);
+  renderWorkspaceSelectedTags(selectedTagsContainer);
 
   // --- Render Tag chips (always, independent of query state) ---
   const tags = WORKSPACE_INDEX_STATE?.ready && WORKSPACE_INDEX_STATE.tags
@@ -3336,7 +3436,7 @@ function renderWorkspaceFindFiles() {
   chipsContainer.innerHTML = tags
     .map((row) => {
       const tag = escapeHtml(row.tag || '');
-      const activeClass = String(row.tag || '') === tagKey ? ' __active' : '';
+      const activeClass = workspaceSelectedTags.has(row.tag) ? ' __active' : '';
       return `
         <button
           type="button"
@@ -3355,8 +3455,8 @@ function renderWorkspaceFindFiles() {
   // --- Update tags toggle visibility (show when > N tags) ---
   updateWorkspaceTagsToggleVisibility(tagsToggle, tags.length);
 
-  // No query and no selected Tag: show concise instruction in the results host.
-  if (!normalized && !tagKey) {
+  // No query and no selected Tags: show concise instruction in the results host.
+  if (!normalized && workspaceSelectedTags.size === 0) {
     resultsEl.hidden = false;
     resultsEl.innerHTML = `
       <div class="workspaceFindFilesEmpty">
@@ -3380,11 +3480,13 @@ function renderWorkspaceFindFiles() {
     });
   }
 
-  // Filter by selected Tag (intersection when both query and Tag are present).
-  if (tagKey) {
-    const tagFiles = getWorkspaceTagFiles(tagKey);
-    const tagPaths = new Set(tagFiles.map((f) => String(f.path || '')));
-    matches = matches.filter((file) => tagPaths.has(String(file.path || '')));
+  // Filter by selected Tags (intersection when query and/or Tags are present).
+  if (workspaceSelectedTags.size > 0) {
+    for (const tagKey of workspaceSelectedTags) {
+      const tagFiles = getWorkspaceTagFiles(tagKey);
+      const tagPaths = new Set(tagFiles.map((f) => String(f.path || '')));
+      matches = matches.filter((file) => tagPaths.has(String(file.path || '')));
+    }
   }
 
   if (!matches.length) {
@@ -3422,6 +3524,7 @@ function renderWorkspaceFindFiles() {
 
   resultsEl.innerHTML = rows;
   resultsEl.hidden = false;
+  updateWorkspaceTagsToggleVisibility();
 }
 
 function renderWorkspaceTagResults(tag) {
@@ -3515,19 +3618,25 @@ function wireWorkspaceTagsPanel() {
       event.preventDefault();
       event.stopPropagation();
 
-      const tag = tagBtn.dataset.tag || '';
+      const tag = (tagBtn.dataset.tag || '').trim();
 
-      __workspaceActiveTag = __workspaceActiveTag === tag ? '' : tag;
+      if (!tag) {
+        return;
+      }
 
-      // Re-render the tag chips (active state) and the shared Find Files
-      // results (filtered by the new selected tag).
-      renderWorkspaceTagsPanel();
+      if (workspaceSelectedTags.has(tag)) {
+        workspaceSelectedTags.delete(tag);
+      } else {
+        workspaceSelectedTags.add(tag);
+      }
+
+      renderWorkspaceTagsPanel({ skipFindFiles: true });
+      renderWorkspaceSelectedTags();
       renderWorkspaceFindFiles();
+      updateWorkspaceTagsToggleVisibility();
 
       log?.(
-        __workspaceActiveTag
-          ? `Workspace Tags: selected #${__workspaceActiveTag}`
-          : 'Workspace Tags: cleared selected tag'
+        `Workspace Find Files: tags selected=${workspaceSelectedTags.size}`
       );
 
       return;
@@ -3537,10 +3646,28 @@ function wireWorkspaceTagsPanel() {
     if (clearTagBtn) {
       event.preventDefault();
       event.stopPropagation();
-      __workspaceActiveTag = '';
-      renderWorkspaceTagsPanel();
+      workspaceSelectedTags.clear();
+      renderWorkspaceTagsPanel({ skipFindFiles: true });
+      renderWorkspaceSelectedTags();
       renderWorkspaceFindFiles();
-      log?.('Workspace Tags: cleared selected tag via clear button');
+      updateWorkspaceTagsToggleVisibility();
+      log?.('Workspace Find Files: cleared all tags');
+      return;
+    }
+
+    const removeChipBtn = event.target?.closest?.('[data-workspace-remove-chip-tag]');
+    if (removeChipBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      const tag = removeChipBtn.dataset.workspaceRemoveChipTag || '';
+      if (tag) {
+        workspaceSelectedTags.delete(tag);
+        renderWorkspaceTagsPanel({ skipFindFiles: true });
+        renderWorkspaceSelectedTags();
+        renderWorkspaceFindFiles();
+        updateWorkspaceTagsToggleVisibility();
+        log?.(`Workspace Find Files: removed tag #${tag}`);
+      }
       return;
     }
 
