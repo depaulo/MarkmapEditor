@@ -206,7 +206,6 @@ async function reopenLastActiveWorkspaceFileIfPossible() {
 
     window.updateWorkspaceActiveFileHighlight?.();
     renderWorkspaceActivePanel?.();
-    renderWorkspaceRelatedPanel?.();
 
     globalThis.MME_APP?.showToast?.(`Reopened ${file.name}`, 'ok', 1600);
     globalThis.MME_APP?.log?.(`Workspace: reopened last active file ${file.path}`);
@@ -712,9 +711,6 @@ async function activateWorkspaceAtExistingBoundary(root) {
     wireWorkspaceSidebarResize?.();
     ensureWorkspaceSearchPanel?.();
     wireWorkspaceSearch?.();
-    ensureWorkspaceRelatedPanel?.();
-    wireWorkspaceRelatedPanel?.();
-    renderWorkspaceRelatedPanel?.();
   } catch (e) {
     globalThis.MME_APP?.log?.(
       `Workspace: sidebar resize restore/wire failed after openWorkspace: ${e?.message || e}`
@@ -1157,7 +1153,6 @@ async function createNamedNote() {
   persistActiveWorkspaceFile();
   window.updateWorkspaceActiveFileHighlight?.();
   renderWorkspaceActivePanel?.();
-  renderWorkspaceRelatedPanel?.();
   renderWorkspaceTasksPanel?.();
 
   // Exactly one Index rebuild, and only when the physical collection is current.
@@ -1398,7 +1393,6 @@ async function openToday() {
   await refreshWorkspaceSidebar();
   window.updateWorkspaceActiveFileHighlight?.();
   renderWorkspaceActivePanel?.();
-  renderWorkspaceRelatedPanel?.();
   renderWorkspaceTasksPanel?.();
   // ACT 2C.1 — exactly one Index rebuild for this Today, and only when the
   // physical collection is current. A failed refresh leaves the previous Index
@@ -1448,7 +1442,6 @@ async function openWorkspaceFile(fileRecord) {
   persistActiveWorkspaceFile();
   window.updateWorkspaceActiveFileHighlight?.();
   renderWorkspaceActivePanel?.();
-  renderWorkspaceRelatedPanel?.();
   window.scheduleWorkspaceIndexRebuild?.('workspace file opened');
   globalThis.MME_APP?.showToast?.(`Opened ✓ ${file.name}`, 'ok');
 }
