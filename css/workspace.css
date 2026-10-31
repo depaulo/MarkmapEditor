@@ -5026,13 +5026,17 @@ html.projects-view-active .splitter::before { content: none; }
 
 /* Find Files section inside Workspace Knowledge */
 #workspaceKnowledgeFindFilesSection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
   margin-top: 10px;
   border-top: 1px solid var(--border-subtle, #d4d4d8);
   padding-top: 8px;
   padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 #workspaceKnowledgeFindFilesSection .workspaceKnowledgeSectionLabel {
@@ -5057,16 +5061,10 @@ html.projects-view-active .splitter::before { content: none; }
 }
 
 /* Tag chips wrap naturally inside Find Files */
-#workspaceKnowledgeFindFilesSection .workspaceTagsList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: flex-start;
-  max-height: none;
-  overflow: visible;
-  padding: 0;
-  margin: 0;
-}
+/* Tag chips role in Find Files: shared controller for Search and Tags.
+   Overflow measurement happens in the collapsed state (max-height 58px)
+   before the expanded class is added. The expanded state is scoped below. */
+
 
 /* Shared result list: bounded vertical scrolling, compact file rows */
 #workspaceKnowledgeFindFilesSection #workspaceSearchResults {
@@ -5289,20 +5287,37 @@ html.projects-view-active .splitter::before { content: none; }
 
 /* Individual tag chip */
 #workspaceKnowledgeFindFilesSection,
-#workspaceKnowledgeFindFilesSection #workspaceFindFilesTagsHost,
-#workspaceKnowledgeFindFilesSection #workspaceTagsPanel,
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+#workspaceKnowledgeFindFilesSection
+  #workspaceFindFilesSearchHost,
+#workspaceKnowledgeFindFilesSection
+  #workspaceFindFilesTagsHost,
+#workspaceKnowledgeFindFilesSection
+  #workspaceFindFilesResultsHost,
+#workspaceKnowledgeFindFilesSection
+  #workspaceSearchPanel,
+#workspaceKnowledgeFindFilesSection
+  #workspaceTagsPanel,
 #workspaceKnowledgeFindFilesSection
   #workspaceTagsPanel .workspacePanelBody {
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  overflow-x: hidden;
 }
 
-#workspaceKnowledgeFindFilesSection #workspaceTagsList {
+#workspaceKnowledgeFindFilesSection
+  #workspaceTagsList {
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
+  align-items: flex-start;
   gap: 4px;
   width: 100%;
   max-width: 100%;
@@ -5313,44 +5328,39 @@ html.projects-view-active .splitter::before { content: none; }
   overflow-x: hidden;
 }
 
-/* Collapsed / expanded tag list */
 #workspaceKnowledgeFindFilesSection:not(.workspaceTagsExpanded)
   #workspaceTagsList {
   max-height: 58px;
   overflow-y: hidden;
-  overflow-x: hidden;
 }
 
 #workspaceKnowledgeFindFilesSection.workspaceTagsExpanded
   #workspaceTagsList {
   max-height: none;
   overflow-y: visible;
-  overflow-x: hidden;
 }
 
-/* Individual tag chip */
-#workspaceKnowledgeFindFilesSection .workspaceTagItem {
+/* Individual tag chip: identical geometry, selected = color + border emphasis only */
+#workspaceKnowledgeFindFilesSection
+  .workspaceTagItem,
+#workspaceKnowledgeFindFilesSection
+  .workspaceTagItem.__active {
   position: static;
+  display: inline-flex;
   flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+  width: auto;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
   margin: 0;
   transform: none;
-  padding: 2px 6px;
-  border: 1px solid var(--menu-border);
-  border-radius: 12px;
-  background: var(--surface-panel);
-  font-size: 11px;
-  cursor: pointer;
+  white-space: nowrap;
 }
 
-#workspaceKnowledgeFindFilesSection .workspaceTagItem.__active {
-  position: static;
-  max-width: 100%;
-  min-width: 0;
-  margin: 0;
-  transform: none;
+#workspaceKnowledgeFindFilesSection
+  .workspaceTagItem.__active {
   color: inherit;
   background: color-mix(
     in srgb,
@@ -5370,10 +5380,18 @@ html.projects-view-active .splitter::before { content: none; }
     );
 }
 
-#workspaceKnowledgeFindFilesSection .workspaceTagName {
+#workspaceKnowledgeFindFilesSection
+  .workspaceTagName {
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#workspaceKnowledgeFindFilesSection .workspaceTagCount {
+  flex: 0 0 auto;
+}
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -5391,3 +5409,89 @@ html.projects-view-active .splitter::before { content: none; }
   overflow-x: hidden;
   box-sizing: border-box;
 }
+
+/* =========================== */
+/* Workspace Knowledge — Find Files result rows and secondary text */
+/* =========================== */
+
+#workspaceKnowledgeFindFilesSection
+  #workspaceSearchResults {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+#workspaceKnowledgeFindFilesSection
+  .workspaceSearchResultItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#workspaceKnowledgeFindFilesSection
+  .workspaceSearchResultBody,
+#workspaceKnowledgeFindFilesSection
+  .workspaceSearchResultName,
+#workspaceKnowledgeFindFilesSection
+  .workspaceSearchResultMeta {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#workspaceKnowledgeFindFilesSection
+  .workspaceSearchResultName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#workspaceKnowledgeFindFilesSection
+  .workspaceSearchResultMeta {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* Secondary typography: empty instruction, result metadata, result paths */
+#workspaceKnowledgeFindFilesSection
+  .workspaceFindFilesEmpty,
+#workspaceKnowledgeFindFilesSection
+  .workspaceSearchResultMeta,
+#workspaceKnowledgeFindFilesSection
+  .workspaceSearchResultPath {
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: inherit;
+  opacity: 0.62;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+}
+
+/* Empty instruction */
+#workspaceKnowledgeFindFilesSection
+  .workspaceFindFilesEmpty {
+  padding: 6px 0;
+}
+
+/* =========================== */
+/* Workspace Knowledge — Find Files note-row alignment */
+/* =========================== */
+
+#workspaceKnowledgeFindFilesSection
+  .workspaceFindFilesNoteRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  width: 100

@@ -3379,30 +3379,86 @@ function normalizeWorkspaceFindFilesOrder() {
 
 // ACT 4 — show/hide the "Show more tags" toggle based on the number of tags.
 function updateWorkspaceTagsToggleVisibility() {
-  requestAnimationFrame(() => {
-    const list = document.getElementById('workspaceTagsList');
-    const toggle = document.getElementById('workspaceFindFilesTagsToggle');
-    const section = document.getElementById('workspaceKnowledgeFindFilesSection');
+  const section =
+    document.getElementById(
+      'workspaceKnowledgeFindFilesSection'
+    );
 
-    if (!list || !toggle || !section) {
-      return;
+  const list =
+    document.getElementById('workspaceTagsList');
+
+  const toggle =
+    document.getElementById(
+      'workspaceFindFilesTagsToggle'
+    );
+
+  if (!section || !list || !toggle) {
+    return;
+  }
+
+  section.classList.toggle(
+    'workspaceTagsExpanded',
+    workspaceTagsExpanded
+  );
+
+  toggle.textContent =
+    workspaceTagsExpanded
+      ? 'Show less'
+      : 'Show more';
+
+  toggle.setAttribute(
+    'aria-expanded',
+    workspaceTagsExpanded
+      ? 'true'
+      : 'false'
+  );
+
+  requestAnimationFrame(() => {
+    const measuringExpanded =
+      section.classList.contains(
+        'workspaceTagsExpanded'
+      );
+
+    if (measuringExpanded) {
+      section.classList.remove(
+        'workspaceTagsExpanded'
+      );
     }
 
-    section.classList.toggle(
-      'workspaceTagsExpanded',
-      workspaceTagsExpanded
-    );
+    const collapsedHeight =
+      list.clientHeight;
 
-    const overflows = list.scrollHeight > list.clientHeight + 1;
+    const fullHeight =
+      list.scrollHeight;
 
-    toggle.hidden = !workspaceTagsExpanded && !overflows;
+    const hasCollapsedOverflow =
+      fullHeight > collapsedHeight + 1;
 
-    toggle.textContent = workspaceTagsExpanded ? 'Show less' : 'Show more';
+    if (measuringExpanded) {
+      section.classList.add(
+        'workspaceTagsExpanded'
+      );
+    }
 
-    toggle.setAttribute(
-      'aria-expanded',
-      workspaceTagsExpanded ? 'true' : 'false'
-    );
+    toggle.hidden =
+      !hasCollapsedOverflow &&
+      !workspaceTagsExpanded;
+
+    // Reset expanded state when overflow disappears.
+    if (!hasCollapsedOverflow) {
+      workspaceTagsExpanded = false;
+
+      section.classList.remove(
+        'workspaceTagsExpanded'
+      );
+
+      toggle.textContent = 'Show more';
+
+      toggle.setAttribute(
+        'aria-expanded',
+        'false'
+      );
+    }
   });
 }
 
@@ -3509,7 +3565,7 @@ function renderWorkspaceFindFiles() {
           data-workspace-search-result="1"
           data-path="${escapeHtml(path)}"
           data-kind="${escapeHtml(kind)}"
-          class="workspaceSearchResultItem"
+          class="workspaceSearchResultItem workspaceFindFilesNoteRow"
         >
           <span class="workspaceSearchResultIcon">${getWorkspaceSearchIcon(kind)}</span>
           <span class="workspaceSearchResultMeta">
@@ -3700,17 +3756,15 @@ function wireWorkspaceTagsPanel() {
     }
   });
 
-  // ACT 4 — tags list toggle: expand / collapse the chip list in the
-  // Find Files section. The CSS uses .workspaceTagsExpanded on the section.
+  // ACT 4 — tags list toggle: one idempotent listener only.
+  // The click toggles workspaceTagsExpanded and re-runs the measurement;
+  // it must NOT re-render Tags, re-render Search results, clear Search,
+  // clear selected Tags, or rebuild the Index.
   const tagsToggle = document.getElementById('workspaceFindFilesTagsToggle');
   if (tagsToggle && !tagsToggle.__workspaceTagsToggleBound) {
     tagsToggle.addEventListener('click', () => {
-      const section = document.getElementById('workspaceKnowledgeFindFilesSection');
-      if (!section) return;
-      section.classList.toggle('workspaceTagsExpanded');
-      const expanded = section.classList.contains('workspaceTagsExpanded');
-      tagsToggle.setAttribute('aria-expanded', String(expanded));
-      tagsToggle.textContent = expanded ? 'Show less' : 'Show more';
+      workspaceTagsExpanded = !workspaceTagsExpanded;
+      updateWorkspaceTagsToggleVisibility();
     });
     tagsToggle.__workspaceTagsToggleBound = true;
   }
@@ -5183,7 +5237,7 @@ function runWorkspaceSearch(query) {
           data-workspace-search-result="1"
           data-path="${escapeHtml(path)}"
           data-kind="${escapeHtml(kind)}"
-          class="workspaceSearchResultItem"
+          class="workspaceSearchResultItem workspaceFindFilesNoteRow"
         >
           <span class="workspaceSearchResultIcon">${getWorkspaceSearchIcon(kind)}</span>
           <span class="workspaceSearchResultMeta">

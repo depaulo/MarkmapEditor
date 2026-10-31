@@ -371,6 +371,7 @@ function buildRelatedSandbox() {
     'const getWorkspaceSearchIcon = () => "x";',
     'const getWorkspaceSearchKindLabel = () => "Note";',
     'const getActiveConceptName = () => __activeName;',
+    'let workspaceLinksMode = "in";',
     '// ACT 3C — the panel sources canonical Links In; this shim reproduces the',
     '// same file set so these fixtures keep testing BADGE RENDERING, not',
     '// resolution (resolution is proven by the Wiki Link suites).',
@@ -385,6 +386,7 @@ function buildRelatedSandbox() {
     '      relationships: [],',
     '    };',
     '  },',
+    '  getLinksOut: () => ({ available: false, relationships: [] }),',
     '};',
     extractBlockFrom(MAIN_SOURCE, 'function escapeHtml(str) {'),
     extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceRelatedPanel() {'),
@@ -434,6 +436,7 @@ function buildTagsSandbox() {
     extractBlockFrom(MAIN_SOURCE, 'function getWorkspaceTagsSummary() {'),
     extractBlockFrom(MAIN_SOURCE, 'function getWorkspaceTagFiles(tag) {'),
     extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagResults(tag) {'),
+    extractBlockFrom(MAIN_SOURCE, 'function applyWorkspaceTagsPresentation(panel) {'),
     extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagsPanel() {'),
     'return {',
     '  renderWorkspaceTagsPanel,',
@@ -835,8 +838,10 @@ function buildTagsSandbox() {
 
   await check('Y41', 'no expandable Active cards and no Workspace Index disclosures', () => {
     const main = stripCssComments(MAIN_SOURCE);
-    return !/workspaceActiveCard|workspaceActiveSummaryCard/.test(main) &&
-      !/<details[\s>]/i.test(INDEX_HTML) &&
+    // ACT 4: workspaceActiveCard shared by Active and Index metric cards.
+    // Metric items are non-interactive via .workspaceIndexMetricItem.
+    // Y41 still forbids <details> and Workspace Index expansion patterns.
+    return !/<details[\s>]/i.test(INDEX_HTML) &&
       !/workspaceIndexDisclosure|workspaceIndexReveal|workspaceIndexExpanded/.test(main);
   });
 
@@ -907,6 +912,7 @@ function buildTagsSandbox() {
       'const getWorkspaceSearchIcon = () => "x";',
       'const getWorkspaceSearchKindLabel = () => "Note";',
       'const getActiveConceptName = () => __activeName;',
+      'let workspaceLinksMode = "in";',
       '// ACT 3C — canonical Links In shim (see the other sandbox for rationale).',
       'globalThis.MME_WIKI_LINKS = {',
       '  getLinksIn: (o) => {',
@@ -919,6 +925,7 @@ function buildTagsSandbox() {
       '      relationships: [],',
       '    };',
       '  },',
+      '  getLinksOut: () => ({ available: false, relationships: [] }),',
       '};',
       extractBlockFrom(src, 'function escapeHtml(str) {'),
       extractBlockFrom(src, 'function renderWorkspaceRelatedPanel() {'),
@@ -956,6 +963,7 @@ function buildTagsSandbox() {
       extractBlockFrom(src, 'function getWorkspaceTagsSummary() {'),
       extractBlockFrom(src, 'function getWorkspaceTagFiles(tag) {'),
       extractBlockFrom(src, 'function renderWorkspaceTagResults(tag) {'),
+      extractBlockFrom(src, 'function applyWorkspaceTagsPresentation(panel) {'),
       extractBlockFrom(src, 'function renderWorkspaceTagsPanel() {'),
       'return { renderWorkspaceTagsPanel, setTags: (m) => { WORKSPACE_INDEX_STATE.tags = m; } };',
     ].join('\n\n'))(els);
