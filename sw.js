@@ -16,7 +16,7 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 // 0.6.3 client will discover a new worker and follow the existing user-controlled
 // Update Ready contract. All changed assets are deterministic precache entries,
 // so a new identity ensures installed clients receive the complete accepted package.
-const APP_VERSION = 'markmap-journal-pwa-0.7.0-projects-foundation';
+const APP_VERSION = 'markmap-journal-pwa-0.8.0-document-workspace-knowledge';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.

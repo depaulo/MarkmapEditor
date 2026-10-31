@@ -17,6 +17,62 @@
   //   limitations?, helpTopic? (links to a Help topic ID).
   const RELEASES = Object.freeze([
     {
+      version: '0.8.0',
+      title: 'MarkmapEditor 0.8.0: Document and Workspace Knowledge',
+      summary: t`Version 0.8.0 introduces a persistent Current Document context with document-scoped Task status cards and local read-only Task and Links details. It consolidates Workspace Index, Search, and Tags into one Workspace Knowledge panel with combined filename/path Search and multi-Tag filtering. Sidebar order is improved with Report moved after Archive.`,
+      expanded: true,
+      changes: [
+        {
+          group: 'Current Document',
+          items: [
+            'Added persistent Current Document context scoped to the exact active file path.',
+            'Added document-scoped Task status cards: Backlog, Open, Ongoing, Done, Links In, Links Out.',
+            'Added local read-only Task details with source-line navigation.',
+            'Added document-scoped Links In (documents referencing the current document) and Links Out (documents referenced by the current document) details.',
+            'Selecting a card opens one local transient detail region; closing it returns to the card view.',
+          ],
+        },
+        {
+          group: 'Workspace Knowledge',
+          items: [
+            'Consolidated Workspace Index, Search, and Tags into one expandable Workspace Knowledge panel.',
+            'Added combined filename/path Search over indexed Workspace files.',
+            'Added multi-Tag filtering with AND semantics across simultaneously active Tags.',
+            'Tag chips use the accepted soft-green active treatment; clicking an active Tag removes the filter.',
+            'Show more and Show less control the available Tags area (bounded to approximately two rows when collapsed).',
+            'Results are vertically bounded and open exact-path files.',
+          ],
+        },
+        {
+          group: 'Sidebar',
+          items: [
+            'Improved Sidebar order: Current Document → Workspace Knowledge → Notes → Knowledge → Tasks → Projects → Archive → Report.',
+            'Moved Report after Archive; Report remains a separate feature.',
+            'Retired separate visible Search, Tags, and Links In panels.',
+          ],
+        },
+        {
+          group: 'Preserved',
+          items: [
+            'Existing Task, Project, Link and Save owners preserved unchanged.',
+            'Knowledge classification (knowledge: true frontmatter) unchanged; not merged into Workspace Knowledge.',
+            'Archive behavior unchanged.',
+          ],
+        },
+      ],
+      tryIt: t`Open a Workspace, select a document, then use Current Document for local Tasks and Links or expand Workspace Knowledge to search and filter files by Tags.`,
+      uiPath: 'Open a document → select a Current Document card → view local details; or expand Workspace Knowledge → search by filename/path → select Tag chips to filter',
+      limitations: [
+        'Current Document quick Task completion and reopen remain deferred.',
+        'Archived files may still contribute to active Workspace Index counts; Archive exclusion from active aggregations remains deferred.',
+        'Search does not expand into Tasks, Projects, or Reports as separate domains.',
+        'Related compatibility code remains internally available but visually hidden.',
+        'Old Sidebar validator debt remains unresolved.',
+        'Release activation remains pending owner authorization.',
+      ],
+      helpTopic: 'journal-current-document',
+    },
+    {
       version: '0.7.0',
       title: 'MarkmapEditor 0.7.0: Projects Foundation',
       summary: t`Version 0.7.0 introduces managed Projects with stable identity, Task Board source\nfiltering, and automatic Save after accepted metadata Quick Actions. Projects can be\ncreated, edited and applied from the Workspace; the Task Board filters by exact source\nfile; Pin, Unpin and Knowledge promotion save automatically.`,
