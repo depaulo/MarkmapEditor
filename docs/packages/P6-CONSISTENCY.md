@@ -1,6 +1,6 @@
 # Package 6 — Expanded-View Behavior and Visual Consistency
 
-**Version target:** 0.8.x (activation NOT authorized)
+**Version target:** 0.8.0 (activation NOT authorized)
 **Package plan:** `docs/architecture/consistency-package-plan.md`
 **Plan-0 inventory:** `docs/architecture/CONSISTENCY_PLAN_0_SURFACE_INVENTORY.md`
 
@@ -13,7 +13,7 @@
 - ACT 2 Slice 2: Inspection and Return Recovery Alignment — complete and accepted (on `development`)
 - ACT 2 Slice 3: Overlay Exit, Transient State, and State-Copy Consistency — complete and accepted (on `development`)
 - ACT 3: Sidebar Information Architecture — complete and accepted (on `development`)
-- ACT 4: File Knowledge Cards and Workspace Index Consolidation — ACTIVE (Slice 1 & Slice 2 complete, on `development`)
+- ACT 4: File Knowledge Cards and Workspace Index Consolidation — ACCEPTED (all slices complete, on `development`)
 
 ## ACT 1 — Projects Source filter (ACCEPTED, commit 66e3b7a)
 
@@ -544,15 +544,42 @@ Render six mutually-exclusive Current Document File Knowledge cards (Backlog Tas
 - Y41/Y42 compliance: no `workspaceActiveCard` / `workspaceActiveSummaryCard` classes, no `<details>` elements, no Links In rename
 - **Validators:** `scripts/workspace-sidebar-visual-validators.cjs`: **93/93 PASS** (S1–S41)
 
-### Remaining Slices (PLAN-0 — implementation NOT AUTHORIZED)
-- Slice 3: Workspace Index compact identity and useful summary
-- Slice 4: Tags presentation through Workspace Index
-- Slice 5: Remove separate Tags panel and reduce redundant Index cards
+### Remaining Slices (ALL COMPLETE — no PLAN-0 remaining)
 
-### Deferred (recorded as future evaluation items)
-- Workspace Index becoming a richer Workspace Context surface;
-- reducing redundant Index number cards (Index counts/filtering unchanged);
-- moving Tags into Workspace Index;
-- adding or changing Task statuses (Backlog/Ongoing/In Progress not canonical unless source-proven);
-- Archive exclusion from active aggregations — archived files may currently contribute to active Workspace Index counts and possibly Search, Tasks, Projects, Tags and Links; a later source-proven ACT must determine the canonical indexing owner and exclude archived sources from active aggregations without scattering consumer-level filters;
-- Reports redesign.
+- Slice 3: Workspace Index compact identity and useful summary — COMPLETE
+- Slice 4: Tags presentation through Workspace Index — COMPLETE
+- Slice 5: Remove separate Tags panel and reduce redundant Index cards — COMPLETE
+
+### Package 6 Closure Record
+
+ACT 4 — File Knowledge Cards and Workspace Index Consolidation: ACCEPTED (commit adac27d).
+
+**Slice 3 — Current Document document-scoped cards and detail region:**
+- Six document-scoped cards: Backlog, Open, Ongoing, Done, Links In, Links Out.
+- Open = canonical `todo` only; categories mutually exclusive.
+- Selecting a card opens one local transient detail region; changing Current Document clears the previous detail.
+- Local Task and Link lists are read-only; Task rows navigate to source line; relationship rows navigate through existing link/file owners.
+- `[ ]` and `[x]` non-interactive status indicators; no Task mutation or Save from local controls.
+
+**Slice 4 — Workspace Knowledge Find Files — Search + multi-Tag consolidation:**
+- Find Files section under Workspace Knowledge: title, description, Search input, Tag chips, Show more/less toggle, results host.
+- `workspaceSelectedTags` Set state owner for multi-tag intersection filtering.
+- `renderWorkspaceFindFiles()` — shared Search + Tag coordinator rendering into `#workspaceSearchResults`.
+- `normalizeWorkspaceFindFilesOrder()` — enforces DOM order.
+- `renderWorkspaceTagsPanel()` chip click handler toggles selection.
+- `renderWorkspaceRelatedPanel()` retired (`data-standalone-retired="1"`).
+- CSS: Find Files section styling, chip styling, section layout; boundary fix accepted.
+
+**Slice 5 — Sidebar order, Help, Release Notes, Package 6 closure:**
+- Sidebar order documented: Current Document → Workspace Knowledge → Notes → Knowledge → Tasks → Projects → Archive → Report.
+- Help topics added for Current Document and Workspace Knowledge.
+- Release Notes 0.8.0 entry added.
+- Version/cache boundary updated (0.7.0 → 0.8.0).
+- Package 6 runtime committed (adac27d); activation pending owner authorization.
+
+## Package 6 Closure Summary
+
+- Package status: CLOSED
+- All ACTs ACCEPTED: ACT 1, ACT 2 (slices 1–3), ACT 3, ACT 4 (slices 1–5)
+- Release candidate: 0.8.0, committed to development, activation NOT authorized
+- No new runtime behavior beyond accepted Package 6 work

@@ -558,6 +558,69 @@ This period focused on:
   </ul>
 </section>`,
     },
+    {
+      id: 'journal-current-document',
+      title: 'Current Document',
+      subtitle: 'Document-scoped Tasks, Links In, and Links Out for the open document.',
+      html: t`<section class="helpSection">
+  <h2>Cards scoped to the current document</h2>
+  <ul>
+    <li>Select a Task or Link card to open local details for that document.</li>
+    <li>Click a result row to navigate to the source line.</li>
+    <li>Close the local detail with the × control.</li>
+    <li>Links In means documents that reference the current document.</li>
+    <li>Links Out means documents referenced by the current document.</li>
+  </ul>
+</section>
+<section class="helpSection">
+  <h2>Card types</h2>
+  <ul>
+    <li><strong>Backlog</strong> — all open Tasks for this document.</li>
+    <li><strong>Open</strong> — canonical todo Tasks only.</li>
+    <li><strong>Ongoing</strong> — Tasks in progress for this document.</li>
+    <li><strong>Done</strong> — completed Tasks for this document.</li>
+    <li><strong>Links In</strong> — documents that link to this document.</li>
+    <li><strong>Links Out</strong> — documents this document links to.</li>
+  </ul>
+  <p>Task categories are mutually exclusive; each Task appears in exactly one card.</p>
+</section>
+<section class="helpSection">
+  <h2>Navigation</h2>
+  <ul>
+    <li>Task rows open the source file at the Task line.</li>
+    <li>Link rows navigate through existing Wiki Link owners.</li>
+    <li>Lists are read-only; no Task completion, reopen, or Save from these controls.</li>
+  </ul>
+</section>`,
+    },
+    {
+      id: 'workspace-knowledge',
+      title: 'Workspace Knowledge',
+      subtitle: 'Search and filter indexed Workspace files by name, path, and Tags.',
+      html: t`<section class="helpSection">
+  <h2>Workspace summary</h2>
+  <ul>
+    <li>The summary describes the indexed Workspace contents.</li>
+    <li>Search finds indexed files by filename or path match.</li>
+    <li>Tag chips filter files by their Tags.</li>
+    <li>Multiple green Tags are active simultaneously.</li>
+    <li>Clicking an active green Tag removes that filter.</li>
+    <li>Search and Tags work together using intersection.</li>
+    <li>Show more and Show less expand or collapse the available Tags.</li>
+    <li>Click a result to open the file.</li>
+  </ul>
+</section>
+<section class="helpSection">
+  <h2>Surface distinction</h2>
+  <ul>
+    <li><strong>Current Document</strong> — scoped to the document you have open; local Tasks and Links only.</li>
+    <li><strong>Workspace Knowledge</strong> — Workspace-wide; Search and Tag filtering across all indexed files.</li>
+    <li><strong>Knowledge classification</strong> — Notes marked with <code>knowledge: true</code> frontmatter; a filtered view over Notes, not a separate collection.</li>
+    <li><strong>Archive</strong> — Notes marked <code>archived: true</code>; removed from active views but not deleted.</li>
+    <li><strong>Report</strong> — a separate feature after Archive; generates virtual Reports from date ranges over Tasks and Projects.</li>
+  </ul>
+</section>`,
+    },
   ];
 
   // Expose the topic registry.

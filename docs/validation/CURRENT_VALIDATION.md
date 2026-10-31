@@ -5,7 +5,7 @@
 
 ## Current required test tier
 
-**Tier: ACT 3 (all slices + structural correction + final Workspace Knowledge ordering correction — targeted Sidebar/Workspace suites + source-contract assertions S1–S27 + executed rendered-DOM gate S28–S41 + `git diff --check`).**
+**Tier: Package 6 closure (targeted Sidebar/Workspace suites + source-contract assertions + `git diff --check` + focused static checks — no validator repairs).**
 
 ## ACT 2 — COMPLETE (all slices accepted)
 
@@ -325,30 +325,42 @@ Browser gate: Task Board opens normally; visible exit works; Escape/close works;
 - ACT 3 rendered-DOM gate: PASS (S28–S41)
 - ACT 3 status: ACCEPTED
 
-## ACT 4 — ACTIVE (Slice 1 & Slice 2 complete)
+## ACT 4 — ACCEPTED
 
 ### ACT 4 Slice 1 — File Knowledge Projection Module (COMPLETE)
-- Created `js/workspace/file-knowledge-projection.js` — pure, document-scoped projection functions:
-  - `projectFileKnowledgeTasks(indexSnapshot, activeSourcePath)` — calls `MME_TASK_LIFECYCLE.projectTasks()` with `scope: 'current-document'` and statusFilters `'backlog'`, `'todo'`, `'ongoing'`, `'done'`
-  - `getFileKnowledgeLinks(activeSourcePath, indexSnapshot, markdownText, sourceTitle)` — wraps `MME_WIKI_LINKS.getLinksIn` / `getLinksOut`
-  - `projectFileKnowledge(...)` — combined projection returning `{tasks, links}`
-- Published as `globalThis.MME_FILE_KNOWLEDGE` / `window.MME_FILE_KNOWLEDGE`
-- Critical semantic fix: `project('open')` → `project('todo')` because lifecycle's `'open'` filter = all non-done (backlog+todo+ongoing=3) breaks mutual exclusivity; `'todo'` = Todo only (=1)
-- `js/app/script-loader.js` — updated to load `file-knowledge-projection.js` after `wiki-links.js`
-- Static gate: `scripts/file-knowledge-projection-validators.cjs`: **30/30 PASS** including mutual-exclusivity checks B03b (no backlog in Open) and B03c (no ongoing in Open)
-- `node --check js/main.js`: PASS
-- `git diff --check`: clean
+- Static gate: scripts/file-knowledge-projection-validators.cjs: 30/30 PASS including mutual-exclusivity checks.
+- node --check js/main.js: PASS
+- git diff --check: clean
 
-### ACT 4 Slice 2 — Workspace Active Panel File Knowledge Cards (COMPLETE)
-- Wired `MME_FILE_KNOWLEDGE.projectFileKnowledgeTasks(WORKSPACE_INDEX_STATE, active.path)` into `renderWorkspaceActivePanel()` in `js/main.js`
-- Four mutually-exclusive task stats cards: Backlog / Open / Todo / Ongoing / Done (replacing previous Open / Done)
-- `['Links out', stats.linksOut]` retained per Y42 contract (no Links In rename, no Task/Wiki Links/Projects/Report change)
-- Y41: no expandable Active cards, no Workspace Index disclosures — no `workspaceActiveCard` / `workspaceActiveSummaryCard` classes added, no `<details>` elements
-- Static gate: `scripts/workspace-sidebar-visual-validators.cjs`: **93/93 PASS** (S1–S41)
-- `node --check js/main.js`: PASS
-- `git diff --check`: clean
+### ACT 4 Slice 2 — Workspace Knowledge Find Files — Search + multi-Tag consolidation (COMPLETE)
+- Find Files section under Workspace Knowledge with Search input, Tag chips, Show more/less toggle, results host.
+- workspaceSelectedTags Set state owner for multi-tag intersection filtering.
+- renderWorkspaceFindFiles() — shared Search + Tag coordinator.
+- normalizeWorkspaceFindFilesOrder() — enforces DOM order.
+- renderWorkspaceTagsPanel() chip click handler toggles selection.
+- renderWorkspaceRelatedPanel() retired (data-standalone-retired="1").
+- Static: node --check js/main.js: PASS; git diff --check: PASS.
+- Browser acceptance: tag select/deselect; multi-tag intersection filtering; result navigation; standalone Links In retired; Current Document functional; Find Files boundary fix accepted.
+
+### ACT 4 Slice 3 — Current Document document-scoped cards and detail region (COMPLETE)
+- Six document-scoped cards: Backlog, Open, Ongoing, Done, Links In, Links Out.
+- Open = canonical todo only; categories mutually exclusive.
+- Local Task and Link lists are read-only; no Task mutation or Save from local controls.
+
+### ACT 4 Slice 4 — Workspace Knowledge panel consolidation (COMPLETE)
+- Workspace Index evolved into Workspace Knowledge panel.
+- Find Files integrates Workspace Search and Tags.
+- Multiple Tags use AND semantics; one shared result list.
+- Available Tags bounded to ~2 rows; Show more/less control expansion.
+
+### ACT 4 Slice 5 — Sidebar order, Help, Release Notes, Package 6 closure (COMPLETE)
+- Sidebar order documented: Current Document → Workspace Knowledge → Notes → Knowledge → Tasks → Projects → Archive → Report.
+- Help topics added for Current Document and Workspace Knowledge.
+- Release Notes 0.8.0 entry added.
+- Version/cache boundary updated (0.7.0 → 0.8.0).
 
 ## Package 6 Release Gate
 
 - Package 6 release gate: CLOSED
-- 0.8.0 activation: NOT AUTHORIZED
+- 0.8.0 activation: NOT AUTHORIZED (pending owner authorization)
+- Release candidate committed (adac27d) awaiting activation decision.
