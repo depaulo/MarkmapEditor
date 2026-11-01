@@ -5531,3 +5531,81 @@ html.projects-view-active .splitter::before { content: none; }
   max-width: 100%;
   box-sizing: border-box;
 }
+
+/* ACT 5 — Current Document Edit/Read mode control */
+#workspaceActivePanel
+  .workspaceDocumentModeRegion {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  margin-top: 6px;
+}
+
+#workspaceActivePanel
+  .workspaceDocumentModeControl {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  min-width: 112px;
+  border: 1px solid var(--menu-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#workspaceActivePanel
+  .workspaceDocumentModeButton {
+  min-width: 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+#workspaceActivePanel
+  .workspaceDocumentModeButton.__active {
+  background: color-mix(
+    in srgb,
+    var(--accent) 18%,
+    transparent
+  );
+}
+
+#workspaceActivePanel
+  .workspaceDocumentModeButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+#workspaceActivePanel
+  .workspaceDocumentModeButton:disabled {
+  cursor: wait;
+  opacity: 0.64;
+}
+
+#workspaceActivePanel
+  .workspaceDocumentModeStatus,
+#workspaceActivePanel
+  .workspaceDocumentDirtyState {
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+#workspaceActivePanel
+  .workspaceDocumentModeStatus {
+  opacity: 0.64;
+}
+
+#workspaceActivePanel
+  .workspaceDocumentDirtyState {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Re-add .workspaceActiveName from earlier */
+.workspaceActiveName {

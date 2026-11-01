@@ -4471,6 +4471,7 @@ function finalizeWorkspaceSidebar() {
     wireWorkspaceIndexRefreshButton?.();
     wireWorkspaceIndexOpenButton?.();
     wireWorkspaceActivePanel?.();
+    wireWorkspaceDocumentModeControl?.();
     wireWorkspaceTasksPanel();
     wireWorkspaceTagsPanel?.();
     wireWorkspaceProjectsPanel();
@@ -5089,6 +5090,12 @@ function renderWorkspaceActivePanel() {
         : ''
     }
 
+    <div id="documentReadSurface"
+      class="documentReadSurface"
+      hidden
+      aria-label="Rendered document"
+    ></div>
+
     <div id="workspaceActiveActions" class="workspaceActiveActions" hidden></div>
 
     ${
@@ -5097,8 +5104,7 @@ function renderWorkspaceActivePanel() {
         : '<div class="workspaceActiveMeta">No tags</div>'
     }
 
-    <div class="workspaceActiveCards">
-      ${taskCard('backlog', 'Backlog', taskCounts.backlog, workspaceActiveDetail?.mode === 'backlog' && workspaceActiveDetail?.path === active.path)}
+    <div\n      id=\"workspaceDocumentModeRegion\"\n      class=\"workspaceDocumentModeRegion\"\n    >\n      <div\n        id=\"workspaceDocumentModeControl\"\n        class=\"workspaceDocumentModeControl\"\n        role=\"group\"\n        aria-label=\"Document mode\"\n      >\n        <button\n          id=\"workspaceDocumentModeEdit\"\n          type=\"button\"\n          class=\"workspaceDocumentModeButton\"\n          data-document-mode=\"edit\"\n          aria-pressed=\"true\"\n        >\n          Edit\n        </button>\n        <button\n          id=\"workspaceDocumentModeRead\"\n          type=\"button\"\n          class=\"workspaceDocumentModeButton\"\n          data-document-mode=\"read\"\n          aria-pressed=\"false\"\n        >\n          Read\n        </button>\n      </div>\n      <span\n        id=\"workspaceDocumentModeStatus\"\n        class=\"workspaceDocumentModeStatus\"\n        aria-hidden=\"true\"\n      >\n        Editing\n      </span>\n      <span\n        id=\"workspaceDocumentDirtyState\"\n        class=\"workspaceDocumentDirtyState\"\n        hidden\n      >\n        Unsaved\n      </span>\n    </div>\n\n    <div class=\"workspaceActiveCards\">\n      ${taskCard('backlog', 'Backlog', taskCounts.backlog, workspaceActiveDetail?.mode === 'backlog' && workspaceActiveDetail?.path === active.path)}
       ${taskCard('todo', 'Open', taskCounts.open, workspaceActiveDetail?.mode === 'todo' && workspaceActiveDetail?.path === active.path)}
       ${taskCard('ongoing', 'Ongoing', taskCounts.ongoing, workspaceActiveDetail?.mode === 'ongoing' && workspaceActiveDetail?.path === active.path)}
       ${taskCard('done', 'Done', taskCounts.done, workspaceActiveDetail?.mode === 'done' && workspaceActiveDetail?.path === active.path)}
@@ -5123,6 +5129,59 @@ function renderWorkspaceActivePanel() {
 function wireWorkspaceActivePanel() {
   ensureWorkspaceActivePanel();
 }
+
+function findDocumentReadSurface() {
+  return document.getElementById('documentReadSurface');
+}
+
+// Determine the CodeMirror presentation wrapper element.
+// If cm.getWrapperElement() is available (CodeMirror 6+), use it;
+// otherwise fall back to the scroller element.
+function getDocumentEditSurfaceElement() {
+  const cm = globalThis.__cm;
+  if (
+    cm &&
+    typeof cm.getWrapperElement === 'function'
+  ) {
+    return cm.getWrapperElement();
+  }
+  // Fallback: the CodeMirror scroller element
+  if (cm && cm.state && cm.state.scroller) {
+    return cm.state.scroller;
+  }
+  return null;
+}
+
+// ACT 5 Slice 2.5 — toggle the Edit surface (CodeMirror wrapper) visibility.
+// Do NOT use MME_EDITOR_VISIBILITY.hideEditor() — that owner collapses the
+// entire Editor pane. Instead, swap the visible child inside the Editor pane.
+function setDocumentEditSurfaceVisible(visible) {
+  const editSurface = getDocumentEditSurfaceElement();
+  if (!editSurface) return false;
+
+  editSurface.hidden = !visible;
+  editSurface.style.display = visible ? '' : 'none';
+
+  editSurface.setAttribute(
+    'aria-hidden',
+    visible ? 'false' : 'true'
+  );
+
+  if (
+    visible &&
+    globalThis.__cm &&
+    typeof globalThis.__cm.refresh === 'function'
+  ) {
+    requestAnimationFrame(() => {
+      globalThis.__cm.refresh();
+    });
+  }
+
+  return true;
+}
+
+// ACT 5 Slice 2.5 — sync document-mode control after renders.
+try { renderWorkspaceDocumentModeControl?.(); } catch {}
 
 function renderWorkspaceIndexSummary() {
   const panel = ensureWorkspaceIndexPanel();
@@ -12843,35 +12902,26 @@ async function switchToRead() {
 async function switchToEdit() {
   if (documentMode === 'edit') return true;
 
-  // 1. Hide the Read HTML document surface
-  htmlPane.style.display = 'none';
+  const readSurface = findDocumentReadSurface();
 
-  // 2. Show the same existing editor instance via existing visibility owner
-  if (window.MME_EDITOR_VISIBILITY?.showEditor) {
-    window.MME_EDITOR_VISIBILITY.showEditor();
-  } else {
-    editorEl.style.display = 'block';
-    document.body.classList.remove('editor-hidden');
+  if (readSurface) {
+    readSurface.hidden = true;
+    readSurface.setAttribute('aria-hidden', 'true');
   }
 
-  // 3. Keep md.value, currentSaveHandle, currentFileName, dirty unchanged
+  // Show CodeMirror wrapper inside the Editor area (preserve column geometry)
+  setDocumentEditSurfaceVisible(true);
 
-  // 4. Restore cursor, selection and scroll after editor is visible
-  requestAnimationFrame(() => {
-    restoreEditorPresentationState();
-    try { globalThis.__cm?.refresh?.(); } catch {}
-  });
-
-  // 5. Preserve map zoom/pan (do not call applyViewState with new state)
-  // Markmap instance and zoom/pan are unchanged by mode switch
-
-  // 6. Set documentMode to 'edit' only after editor surface is restored
   documentMode = 'edit';
-  setStatus(modeLabel());
-  updateDocumentTitle();
+
+  restoreEditorPresentationState();
+
   try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
 
-  return true;
+  // ACT 5 Slice 1 — sync document-mode control after transition.
+  try { renderWorkspaceDocumentModeControl?.(); } catch {}
+
+  log?.('ACT5: Edit surface restored');
 }
 
 // Bridge function for ModeSession to apply documentMode
