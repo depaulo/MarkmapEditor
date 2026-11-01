@@ -5492,6 +5492,42 @@ html.projects-view-active .splitter::before { content: none; }
   .workspaceFindFilesNoteRow {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   gap: 7px;
-  width: 100
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  text-align: left;
+  color: inherit;
+}
+
+#workspaceKnowledgeFindFilesSection
+  .workspaceSearchResultBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#workspaceKnowledgeFindFilesSection
+  .workspaceSearchResultName {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#workspaceKnowledgeFindFilesSection
+  .workspaceSearchResultMeta,
+#workspaceKnowledgeFindFilesSection
+  .workspaceFindFilesResultDate {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}

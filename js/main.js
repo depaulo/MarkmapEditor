@@ -3557,22 +3557,54 @@ function renderWorkspaceFindFiles() {
     .map((file) => {
       const path = String(file.path || '');
       const kind = String(file.kind || 'notes');
-      const name = String(file.title || file.name || '');
-      const fileName = String(file.name || '');
+      const displayTitle =
+        getWorkspaceNoteTitle(file) ||
+        file.name ||
+        file.path ||
+        'Untitled';
+      const escapedTitle = escapeHtml(displayTitle);
+      const secondaryIdentity = file.name || file.path;
+      const escapedSecondary = escapeHtml(secondaryIdentity);
+
+      const dateHtml = file.date
+        ? `<span class="workspaceJournalDate workspaceFindFilesResultDate">${escapeHtml(
+            String(file.date)
+          )}</span>`
+        : '';
+
       return `
         <button
           type="button"
           data-workspace-search-result="1"
           data-path="${escapeHtml(path)}"
           data-kind="${escapeHtml(kind)}"
+          title="${escapeHtml(path)}"
           class="workspaceSearchResultItem workspaceFindFilesNoteRow"
         >
-          <span class="workspaceSearchResultIcon">${getWorkspaceSearchIcon(kind)}</span>
-          <span class="workspaceSearchResultMeta">
-            <span class="workspaceSearchResultName">${escapeHtml(name)}</span>
-            <span class="workspaceSearchResultKind">${escapeHtml(getWorkspaceSearchKindLabel(kind))}</span>
+          <span
+            class="workspaceJournalIcon workspaceSearchResultIcon"
+            aria-hidden="true"
+          >
+            ${getWorkspaceSearchIcon(kind)}
           </span>
-          <span class="workspaceSearchResultPath">${escapeHtml(fileName)} · ${escapeHtml(path)}</span>
+
+          <span
+            class="workspaceJournalBody workspaceSearchResultBody"
+          >
+            <span
+              class="workspaceJournalTitle workspaceSearchResultName"
+            >
+              ${escapedTitle}
+            </span>
+
+            <span
+              class="workspaceNoteSecondary workspaceSearchResultMeta"
+            >
+              ${escapedSecondary}
+            </span>
+
+            ${dateHtml}
+          </span>
         </button>
       `;
     })
@@ -6500,6 +6532,20 @@ globalThis.MME_APP = {
     setStatus(modeLabel());
     updateDocumentTitle();
   },
+
+  // ACT 5 Slice 1 — Document-mode bridge (Edit/Read).
+  // Returns the current document-mode without exposing mutable state.
+  getDocumentMode() {
+    return documentMode;
+  },
+
+  // Applies the requested document-mode ('edit' or 'read') via the
+  // internal transition functions. Does not expose mutable state.
+  applyDocumentMode(mode) {
+    if (mode === 'read') return switchToRead();
+    if (mode === 'edit') return switchToEdit();
+    return Promise.resolve(false);
+  },
 };
 
 async function resetServiceWorkerAndCaches() {
@@ -8276,6 +8322,66 @@ let dirty = false;
 let currentFileName = 'markmap.md';
 
 let currentSaveHandle = null;
+
+// ACT 5 Slice 1 — Document-mode owner (Edit/Read).
+// Edit/Read is NOT an application context. It is a document-surface mode only.
+let documentMode = 'edit';
+
+function getDocumentMode() {
+  return documentMode;
+}
+
+// ACT 5 Slice 1 — Editor presentation state capture/restore.
+// CodeMirror instance is globalThis.__cm. Capture only what is needed to
+// restore the user's view when switching back to Edit.
+const documentModeState = {
+  cursor: null,
+  selection: null,
+  editorScrollTop: 0
+};
+
+function captureEditorPresentationState() {
+  try {
+    const cm = globalThis.__cm;
+    if (cm && typeof cm.getCursor === 'function') {
+      const anchor = cm.getCursor('anchor');
+      const head = cm.getCursor('head');
+      documentModeState.cursor = cm.getCursor();
+      documentModeState.selection = anchor && head ? { anchor, head } : null;
+    }
+    const scrollInfo = cm && typeof cm.getScrollInfo === 'function'
+      ? cm.getScrollInfo()
+      : null;
+    documentModeState.editorScrollTop = Number(scrollInfo?.top || 0);
+  } catch (e) {
+    log?.(`captureEditorPresentationState: ${e?.message || e}`);
+  }
+}
+
+function restoreEditorPresentationState() {
+  try {
+    const cm = globalThis.__cm;
+    if (!cm) return;
+    const selection = documentModeState.selection;
+    if (
+      selection?.anchor &&
+      selection?.head &&
+      typeof cm.setSelection === 'function'
+    ) {
+      try { cm.setSelection(selection.anchor, selection.head); } catch {}
+    } else if (
+      documentModeState.cursor &&
+      typeof cm.setCursor === 'function'
+    ) {
+      try { cm.setCursor(documentModeState.cursor); } catch {}
+    }
+    if (typeof cm.scrollTo === 'function') {
+      try { cm.scrollTo(null, documentModeState.editorScrollTop); } catch {}
+    }
+  } catch (e) {
+    log?.(`restoreEditorPresentationState: ${e?.message || e}`);
+  }
+}
 let externalHandleGeneration = 0;
 let internalSaveInProgress = false;
 let fileLastSeenModified = 0;
@@ -12691,6 +12797,88 @@ document.getElementById('btnHtmlEdgeOpen')?.addEventListener('click', showHtmlPr
 // no longer applies because the top-toolbar access point was removed.
 if (window.MME_EDITOR_VISIBILITY) {
   window.MME_EDITOR_VISIBILITY.wireEditorVisibilityControls();
+}
+
+// ================================
+// ACT 5 Slice 1 — Document-mode switching (Edit/Read)
+// These functions implement the internal Edit/Read contract.
+// They do NOT change application context, handle, dirty state, or trigger Save.
+// ================================
+
+async function switchToRead() {
+  if (documentMode === 'read') return true;
+
+  // 1. Capture editor presentation state (cursor, selection, scroll)
+  captureEditorPresentationState();
+
+  // 2. Keep md.value, currentSaveHandle, currentFileName, dirty unchanged
+  //    (these remain owned by existing state)
+
+  // 3. Render current in-memory Markdown to HTML via existing renderer
+  const html = await renderHtmlWithShiki(md.value);
+
+  // 4. Show HTML document surface (htmlPane) using existing show primitive
+  htmlPane.style.display = 'block';
+  htmlPane.innerHTML = html;
+  buildHtmlHeadingIndex?.();
+  log?.('ACT5: Read surface shown');
+
+  // 5. Hide CodeMirror through existing visibility owner
+  if (window.MME_EDITOR_VISIBILITY?.hideEditor) {
+    window.MME_EDITOR_VISIBILITY.hideEditor();
+  } else {
+    editorEl.style.display = 'none';
+    document.body.classList.add('editor-hidden');
+  }
+
+  // 6. Set documentMode to 'read' only after surface transition succeeds
+  documentMode = 'read';
+  setStatus(modeLabel());
+  updateDocumentTitle();
+  try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
+
+  return true;
+}
+
+async function switchToEdit() {
+  if (documentMode === 'edit') return true;
+
+  // 1. Hide the Read HTML document surface
+  htmlPane.style.display = 'none';
+
+  // 2. Show the same existing editor instance via existing visibility owner
+  if (window.MME_EDITOR_VISIBILITY?.showEditor) {
+    window.MME_EDITOR_VISIBILITY.showEditor();
+  } else {
+    editorEl.style.display = 'block';
+    document.body.classList.remove('editor-hidden');
+  }
+
+  // 3. Keep md.value, currentSaveHandle, currentFileName, dirty unchanged
+
+  // 4. Restore cursor, selection and scroll after editor is visible
+  requestAnimationFrame(() => {
+    restoreEditorPresentationState();
+    try { globalThis.__cm?.refresh?.(); } catch {}
+  });
+
+  // 5. Preserve map zoom/pan (do not call applyViewState with new state)
+  // Markmap instance and zoom/pan are unchanged by mode switch
+
+  // 6. Set documentMode to 'edit' only after editor surface is restored
+  documentMode = 'edit';
+  setStatus(modeLabel());
+  updateDocumentTitle();
+  try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
+
+  return true;
+}
+
+// Bridge function for ModeSession to apply documentMode
+function applyDocumentMode(mode) {
+  if (mode === 'read') return switchToRead();
+  if (mode === 'edit') return switchToEdit();
+  return Promise.resolve(false);
 }
 
 async function copyHtmlPreviewText() {
