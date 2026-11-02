@@ -3551,7 +3551,7 @@ function renderWorkspaceFindFiles() {
     return;
   }
 
-  // Render matching files using existing compact file-row language.
+  // Render matching files using the proven Note row structure.
   const rows = matches
     .slice(0, 20)
     .map((file) => {
@@ -3559,20 +3559,35 @@ function renderWorkspaceFindFiles() {
       const kind = String(file.kind || 'notes');
       const name = String(file.title || file.name || '');
       const fileName = String(file.name || '');
+      const displayTitle = getWorkspaceNoteTitle(file) || name || fileName || path || 'Untitled';
+      const secondaryIdentity = file.name || '';
+      const date = file.date ? `${file.date}` : '';
       return `
         <button
           type="button"
           data-workspace-search-result="1"
           data-path="${escapeHtml(path)}"
           data-kind="${escapeHtml(kind)}"
-          class="workspaceSearchResultItem workspaceFindFilesNoteRow"
+          class="workspaceSearchResultItem workspaceFindFilesNoteRow workspaceFileItem workspaceJournalItem"
         >
-          <span class="workspaceSearchResultIcon">${getWorkspaceSearchIcon(kind)}</span>
-          <span class="workspaceSearchResultMeta">
-            <span class="workspaceSearchResultName">${escapeHtml(name)}</span>
-            <span class="workspaceSearchResultKind">${escapeHtml(getWorkspaceSearchKindLabel(kind))}</span>
+          <span
+            class="workspaceJournalIcon workspaceSearchResultIcon"
+            aria-hidden="true"
+          >${getWorkspaceSearchIcon(kind)}</span>
+          <span
+            class="workspaceJournalBody workspaceSearchResultBody"
+          >
+            <span
+              class="workspaceJournalTitle workspaceSearchResultName"
+            >${displayTitle}</span>
+            <span
+              class="workspaceNoteSecondary workspaceSearchResultMeta"
+            >${secondaryIdentity}</span>
+            ${date ? `
+              <span
+                class="workspaceJournalDate workspaceFindFilesResultDate"
+              >${escapeHtml(date)}</span>` : ''}
           </span>
-          <span class="workspaceSearchResultPath">${escapeHtml(fileName)} · ${escapeHtml(path)}</span>
         </button>
       `;
     })
@@ -5259,20 +5274,35 @@ function runWorkspaceSearch(query) {
       const kind = String(file.kind || 'notes');
       const name = String(file.title || file.name || '');
       const fileName = String(file.name || '');
+      const displayTitle = getWorkspaceNoteTitle(file) || name || fileName || path || 'Untitled';
+      const secondaryIdentity = file.name || '';
+      const date = file.date ? `${file.date}` : '';
       return `
         <button
           type="button"
           data-workspace-search-result="1"
           data-path="${escapeHtml(path)}"
           data-kind="${escapeHtml(kind)}"
-          class="workspaceSearchResultItem workspaceFindFilesNoteRow"
+          class="workspaceSearchResultItem workspaceFindFilesNoteRow workspaceFileItem workspaceJournalItem"
         >
-          <span class="workspaceSearchResultIcon">${getWorkspaceSearchIcon(kind)}</span>
-          <span class="workspaceSearchResultMeta">
-            <span class="workspaceSearchResultName">${escapeHtml(name)}</span>
-            <span class="workspaceSearchResultKind">${escapeHtml(getWorkspaceSearchKindLabel(kind))}</span>
+          <span
+            class="workspaceJournalIcon workspaceSearchResultIcon"
+            aria-hidden="true"
+          >${getWorkspaceSearchIcon(kind)}</span>
+          <span
+            class="workspaceJournalBody workspaceSearchResultBody"
+          >
+            <span
+              class="workspaceJournalTitle workspaceSearchResultName"
+            >${displayTitle}</span>
+            <span
+              class="workspaceNoteSecondary workspaceSearchResultMeta"
+            >${secondaryIdentity}</span>
+            ${date ? `
+              <span
+                class="workspaceJournalDate workspaceFindFilesResultDate"
+              >${escapeHtml(date)}</span>` : ''}
           </span>
-          <span class="workspaceSearchResultPath">${escapeHtml(fileName)} · ${escapeHtml(path)}</span>
         </button>
       `;
     })

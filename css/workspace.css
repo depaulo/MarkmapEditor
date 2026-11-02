@@ -5144,22 +5144,18 @@ html.projects-view-active .splitter::before { content: none; }
   white-space: nowrap;
 }
 
+/* workspaceSearchResultKind and workspaceSearchResultPath are no longer
+   rendered as standalone elements in Find Files results (now use Note
+   hierarchy: title + secondary identity + optional date). Keep only the
+   max-width constraints and readable ellipsis; do not reserve space for
+   duplicate path lines. */
 #workspaceKnowledgeFindFilesSection .workspaceSearchResultKind {
-  font-size: 10px;
-  opacity: 0.65;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: none;
 }
 
+/* workspaceSearchResultPath is no longer rendered; collapse to zero width */
 #workspaceKnowledgeFindFilesSection .workspaceSearchResultPath {
-  flex: 0 0 auto;
-  font-size: 10px;
-  opacity: 0.6;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
+  display: none;
 }
 
 /* No duplicate borders around embedded Search/Tags owners inside Find Files */
@@ -5431,12 +5427,15 @@ html.projects-view-active .splitter::before { content: none; }
 }
 
 /* =========================== */
-/* Workspace Knowledge — Find Files result rows and secondary text */
-/* =========================== */
+/* Workspace Knowledge — Find Files note-row alignment */
+/* The following overrides let the normal Note classes own the row hierarchy.
+   Do not redefine display, title font, icon size, padding, border, hover,
+   or active styling unless DevTools proves a Find Files rule overrides the
+   normal Note rule. */
 
+/* Bounded result list — preserved per requirement A12 */
 #workspaceKnowledgeFindFilesSection
   #workspaceSearchResults {
-  display: block;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -5446,56 +5445,37 @@ html.projects-view-active .splitter::before { content: none; }
   box-sizing: border-box;
 }
 
+/* Container-level width constraint */
 #workspaceKnowledgeFindFilesSection
-  .workspaceSearchResultItem {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  .workspaceFindFilesNoteRow {
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
 }
 
+/* Body owns the text hierarchy */
 #workspaceKnowledgeFindFilesSection
-  .workspaceSearchResultBody,
-#workspaceKnowledgeFindFilesSection
-  .workspaceSearchResultName,
-#workspaceKnowledgeFindFilesSection
-  .workspaceSearchResultMeta {
+  .workspaceFindFilesNoteRow
+  .workspaceJournalBody {
+  width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
 }
 
+/* Title, secondary and date respect the same constraints */
 #workspaceKnowledgeFindFilesSection
-  .workspaceSearchResultName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
+  .workspaceFindFilesNoteRow
+  .workspaceJournalTitle,
 #workspaceKnowledgeFindFilesSection
-  .workspaceSearchResultMeta {
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-
-/* Secondary typography: empty instruction, result metadata, result paths */
+  .workspaceFindFilesNoteRow
+  .workspaceNoteSecondary,
 #workspaceKnowledgeFindFilesSection
-  .workspaceFindFilesEmpty,
-#workspaceKnowledgeFindFilesSection
-  .workspaceSearchResultMeta,
-#workspaceKnowledgeFindFilesSection
-  .workspaceSearchResultPath {
+  .workspaceFindFilesNoteRow
+  .workspaceJournalDate {
   max-width: 100%;
   min-width: 0;
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.35;
-  color: inherit;
-  opacity: 0.62;
-  overflow-wrap: anywhere;
-  box-sizing: border-box;
 }
 
 /* Empty instruction */
@@ -5503,15 +5483,3 @@ html.projects-view-active .splitter::before { content: none; }
   .workspaceFindFilesEmpty {
   padding: 6px 0;
 }
-
-/* =========================== */
-/* Workspace Knowledge — Find Files note-row alignment */
-/* =========================== */
-
-#workspaceKnowledgeFindFilesSection
-  .workspaceFindFilesNoteRow {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 7px;
-  width: 100
