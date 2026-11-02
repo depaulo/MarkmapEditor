@@ -298,10 +298,13 @@
       </div>
     `;
 
+    const archiveGroup = document.getElementById('workspaceArchiveGroup');
     const archivePanel = document.getElementById('workspaceArchivePanel');
 
-    if (archivePanel && archivePanel.parentNode === host) {
-      host.insertBefore(panel, archivePanel.nextSibling);
+    if (archiveGroup && archiveGroup.parentNode === host) {
+      host.insertBefore(panel, archiveGroup);
+    } else if (archivePanel && archivePanel.parentNode === host) {
+      host.insertBefore(panel, archivePanel);
     } else {
       host.appendChild(panel);
     }

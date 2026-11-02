@@ -3557,54 +3557,22 @@ function renderWorkspaceFindFiles() {
     .map((file) => {
       const path = String(file.path || '');
       const kind = String(file.kind || 'notes');
-      const displayTitle =
-        getWorkspaceNoteTitle(file) ||
-        file.name ||
-        file.path ||
-        'Untitled';
-      const escapedTitle = escapeHtml(displayTitle);
-      const secondaryIdentity = file.name || file.path;
-      const escapedSecondary = escapeHtml(secondaryIdentity);
-
-      const dateHtml = file.date
-        ? `<span class="workspaceJournalDate workspaceFindFilesResultDate">${escapeHtml(
-            String(file.date)
-          )}</span>`
-        : '';
-
+      const name = String(file.title || file.name || '');
+      const fileName = String(file.name || '');
       return `
         <button
           type="button"
           data-workspace-search-result="1"
           data-path="${escapeHtml(path)}"
           data-kind="${escapeHtml(kind)}"
-          title="${escapeHtml(path)}"
           class="workspaceSearchResultItem workspaceFindFilesNoteRow"
         >
-          <span
-            class="workspaceJournalIcon workspaceSearchResultIcon"
-            aria-hidden="true"
-          >
-            ${getWorkspaceSearchIcon(kind)}
+          <span class="workspaceSearchResultIcon">${getWorkspaceSearchIcon(kind)}</span>
+          <span class="workspaceSearchResultMeta">
+            <span class="workspaceSearchResultName">${escapeHtml(name)}</span>
+            <span class="workspaceSearchResultKind">${escapeHtml(getWorkspaceSearchKindLabel(kind))}</span>
           </span>
-
-          <span
-            class="workspaceJournalBody workspaceSearchResultBody"
-          >
-            <span
-              class="workspaceJournalTitle workspaceSearchResultName"
-            >
-              ${escapedTitle}
-            </span>
-
-            <span
-              class="workspaceNoteSecondary workspaceSearchResultMeta"
-            >
-              ${escapedSecondary}
-            </span>
-
-            ${dateHtml}
-          </span>
+          <span class="workspaceSearchResultPath">${escapeHtml(fileName)} · ${escapeHtml(path)}</span>
         </button>
       `;
     })
@@ -4284,7 +4252,7 @@ function ensureWorkspaceSidebarGroups() {
   // any ungrouped content such as Report and Navigation History).
   // Final flat owner-approved order:
   //   Controls → Current Document → Workspace Index → Tags → Search
-  //   → Links In → Notes → Knowledge → Tasks → Projects → Archive
+  //   → Links In → Notes → Knowledge → Tasks → Projects → Report → Archive
   const groupOrder = [
     'workspaceControlsGroup',
     'workspaceCurrentDocumentGroup',
@@ -4296,7 +4264,6 @@ function ensureWorkspaceSidebarGroups() {
     'workspaceKnowledgeGroup',
     'workspaceTasksGroup',
     'workspaceProjectsGroup',
-    'workspaceArchiveGroup',
   ];
   let groupAnchor = host.querySelector('.workspaceHeader') || null;
   for (const groupId of groupOrder) {
@@ -4317,6 +4284,8 @@ function ensureWorkspaceSidebarGroups() {
   return groups;
 }
 
+normalizeWorkspaceSidebarTail();
+
 // ACT A: Idempotent panel order normalizer.
 // Moves existing nodes into canonical order using insertBefore/appendChild.
 // Tolerates absent panels; preserves listeners and collapse state.
@@ -4331,7 +4300,7 @@ function normalizeWorkspacePanelOrder() {
   // Panel order within each group (by panel ID). Each group holds exactly
   // one panel for the accepted flat visible order:
   //   Controls → Current Document → Workspace Knowledge → Notes → Knowledge
-  //   → Tasks → Projects → Archive
+  //   → Tasks → Projects → Report → Archive
   const groupPanelOrders = {
     workspaceControlsGroup: [],
     workspaceCurrentDocumentGroup: ['workspaceActivePanel'],
@@ -4352,7 +4321,6 @@ function normalizeWorkspacePanelOrder() {
     'workspaceKnowledgeGroup',
     'workspaceTasksGroup',
     'workspaceProjectsGroup',
-    'workspaceArchiveGroup',
   ];
 
   // Order groups in the host (after header, before ungrouped content).
@@ -4397,6 +4365,7 @@ function normalizeWorkspacePanelOrder() {
 
   // Navigation History controls remain last (workspaceNavControls).
   // It is created by workspace-sidebar.js and appended at the end already.
+  normalizeWorkspaceSidebarTail();
 }
 
 // ACT A: Idempotent post-readiness finalizer.
@@ -4471,7 +4440,6 @@ function finalizeWorkspaceSidebar() {
     wireWorkspaceIndexRefreshButton?.();
     wireWorkspaceIndexOpenButton?.();
     wireWorkspaceActivePanel?.();
-    wireWorkspaceDocumentModeControl?.();
     wireWorkspaceTasksPanel();
     wireWorkspaceTagsPanel?.();
     wireWorkspaceProjectsPanel();
@@ -4528,6 +4496,7 @@ function finalizeWorkspaceSidebar() {
     } catch {}
 
     log?.('Workspace: panels setup complete');
+    normalizeWorkspaceSidebarTail();
   } catch (e) {
     log?.(`Workspace: panels finalize failed: ${e?.message || e}`);
   }
@@ -4543,6 +4512,32 @@ function setupWorkspacePanels() {
 
   // Delegate to the idempotent finalizer.
   finalizeWorkspaceSidebar();
+}
+
+function normalizeWorkspaceSidebarTail() {
+  const host = getWorkspaceSidebarContentHost();
+
+  if (!host) {
+    return;
+  }
+
+  const report = document.getElementById('workspaceReportPanel');
+
+  const archiveGroup = document.getElementById('workspaceArchiveGroup');
+
+  const navControls = document.getElementById('workspaceNavControls');
+
+  if (report && report.parentNode === host) {
+    host.appendChild(report);
+  }
+
+  if (archiveGroup && archiveGroup.parentNode === host) {
+    host.appendChild(archiveGroup);
+  }
+
+  if (navControls && navControls.parentNode === host) {
+    host.appendChild(navControls);
+  }
 }
 
 // ACT A: Post-readiness finalization listener.
@@ -5090,12 +5085,6 @@ function renderWorkspaceActivePanel() {
         : ''
     }
 
-    <div id="documentReadSurface"
-      class="documentReadSurface"
-      hidden
-      aria-label="Rendered document"
-    ></div>
-
     <div id="workspaceActiveActions" class="workspaceActiveActions" hidden></div>
 
     ${
@@ -5104,7 +5093,8 @@ function renderWorkspaceActivePanel() {
         : '<div class="workspaceActiveMeta">No tags</div>'
     }
 
-    <div\n      id=\"workspaceDocumentModeRegion\"\n      class=\"workspaceDocumentModeRegion\"\n    >\n      <div\n        id=\"workspaceDocumentModeControl\"\n        class=\"workspaceDocumentModeControl\"\n        role=\"group\"\n        aria-label=\"Document mode\"\n      >\n        <button\n          id=\"workspaceDocumentModeEdit\"\n          type=\"button\"\n          class=\"workspaceDocumentModeButton\"\n          data-document-mode=\"edit\"\n          aria-pressed=\"true\"\n        >\n          Edit\n        </button>\n        <button\n          id=\"workspaceDocumentModeRead\"\n          type=\"button\"\n          class=\"workspaceDocumentModeButton\"\n          data-document-mode=\"read\"\n          aria-pressed=\"false\"\n        >\n          Read\n        </button>\n      </div>\n      <span\n        id=\"workspaceDocumentModeStatus\"\n        class=\"workspaceDocumentModeStatus\"\n        aria-hidden=\"true\"\n      >\n        Editing\n      </span>\n      <span\n        id=\"workspaceDocumentDirtyState\"\n        class=\"workspaceDocumentDirtyState\"\n        hidden\n      >\n        Unsaved\n      </span>\n    </div>\n\n    <div class=\"workspaceActiveCards\">\n      ${taskCard('backlog', 'Backlog', taskCounts.backlog, workspaceActiveDetail?.mode === 'backlog' && workspaceActiveDetail?.path === active.path)}
+    <div class="workspaceActiveCards">
+      ${taskCard('backlog', 'Backlog', taskCounts.backlog, workspaceActiveDetail?.mode === 'backlog' && workspaceActiveDetail?.path === active.path)}
       ${taskCard('todo', 'Open', taskCounts.open, workspaceActiveDetail?.mode === 'todo' && workspaceActiveDetail?.path === active.path)}
       ${taskCard('ongoing', 'Ongoing', taskCounts.ongoing, workspaceActiveDetail?.mode === 'ongoing' && workspaceActiveDetail?.path === active.path)}
       ${taskCard('done', 'Done', taskCounts.done, workspaceActiveDetail?.mode === 'done' && workspaceActiveDetail?.path === active.path)}
@@ -5129,59 +5119,6 @@ function renderWorkspaceActivePanel() {
 function wireWorkspaceActivePanel() {
   ensureWorkspaceActivePanel();
 }
-
-function findDocumentReadSurface() {
-  return document.getElementById('documentReadSurface');
-}
-
-// Determine the CodeMirror presentation wrapper element.
-// If cm.getWrapperElement() is available (CodeMirror 6+), use it;
-// otherwise fall back to the scroller element.
-function getDocumentEditSurfaceElement() {
-  const cm = globalThis.__cm;
-  if (
-    cm &&
-    typeof cm.getWrapperElement === 'function'
-  ) {
-    return cm.getWrapperElement();
-  }
-  // Fallback: the CodeMirror scroller element
-  if (cm && cm.state && cm.state.scroller) {
-    return cm.state.scroller;
-  }
-  return null;
-}
-
-// ACT 5 Slice 2.5 — toggle the Edit surface (CodeMirror wrapper) visibility.
-// Do NOT use MME_EDITOR_VISIBILITY.hideEditor() — that owner collapses the
-// entire Editor pane. Instead, swap the visible child inside the Editor pane.
-function setDocumentEditSurfaceVisible(visible) {
-  const editSurface = getDocumentEditSurfaceElement();
-  if (!editSurface) return false;
-
-  editSurface.hidden = !visible;
-  editSurface.style.display = visible ? '' : 'none';
-
-  editSurface.setAttribute(
-    'aria-hidden',
-    visible ? 'false' : 'true'
-  );
-
-  if (
-    visible &&
-    globalThis.__cm &&
-    typeof globalThis.__cm.refresh === 'function'
-  ) {
-    requestAnimationFrame(() => {
-      globalThis.__cm.refresh();
-    });
-  }
-
-  return true;
-}
-
-// ACT 5 Slice 2.5 — sync document-mode control after renders.
-try { renderWorkspaceDocumentModeControl?.(); } catch {}
 
 function renderWorkspaceIndexSummary() {
   const panel = ensureWorkspaceIndexPanel();
@@ -6590,20 +6527,6 @@ globalThis.MME_APP = {
     // Update status/title once.
     setStatus(modeLabel());
     updateDocumentTitle();
-  },
-
-  // ACT 5 Slice 1 — Document-mode bridge (Edit/Read).
-  // Returns the current document-mode without exposing mutable state.
-  getDocumentMode() {
-    return documentMode;
-  },
-
-  // Applies the requested document-mode ('edit' or 'read') via the
-  // internal transition functions. Does not expose mutable state.
-  applyDocumentMode(mode) {
-    if (mode === 'read') return switchToRead();
-    if (mode === 'edit') return switchToEdit();
-    return Promise.resolve(false);
   },
 };
 
@@ -8381,66 +8304,6 @@ let dirty = false;
 let currentFileName = 'markmap.md';
 
 let currentSaveHandle = null;
-
-// ACT 5 Slice 1 — Document-mode owner (Edit/Read).
-// Edit/Read is NOT an application context. It is a document-surface mode only.
-let documentMode = 'edit';
-
-function getDocumentMode() {
-  return documentMode;
-}
-
-// ACT 5 Slice 1 — Editor presentation state capture/restore.
-// CodeMirror instance is globalThis.__cm. Capture only what is needed to
-// restore the user's view when switching back to Edit.
-const documentModeState = {
-  cursor: null,
-  selection: null,
-  editorScrollTop: 0
-};
-
-function captureEditorPresentationState() {
-  try {
-    const cm = globalThis.__cm;
-    if (cm && typeof cm.getCursor === 'function') {
-      const anchor = cm.getCursor('anchor');
-      const head = cm.getCursor('head');
-      documentModeState.cursor = cm.getCursor();
-      documentModeState.selection = anchor && head ? { anchor, head } : null;
-    }
-    const scrollInfo = cm && typeof cm.getScrollInfo === 'function'
-      ? cm.getScrollInfo()
-      : null;
-    documentModeState.editorScrollTop = Number(scrollInfo?.top || 0);
-  } catch (e) {
-    log?.(`captureEditorPresentationState: ${e?.message || e}`);
-  }
-}
-
-function restoreEditorPresentationState() {
-  try {
-    const cm = globalThis.__cm;
-    if (!cm) return;
-    const selection = documentModeState.selection;
-    if (
-      selection?.anchor &&
-      selection?.head &&
-      typeof cm.setSelection === 'function'
-    ) {
-      try { cm.setSelection(selection.anchor, selection.head); } catch {}
-    } else if (
-      documentModeState.cursor &&
-      typeof cm.setCursor === 'function'
-    ) {
-      try { cm.setCursor(documentModeState.cursor); } catch {}
-    }
-    if (typeof cm.scrollTo === 'function') {
-      try { cm.scrollTo(null, documentModeState.editorScrollTop); } catch {}
-    }
-  } catch (e) {
-    log?.(`restoreEditorPresentationState: ${e?.message || e}`);
-  }
-}
 let externalHandleGeneration = 0;
 let internalSaveInProgress = false;
 let fileLastSeenModified = 0;
@@ -12856,79 +12719,6 @@ document.getElementById('btnHtmlEdgeOpen')?.addEventListener('click', showHtmlPr
 // no longer applies because the top-toolbar access point was removed.
 if (window.MME_EDITOR_VISIBILITY) {
   window.MME_EDITOR_VISIBILITY.wireEditorVisibilityControls();
-}
-
-// ================================
-// ACT 5 Slice 1 — Document-mode switching (Edit/Read)
-// These functions implement the internal Edit/Read contract.
-// They do NOT change application context, handle, dirty state, or trigger Save.
-// ================================
-
-async function switchToRead() {
-  if (documentMode === 'read') return true;
-
-  // 1. Capture editor presentation state (cursor, selection, scroll)
-  captureEditorPresentationState();
-
-  // 2. Keep md.value, currentSaveHandle, currentFileName, dirty unchanged
-  //    (these remain owned by existing state)
-
-  // 3. Render current in-memory Markdown to HTML via existing renderer
-  const html = await renderHtmlWithShiki(md.value);
-
-  // 4. Show HTML document surface (htmlPane) using existing show primitive
-  htmlPane.style.display = 'block';
-  htmlPane.innerHTML = html;
-  buildHtmlHeadingIndex?.();
-  log?.('ACT5: Read surface shown');
-
-  // 5. Hide CodeMirror through existing visibility owner
-  if (window.MME_EDITOR_VISIBILITY?.hideEditor) {
-    window.MME_EDITOR_VISIBILITY.hideEditor();
-  } else {
-    editorEl.style.display = 'none';
-    document.body.classList.add('editor-hidden');
-  }
-
-  // 6. Set documentMode to 'read' only after surface transition succeeds
-  documentMode = 'read';
-  setStatus(modeLabel());
-  updateDocumentTitle();
-  try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
-
-  return true;
-}
-
-async function switchToEdit() {
-  if (documentMode === 'edit') return true;
-
-  const readSurface = findDocumentReadSurface();
-
-  if (readSurface) {
-    readSurface.hidden = true;
-    readSurface.setAttribute('aria-hidden', 'true');
-  }
-
-  // Show CodeMirror wrapper inside the Editor area (preserve column geometry)
-  setDocumentEditSurfaceVisible(true);
-
-  documentMode = 'edit';
-
-  restoreEditorPresentationState();
-
-  try { globalThis.MME_VIEW_LAYOUT?.refresh?.(); } catch {}
-
-  // ACT 5 Slice 1 — sync document-mode control after transition.
-  try { renderWorkspaceDocumentModeControl?.(); } catch {}
-
-  log?.('ACT5: Edit surface restored');
-}
-
-// Bridge function for ModeSession to apply documentMode
-function applyDocumentMode(mode) {
-  if (mode === 'read') return switchToRead();
-  if (mode === 'edit') return switchToEdit();
-  return Promise.resolve(false);
 }
 
 async function copyHtmlPreviewText() {
