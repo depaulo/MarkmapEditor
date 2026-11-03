@@ -1833,6 +1833,88 @@ function setDocumentEditSurfaceVisible(
   return editSurface;
 }
 
+// ACT 5C — Document editor presentation state (selection + scroll only).
+const documentModeEditorState = {
+  anchor: null,
+  head: null,
+  scrollTop: 0,
+};
+
+function getEditorView() {
+  return globalThis.__cm || null;
+}
+
+function captureDocumentEditorState() {
+  const view = getEditorView();
+  if (!view || !view.state) return false;
+
+  try {
+    const selection = view.state.selection?.main;
+    if (!selection) return false;
+
+    const anchor = selection.anchor;
+    const head = selection.head;
+    const scrollDOM = view.scrollDOM;
+    const scrollTop = scrollDOM ? scrollDOM.scrollTop : 0;
+
+    if (
+      !Number.isFinite(anchor) ||
+      !Number.isFinite(head) ||
+      !Number.isFinite(scrollTop) ||
+      scrollTop < 0
+    ) {
+      return false;
+    }
+
+    documentModeEditorState.anchor = anchor;
+    documentModeEditorState.head = head;
+    documentModeEditorState.scrollTop = scrollTop;
+
+    // ACT5C temporary diagnostics
+    log?.(`ACT5C: editor state captured anchor=${anchor} head=${head} scrollTop=${scrollTop}`);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function restoreDocumentEditorState() {
+  const view = getEditorView();
+  if (!view || !view.state) return false;
+
+  try {
+    const docLength = view.state.doc.length;
+    const anchor = Math.max(0, Math.min(documentModeEditorState.anchor ?? 0, docLength));
+    const head = Math.max(0, Math.min(documentModeEditorState.head ?? 0, docLength));
+
+    view.dispatch({
+      selection: { anchor, head },
+    });
+
+    view.focus();
+
+    if (view.scrollDOM && Number.isFinite(documentModeEditorState.scrollTop)) {
+      view.scrollDOM.scrollTop = documentModeEditorState.scrollTop;
+    }
+
+    if (typeof view.requestMeasure === 'function') {
+      requestAnimationFrame(() => {
+        try {
+          view.requestMeasure();
+        } catch {}
+      });
+    }
+
+    // ACT5C temporary diagnostics
+    log?.(`ACT5C: editor state restored anchor=${anchor} head=${head} scrollTop=${documentModeEditorState.scrollTop}`);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function ensureDocumentReadSurface() {
   const editorHost =
     document.getElementById('editor');
@@ -1930,6 +2012,11 @@ async function switchToRead() {
       throw new Error('CodeMirror wrapper unavailable');
     }
 
+    // ACT 5C — capture editor state before hiding CodeMirror
+    captureDocumentEditorState();
+    // ACT5C temporary diagnostics
+    log?.(`ACT5C: documentMode captured=${documentMode}`);
+
     readSurface.hidden = false;
 
     readSurface.setAttribute('aria-hidden', 'false');
@@ -1990,6 +2077,10 @@ async function switchToEdit() {
     readSurface.setAttribute('aria-hidden', 'true');
   }
   setDocumentEditSurfaceVisible(true);
+
+  // ACT 5C — restore editor state after CodeMirror is visible
+  restoreDocumentEditorState();
+
   documentMode = 'edit';
 
   renderWorkspaceDocumentModeControl?.();
@@ -5961,6 +6052,11 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
     );
   }
 
+  // ACT 5C — reset editor state when a new physical document activates
+  documentModeEditorState.anchor = null;
+  documentModeEditorState.head = null;
+  documentModeEditorState.scrollTop = 0;
+
   // Explicit source-open result for readiness-aware callers; the file
   // properties are preserved for every existing consumer.
   return Object.assign({}, file, { ok: true, ready: true, sourcePath: filePath, sourceKind: fileKind });
@@ -6960,6 +7056,12 @@ globalThis.MME_APP = {
     setStatus(modeLabel());
     updateDocumentTitle();
   },
+
+  // ACT D: Expose document editor mode so mode-session can bridge presentation
+  // across the React wrapper when a document is suspended/reactivated.
+  getDocumentMode,
+
+  applyDocumentMode,
 };
 
 async function resetServiceWorkerAndCaches() {

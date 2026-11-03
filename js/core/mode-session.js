@@ -101,6 +101,8 @@
     const session = APP_MODE_SESSIONS[mode] || {};
 
     session.mode = mode;
+    session.documentMode =
+      (globalThis.MME_APP?.getDocumentMode?.()) || 'edit';
     session.sessionId = getCurrentModeSessionId(mode);
     session.text = getCurrentEditorTextSafe();
 
@@ -128,6 +130,8 @@
 
     session.timestamp = Date.now();
 
+
+    // ACT5C temporary diagnostics\n    safeLog(`ACT5C: documentMode captured=${session.documentMode}`);
     APP_MODE_SESSIONS[mode] = session;
 
     // Capture runtime live resources (handles, hot reload) into memory-only registry.
@@ -143,7 +147,7 @@
     return session;
   }
 
-  function restoreModeSession(modeInput, reason = 'restore') {
+  async function restoreModeSession(modeInput, reason = 'restore') {
     const mode = normalizeAppModeId(modeInput);
     const session = APP_MODE_SESSIONS[mode];
 
@@ -159,9 +163,15 @@
       return false;
     }
 
+
     // 1. Restore runtime live resources (handles, hot reload) first.
     try {
       globalThis.MME_MODE_RUNTIME_SESSIONS?.restoreRuntime?.(mode);
+    } catch {}
+
+    // ACT 5C — restore document editor mode after runtime state.
+    try {
+      await globalThis.MME_APP?.applyDocumentMode?.(session.documentMode || 'edit');
     } catch {}
 
     // 2. Restore text.
@@ -263,6 +273,8 @@
 
   // ---- R-MULTI4 — session-aware storage helpers ----
 
+
+    // ACT5C temporary diagnostics\n    safeLog(`ACT5C: documentMode restored=${session.documentMode}`);
   function normalizeModeSessionId(sessionInput, modeInput) {
     const mode = normalizeAppModeId(
       modeInput || getCurrentModeIdSafe()
