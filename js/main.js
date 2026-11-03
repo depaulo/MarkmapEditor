@@ -1717,6 +1717,318 @@ const WORKSPACE_PANEL_DEFAULT_COLLAPSED = {
 // (Links In), 'out' shows outgoing references (Links Out). Shared by the
 // Links In and Links Out cards via the existing workspaceRelatedPanel owner.
 let workspaceLinksMode = 'in';
+let documentMode = 'edit'; // 'edit' or 'read'
+
+function getDocumentMode() {
+  return documentMode;
+}
+
+function getDocumentEditSurfaceElement() {
+  const editorHost =
+    document.getElementById('editor');
+
+  if (!(editorHost instanceof HTMLElement)) {
+    return null;
+  }
+
+  const runtime =
+    globalThis.__cm ||
+    globalThis.MME_EDITOR?.view?.dom ||
+    null;
+
+  if (
+    runtime &&
+    typeof runtime.getWrapperElement ===
+      'function'
+  ) {
+    const wrapper =
+      runtime.getWrapperElement();
+
+    if (
+      wrapper instanceof HTMLElement &&
+      editorHost.contains(wrapper)
+    ) {
+      return wrapper;
+    }
+  }
+
+  const editorView =
+    runtime?.view ||
+    runtime;
+
+  if (
+    editorView?.dom instanceof HTMLElement &&
+    editorHost.contains(editorView.dom)
+  ) {
+    return editorView.dom;
+  }
+
+  const cm6Wrapper =
+    editorHost.querySelector(
+      '.cm-editor'
+    );
+
+  if (cm6Wrapper instanceof HTMLElement) {
+    return cm6Wrapper;
+  }
+
+  const cm5Wrapper =
+    editorHost.querySelector(
+      '.CodeMirror'
+    );
+
+  if (cm5Wrapper instanceof HTMLElement) {
+    return cm5Wrapper;
+  }
+
+  return null;
+}
+
+function setDocumentEditSurfaceVisible(
+  visible
+) {
+  const editSurface =
+    getDocumentEditSurfaceElement();
+
+  if (!editSurface) {
+    throw new Error(
+      'CodeMirror wrapper unavailable'
+    );
+  }
+
+  editSurface.hidden = !visible;
+
+  editSurface.style.display =
+    visible ? '' : 'none';
+
+  editSurface.setAttribute(
+    'aria-hidden',
+    visible ? 'false' : 'true'
+  );
+
+  if (visible) {
+    const runtime =
+      globalThis.__cm ||
+      globalThis.MME_EDITOR?.view;
+
+    if (
+      runtime &&
+      typeof runtime.requestMeasure === 'function'
+    ) {
+      requestAnimationFrame(() => {
+        runtime.requestMeasure();
+      });
+    } else if (
+      visible &&
+      globalThis.__cm &&
+      typeof globalThis.__cm.refresh ===
+        'function'
+    ) {
+      requestAnimationFrame(() => {
+        globalThis.__cm.refresh();
+      });
+    }
+  }
+
+  return editSurface;
+}
+
+function ensureDocumentReadSurface() {
+  const editorHost =
+    document.getElementById('editor');
+
+  if (!(editorHost instanceof HTMLElement)) {
+    throw new Error(
+      'Editor host #editor unavailable'
+    );
+  }
+
+  let surface =
+    document.getElementById(
+      'documentReadSurface'
+    );
+
+  if (surface) {
+    if (!(surface instanceof HTMLElement)) {
+      throw new Error(
+        'Read Surface is not an HTMLElement'
+      );
+    }
+
+    if (surface.parentElement !== editorHost) {
+      throw new Error(
+        'Read Surface has incorrect parent'
+      );
+    }
+
+    return surface;
+  }
+
+  surface =
+    document.createElement('div');
+
+  surface.id = 'documentReadSurface';
+  surface.className = 'documentReadSurface';
+  surface.hidden = true;
+
+  surface.setAttribute(
+    'aria-hidden',
+    'true'
+  );
+
+  surface.setAttribute(
+    'aria-label',
+    'Rendered document'
+  );
+
+  editorHost.appendChild(surface);
+
+  return surface;
+}
+
+async function renderDocumentReadSurface(surface) {
+  if (!(surface instanceof HTMLElement)) {
+    throw new Error(
+      'Read Surface element unavailable'
+    );
+  }
+
+  const markdown =
+    String(md?.value ?? '');
+
+  const rendered =
+    await renderHtmlWithShiki(markdown);
+
+  if (typeof rendered !== 'string') {
+    throw new Error(
+      'Markdown renderer did not return HTML'
+    );
+  }
+
+  surface.innerHTML = rendered;
+
+  return surface;
+}
+
+async function switchToRead() {
+  if (documentMode === 'read') {
+    return true;
+  }
+
+  let readSurface = null;
+  let readSurfaceShown = false;
+  let editSurfaceHidden = false;
+
+  try {
+    readSurface = ensureDocumentReadSurface();
+
+    await renderDocumentReadSurface(readSurface);
+
+    const editSurface = getDocumentEditSurfaceElement();
+
+    if (!(editSurface instanceof HTMLElement)) {
+      throw new Error('CodeMirror wrapper unavailable');
+    }
+
+    readSurface.hidden = false;
+
+    readSurface.setAttribute('aria-hidden', 'false');
+
+    readSurfaceShown = true;
+
+    setDocumentEditSurfaceVisible(false);
+
+    editSurfaceHidden = true;
+
+    documentMode = 'read';
+
+    renderWorkspaceDocumentModeControl?.();
+
+    return true;
+  } catch (error) {
+    if (readSurfaceShown && readSurface instanceof HTMLElement) {
+      readSurface.hidden = true;
+      readSurface.setAttribute('aria-hidden', 'true');
+    }
+
+    if (editSurfaceHidden) {
+      try {
+        setDocumentEditSurfaceVisible(true);
+      } catch {}
+    }
+
+    documentMode = 'edit';
+
+    renderWorkspaceDocumentModeControl?.();
+
+    throw error;
+  }
+}
+
+async function switchToEdit() {
+  if (documentMode === 'edit') {
+    return true;
+  }
+  const readSurface =
+    document.getElementById('documentReadSurface');
+
+  if (
+    readSurface &&
+    !(readSurface instanceof HTMLElement)
+  ) {
+    throw new Error('Read Surface is invalid');
+  }
+
+  const editSurface = getDocumentEditSurfaceElement();
+
+  if (!(editSurface instanceof HTMLElement)) {
+    throw new Error('CodeMirror wrapper unavailable');
+  }
+  if (readSurface) {
+    readSurface.hidden = true;
+
+    readSurface.setAttribute('aria-hidden', 'true');
+  }
+  setDocumentEditSurfaceVisible(true);
+  documentMode = 'edit';
+
+  renderWorkspaceDocumentModeControl?.();
+  return true;
+}
+
+async function applyDocumentMode(mode) {
+  if (mode === 'read') {
+    return switchToRead();
+  }
+
+  if (mode === 'edit') {
+    return switchToEdit();
+  }
+
+  throw new Error(
+    `Unsupported document mode: ${mode}`
+  );
+}
+
+async function synchronizeDocumentModeSurface() {
+  if (documentMode !== 'read') {
+    return false;
+  }
+
+  const readSurface = ensureDocumentReadSurface();
+
+  await renderDocumentReadSurface(readSurface);
+
+  readSurface.hidden = false;
+
+  readSurface.setAttribute('aria-hidden', 'false');
+
+  setDocumentEditSurfaceVisible(false);
+
+  renderWorkspaceDocumentModeControl?.();
+  return true;
+}
+
 let workspaceActiveDetail = null; // null or { path, mode } — ACT 4.2C-A local detail state
 
 function getWorkspacePanelCollapsedState() {
@@ -4896,8 +5208,6 @@ function renderWorkspaceActiveDetail(active, fk, displayName) {
 
   return '';
 }
-
-
 function wireWorkspaceActivePanelCards() {
   const body = document.getElementById('workspaceActiveBody');
   if (!body) return;
@@ -5102,6 +5412,8 @@ function renderWorkspaceActivePanel() {
 
     <div id="workspaceActiveActions" class="workspaceActiveActions" hidden></div>
 
+    <span id="workspaceDocumentModeStatus" class="workspaceDocumentModeStatus" aria-hidden="true">Editing</span>
+
     ${
       tagHtml
         ? `<div class="workspaceActiveTags">${tagHtml}</div>`
@@ -5129,10 +5441,92 @@ function renderWorkspaceActivePanel() {
 
   // Wire the delegated card click handler exactly once (idempotent).
   wireWorkspaceActivePanelCards();
+
+  // ACT 5B — document mode control (Edit / Read)
+  renderWorkspaceDocumentModeControl();
+  wireWorkspaceDocumentModeControl();
 }
 
 function wireWorkspaceActivePanel() {
   ensureWorkspaceActivePanel();
+}
+
+function renderWorkspaceDocumentModeControl() {
+  const panel = document.getElementById('workspaceActivePanel');
+  if (!panel) return;
+
+  const actionsContainer = panel.querySelector('#workspaceActiveActions');
+  if (!actionsContainer) return;
+
+  const mode = getDocumentMode();
+
+  actionsContainer.innerHTML = `
+    <div class="workspaceActiveModeControl" data-document-mode="${mode}">
+      <button
+        type="button"
+        class="workspaceActiveModeBtn ${mode === 'edit' ? 'active' : ''}"
+        data-mode="edit"
+        aria-pressed="${mode === 'edit'}"
+        title="Switch to Edit mode"
+      >
+        Edit
+      </button>
+      <button
+        type="button"
+        class="workspaceActiveModeBtn ${mode === 'read' ? 'active' : ''}"
+        data-mode="read"
+        aria-pressed="${mode === 'read'}"
+        title="Switch to Read mode"
+      >
+        Read
+      </button>
+    </div>
+  `;
+
+  actionsContainer.hidden = false;
+
+  const status = panel.querySelector('#workspaceDocumentModeStatus');
+
+  if (status) {
+    status.textContent = mode === 'read' ? 'Reading' : 'Editing';
+  }
+}
+
+function wireWorkspaceDocumentModeControl() {
+  const panel = document.getElementById('workspaceActivePanel');
+  if (!panel) return;
+
+  const actionsContainer = panel.querySelector('#workspaceActiveActions');
+  if (!actionsContainer) return;
+
+  if (actionsContainer.dataset.modeWired === 'true') return;
+
+  actionsContainer.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.workspaceActiveModeBtn');
+    if (!btn) return;
+
+    const mode = btn.dataset.mode;
+    if (mode !== 'edit' && mode !== 'read') return;
+
+    try {
+      await applyDocumentMode(mode);
+    } catch (err) {
+      log?.(
+        `Document mode switch failed: ${
+          err?.message ||
+          String(err || 'unknown error')
+        }`
+      );
+
+      showToast?.(
+        'Could not change document mode',
+        'error',
+        2200
+      );
+    }
+  });
+
+  actionsContainer.dataset.modeWired = 'true';
 }
 
 function renderWorkspaceIndexSummary() {
@@ -5555,6 +5949,18 @@ async function openWorkspaceFile(file, kind = '', reason = 'workspace open file'
     }
   }
 
+  // ACT 5B — if in Read mode, refresh the Read Surface for the newly activated document
+  try {
+    await synchronizeDocumentModeSurface();
+  } catch (error) {
+    log?.(
+      `Document Read refresh failed: ${
+        error?.message ||
+        String(error || 'unknown error')
+      }`
+    );
+  }
+
   // Explicit source-open result for readiness-aware callers; the file
   // properties are preserved for every existing consumer.
   return Object.assign({}, file, { ok: true, ready: true, sourcePath: filePath, sourceKind: fileKind });
@@ -5816,8 +6222,6 @@ async function resolveBeforeApplicationReload(options) {
   }
   return 'failure';
 }
-
-
 // ACT G1: Decision helper for Report generation when the current source is dirty.
 // Uses two sequential window.confirm calls and returns one of:
 //   { action: 'save' }    — Save before generating the Report
@@ -6495,8 +6899,6 @@ async function openVirtualReport(preparedResult) {
     return { ok: false, reason: 'activation-error', error: msg };
   }
 }
-
-
 globalThis.MME_APP = {
   isDirty: () => dirty,
   confirmDiscardIfDirty,
