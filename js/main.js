@@ -1870,11 +1870,9 @@ function captureDocumentEditorState() {
     documentModeEditorState.head = head;
     documentModeEditorState.scrollTop = scrollTop;
 
-    // ACT5C temporary diagnostics
-    log?.(`ACT5C: editor state captured anchor=${anchor} head=${head} scrollTop=${scrollTop}`);
-
     return true;
   } catch {
+    log?.('Document: failed to capture editor state');
     return false;
   }
 }
@@ -1906,11 +1904,9 @@ async function restoreDocumentEditorState() {
       });
     }
 
-    // ACT5C temporary diagnostics
-    log?.(`ACT5C: editor state restored anchor=${anchor} head=${head} scrollTop=${documentModeEditorState.scrollTop}`);
-
     return true;
   } catch {
+    log?.('Document: failed to restore editor state');
     return false;
   }
 }
@@ -1992,6 +1988,71 @@ async function renderDocumentReadSurface(surface) {
   return surface;
 }
 
+// ACT 5C — align Read Surface to Editor's logical reading position on Read entry.
+// Tries source-line/heading mapping first, falls back to the existing ScrollSync
+// normalized-ratio mapping (_getScrollRatio/_setScrollRatio). Initial alignment only:
+// no listener installed, no Editor/HTML Preview scroll change, no documentMode change.
+function alignDocumentReadSurface(readSurface, readingPosition) {
+  if (!(readSurface instanceof HTMLElement)) {
+    return false;
+  }
+
+  const ratio = Math.max(
+    0,
+    Math.min(1, Number(readingPosition) || 0)
+  );
+  let applied = false;
+  let method = 'normalized-ratio';
+
+  // Priority 1 & 2: source-line / heading mapping — map Editor line to the nearest
+  // heading, then scroll the Read Surface to that heading's rendered position.
+  try {
+    buildMdHeadingIndex();
+    if (__mdHeadings.length && __mdTotalLines > 1) {
+      const editorLine = Math.max(
+        0,
+        Math.min(
+          __mdTotalLines - 1,
+          Math.round(ratio * (__mdTotalLines - 1))
+        )
+      );
+
+      let targetHeading = null;
+      for (let i = __mdHeadings.length - 1; i >= 0; i--) {
+        if (__mdHeadings[i].lineNo <= editorLine) {
+          targetHeading = __mdHeadings[i];
+          break;
+        }
+      }
+
+      if (targetHeading) {
+        const headingText = targetHeading.raw || targetHeading.norm || '';
+        if (headingText) {
+          const headingId = slugifyHeading(headingText);
+          const headingEl = readSurface.querySelector('#' + headingId);
+          if (headingEl instanceof HTMLElement) {
+            readSurface.scrollTop = headingEl.offsetTop || 0;
+            applied = true;
+            method = 'heading';
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // Priority 3: existing ScrollSync normalized mapping.
+  if (!applied) {
+    _setScrollRatio(readSurface, ratio);
+    applied = true;
+  }
+
+  if (!applied) {
+    log?.('Document: failed to align Read Surface');
+  }
+
+  return applied;
+}
+
 async function switchToRead() {
   if (documentMode === 'read') {
     return true;
@@ -2000,6 +2061,7 @@ async function switchToRead() {
   let readSurface = null;
   let readSurfaceShown = false;
   let editSurfaceHidden = false;
+  let readingPosition = 0;
 
   try {
     readSurface = ensureDocumentReadSurface();
@@ -2014,8 +2076,14 @@ async function switchToRead() {
 
     // ACT 5C — capture editor state before hiding CodeMirror
     captureDocumentEditorState();
-    // ACT5C temporary diagnostics
-    log?.(`ACT5C: documentMode captured=${documentMode}`);
+
+    // ACT 5C — capture logical reading position from visible Editor scroller
+    // (transition-local value; not stored in ModeSession, does not overwrite
+    //  Editor restoration scrollTop in documentModeEditorState).
+    const cmScroller = document.querySelector('#cmHost .cm-scroller');
+    if (cmScroller instanceof HTMLElement) {
+      readingPosition = _getScrollRatio(cmScroller);
+    }
 
     readSurface.hidden = false;
 
@@ -2026,6 +2094,13 @@ async function switchToRead() {
     setDocumentEditSurfaceVisible(false);
 
     editSurfaceHidden = true;
+
+    // ACT 5C — align Read Surface after rendered layout is measurable.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        alignDocumentReadSurface(readSurface, readingPosition);
+      });
+    });
 
     documentMode = 'read';
 
@@ -2109,6 +2184,11 @@ async function synchronizeDocumentModeSurface() {
   const readSurface = ensureDocumentReadSurface();
 
   await renderDocumentReadSurface(readSurface);
+
+  // ACT 5C — reset Read position to top for newly activated document (file switch).
+  // Does not reset on Current Document rerender, Index rebuild, collapse/expand,
+  // or opening the already active file (those paths do not reach this function).
+  readSurface.scrollTop = 0;
 
   readSurface.hidden = false;
 
