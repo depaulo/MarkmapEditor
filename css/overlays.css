@@ -622,6 +622,17 @@ html.compact #editorOverlayControls button {
   outline-offset: 1px;
 }
 
+/* ---- Hide Editor overlay containers and pencil in Read via [hidden] attribute.
+     The author `display: flex` on `#editorOverlayControls` (and
+     `display: inline-flex` on `#editorOverlayControls button`) can override
+     the UA `[hidden]` default in some environments, so `!important` is needed
+     here to guarantee the Read-mode hide. */
+#editorOverlayControls[hidden],
+#editorOverlayToolsPanel[hidden],
+#editorBtnEditToggle[hidden] {
+  display: none !important;
+}
+
 .editorOverlayToolsPanel {
   position: absolute;
   right: 14px;

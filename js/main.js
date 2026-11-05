@@ -203,7 +203,7 @@ async function renderHtmlWithShiki(mdText) {
 
     return `<h${depth} id="${id}">
 		${text}
-		<a href="#${id}" style="text-decoration:none; opacity:.5;">🔗</a>
+		<a class="renderedHeadingAnchor" href="#${id}" aria-label="Link to this section" title="Link to this section">🔗</a>
 	  </h${depth}>`;
   };
 
@@ -1723,6 +1723,132 @@ function getDocumentMode() {
   return documentMode;
 }
 
+// ACT 5D.1 — mode-aware presentation helper for the two Editor overlay
+// containers. Exact IDs only; no broad selectors; no button listeners.
+// Read hides both; Edit restores them. The mutation panel remains owned by
+// the existing pencil toggle (setOpen) — this helper never reopens it.
+function renderDocumentModeTools() {
+  const isRead = getDocumentMode() === 'read';
+
+  const mutationPanel = document.getElementById('editorOverlayToolsPanel');
+  const editorControls = document.getElementById('editorOverlayControls');
+  const editToggle = document.getElementById('editorBtnEditToggle');
+
+  if (mutationPanel instanceof HTMLElement) {
+    mutationPanel.hidden = isRead;
+    mutationPanel.setAttribute('aria-hidden', isRead ? 'true' : 'false');
+  }
+
+  if (editorControls instanceof HTMLElement) {
+    editorControls.hidden = isRead;
+    editorControls.setAttribute('aria-hidden', isRead ? 'true' : 'false');
+  }
+
+  if (editToggle instanceof HTMLElement) {
+    editToggle.hidden = isRead;
+    editToggle.setAttribute('aria-hidden', isRead ? 'true' : 'false');
+
+    editToggle.disabled = isRead;
+  }
+}
+
+// ACT 5D.1 — surface-scoped heading permalink navigation.
+// Resolves the clicked anchor's target within the same rendered surface only;
+// never falls back to a global document lookup (Read and HTML Preview may
+// contain identical heading IDs simultaneously). Binds once per persistent
+// surface; innerHTML replacement does not remove the listener.
+function wireRenderedHeadingAnchors(surface) {
+  if (
+    !(surface instanceof HTMLElement) ||
+    surface.__headingAnchorsBound
+  ) {
+    return false;
+  }
+
+  surface.addEventListener(
+    'click',
+    (event) => {
+      const anchor =
+        event.target?.closest?.('a.renderedHeadingAnchor');
+
+      if (
+        !(anchor instanceof HTMLAnchorElement) ||
+        !surface.contains(anchor)
+      ) {
+        return;
+      }
+
+      const href =
+        String(
+          anchor.getAttribute('href') ||
+          ''
+        );
+
+      if (
+        !href.startsWith('#') ||
+        href.length <= 1
+      ) {
+        return;
+      }
+
+      let headingId =
+        href.slice(1);
+
+      try {
+        headingId =
+          decodeURIComponent(
+            headingId
+          );
+      } catch {}
+
+      const heading =
+        surface.querySelector(
+          `#${CSS.escape(headingId)}`
+        );
+
+      if (!(heading instanceof HTMLElement)) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const surfaceRect =
+        surface.getBoundingClientRect();
+
+      const headingRect =
+        heading.getBoundingClientRect();
+
+      const nextScrollTop =
+        surface.scrollTop +
+        headingRect.top -
+        surfaceRect.top -
+        8;
+
+      surface.scrollTo({
+        top: Math.max(
+          0,
+          nextScrollTop
+        ),
+        behavior: 'smooth',
+      });
+
+      try {
+        history.replaceState(
+          null,
+          '',
+          `#${encodeURIComponent(
+            headingId
+          )}`
+        );
+      } catch {}
+    }
+  );
+
+  surface.__headingAnchorsBound = true;
+
+  return true;
+}
+
 function getDocumentEditSurfaceElement() {
   const editorHost =
     document.getElementById('editor');
@@ -2074,6 +2200,10 @@ async function switchToRead() {
       throw new Error('CodeMirror wrapper unavailable');
     }
 
+    // ACT 5D.1 — bind heading-link navigation to the Read Surface once per
+    // persistent surface; innerHTML replacement does not remove the listener.
+    wireRenderedHeadingAnchors(readSurface);
+
     // ACT 5C — capture editor state before hiding CodeMirror
     captureDocumentEditorState();
 
@@ -2105,6 +2235,10 @@ async function switchToRead() {
     documentMode = 'read';
 
     renderWorkspaceDocumentModeControl?.();
+
+    // ACT 5D.1 — hide Editor overlay controls in Read; keep Current Document owner
+    // the single source for Edit and Read command ownership.
+    renderDocumentModeTools();
 
     return true;
   } catch (error) {
@@ -2159,6 +2293,10 @@ async function switchToEdit() {
   documentMode = 'edit';
 
   renderWorkspaceDocumentModeControl?.();
+
+  // ACT 5D.1 - restore Editor overlay controls in Edit; pencil reopens mutation panel
+  renderDocumentModeTools();
+
   return true;
 }
 
@@ -13441,6 +13579,10 @@ function wireHtmlOverlayControls() {
   }
 
   log?.('HTML Preview overlay controls wired');
+
+  // ACT 5D.1 — bind heading-link navigation to the persistent HTML Preview
+  // surface. Binds once; innerHTML replacement does not remove the listener.
+  wireRenderedHeadingAnchors(htmlPane);
 }
 
 wireHtmlOverlayControls();
@@ -13600,6 +13742,12 @@ function wireEditorOverlayControls() {
 }
 
 wireEditorOverlayControls();
+
+// ACT 5D.1 — initial Editor-overlay presentation pass at module load.
+// documentMode starts as 'edit', so this is a no-op today; it guarantees the
+// helper has run once the wiring completes and guards against any future
+// initial-state divergence.
+renderDocumentModeTools();
 
 function insertCheckboxFromOverlay(checked) {
   try {

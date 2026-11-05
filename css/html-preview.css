@@ -311,38 +311,48 @@ html.compact #htmlOverlayControls button {
   font-size: 13px;
 }
 
-/* ---- HTML heading anchor: smaller and less prominent in the live preview
-   only. The renderer markup, heading IDs, href targets, and the standalone
-   export CSS are untouched, so exported HTML behavior is unchanged. The
-   glyph stays baseline-aligned so the heading line height is not disturbed;
-   hover/focus-visible restores full prominence. Selector is intentionally
-   narrow (same-page heading anchors only, inside the live pane). */
-#htmlPane h1 a[href^="#"],
-#htmlPane h2 a[href^="#"],
-#htmlPane h3 a[href^="#"],
-#htmlPane h4 a[href^="#"],
-#htmlPane h5 a[href^="#"],
-#htmlPane h6 a[href^="#"] {
-  margin-left: 0.45em;
-  font-size: 0.6em;
-  vertical-align: baseline;
+/* ---- Heading permalink anchor: shared across Read Surface and HTML Preview.
+   The visible glyph is about 13px inside a 24x24 click target. The class is
+   only added to heading-anchor markup by renderHtmlWithShiki(), never to
+   normal Markdown links, so ordinary paragraph/list/table links keep their
+   default styling and behaviour. */
+#documentReadSurface
+  .renderedHeadingAnchor,
+#htmlPane
+  .renderedHeadingAnchor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 24px;
+  height: 24px;
+  margin-inline-start: 4px;
+
+  font-size: 13px;
+  line-height: 1;
+  font-variant-emoji: text;
+
+  color: currentColor;
+  opacity: 0.28;
+
   text-decoration: none;
-  color: inherit;
-  opacity: 0.5;
+  vertical-align: middle;
+  border-radius: 4px;
 }
 
-#htmlPane h1 a[href^="#"]:hover,
-#htmlPane h2 a[href^="#"]:hover,
-#htmlPane h3 a[href^="#"]:hover,
-#htmlPane h4 a[href^="#"]:hover,
-#htmlPane h5 a[href^="#"]:hover,
-#htmlPane h6 a[href^="#"]:hover,
-#htmlPane h1 a[href^="#"]:focus-visible,
-#htmlPane h2 a[href^="#"]:focus-visible,
-#htmlPane h3 a[href^="#"]:focus-visible,
-#htmlPane h4 a[href^="#"]:focus-visible,
-#htmlPane h5 a[href^="#"]:focus-visible,
-#htmlPane h6 a[href^="#"]:focus-visible {
-  opacity: 1 !important;
-  color: var(--link, #1976d2);
+#documentReadSurface
+  :is(h1, h2, h3, h4, h5, h6):hover
+  .renderedHeadingAnchor,
+#htmlPane
+  :is(h1, h2, h3, h4, h5, h6):hover
+  .renderedHeadingAnchor,
+.renderedHeadingAnchor:hover,
+.renderedHeadingAnchor:focus-visible {
+  opacity: 0.8;
+}
+
+.renderedHeadingAnchor:focus-visible {
+  outline: 2px solid var(--accent, #4f46e5);
+  outline-offset: 1px;
+  opacity: 1;
 }
