@@ -17,6 +17,61 @@
   //   limitations?, helpTopic? (links to a Help topic ID).
   const RELEASES = Object.freeze([
     {
+      version: '0.9.0',
+      title: 'MarkmapEditor 0.9.0: Document Surface and Workspace Consistency',
+      summary: t`Version 0.9.0 introduces Edit and Read modes to Current Document. Read renders current Markdown in the Editor column, including unsaved text. Edit restores selection, cursor and reading position. Opening another Note while Reading refreshes the same Read Surface. Read initially aligns with the Editor's logical reading position. Read and HTML Preview retain independent scroll and heading navigation. Editor mutation tools are hidden in Read. Workspace Note and Find Files presentation is aligned. Archive is the final Sidebar feature panel.`,
+      expanded: true,
+      changes: [
+        {
+          group: 'Current Document',
+          items: [
+            'Added Edit and Read modes to Current Document.',
+            'Read renders current Markdown in the Editor column, including unsaved text.',
+            'Edit restores selection, cursor and reading position.',
+            'Opening another Note while Reading refreshes the same Read Surface.',
+            'Read initially aligns with the Editor\'s logical reading position.',
+            'Read and HTML Preview retain independent scroll and heading navigation.',
+            'Editor mutation tools are hidden in Read mode.',
+          ],
+        },
+        {
+          group: 'Workspace Knowledge',
+          items: [
+            'Aligned Workspace Note and Find Files presentation.',
+            'Archive moved to final Sidebar feature panel position.',
+          ],
+        },
+        {
+          group: 'Sidebar',
+          items: [
+            'Sidebar order confirmed: Current Document → Workspace Knowledge → Notes → Knowledge → Tasks → Projects → Archive → Report.',
+          ],
+        },
+        {
+          group: 'Preserved',
+          items: [
+            'Existing Task, Project, Link and Save owners preserved unchanged.',
+            'Knowledge classification (knowledge: true frontmatter) unchanged; not merged into Workspace Knowledge.',
+            'Archive behavior unchanged.',
+          ],
+        },
+      ],
+      tryIt: t`Open a Workspace Note, choose Read in Current Document, navigate rendered headings, then return to Edit to continue from the preserved Editor position.`,
+      uiPath: 'Open a Note → choose Read in Current Document → navigate rendered headings → return to Edit → verify restored position.',
+      limitations: [
+        'Current Document Edit/Read behavioral consistency is session-scoped, not per-file.',
+        'Read has no dedicated search toolbar.',
+        'Read has no dedicated fullscreen toolbar.',
+        'Read has no dedicated copy toolbar.',
+        'HTML Preview remains separate rather than being reused as Read.',
+        'Document mode is session/context based, not per file.',
+        'Selection and scroll are not stored in per-file history.',
+        'A document-level Back to Top control is not included.',
+        'Compact Capture and Back to Top are optional pre-1.0 candidates for evaluation after 0.9.0.',
+      ],
+      helpTopic: 'mode-read',
+    },
+    {
       version: '0.8.0',
       title: 'MarkmapEditor 0.8.0: Document and Workspace Knowledge',
       summary: t`Version 0.8.0 introduces a persistent Current Document context with document-scoped Task status cards and local read-only Task and Links details. It consolidates Workspace Index, Search, and Tags into one Workspace Knowledge panel with combined filename/path Search and multi-Tag filtering. Sidebar order is improved with Report moved after Archive.`,
