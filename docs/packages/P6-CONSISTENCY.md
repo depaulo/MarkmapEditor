@@ -583,3 +583,45 @@ ACT 4 — File Knowledge Cards and Workspace Index Consolidation: ACCEPTED (comm
 - All ACTs ACCEPTED: ACT 1, ACT 2 (slices 1–3), ACT 3, ACT 4 (slices 1–5)
 - Release candidate: 0.8.0, committed to development, activation NOT authorized
 - No new runtime behavior beyond accepted Package 6 work
+
+---
+
+## ACT 5D.1 — Editor Tools Hidden in Read Mode (Complete)
+
+### Objective
+Remove the remaining Editor edit button (pencil) and Editor mutation tools from Read mode so Read content is unobstructed. Preserve Edit mode behavior unchanged.
+
+### Changes
+- Extended `renderDocumentModeTools()` in `js/main.js` to hide `editorBtnEditToggle` alongside `editorOverlayToolsPanel` and `editorOverlayControls` when `documentMode` is `read`.
+- Added narrow CSS `[hidden]` rule in `css/overlays.css` so `[hidden]` on `#editorOverlayControls`, `#editorOverlayToolsPanel`, `#editorBtnEditToggle` overrides the author `display: flex` / `display: inline-flex` rules.
+- `renderDocumentModeTools()` runs after successful `switchToRead()`, successful `switchToEdit()`, and after initial Editor-overlay wiring completion.
+
+### What is preserved
+- Edit mode: `editorBtnEditToggle` visible; `editorOverlayControls` visible; mutation panel opens through the pencil; existing Editor commands work.
+- Read mode: pencil hidden; mutation panel hidden; lower Editor toolbar hidden; rendered document unobstructed.
+- HTML Preview controls remain visible during Read; closing HTML Preview does not restore Editor overlays.
+- Markmap controls remain independent.
+- Read entry alignment, Read scroll independence, Editor selection/scroll/cursor restoration unchanged.
+
+### Result
+Edit mode: pencil returns; mutation panel works; formatting commands work.
+Read mode: no pencil over rendered document; no Markdown mutation controls; Read content unobstructed.
+
+---
+
+## Package 6 Closure Checklist (ACT 5E)
+
+- final source validation
+- final browser smoke test
+- Help accepted
+- package documentation accepted
+- Release Notes 0.9.0
+- APP_VERSION update exactly once
+- service-worker/cache update exactly once
+- no version bump during experiments
+- activation test
+- automatic What's New shown once after activation
+- Release Notes remain permanently accessible
+- final release commit and tag policy
+
+---

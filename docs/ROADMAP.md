@@ -72,3 +72,66 @@ Primary development and static validation occur on the cellphone. Validators,
 mutation tests and source inspection follow every ACT. Browser checkpoints
 happen on S22/DeX when the interaction is available there. Static validation
 quality is never reduced because development happens on mobile.
+
+## Future candidates
+
+Compact Capture is an optional pre-1.0 candidate to be evaluated only after Edit/Read and Document Surface stabilization.
+
+Compact Capture must reuse:
+- the current document;
+- existing Editor;
+- writable handle;
+- dirty state;
+- Save;
+- Today;
+- New Note;
+- Open Workspace.
+
+Initial compact layout:
+- menu;
+- document title;
+- Unsaved status;
+- Save;
+- one active surface at a time: Edit, Read or Map.
+
+Always-on-top is optional.
+
+Expected scope:
+- layout-only version: 1 to 2 ACTs;
+- complete evaluation: one short PLAN plus no more than 3 ACTs.
+
+Defer until after 1.0 if implementation requires:
+- duplicate Editor ownership;
+- a new session model;
+- substantial Save changes;
+- complex window infrastructure;
+- more than 3 ACTs.
+
+Explicitly record:
+
+Idea recorded only.
+Implementation is not authorized.
+Do not automatically include Compact Capture in the next package.
+
+## Optional Back to Top
+
+Add one future visual candidate:
+
+If implemented:
+- one document-level control;
+- appears only after meaningful vertical scrolling;
+- does not replace heading permalinks;
+- does not add visible Top text beside every heading;
+- must be evaluated after 0.9.0 usage.
+
+Not included in Package 6 runtime.
+
+## Compact Capture roadmap location and status
+
+Add Compact Capture under Future candidates as described above.
+
+Status: Idea recorded only. Implementation is not authorized.
+
+Do not automatically include Compact Capture in the next package.
+
+Record: Idea recorded only. Implementation is not authorized.

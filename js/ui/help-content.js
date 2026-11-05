@@ -621,6 +621,52 @@ This period focused on:
   </ul>
 </section>`,
     },
+    {
+      id: 'mode-read',
+      title: 'Read Mode',
+      subtitle: 'Reading rendered Markdown with hidden Editor tools.',
+      html: t`<section class="helpSection">
+  <h2>Read Mode</h2>
+  <ol>
+    <li>Read displays the current Markdown as a rendered document in the same Editor column. Unsaved Markdown is included.</li>
+    <li>Editor mutation tools are hidden during Read; the pencil and formatting controls are not visible.</li>
+    <li>Returning to Edit restores the Editor selection and reading position.</li>
+    <li>Current Document remains the mode-control owner.</li>
+    <li>Read initially aligns to the Editor's logical reading position.</li>
+    <li>Read scroll becomes independent after entry.</li>
+    <li>Opening another file in Read refreshes the same Read Surface.</li>
+    <li>If opening another file while Reading, the new physical file starts Read at the top.</li>
+  </ol>
+  <h2>HTML Preview</h2>
+  <p>HTML Preview is an optional independent preview tool. HTML Preview has its own controls and scroll state and does not replace Read mode.</p>
+  <h2>Heading links</h2>
+  <p>The link beside a rendered heading navigates to that section inside the current rendered surface. Read and HTML Preview navigate independently.</p>
+  <h2>File switching</h2>
+  <p>Opening another Note while Reading keeps Read active and refreshes the Read Surface with the newly opened document.</p>
+</section>`,
+    },
+    {
+      id: 'html-preview',
+      title: 'HTML Preview',
+      subtitle: 'Independent rendered preview with own scroll state.',
+      html: t`<section class="helpSection">
+  <h2>HTML Preview</h2>
+  <p>HTML Preview is an optional independent preview tool. HTML Preview has its own container, scroll state, controls and lifecycle.</p>
+  <p>HTML Preview does not become the Read Surface.</p>
+  <p>HTML Preview has its own controls and scroll state and does not replace Read mode.</p>
+</section>`,
+    },
+    {
+      id: 'heading-links',
+      title: 'Heading links',
+      subtitle: 'Permalinks beside rendered headings.',
+      html: t`<section class="helpSection">
+  <h2>Heading links</h2>
+  <p>The link beside a rendered heading navigates to that section inside the current rendered surface.</p>
+  <p>Read and HTML Preview navigate independently.</p>
+  <p>Global heading lookup is forbidden when both surfaces may contain identical heading IDs.</p>
+</section>`,
+    }
   ];
 
   // Expose the topic registry.

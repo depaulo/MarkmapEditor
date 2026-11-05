@@ -54,3 +54,15 @@ The pre-consolidation content of each file is preserved at:
 - `docs/archive/ai-state-CURRENT_ACT.original.md`
 - `docs/archive/ai-state-VALIDATION_STATE.original.md`
 - `docs/archive/ai-state-DECISION_LOG.original.md`
+
+## Current ACT summary
+
+| ACT | Name | Status |
+|-----|------|--------|
+| ACT 5B | Workspace Knowledge consolidation (slices 1–5) | ACCEPTED |
+| ACT 5C | Compact Workspace Index consolidation (slice 1–3) | ACCEPTED |
+| ACT 5D.1 | Editor Tools Hidden in Read Mode | **ACCEPTED** |
+| ACT 5D.2 | Help, documentation and roadmap alignment | IN PROGRESS |
+| next step = ACT 5E release closure | | |
+
+Record browser-accepted behavior, not implementation claims without evidence.
