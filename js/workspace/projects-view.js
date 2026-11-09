@@ -231,6 +231,9 @@
       // Source filter: exact sourcePath identity only. '' matches all; basename
       // matching is prohibited — duplicates stay distinct by full path.
       if (f.source && String(r.sourcePath || '') !== String(f.source)) return false;
+      // ACT 1 — exclude archived projects from the active Projects projection
+      const sourcePath = String(r.sourcePath || '');
+      if (sourcePath && globalThis.isWorkspaceFileArchived?.(sourcePath)) return false;
       return true;
     });
   }

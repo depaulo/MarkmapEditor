@@ -174,7 +174,12 @@
   function getAllTasks() {
     const index = getWorkspaceIndex();
     if (!index || !index.ready || !index.tasks) return [];
-    return index.tasks.map(enrichTask);
+    return index.tasks
+      .filter((task) => {
+        const file = index.byPath?.get(task.filePath || '');
+        return !globalThis.isWorkspaceFileArchived?.(file);
+      })
+      .map(enrichTask);
   }
 
   function getOpenTasks() {

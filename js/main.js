@@ -3768,7 +3768,13 @@ function getWorkspaceTagsSummary() {
   const rows = [];
 
   for (const [tag, paths] of WORKSPACE_INDEX_STATE.tags.entries()) {
-    const uniquePaths = Array.from(new Set(paths || []));
+    const uniquePaths = Array.from(new Set(paths || []))
+      .map((path) => WORKSPACE_INDEX_STATE.byPath?.get(String(path || '')))
+      .filter(Boolean)
+      .filter((file) => !globalThis.isWorkspaceFileArchived?.(file))
+      .map((file) => String(file.path || ''));
+
+    if (!uniquePaths.length) continue;
 
     rows.push({
       tag,
@@ -3799,6 +3805,8 @@ function getWorkspaceTagFiles(tag) {
   return paths
     .map((path) => WORKSPACE_INDEX_STATE.byPath?.get(path))
     .filter(Boolean)
+    // ACT 1 — exclude archived files from tag selection results
+    .filter((file) => !globalThis.isWorkspaceFileArchived?.(file))
     // ACT 2A — ordering preserved minus the legacy kind tier: date desc,
     // then name asc. No kind comparison remains.
     .sort((a, b) => {
@@ -4144,7 +4152,8 @@ function renderWorkspaceFindFiles() {
   }
 
   // Candidates come from the saved Workspace Index (notes only — existing file-search scope).
-  const candidates = [...(WORKSPACE_INDEX_STATE?.byKind?.notes || [])];
+  const candidates = [...(WORKSPACE_INDEX_STATE?.byKind?.notes || [])]
+    .filter((file) => !globalThis.isWorkspaceFileArchived?.(file));
 
   // Filter by query (existing Search behavior: filename/path substring match).
   let matches = candidates;
@@ -7982,8 +7991,8 @@ function buildWorkspaceNotesViewModel() {
     ? index.byKind.notes
     : (Array.isArray(index.files) ? index.files.filter((f) => f?.kind === 'notes') : []);
 
-  const activeNotes = source.filter((note) => note?.archived !== true);
-  const archivedNotes = source.filter((note) => note?.archived === true);
+  const activeNotes = source.filter((note) => !globalThis.isWorkspaceFileArchived?.(note));
+  const archivedNotes = source.filter((note) => globalThis.isWorkspaceFileArchived?.(note));
 
   // Pinned and Knowledge are INDEPENDENT derivations over the same records.
   // Pinned is sorted with the same comparator, so its presentation order never

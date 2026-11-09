@@ -1412,6 +1412,11 @@
     return value.trim().toLowerCase() === 'true';
   }
 
+  // Authoritative archive predicate — single owner for all active projections.
+  function isWorkspaceFileArchived(file) {
+    return file?.archived === true;
+  }
+
   function inferDateFromDatedFilename(name) {
     const match = String(name || '').match(DATED_NOTE_FILENAME);
 
@@ -1682,5 +1687,6 @@
     globalThis.isProjectIdValue = isProjectIdValue;
     globalThis.nextWorkspaceProjectId = nextWorkspaceProjectId;
     globalThis.collectReservedProjectIds = collectReservedProjectIds;
+    globalThis.isWorkspaceFileArchived = isWorkspaceFileArchived;
   } catch {}
 })();
