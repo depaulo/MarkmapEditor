@@ -3594,12 +3594,11 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
   gap: 6px;
 }
 
-/* ---- Journals / Concepts sidebar list density ----
-   Only the list bodies scroll (panel headers stay visible and fixed).
+/* ---- Journals sidebar list density ----
+   Only the list body scrolls (panel header stays visible and fixed).
    Desktop caps at a compact-but-useful height; mobile is
    viewport-sensitive. No horizontal scrolling. */
-#workspaceJournalsList,
-#workspaceConceptsList {
+#workspaceJournalsList {
   min-height: 40px;
   max-height: 260px;
   overflow-y: auto;
@@ -3609,10 +3608,27 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
   gap: 4px;
 }
 
+/* ---- Knowledge list density ----
+   Knowledge rows share the Sidebar's single vertical scroll owner.
+   Natural height for its currently rendered rows; no independent
+   scrollbar inside the Sidebar. */
+#workspaceConceptsList {
+  min-height: 40px;
+  max-height: none;
+  overflow: visible;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* Direct list items must not shrink inside the bounded scroll viewport.
    Preserve original row height, padding, icon size, and readability. */
-#workspaceJournalsList > .workspaceFileItem,
-#workspaceConceptsList > .workspaceFileItem {
+#workspaceJournalsList > .workspaceFileItem {
+  flex: 0 0 auto;
+}
+
+#workspaceConceptsList > .workspaceJournalItem {
   flex: 0 0 auto;
 }
 
@@ -3626,8 +3642,12 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
    .workspaceJournalGroup wrappers, so the Journal selector is
    descendant-scoped; Concept rows are direct children. Month/year group
    titles (.workspaceJournalGroupTitle) remain outside the cards. */
-#workspaceJournalsList .workspaceFileItem,
-#workspaceConceptsList > .workspaceFileItem {
+#workspaceJournalsList .workspaceFileItem {
+  box-sizing: border-box;
+  border-color: var(--border-subtle);
+}
+
+#workspaceConceptsList > .workspaceJournalItem {
   box-sizing: border-box;
   border-color: var(--border-subtle);
 }
@@ -3635,8 +3655,11 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
 /* Hover strengthens within the current vocabulary but stays visibly weaker
    than the active/selected state. Same ID scope so it outranks the
    ID-scoped default above and preserves the existing hover background. */
-#workspaceJournalsList .workspaceFileItem:hover,
-#workspaceConceptsList > .workspaceFileItem:hover {
+#workspaceJournalsList .workspaceFileItem:hover {
+  border-color: var(--menu-border);
+}
+
+#workspaceConceptsList > .workspaceJournalItem:hover {
   border-color: var(--menu-border);
 }
 
@@ -3644,16 +3667,23 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
    are full-width inside lists with overflow-x: hidden, so the outline is
    drawn just inside the card to avoid clipping; outline never affects
    layout. Active rows keep their persistent treatment. */
-#workspaceJournalsList .workspaceFileItem:focus-visible,
-#workspaceConceptsList > .workspaceFileItem:focus-visible {
+#workspaceJournalsList .workspaceFileItem:focus-visible {
+  outline: 2px solid rgba(34, 197, 94, 0.45);
+  outline-offset: -1px;
+}
+
+#workspaceConceptsList > .workspaceJournalItem:focus-visible {
   outline: 2px solid rgba(34, 197, 94, 0.45);
   outline-offset: -1px;
 }
 
 @media (max-width: 767px) {
-  #workspaceJournalsList,
-  #workspaceConceptsList {
+  #workspaceJournalsList {
     max-height: 40vh;
+  }
+
+  #workspaceConceptsList {
+    max-height: none;
   }
 }
 
