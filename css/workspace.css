@@ -3609,17 +3609,23 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
 }
 
 /* ---- Knowledge list density ----
-   Knowledge rows share the Sidebar's single vertical scroll owner.
-   Natural height for its currently rendered rows; no independent
-   scrollbar inside the Sidebar. */
+   Bounded responsive viewport with internal scrolling.
+   Cards retain content-defined height; Sidebar owns panel-level scroll. */
 #workspaceConceptsList {
-  min-height: 40px;
-  max-height: none;
-  overflow: visible;
-  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 4px;
+
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  max-height: clamp(260px, 38vh, 460px);
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  box-sizing: border-box;
+  scrollbar-gutter: stable;
 }
 
 /* Direct list items must not shrink inside the bounded scroll viewport.
@@ -3628,8 +3634,17 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
   flex: 0 0 auto;
 }
 
-#workspaceConceptsList > .workspaceJournalItem {
+/* Bounded list cards must never shrink vertically inside their scroll viewport.
+   Cards retain content-defined height based on title, secondary identity, date. */
+#workspaceConceptsList
+  > .workspaceJournalItem,
+#workspaceKnowledgeFindFilesSection
+  #workspaceSearchResults
+  > .workspaceJournalItem {
   flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  max-height: none;
 }
 
 /* ---- Journal / Concept row containment ----
@@ -3683,7 +3698,7 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
   }
 
   #workspaceConceptsList {
-    max-height: none;
+    max-height: clamp(260px, 40vh, 460px);
   }
 }
 
@@ -5195,17 +5210,22 @@ html.projects-view-active .splitter::before { content: none; }
    before the expanded class is added. The expanded state is scoped below. */
 
 
-/* Find Files result list: no independent vertical viewport */
+/* Find Files result list: bounded responsive viewport with internal scrolling */
 #workspaceKnowledgeFindFilesSection #workspaceSearchResults {
   display: flex;
   flex-direction: column;
   gap: 6px;
+
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  max-height: none;
-  overflow: visible;
+
+  max-height: clamp(240px, 34vh, 420px);
+  overflow-y: auto;
+  overflow-x: hidden;
+
   box-sizing: border-box;
+  scrollbar-gutter: stable;
   border: 1px solid var(--border-subtle, #d4d4d8);
   border-radius: 4px;
   background: var(--surface-page, #f4f4f5);
@@ -5533,13 +5553,17 @@ html.projects-view-active .splitter::before { content: none; }
   box-sizing: border-box;
 }
 
-/* Body owns the text hierarchy */
+/* Body owns the text hierarchy; never clips vertical content inside
+   bounded lists. Horizontal ellipsis applies only to individual lines. */
+#workspaceConceptsList
+  .workspaceJournalBody,
 #workspaceKnowledgeFindFilesSection
-  .workspaceFindFilesNoteRow
   .workspaceJournalBody {
-  width: 100%;
-  max-width: 100%;
+  flex: 1 1 auto;
   min-width: 0;
+  height: auto;
+  max-height: none;
+  overflow: visible;
   box-sizing: border-box;
 }
 
