@@ -2952,6 +2952,43 @@ function getOpenWorkspaceTasks() {
     }));
 }
 
+// ACT 1 — shared active Task projection: excludes Tasks whose source file is
+// archived. Consumers: Task Review, Task Board, Workspace Knowledge counts.
+// Missing source records keep the Task visible (never silently lose data).
+function getActiveWorkspaceTasks(index) {
+  if (!index || !Array.isArray(index.tasks)) {
+    return [];
+  }
+
+  return index.tasks.filter((task) => {
+    const sourcePath = String(task?.filePath || '');
+    const sourceFile = sourcePath ? index.byPath?.get(sourcePath) : null;
+    if (!sourceFile) {
+      return true;
+    }
+    return !globalThis.isWorkspaceFileArchived?.(sourceFile);
+  });
+}
+
+// ACT 1 — shared active Project projection: excludes Projects whose source
+// file is archived. Consumers: compact Projects, Expanded Projects Review,
+// active Project counts and value summaries.
+// Missing source records keep the Project visible (never silently lose data).
+function getActiveWorkspaceProjects(index) {
+  if (!index || !Array.isArray(index.projects)) {
+    return [];
+  }
+
+  return index.projects.filter((project) => {
+    const sourcePath = String(project?.sourcePath || '');
+    const sourceFile = sourcePath ? index.byPath?.get(sourcePath) : null;
+    if (!sourceFile) {
+      return true;
+    }
+    return !globalThis.isWorkspaceFileArchived?.(sourceFile);
+  });
+}
+
 function getWorkspaceTaskFileDisplayName(path, fallback = '') {
   if (!WORKSPACE_INDEX_STATE?.ready || !path) {
     return fallback || path || '';
@@ -4198,7 +4235,7 @@ function renderWorkspaceFindFiles() {
           data-workspace-search-result="1"
           data-path="${escapeHtml(path)}"
           data-kind="${escapeHtml(kind)}"
-          class="workspaceSearchResultItem workspaceFindFilesNoteRow workspaceFileItem workspaceJournalItem"
+          class="workspaceSearchResultItem workspaceFindFilesNoteRow workspaceJournalItem"
         >
           <span
             class="workspaceJournalIcon workspaceSearchResultIcon"
@@ -4224,6 +4261,7 @@ function renderWorkspaceFindFiles() {
     .join('');
 
   resultsEl.innerHTML = rows;
+  window.updateWorkspaceActiveFileHighlight?.();
   resultsEl.hidden = false;
   updateWorkspaceTagsToggleVisibility();
 }
@@ -4529,7 +4567,10 @@ function renderWorkspaceProjectsPanel() {
     return;
   }
 
-  const projects = WORKSPACE_INDEX_STATE.projects || [];
+  const projects =
+    typeof globalThis.getActiveWorkspaceProjects === 'function'
+      ? globalThis.getActiveWorkspaceProjects(WORKSPACE_INDEX_STATE)
+      : WORKSPACE_INDEX_STATE.projects || [];
   const count = projects.length;
 
   badge.textContent = String(count);
@@ -5728,9 +5769,12 @@ function renderWorkspaceActivePanel() {
         : ''
     }
 
-    <div id="workspaceActiveActions" class="workspaceActiveActions" hidden></div>
+    <div class="workspaceDocumentModeRegion">
+      <div id="workspaceDocumentModeControl" class="workspaceActiveModeControl"></div>
+      <span id="workspaceDocumentModeStatus" class="workspaceDocumentModeStatus" aria-hidden="true">Editing</span>
+    </div>
 
-    <span id="workspaceDocumentModeStatus" class="workspaceDocumentModeStatus" aria-hidden="true">Editing</span>
+    <div id="workspaceActiveActions" class="workspaceActiveActions" hidden></div>
 
     ${
       tagHtml
@@ -5770,40 +5814,35 @@ function wireWorkspaceActivePanel() {
 }
 
 function renderWorkspaceDocumentModeControl() {
-  const panel = document.getElementById('workspaceActivePanel');
-  if (!panel) return;
-
-  const actionsContainer = panel.querySelector('#workspaceActiveActions');
-  if (!actionsContainer) return;
+  const modeContainer = document.getElementById('workspaceDocumentModeControl');
+  if (!modeContainer) return;
 
   const mode = getDocumentMode();
 
-  actionsContainer.innerHTML = `
-    <div class="workspaceActiveModeControl" data-document-mode="${mode}">
-      <button
-        type="button"
-        class="workspaceActiveModeBtn ${mode === 'edit' ? 'active' : ''}"
-        data-mode="edit"
-        aria-pressed="${mode === 'edit'}"
-        title="Switch to Edit mode"
-      >
-        Edit
-      </button>
-      <button
-        type="button"
-        class="workspaceActiveModeBtn ${mode === 'read' ? 'active' : ''}"
-        data-mode="read"
-        aria-pressed="${mode === 'read'}"
-        title="Switch to Read mode"
-      >
-        Read
-      </button>
-    </div>
+  modeContainer.setAttribute('data-document-mode', mode);
+
+  modeContainer.innerHTML = `
+    <button
+      type="button"
+      class="workspaceActiveModeBtn ${mode === 'edit' ? 'active' : ''}"
+      data-mode="edit"
+      aria-pressed="${mode === 'edit'}"
+      title="Switch to Edit mode"
+    >
+      Edit
+    </button>
+    <button
+      type="button"
+      class="workspaceActiveModeBtn ${mode === 'read' ? 'active' : ''}"
+      data-mode="read"
+      aria-pressed="${mode === 'read'}"
+      title="Switch to Read mode"
+    >
+      Read
+    </button>
   `;
 
-  actionsContainer.hidden = false;
-
-  const status = panel.querySelector('#workspaceDocumentModeStatus');
+  const status = document.getElementById('workspaceDocumentModeStatus');
 
   if (status) {
     status.textContent = mode === 'read' ? 'Reading' : 'Editing';
@@ -5811,15 +5850,12 @@ function renderWorkspaceDocumentModeControl() {
 }
 
 function wireWorkspaceDocumentModeControl() {
-  const panel = document.getElementById('workspaceActivePanel');
-  if (!panel) return;
+  const modeContainer = document.getElementById('workspaceDocumentModeControl');
+  if (!modeContainer) return;
 
-  const actionsContainer = panel.querySelector('#workspaceActiveActions');
-  if (!actionsContainer) return;
+  if (modeContainer.dataset.modeWired === 'true') return;
 
-  if (actionsContainer.dataset.modeWired === 'true') return;
-
-  actionsContainer.addEventListener('click', async (e) => {
+  modeContainer.addEventListener('click', async (e) => {
     const btn = e.target.closest('.workspaceActiveModeBtn');
     if (!btn) return;
 
@@ -5844,7 +5880,7 @@ function wireWorkspaceDocumentModeControl() {
     }
   });
 
-  actionsContainer.dataset.modeWired = 'true';
+  modeContainer.dataset.modeWired = 'true';
 }
 
 function renderWorkspaceIndexSummary() {
@@ -5872,8 +5908,9 @@ function renderWorkspaceIndexSummary() {
     return;
   }
 
-  const openTasks = index.tasks.filter((task) => !task.done).length;
-  const doneTasks = index.tasks.filter((task) => task.done).length;
+  const activeTasks = getActiveWorkspaceTasks(index);
+  const openTasks = activeTasks.filter((task) => !task.done).length;
+  const doneTasks = activeTasks.filter((task) => task.done).length;
   const updatedAt = index.lastBuiltAt
     ? new Date(index.lastBuiltAt).toLocaleTimeString([], {
         hour: '2-digit',
@@ -5912,7 +5949,7 @@ function renderWorkspaceIndexSummary() {
     { label: 'Files', value: index.files.length },
     { label: 'Notes', value: (index.byKind.notes || []).length },
     { label: 'Tags', value: index.tags.size },
-    { label: 'Tasks', value: index.tasks.length },
+    { label: 'Tasks', value: activeTasks.length },
     { label: 'Open', value: openTasks },
     { label: 'Done', value: doneTasks },
     { label: 'Links', value: index.links.size },
@@ -5995,7 +6032,7 @@ function runWorkspaceSearch(query) {
           data-workspace-search-result="1"
           data-path="${escapeHtml(path)}"
           data-kind="${escapeHtml(kind)}"
-          class="workspaceSearchResultItem workspaceFindFilesNoteRow workspaceFileItem workspaceJournalItem"
+          class="workspaceSearchResultItem workspaceFindFilesNoteRow workspaceJournalItem"
         >
           <span
             class="workspaceJournalIcon workspaceSearchResultIcon"
@@ -8066,7 +8103,7 @@ function getWorkspaceNoteRowMarkup(note, options = {}) {
   return `
     <button
       type="button"
-      class="workspaceFileItem workspaceJournalItem"
+      class="workspaceJournalItem"
       data-workspace-file="1"
       data-kind="${kind}"
       data-path="${escapeHtml(path)}"
@@ -8235,6 +8272,10 @@ try {
   globalThis.renderWorkspaceArchivePanel = renderWorkspaceArchivePanel;
   window.buildWorkspaceNotesViewModel = buildWorkspaceNotesViewModel;
   globalThis.buildWorkspaceNotesViewModel = buildWorkspaceNotesViewModel;
+  window.getActiveWorkspaceTasks = getActiveWorkspaceTasks;
+  globalThis.getActiveWorkspaceTasks = getActiveWorkspaceTasks;
+  window.getActiveWorkspaceProjects = getActiveWorkspaceProjects;
+  globalThis.getActiveWorkspaceProjects = getActiveWorkspaceProjects;
 } catch {}
 
 // ACT 4 — RETAINED LEGACY, still inert. This overlay is keyed to

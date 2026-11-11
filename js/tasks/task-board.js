@@ -855,7 +855,15 @@
     const sortValue = getStoredSort();
     const availablePaths = availableSourcePaths(index);
     const sourceFilter = getStoredSourceFilter(availablePaths);
-    const model = viewModel(index, doneWindow, today, priorityFilter, sortValue, sourceFilter);
+    const activeTasks = globalThis.getActiveWorkspaceTasks?.(index) || (index.tasks || []);
+    const model = viewModel(
+      { tasks: activeTasks },
+      doneWindow,
+      today,
+      priorityFilter,
+      sortValue,
+      sourceFilter
+    );
 
     const prioritySelect = document.getElementById('mmeTaskBoardPriorityFilter');
     if (prioritySelect && prioritySelect.value !== priorityFilter) {

@@ -231,9 +231,6 @@
       // Source filter: exact sourcePath identity only. '' matches all; basename
       // matching is prohibited — duplicates stay distinct by full path.
       if (f.source && String(r.sourcePath || '') !== String(f.source)) return false;
-      // ACT 1 — exclude archived projects from the active Projects projection
-      const sourcePath = String(r.sourcePath || '');
-      if (sourcePath && globalThis.isWorkspaceFileArchived?.(sourcePath)) return false;
       return true;
     });
   }
@@ -696,7 +693,11 @@
     if (!wsRead.available) return { html: renderEmpty('No Workspace is open.'), count: 0, ready: true, state: 'unavailable' };
     const src = readProjectSource();
     if (!src.indexReady) return { html: renderEmpty('Loading Projects…'), count: 0, ready: false, state: 'loading' };
-    const all = src.projects.map(decorate);
+    const index = globalThis.WORKSPACE_INDEX_STATE || globalThis.window?.WORKSPACE_INDEX_STATE;
+    const activeProjects = typeof globalThis.getActiveWorkspaceProjects === 'function'
+      ? globalThis.getActiveWorkspaceProjects(index)
+      : index.projects || [];
+    const all = activeProjects.map(decorate);
     // Duplicate basename disambiguation: when two or more projects share the
     // same sourceName (basename) but different sourcePath, show the full path
     // for those rows so the Source column never shows two identical labels.

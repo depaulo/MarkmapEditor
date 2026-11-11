@@ -174,12 +174,15 @@
   function getAllTasks() {
     const index = getWorkspaceIndex();
     if (!index || !index.ready || !index.tasks) return [];
-    return index.tasks
-      .filter((task) => {
-        const file = index.byPath?.get(task.filePath || '');
-        return !globalThis.isWorkspaceFileArchived?.(file);
-      })
-      .map(enrichTask);
+    const active = globalThis.getActiveWorkspaceTasks?.(index);
+    const tasks =
+      active !== undefined
+        ? active
+        : index.tasks.filter((task) => {
+            const file = index.byPath?.get(task.filePath || '');
+            return !globalThis.isWorkspaceFileArchived?.(file);
+          });
+    return tasks.map(enrichTask);
   }
 
   function getOpenTasks() {

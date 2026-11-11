@@ -1447,8 +1447,14 @@ async function openWorkspaceFile(fileRecord) {
 }
 
 function handleSidebarClick(event) {
-  const item = event.target.closest('.workspaceFileItem');
+  const item = event.target.closest('.workspaceFileItem, .workspaceJournalItem');
   if (!item) return;
+
+  // Guard against Find Files duplicate handling — Find Files has its own
+  // click owner using data-workspace-search-result.
+  if (item.matches('[data-workspace-search-result="1"]')) {
+    return;
+  }
 
   const path = item.dataset.path || '';
   const kind = item.dataset.kind || '';

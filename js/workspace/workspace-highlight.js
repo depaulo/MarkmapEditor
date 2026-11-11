@@ -85,7 +85,7 @@ function updateWorkspaceActiveFileHighlight() {
     let matched = 0;
 
     document
-      .querySelectorAll('.workspaceFileItem[data-workspace-file="1"]')
+      .querySelectorAll('.workspaceFileItem[data-workspace-file="1"], .workspaceJournalItem[data-workspace-file="1"]')
       .forEach((btnEl) => {
         const btn = /** @type {HTMLElement} */ (btnEl);
 
@@ -113,24 +113,6 @@ function updateWorkspaceActiveFileHighlight() {
         activePath || activeName || '(none)'
       } kind=${activeKind || '(none)'} matched=${matched}/${total}`
     );
-
-    if (active && total > 0 && matched === 0) {
-      safeLog(
-        `Workspace: highlight active debug kind=${activeKind} path=${activePath} name=${activeName}`
-      );
-
-      document
-        .querySelectorAll('.workspaceFileItem[data-workspace-file="1"]')
-        .forEach((btn) => {
-          safeLog(
-            `Workspace: highlight miss btn kind=${normalizeWorkspaceKindForCompare(
-              btn.dataset.kind || ''
-            )} path=${normalizeWorkspacePathForCompare(
-              btn.dataset.path || ''
-            )} name=${btn.dataset.name || ''}`
-          );
-        });
-    }
   } catch (e) {
     safeLog(
       `Workspace: active highlight update failed: ${e?.message || e}`

@@ -189,8 +189,10 @@
   // ---- Section builders ----
 
   function buildSummarySection(index) {
-    const openTasks = (index.tasks || []).filter((t) => !t.done).length;
-    const doneTasks = (index.tasks || []).filter((t) => t.done).length;
+    const activeTasks = globalThis.getActiveWorkspaceTasks?.(index) || (index.tasks || []);
+    const activeProjects = globalThis.getActiveWorkspaceProjects?.(index) || (index.projects || []);
+    const openTasks = activeTasks.filter((t) => !t.done).length;
+    const doneTasks = activeTasks.filter((t) => t.done).length;
 
     // ACT 2B — 'notes' is the only bucket, so the retired Journals/Concepts
     // metrics are replaced by a single Notes metric.
@@ -199,9 +201,9 @@
     const metrics = [
       { label: 'Files', value: (index.files || []).length },
       { label: 'Notes', value: notes },
-      { label: 'Projects', value: (index.projects || []).length },
+      { label: 'Projects', value: activeProjects.length },
       { label: 'Tags', value: index.tags?.size || 0 },
-      { label: 'Tasks', value: (index.tasks || []).length },
+      { label: 'Tasks', value: activeTasks.length },
       { label: 'Open', value: openTasks },
       { label: 'Done', value: doneTasks },
       { label: 'Links', value: index.links?.size || 0 },
@@ -524,7 +526,8 @@
   }
 
   function buildTasksSection(index, filter, expanded) {
-    let tasks = (index.tasks || []).slice();
+    const activeTasks = globalThis.getActiveWorkspaceTasks?.(index) || (index.tasks || []);
+    let tasks = activeTasks.slice();
 
     // Apply filter
     if (filter === 'open') {
@@ -609,9 +612,9 @@
     // empty section with NO filter controls, which made the selected filter
     // irreversible: a Workspace with no completed Tasks could enter "Completed"
     // and never get back. The controls must remain reachable in every state.
-    const openCount = (index.tasks || []).filter((t) => !t.done).length;
-    const completedCount = (index.tasks || []).filter((t) => t.done).length;
-    const totalCount = (index.tasks || []).length;
+    const openCount = activeTasks.filter((t) => !t.done).length;
+    const completedCount = activeTasks.filter((t) => t.done).length;
+    const totalCount = activeTasks.length;
 
     const filterHtml = `
       <div class="wsIndexTaskFilters" role="group" aria-label="Task status filter">

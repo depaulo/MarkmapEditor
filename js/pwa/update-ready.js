@@ -169,13 +169,6 @@
     showCard();
   }
 
-  function enterActiveUpdate() {
-    trackedWaiting = null;
-    setState('ready');
-    updateCondition = 'active-update';
-    showCard(); // same approved copy for 0.6.1
-  }
-
   function setWaitingWorker(worker) {
     if (!worker) return;
     if (sameWorker(worker, trackedWaiting)) return; // idempotent per instance
@@ -195,8 +188,15 @@
     if (waiting && hasController) {
       // Existing controller + real waiting worker = application update.
       enterReadyWaiting(waiting);
+    } else {
+      trackedWaiting = null;
+      updateCondition = null;
+      hideCard();
+      if (state !== 'reloading' && state !== 'activating') {
+        setState('idle');
+      }
+      log('Update: ready state waiting=no card=hidden');
     }
-    // No controller at boot: first-ever installation lifecycle; no card.
   }
 
   function onInstallStateChange(worker) {
@@ -269,8 +269,12 @@
     if (state === 'reloading') return;
     // No local transaction: another tab or a browser action activated the
     // update. Preserve current work; offer a later document-safe reload.
-    log('Update: controller changed (active-update)');
-    enterActiveUpdate();
+    trackedWaiting = null;
+    updateCondition = null;
+    clearRecoveryTimer();
+    hideCard();
+    setState('idle');
+    log('Update: controller changed local-reload=no waiting=no card=hidden');
   }
 
   // ================================
