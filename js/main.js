@@ -1719,6 +1719,15 @@ const WORKSPACE_PANEL_DEFAULT_COLLAPSED = {
 let workspaceLinksMode = 'in';
 let documentMode = 'edit'; // 'edit' or 'read'
 
+// Session-local preference: remembers the user's expanded/collapsed choice for the
+// editor overlay within the current page session. Defaults to collapsed when no
+// previous choice exists (e.g. new page session).
+let workspaceEditorOverlayExpanded = false;
+
+// Module-local reference to the canonical overlay state owner (setOpen).
+// Set by the overlay IIFE during initialization.
+let setEditorOverlayOpen = null;
+
 function getDocumentMode() {
   return documentMode;
 }
@@ -1735,8 +1744,20 @@ function renderDocumentModeTools() {
   const editToggle = document.getElementById('editorBtnEditToggle');
 
   if (mutationPanel instanceof HTMLElement) {
-    mutationPanel.hidden = isRead;
-    mutationPanel.setAttribute('aria-hidden', isRead ? 'true' : 'false');
+    if (isRead) {
+      // Read mode: hide the tools panel.
+      mutationPanel.hidden = true;
+      mutationPanel.setAttribute('aria-hidden', 'true');
+    } else {
+      // Edit mode: restore the user's remembered expanded/collapsed state
+      // via the canonical overlay owner (setOpen). Do not force open.
+      if (typeof setEditorOverlayOpen === 'function') {
+        setEditorOverlayOpen(workspaceEditorOverlayExpanded);
+      } else {
+        mutationPanel.hidden = !workspaceEditorOverlayExpanded;
+        mutationPanel.setAttribute('aria-hidden', workspaceEditorOverlayExpanded ? 'false' : 'true');
+      }
+    }
   }
 
   if (editorControls instanceof HTMLElement) {
@@ -5771,7 +5792,8 @@ function renderWorkspaceActivePanel() {
 
     <div class="workspaceDocumentModeRegion">
       <div id="workspaceDocumentModeControl" class="workspaceActiveModeControl"></div>
-      <span id="workspaceDocumentModeStatus" class="workspaceDocumentModeStatus" aria-hidden="true">Editing</span>
+      <span id="workspaceDocumentModeStatus" class="workspaceDocumentModeStatus">Editing</span>
+      <span id="workspaceDocumentDirtyStatus" class="workspaceDocumentDirtyStatus" aria-live="polite" hidden>Unsaved</span>
     </div>
 
     <div id="workspaceActiveActions" class="workspaceActiveActions" hidden></div>
@@ -5842,10 +5864,19 @@ function renderWorkspaceDocumentModeControl() {
     </button>
   `;
 
-  const status = document.getElementById('workspaceDocumentModeStatus');
+  renderWorkspaceDocumentStatus();
+}
 
-  if (status) {
-    status.textContent = mode === 'read' ? 'Reading' : 'Editing';
+function renderWorkspaceDocumentStatus() {
+  const status = document.getElementById('workspaceDocumentModeStatus');
+  const dirtyStatus = document.getElementById('workspaceDocumentDirtyStatus');
+
+  if (!status) return;
+
+  status.textContent = getDocumentMode() === 'read' ? 'Reading' : 'Editing';
+
+  if (dirtyStatus) {
+    dirtyStatus.hidden = !dirty;
   }
 }
 
@@ -12341,6 +12372,7 @@ async function saveToHandle(handle, text) {
   log('saveToHandle(): closed');
   log('saveToHandle(): success');
   dirty = false;
+  renderWorkspaceDocumentStatus();
   setStatus(`Saved ✓ ${currentFileName}`);
   showToast(`Saved ✓ ${currentFileName}`, 'ok');
   updateDocumentTitle();
@@ -13895,6 +13927,9 @@ function insertCheckboxFromOverlay(checked) {
     function setOpen(open) {
       open = !!open;
 
+      // Capture the user's explicit expand/collapse choice for this page session.
+      workspaceEditorOverlayExpanded = open;
+
       panel.hidden = !open;
       overlay.classList.toggle('__expanded', open);
 
@@ -14062,6 +14097,7 @@ function insertCheckboxFromOverlay(checked) {
     });
 
     panel.__bound = true;
+    setEditorOverlayOpen = setOpen;
     setOpen(false);
 
     try {
@@ -15574,6 +15610,7 @@ md.addEventListener('input', () => {
     return;
   }
   dirty = true;
+  renderWorkspaceDocumentStatus();
   setStatus(modeLabel() + ' (modified)');
   updateDocumentTitle();
   globalThis.MME_RENDER?.scheduleRender?.('editor input');

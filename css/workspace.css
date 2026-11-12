@@ -5669,6 +5669,18 @@ html.projects-view-active .splitter::before { content: none; }
   margin-left: 8px;
 }
 
+.workspaceDocumentDirtyStatus {
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+  color: var(--warning-text, var(--accent));
+  white-space: nowrap;
+}
+
+.workspaceDocumentDirtyStatus[hidden] {
+  display: none;
+}
+
 /* Ensure Edit surface respects hidden attribute */
 #editor .CodeMirror[hidden] {
   display: none !important;
