@@ -106,8 +106,15 @@ identical before and after, no `isolated-*` directory left behind.
 |---|---|---|---|---|---|---|
 | package3-device-workspace.cjs | Generates a disposable fixture Workspace into a caller-chosen output dir; never writes into the repository | G | fast | writes only to the given output dir | device checkpoints on demand | utility |
 | validate-aggregate.cjs | Profile runner: concise lines, `.validation/` logs, nonzero propagation, `--demo-fail` self-test, isolated Tier M copy | U | fast | copies tree for mutation profiles only | every aggregate command | utility |
+| validate-aggregate.cjs | Profile runner: concise lines, `.validation/` logs, nonzero propagation, `--demo-fail` self-test, isolated Tier M copy | U | fast | copies tree for mutation profiles only | every aggregate command | utility |
+
+## Playwright MCP Browser Acceptance
+- Reference: `docs/validation/PLAYWRIGHT_MCP_BROWSER_VALIDATION.md`
+- Purpose: exploratory and browser acceptance testing framework; documents headless scope, Workspace-dependent blockers (File System Access picker), owner manual acceptance checklist, tool policy, and reporting categories (automated passed/failed/blocked/manual/not tested)
+- Status: **deferred** — requires Codespace setup and fixture harness not yet implemented; to be added when repository-supported fixture harness is designed
 
 ### Status counts
+
 active 30 · gate-only 5 · utility 3 (38 entries = 37 tracked scripts + the
 new runner) · historical 0 · merge/dup/removal candidates 0. (No script was
 found to be a duplicate or removal candidate; the three temporary Package 5

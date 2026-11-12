@@ -31,6 +31,10 @@ symbol search).
 | js/release/release.js | node --check | release-parity | release-parity strict | no | release activation (Stage D only) | sw.js, Release Notes |
 | sw.js | node --check | release-parity | dependency-cache-validators, update-ready-validators | no | Service Worker activation (Stage D) | release.js, offline behavior |
 
+## Playwright MCP Browser Validation
+
+Reference: `docs/validation/PLAYWRIGHT_MCP_BROWSER_VALIDATION.md` — defines headless MCP scope, Workspace-dependent blocker policy, owner manual acceptance checklist, and reporting categories (automated passed/failed/blocked/manual/not tested).
+
 Rules:
 
 - Inherited accepted evidence is rerun only when a changed owner can
