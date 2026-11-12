@@ -586,7 +586,10 @@
     const changed = d ? d.changedFields : [];
     const changedAttr = changed.length ? ` data-changed-fields="${escapeHtml(changed.join(','))}"` : '';
     const managedTag = r.managed ? '' : '<span class="projectsUnmanagedTag" title="Not yet managed — open the source and Save">read-only</span>';
-    const draftBadge = `<span class="projectsDraftBadge" data-draft-badge="${changed.length ? '1' : '0'}" aria-label="${changed.length} pending field change(s)">${changed.length ? changed.length + ' pending' : ''}</span>`;
+    const err = d ? (d.validationErrors || {}) : {};
+    const hasInvalid = Object.keys(err).some((k) => err[k]);
+    const statusText = hasInvalid ? 'Invalid' : (changed.length ? 'Edited' : '');
+    const draftBadge = `<span class="projectsDraftBadge" data-draft-badge="${changed.length ? '1' : '0'}" aria-label="${changed.length ? changed.length + ' pending field change(s)' : 'no pending changes'}${statusText ? ', ' + statusText : ''}">${changed.length ? statusText || changed.length + ' pending' : ''}</span>${statusText ? ` <span class="projectsRowStatus" data-row-status="${statusText.toLowerCase()}" aria-hidden="true">${statusText}</span>` : ''}`;
     const valueText = f.value ? `${f.currency ? f.currency + ' ' : ''}${f.value}` : '—';
     const sourceText = `${r.sourceDisplayName || r.sourceName || r.sourcePath || '—'}:${r.sourceLine || ''}`;
     const cell = (field) => (changed.indexOf(field) !== -1 ? ' projectsCellChanged' : '');
@@ -599,7 +602,7 @@
           <button type="button" class="projectsExpandBtn" data-action="toggle-details"
             aria-expanded="${expanded ? 'true' : 'false'}"
             aria-controls="details-${escapeHtml(r.key)}"
-            aria-label="${expanded ? 'Collapse' : 'Expand'} details for ${escapeHtml(r.name)}">${expanded ? '▾' : '▸'}</button>
+            aria-label="${expanded ? 'Close Project details' : (r.managed ? 'Edit Project details' : 'View Project details')}">${expanded ? 'Close' : (r.managed ? 'Edit' : 'View')}</button>
         </div>
         <div class="projectsCell projectsCellTitle" role="cell" data-col="project">
           <span class="projectsRowName">${escapeHtml(r.name)}</span>${managedTag}${draftBadge}
@@ -717,6 +720,17 @@
     const rows = applyFilters(ordered);
     const totals = computeTotals(rows);
     const summary = pendingSummary();
+
+    // Drafted visible rows remain expanded across rerenders. Ensure every
+    // visible managed Project that has a draft stays in expandedKeys. Rows
+    // hidden by filters keep their expansion state; they are re-expanded when
+    // they become visible again.
+    for (const r of rows) {
+      const d = getDraft(r.projectId);
+      if (d && r.managed && (d.changedFields.length > 0 || Object.keys(d.validationErrors || {}).length > 0)) {
+        if (viewState.expandedKeys.indexOf(r.key) === -1) viewState.expandedKeys.push(r.key);
+      }
+    }
 
     if (!all.length) return { html: renderEmpty('No Projects yet.'), count: 0, ready: true, state: 'empty' };
 
@@ -1234,8 +1248,16 @@
 
   function toggleDetails(key) {
     const i = viewState.expandedKeys.indexOf(key);
-    if (i === -1) viewState.expandedKeys.push(key);
-    else viewState.expandedKeys.splice(i, 1);
+    if (i === -1) {
+      viewState.expandedKeys.push(key);
+    } else {
+      // Close: only collapse if the row has no draft. A drafted row stays
+      // expanded until its draft is applied, discarded, or filtered out.
+      const record = rowRecordByKey(key);
+      const d = record ? getDraft(record.projectId) : null;
+      const hasDraft = d ? (d.changedFields.length > 0 || Object.keys(d.validationErrors || {}).length > 0) : false;
+      if (!hasDraft) viewState.expandedKeys.splice(i, 1);
+    }
   }
 
   function onActionClick(event) {
@@ -1251,7 +1273,23 @@
       openProjectSource(btn.getAttribute('data-path'), btn.getAttribute('data-kind'), Number(btn.getAttribute('data-line')) || 0);
       return;
     }
-    if (action === 'toggle-details') { event.preventDefault(); toggleDetails(key); renderInto(ensureContainer()); return; }
+    if (action === 'toggle-details') {
+      event.preventDefault();
+      const willExpand = viewState.expandedKeys.indexOf(key) === -1;
+      toggleDetails(key);
+      const hostEl = ensureContainer();
+      renderInto(hostEl);
+      // After expanding: focus first editable control for managed rows.
+      // After closing: focus returns to the row action button.
+      if (willExpand) {
+        requestAnimationFrame(() => {
+          const detailsEl = hostEl.querySelector(`[data-projects-key="${escapeHtml(key)}"] .projectsRowDetails, .projectsRowDetails[data-projects-key="${escapeHtml(key)}"]`) || hostEl.querySelector(`[data-projects-key="${escapeHtml(key)}"]`);
+          const firstEditable = detailsEl ? detailsEl.querySelector('select, input:not([readonly]), textarea') : null;
+          if (firstEditable) firstEditable.focus();
+        });
+      }
+      return;
+    }
     if (action === 'clear-filters') {
       event.preventDefault();
       viewState.search = '';
