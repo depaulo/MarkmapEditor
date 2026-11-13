@@ -253,70 +253,111 @@ function handleFixtureReset() {
 // =====================
 
 async function activateFixtureWorkspace() {
-  if (!isFixtureActive()) return false;
-
-  renderFixtureBanner();
-
-  // Log activation
-  globalThis.MME_APP?.log?.('[fixture] activated projects-review storage=read-only-memory');
-
-  // Populate WORKSPACE_STATE — same shape as activateWorkspaceStorage() assignment
-  globalThis.WORKSPACE_STATE.rootHandle = {
-    __mmeFixture: true,
-    fixture: true,
-  };
-  globalThis.WORKSPACE_STATE.rootName = 'TEST FIXTURE · projects-review';
-  globalThis.WORKSPACE_STATE.folders = globalThis.WORKSPACE_STATE.folders || {};
-  globalThis.WORKSPACE_STATE.folders.notes = {
-    __mmeFixtureRoot: true,
-    getFileHandle: () => Promise.resolve(new FixtureFileHandle('fixture-root', '')),
-    getDirectoryHandle: () => Promise.resolve(new FixtureFileHandle('fixture-root', '')),
-  };
-  globalThis.WORKSPACE_STATE.files = globalThis.WORKSPACE_STATE.files || {};
-  globalThis.WORKSPACE_STATE.files.notes = fixtureRecords;
-  globalThis.WORKSPACE_STATE.activeFile = null;
-
-  // Refresh the UI state so the sidebar/mode surfaces know a Workspace is
-  // active (same owner the canonical activation transaction calls after
-  // assigning WORKSPACE_STATE).
-  if (typeof globalThis.updateWorkspaceUiState === 'function') {
-    globalThis.updateWorkspaceUiState();
+  // Idempotency guard: do not activate more than once per page load.
+  if (globalThis.MME_FIXTURE._activationState === 'active' ||
+      globalThis.MME_FIXTURE._activationState === 'activating') {
+    return false;
   }
+  globalThis.MME_FIXTURE._activationState = 'activating';
 
-  // Build the Workspace Index (reads from WORKSPACE_STATE.files.notes)
   try {
+    if (!isFixtureActive()) {
+      globalThis.MME_FIXTURE._activationState = 'inactive';
+      return false;
+    }
+
+    // Require canonical Workspace state object — never create or replace it.
+    if (!globalThis.WORKSPACE_STATE) {
+      globalThis.MME_FIXTURE._activationState = 'inactive';
+      globalThis.MME_FIXTURE._activationPromise = null;
+      globalThis.MME_APP?.log?.('[fixture] activation blocked: WORKSPACE_STATE not ready', 'error');
+      return false;
+    }
+
+    const state = globalThis.WORKSPACE_STATE;
+
+    if (!state.files || !Array.isArray(state.files.notes) || !state.folders) {
+      globalThis.MME_FIXTURE._activationState = 'inactive';
+      globalThis.MME_FIXTURE._activationPromise = null;
+      globalThis.MME_APP?.log?.('[fixture] activation blocked: WORKSPACE_STATE not ready', 'error');
+      return false;
+    }
+
+    renderFixtureBanner();
+
+    // Log activation
+    globalThis.MME_APP?.log?.('[fixture] activated projects-review storage=read-only-memory');
+
+    // Populate fixture fields on the canonical state object — mutate only,
+    // never assign globalThis.WORKSPACE_STATE = ...
+    state.rootHandle = {
+      __mmeFixture: true,
+      fixture: true,
+    };
+    state.rootName = 'TEST FIXTURE · projects-review';
+    state.folders.notes = {
+      __mmeFixtureRoot: true,
+      getFileHandle: () => Promise.resolve(new FixtureFileHandle('fixture-root', '')),
+      getDirectoryHandle: () => Promise.resolve(new FixtureFileHandle('fixture-root', '')),
+    };
+    state.files.notes = fixtureRecords;
+    state.activeFile = null;
+
+    // Refresh the UI state so the sidebar/mode surfaces know a Workspace is
+    // active (same owner the canonical activation transaction calls after
+    // assigning WORKSPACE_STATE).
+    if (typeof globalThis.updateWorkspaceUiState === 'function') {
+      globalThis.updateWorkspaceUiState();
+    }
+
+    // Build the Workspace Index (reads from state.files.notes)
     if (typeof buildWorkspaceIndex === 'function') {
       await buildWorkspaceIndex();
     }
-  } catch (e) {
-    globalThis.MME_APP?.log?.(`[fixture] Index build error: ${e?.message || e}`, 'error');
-  }
 
-  // ACT 1C continuation — the canonical activation closure dispatches
-  // mme-workspace-index-ready and refreshes every Index consumer from the
-  // completed snapshot. The fixture cannot rely on a host picker, so it
-  // performs the same consumer refresh here (existing owners only — no
-  // manual DOM injection).
-  try {
+    // ACT 1C continuation — the canonical activation closure dispatches
+    // mme-workspace-index-ready and refreshes every Index consumer from the
+    // completed snapshot. The fixture cannot rely on a host picker, so it
+    // performs the same consumer refresh here (existing owners only — no
+    // manual DOM injection).
     window.dispatchEvent(new CustomEvent('mme-workspace-index-ready', {
       detail: {
-        files: globalThis.WORKSPACE_STATE.files.notes.length,
+        files: state.files.notes.length,
       },
     }));
-  } catch {}
 
-  // Refresh the same UI panels that the canonical activation closure refreshes.
-  globalThis.renderWorkspaceIndexSummary?.();
-  globalThis.renderWorkspaceActivePanel?.();
-  globalThis.renderWorkspaceTasksPanel?.();
-  globalThis.renderWorkspaceTagsPanel?.();
-  globalThis.updateWorkspaceJournalSidebarTitlesFromIndex?.();
-  globalThis.renderWorkspaceJournalTimeline?.();
-  globalThis.renderWorkspaceKnowledgePanel?.();
-  globalThis.renderWorkspaceArchivePanel?.();
+    // Refresh the same UI panels that the canonical activation closure refreshes.
+    globalThis.renderWorkspaceIndexSummary?.();
+    globalThis.renderWorkspaceActivePanel?.();
+    globalThis.renderWorkspaceTasksPanel?.();
+    globalThis.renderWorkspaceTagsPanel?.();
+    globalThis.updateWorkspaceJournalSidebarTitlesFromIndex?.();
+    globalThis.renderWorkspaceJournalTimeline?.();
+    globalThis.renderWorkspaceKnowledgePanel?.();
+    globalThis.renderWorkspaceArchivePanel?.();
 
-  globalThis.MME_APP?.log?.('[fixture] Journal context active');
-  return true;
+    globalThis.MME_APP?.log?.('[fixture] Journal context active');
+
+    // Final active-state assertion: verify fixture root and files are present
+    // in the canonical state object before marking active.
+    if (
+      state.rootHandle.__mmeFixture !== true ||
+      state.rootName !== 'TEST FIXTURE · projects-review' ||
+      state.files.notes.length !== 3
+    ) {
+      throw new Error('fixture split-state: canonical WORKSPACE_STATE does not match fixture records');
+    }
+
+    // Success: transition activating → active
+    globalThis.MME_FIXTURE._activationState = 'active';
+    return true;
+  } catch (e) {
+    // Failure: transition activating → inactive
+    globalThis.MME_FIXTURE._activationState = 'inactive';
+    globalThis.MME_FIXTURE._activationPromise = null;
+    globalThis.MME_APP?.log?.(`[fixture] activation failed: ${e?.message || e}`, 'error');
+    throw e;
+  }
 }
 
 // =====================
@@ -324,17 +365,37 @@ async function activateFixtureWorkspace() {
 // =====================
 
 globalThis.MME_FIXTURE = {
-  maybeActivateFixture() {
-    if (!isFixtureActive()) return false;
+  _activationState: 'inactive',
+  _activationPromise: null,
 
-    const knownFixtures = [FIXTURE_NAME];
-    if (!knownFixtures.includes(getFixtureParam())) {
-      globalThis.MME_APP?.log?.(`[fixture] refused fixture=${getFixtureParam()} unknown fixture name`);
+  async maybeActivateFixture() {
+    // 1. Read fixtureName
+    const fixtureName = getFixtureParam();
+
+    // 2. If no fixture parameter, return false silently
+    if (!fixtureName) return false;
+
+    // 3. If host is not exactly localhost or 127.0.0.1, log bounded refusal and return
+    if (!isFixtureHostAllowed()) {
+      globalThis.MME_APP?.log?.(`[fixture] refused host=${window.location.hostname}`);
       return false;
     }
 
-    activateFixtureWorkspace();
-    return true;
+    // 4. If fixtureName is not exactly projects-review, log unknown fixture name and return
+    if (fixtureName !== FIXTURE_NAME) {
+      globalThis.MME_APP?.log?.(`[fixture] refused fixture=${fixtureName} unknown fixture name`);
+      return false;
+    }
+
+    // 5. Handle active/activating lifecycle
+    if (this._activationState === 'active') return true;
+    if (this._activationState === 'activating') {
+      return this._activationPromise;
+    }
+
+    // 6. Start one activation Promise
+    this._activationPromise = activateFixtureWorkspace();
+    return this._activationPromise;
   },
 
   isFixtureWorkspace(state) {
@@ -344,7 +405,7 @@ globalThis.MME_FIXTURE = {
 
   guardPhysicalOperation() {
     const state = globalThis.WORKSPACE_STATE;
-    if (isFixtureWorkspace(state)) {
+    if (this.isFixtureWorkspace(state)) {
       globalThis.MME_APP?.log?.('[fixture] physical operations are unavailable in fixture mode');
       console.warn('TEST FIXTURE is read-only. Physical file operations are unavailable.');
       return false;
@@ -354,3 +415,42 @@ globalThis.MME_FIXTURE = {
 };
 
 console.log('[fixture] loader ready');
+
+// Fixture bootstrap: register mme-main-ready listener and immediately
+// check the durable ready flag so both startup orders activate the fixture.
+// Path A: event fires → listener calls activation.
+// Path B: flag already true → immediate activation.
+function requestFixtureActivation() {
+  // Only activate when both main.js and canonical Workspace state are ready.
+  if (globalThis.MME_MAIN_READY !== true || globalThis.MME_WORKSPACE_STATE_READY !== true) {
+    return;
+  }
+  Promise.resolve(
+    globalThis.MME_FIXTURE?.maybeActivateFixture?.()
+  ).catch((error) => {
+    console.error('[fixture] activation failed:', error);
+    if (globalThis.MME_APP?.log) {
+      globalThis.MME_APP.log('[fixture] activation failed: ' + (error?.message || String(error)), 'error');
+    }
+  });
+}
+
+window.addEventListener(
+  'mme-main-ready',
+  requestFixtureActivation,
+  { once: true }
+);
+
+if (globalThis.MME_MAIN_READY === true) {
+  requestFixtureActivation();
+}
+
+window.addEventListener(
+  'mme-workspace-state-ready',
+  requestFixtureActivation,
+  { once: true }
+);
+
+if (globalThis.MME_WORKSPACE_STATE_READY === true) {
+  requestFixtureActivation();
+}

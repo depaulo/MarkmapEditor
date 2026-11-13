@@ -115,11 +115,11 @@ if (fixtureLoader.includes('createWritable')) {
   ok &= pass('fixture loader: no createWritable implementation');
 }
 
-// 13. Physical operations are blocked by the canonical fixture guard
-if (!fixtureLoader.includes('guardPhysicalOperation') && !fixtureLoader.includes('physical operations')) {
-  ok &= fail('fixture loader: physical operation guard not found');
+// 13. Physical operations are blocked by the canonical fixture guard using this.isFixtureWorkspace
+if (!fixtureLoader.includes('guardPhysicalOperation') || !fixtureLoader.includes('this.isFixtureWorkspace(state)')) {
+  ok &= fail('fixture loader: guardPhysicalOperation must use this.isFixtureWorkspace(state)');
 } else {
-  ok &= pass('fixture loader: physical operation guard present');
+  ok &= pass('fixture loader: physical operation guard uses this.isFixtureWorkspace(state)');
 }
 
 // 14. One banner owner and stable ID
@@ -149,19 +149,19 @@ if (!foundForbidden) {
   ok &= pass('fixture loader: no real customer identifiers in fixture data');
 }
 
-// 17. Normal boot path does not activate fixture (workspace-controller guard only activates when param present)
+// 17. workspace-controller recognizes already-active fixture, never requests activation,
+// and normal Open Workspace still reaches the native picker candidate path
 const wsController = read('js/workspace/workspace-controller.js');
-if (!wsController.includes('MME_FIXTURE?.maybeActivateFixture')) {
+if (!wsController.includes('isFixtureWorkspace')) {
   ok &= fail('workspace-controller: fixture guard not found');
+} else if (!wsController.includes('isFixtureWorkspace?.(') && !wsController.includes('isFixtureWorkspace(')) {
+  ok &= fail('workspace-controller: isFixtureWorkspace must be called');
+} else if (wsController.includes('maybeActivateFixture')) {
+  ok &= fail('workspace-controller: must not request fixture activation');
+} else if (!wsController.includes('openWorkspaceCandidate')) {
+  ok &= fail('workspace-controller: openWorkspace must reference openWorkspaceCandidate');
 } else {
-  ok &= pass('workspace-controller: fixture guard present');
-}
-
-// 18. workspace-controller guard is safe (optional chaining, returns false when undefined)
-if (!wsController.includes('?.')) {
-  ok &= fail('workspace-controller: guard should use optional chaining');
-} else {
-  ok &= pass('workspace-controller: guard uses optional chaining');
+  ok &= pass('workspace-controller: recognizes fixture, no activation request, picker path intact');
 }
 
 // 19. script-loader registers fixture loader before main.js
@@ -172,14 +172,139 @@ if (!scriptLoader.includes('fixture-loader.js')) {
   ok &= pass('script-loader: fixture-loader registered');
 }
 
-// 20. script-loader has mme-main-ready listener
-if (!scriptLoader.includes('mme-main-ready') || !scriptLoader.includes('MME_FIXTURE')) {
-  ok &= fail('script-loader: mme-main-ready listener for fixture not found');
+// 20. script-loader sets durable ready flag before mme-main-ready dispatch
+const readyFlagPos = scriptLoader.indexOf('MME_MAIN_READY = true');
+const eventDispatchPos = scriptLoader.indexOf('dispatchEvent(new Event(\'mme-main-ready\')');
+if (readyFlagPos === -1 || eventDispatchPos === -1 || readyFlagPos >= eventDispatchPos) {
+  ok &= fail('script-loader: MME_MAIN_READY = true must precede dispatchEvent(new Event(\'mme-main-ready\'))');
 } else {
-  ok &= pass('script-loader: mme-main-ready listener present');
+  ok &= pass('script-loader: durable ready flag set before event dispatch');
 }
 
-// 21. Fixture manifest files exist (3 synthetic Markdown files)
+// 20b. script-loader must NOT directly call MME_FIXTURE.maybeActivateFixture
+if (scriptLoader.includes('MME_FIXTURE.maybeActivateFixture')) {
+  ok &= fail('script-loader: direct MME_FIXTURE.maybeActivateFixture call must not exist (fixture-loader owns activation)');
+} else {
+  ok &= pass('script-loader: no direct MME_FIXTURE.maybeActivateFixture call');
+}
+
+// 21. fixture-loader registers mme-main-ready listener and checks ready flag
+const fixtureLoader2 = read('js/workspace/fixture-loader.js');
+const requestFnDecls = (fixtureLoader2.match(/function\s+requestFixtureActivation\s*\(/g) || []).length;
+const listenerRefs = (fixtureLoader2.match(/addEventListener\s*\(\s*['\"]mme-main-ready['\"]\s*,\s*requestFixtureActivation/g) || []).length;
+const immediateCheck = fixtureLoader2.includes('if (globalThis.MME_MAIN_READY === true) {\n  requestFixtureActivation();') || fixtureLoader2.includes('if (globalThis.MME_MAIN_READY === true) {\nrequestFixtureActivation();');
+if (requestFnDecls !== 1) {
+  ok &= fail(`fixture-loader: expected exactly 1 requestFixtureActivation declaration, found ${requestFnDecls}`);
+} else if (listenerRefs !== 1) {
+  ok &= fail(`fixture-loader: mme-main-ready listener must reference requestFixtureActivation exactly once, found ${listenerRefs}`);
+} else if (!immediateCheck) {
+  ok &= fail('fixture-loader: immediate MME_MAIN_READY check must call requestFixtureActivation()');
+} else {
+  ok &= pass('fixture-loader: mme-main-ready listener and ready flag check reference single requestFixtureActivation');
+}
+
+// 23. fixture-loader idempotency guard present
+if (!fixtureLoader2.includes('_activationState')) {
+  ok &= fail('fixture-loader: idempotency guard not found');
+} else {
+  ok &= pass('fixture-loader: idempotency guard present');
+}
+
+// 24. Functional ordering: unknown fixture check before activation-state handling
+const maybeStart = fixtureLoader2.indexOf('maybeActivateFixture');
+const unknownFixturePos = fixtureLoader2.indexOf('fixtureName !== FIXTURE_NAME', maybeStart);
+const activationStatePos = fixtureLoader2.indexOf('_activationState === \'active\'', maybeStart);
+if (unknownFixturePos === -1 || activationStatePos === -1) {
+  ok &= fail('fixture-loader: unknown-fixture check or activation-state check not found');
+} else if (unknownFixturePos >= activationStatePos) {
+  ok &= fail('fixture-loader: unknown fixture check must occur before activation-state handling');
+} else {
+  ok &= pass('fixture-loader: unknown fixture check occurs before activation-state handling');
+}
+
+// 25. Active success transition exists
+if (!fixtureLoader2.includes('_activationState = \'active\'')) {
+  ok &= fail('fixture-loader: active success transition not found');
+} else {
+  ok &= pass('fixture-loader: active success transition present');
+}
+
+// 30. Inactive failure reset exists
+if (!fixtureLoader2.includes('_activationState = \'inactive\'')) {
+  ok &= fail('fixture-loader: inactive failure reset not found');
+} else {
+  ok &= pass('fixture-loader: inactive failure reset present');
+}
+
+// 31. One activation Promise exists (shared for in-progress activation)
+if (!fixtureLoader2.includes('_activationPromise')) {
+  ok &= fail('fixture-loader: activation Promise sharing not found');
+} else {
+  ok &= pass('fixture-loader: one activation Promise exists');
+}
+
+// 32. No timer or polling exists
+if (
+  fixtureLoader2.includes('setTimeout') ||
+  fixtureLoader2.includes('setInterval')
+) {
+  ok &= fail(
+    'fixture-loader: timer or polling activation detected'
+  );
+} else {
+  ok &= pass(
+    'fixture-loader: no timer or polling activation'
+  );
+}
+
+// 32b. Fixture loader never creates or replaces globalThis.WORKSPACE_STATE
+if (
+  fixtureLoader2.includes('globalThis.WORKSPACE_STATE = {}') ||
+  fixtureLoader2.includes('globalThis.WORKSPACE_STATE = {') ||
+  fixtureLoader2.includes('WORKSPACE_STATE = {}')
+) {
+  ok &= fail('fixture-loader: fixture loader must not create or replace WORKSPACE_STATE');
+} else {
+  ok &= pass('fixture-loader: never creates or replaces WORKSPACE_STATE');
+}
+
+// 32c. Canonical state owner publishes WORKSPACE_STATE readiness
+if (
+  !wsController.includes('MME_WORKSPACE_STATE_READY = true') ||
+  !wsController.includes('mme-workspace-state-ready')
+) {
+  ok &= fail('workspace-controller: must publish WORKSPACE_STATE readiness flag and event');
+} else {
+  ok &= pass('workspace-controller: publishes WORKSPACE_STATE readiness');
+}
+
+// 32d. Fixture activation requires canonical state readiness
+const fixtureReadyPos = fixtureLoader2.indexOf('MME_WORKSPACE_STATE_READY');
+if (fixtureReadyPos === -1) {
+  ok &= fail('fixture-loader: must check MME_WORKSPACE_STATE_READY before activation');
+} else {
+  ok &= pass('fixture-loader: requires canonical Workspace state readiness');
+}
+
+// 33. One activation call site
+const activationCallSites =
+  (
+    fixtureLoader2.match(
+      /_activationPromise\s*=\s*activateFixtureWorkspace\s*\(/g
+    ) || []
+  ).length;
+
+if (activationCallSites !== 1) {
+  ok &= fail(
+    `fixture-loader: expected 1 activation call site, found ${activationCallSites}`
+  );
+} else {
+  ok &= pass(
+    'fixture-loader: single activation call site'
+  );
+}
+
+// 25. Fixture manifest files exist (3 synthetic Markdown files)
 const fixtureDir = 'tests/fixtures/workspaces/projects-review';
 const expectedFiles = ['CUSTOMER_A.md', 'CUSTOMER_B.md', 'PROJECTS_TEST.md'];
 let foundFiles = 0;

@@ -19,6 +19,9 @@ import { scanFolder, scanNotesFolder } from './workspace-scanner.js';
 globalThis.WORKSPACE_STATE = WORKSPACE_STATE;
 window.WORKSPACE_STATE = WORKSPACE_STATE;
 
+globalThis.MME_WORKSPACE_STATE_READY = true;
+window.dispatchEvent(new Event('mme-workspace-state-ready'));
+
 async function refreshWorkspaceSidebar() {
   if (!WORKSPACE_STATE.folders.journals || !WORKSPACE_STATE.folders.concepts) {
     clearSidebar();
@@ -638,15 +641,6 @@ async function openWorkspace() {
       btnOpen.title = 'TEST FIXTURE is active. Reload without the fixture URL to open a real Workspace.';
       btnOpen.setAttribute('aria-label', 'TEST FIXTURE is active');
     }
-    return;
-  }
-
-  // F1 — Local-only Workspace fixture activation. If the URL carries the exact
-  // allowed fixture parameter and the host is loopback, activate the synthetic
-  // read-only Workspace through the real record-population seam and skip the
-  // native File System Access picker. Unknown fixture names and non-loopback
-  // hosts fall through to the normal picker path.
-  if (globalThis.MME_FIXTURE?.maybeActivateFixture?.()) {
     return;
   }
 

@@ -114,6 +114,9 @@ function appendStylesheet(href) {
 
   appendScript('./js/main.js', {
     onload: function () {
+      // Durable ready flag: fixture loader checks this after registering its
+      // mme-main-ready listener so both startup orders activate the fixture.
+      globalThis.MME_MAIN_READY = true;
       // main entry notifies other modules that UI actions can be wired
       window.dispatchEvent(new Event('mme-main-ready'));
     },
@@ -182,17 +185,6 @@ function appendStylesheet(href) {
   // 'mme-main-ready' event so it can expose the guarded activation seam used
   // by the Workspace open boundary.
   appendScript('./js/workspace/fixture-loader.js');
-
-  // F1 — after the app is ready, check for fixture activation (loopback only).
-  window.addEventListener('mme-main-ready', function () {
-    try {
-      if (globalThis.MME_FIXTURE && typeof globalThis.MME_FIXTURE.maybeActivateFixture === 'function') {
-        globalThis.MME_FIXTURE.maybeActivateFixture();
-      }
-    } catch (e) {
-      console.error('[fixture] activation failed:', e);
-    }
-  });
 
 })();
 
