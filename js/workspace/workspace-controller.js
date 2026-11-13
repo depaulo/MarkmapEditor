@@ -619,6 +619,37 @@ async function openWorkspace() {
     return;
   }
 
+  // F1 — if the fixture is already active, Open Workspace exits fixture state
+  // and continues through the normal showDirectoryPicker() flow. The button
+  // shows an accessible explanation; re-activating the fixture would cause a
+  // duplicate index build, so we return early with visible feedback.
+  const fixtureActive = globalThis.MME_FIXTURE?.isFixtureWorkspace?.(globalThis.WORKSPACE_STATE);
+  if (fixtureActive) {
+    globalThis.MME_APP?.showToast?.(
+      'TEST FIXTURE is active. Reload without the fixture URL to open a real Workspace.',
+      'warn',
+      4000
+    );
+    // Disable the Open button while the fixture is active so the user receives
+    // the accessible explanation rather than a silent no-op.
+    const btnOpen = document.getElementById('btnOpen');
+    if (btnOpen) {
+      btnOpen.disabled = true;
+      btnOpen.title = 'TEST FIXTURE is active. Reload without the fixture URL to open a real Workspace.';
+      btnOpen.setAttribute('aria-label', 'TEST FIXTURE is active');
+    }
+    return;
+  }
+
+  // F1 — Local-only Workspace fixture activation. If the URL carries the exact
+  // allowed fixture parameter and the host is loopback, activate the synthetic
+  // read-only Workspace through the real record-population seam and skip the
+  // native File System Access picker. Unknown fixture names and non-loopback
+  // hosts fall through to the normal picker path.
+  if (globalThis.MME_FIXTURE?.maybeActivateFixture?.()) {
+    return;
+  }
+
   // ACT 1A — strict read-only Workspace format gate. Detection runs BEFORE any
   // WORKSPACE_STATE replacement or filesystem mutation.
   const detection = await openWorkspaceCandidate();

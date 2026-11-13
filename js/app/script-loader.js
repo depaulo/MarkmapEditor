@@ -177,5 +177,22 @@ function appendStylesheet(href) {
   // third Host workspace (`projects`); it does NOT reuse the Workspace Index
   // container.
   appendScript('./js/workspace/projects-view.js');
+
+  // F1 — Local-only Workspace fixture loader. Registered before the
+  // 'mme-main-ready' event so it can expose the guarded activation seam used
+  // by the Workspace open boundary.
+  appendScript('./js/workspace/fixture-loader.js');
+
+  // F1 — after the app is ready, check for fixture activation (loopback only).
+  window.addEventListener('mme-main-ready', function () {
+    try {
+      if (globalThis.MME_FIXTURE && typeof globalThis.MME_FIXTURE.maybeActivateFixture === 'function') {
+        globalThis.MME_FIXTURE.maybeActivateFixture();
+      }
+    } catch (e) {
+      console.error('[fixture] activation failed:', e);
+    }
+  });
+
 })();
 
