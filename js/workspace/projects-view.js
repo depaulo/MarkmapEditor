@@ -87,6 +87,7 @@
     firstInvalidProjectId: '',
     lastError: '',
     lastBatchResult: null,
+    columnPreset: 'summary',
   };
 
   // ---- global draft owner: keyed by projectId, NEVER by title ----
@@ -95,6 +96,32 @@
 
   // Drafts are never persisted, so a page reload starts from a clean slate.
   let deferredRefresh = false;
+
+  // ---- ACT 3B column preset shared model ----
+  const COLUMN_DEFINITIONS = {
+    project: { header: 'Project', cellClass: 'projectsCellTitle' },
+    stage: { header: 'Stage', cellClass: 'projectsCellStage' },
+    state: { header: 'State', cellClass: 'projectsCellState' },
+    value: { header: 'Value', cellClass: 'projectsCellValue' },
+    currency: { header: 'Currency', cellClass: 'projectsCellCurrency' },
+    order: { header: 'Order', cellClass: 'projectsCellOrder' },
+    delivery: { header: 'Delivery', cellClass: 'projectsCellDelivery' },
+    billing: { header: 'Billing', cellClass: 'projectsCellBilling' },
+    source: { header: 'Source', cellClass: 'projectsCellSource' },
+  };
+  const PRESET_COLUMNS = {
+    summary: ['project', 'stage', 'state', 'source'],
+    commercial: ['project', 'value', 'currency', 'order', 'stage', 'state'],
+    delivery: ['project', 'delivery', 'billing', 'state', 'source'],
+    all: ['project', 'stage', 'state', 'value', 'currency', 'order', 'delivery', 'billing', 'source'],
+  };
+  const COLUMN_PRESET_LABELS = {
+    summary: 'Summary',
+    commercial: 'Commercial',
+    delivery: 'Delivery',
+    all: 'All',
+  };
+  const COLUMN_PRESET_KEYS = ['summary', 'commercial', 'delivery', 'all'];
 
   function safeLog(m) { try { if (typeof globalThis.MME_APP?.log === 'function') globalThis.MME_APP.log(m); } catch {} }
   function getHost() { return typeof globalThis.MME_WORKSPACE_HOST === 'object' ? globalThis.MME_WORKSPACE_HOST : null; }
@@ -113,6 +140,23 @@
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // ---- ACT 3B preset helpers ----
+  function activeColumns() {
+    return PRESET_COLUMNS[viewState.columnPreset] || PRESET_COLUMNS.summary;
+  }
+  function activePresetLabel() {
+    return COLUMN_PRESET_LABELS[viewState.columnPreset] || 'Summary';
+  }
+  function isColumnVisible(key) {
+    return activeColumns().indexOf(key) !== -1;
+  }
+  function setColumnPreset(preset) {
+    if (COLUMN_PRESET_KEYS.indexOf(preset) === -1) preset = 'summary';
+    if (viewState.columnPreset === preset) return;
+    viewState.columnPreset = preset;
+    renderInto(ensureContainer());
   }
   function cssEscape(v) { return String(v).replace(/"/g, '\\"'); }
 
@@ -563,7 +607,8 @@
       : '<span aria-label="No created date">—</span>';
     const sourceBtn = `<button type="button" class="projectsDetailSource" data-action="open-source"
       data-path="${escapeHtml(r.sourcePath)}" data-kind="${escapeHtml(r.sourceKind)}" data-line="${escapeHtml(String(r.sourceLine))}"
-      aria-label="Open source for ${escapeHtml(r.name)}">${escapeHtml(r.sourceDisplayName || r.sourceName || r.sourcePath || '—')}:${escapeHtml(String(r.sourceLine || ''))}</button>`;
+      aria-label="Open source for ${escapeHtml(r.name)}"
+      title="${escapeHtml(r.sourcePath || '')}:${escapeHtml(String(r.sourceLine || ''))}">${escapeHtml(r.sourceDisplayName || r.sourceName || r.sourcePath || '—')}:${escapeHtml(String(r.sourceLine || ''))}</button>`;
 
     return `
       <div class="projectsDetailsFields" role="group" aria-label="Edit ${escapeHtml(r.name)}"${expanded ? '' : ' hidden'}>
@@ -574,6 +619,8 @@
         ${fieldWrap('Expected Order', quarterStructured('expectedOrder', f.expectedOrder), 'expectedOrder')}
         ${fieldWrap('Expected Delivery', quarterStructured('expectedDelivery', f.expectedDelivery), 'expectedDelivery')}
         ${fieldWrap('Expected Billing', quarterStructured('expectedBilling', f.expectedBilling), 'expectedBilling')}
+      </div>
+      <div class="projectsDetailsMeta">
         <span class="projectsDetailItem projectsDetailCreated">Created: ${createdCell}</span>
         <span class="projectsDetailItem">Source: ${sourceBtn}</span>
       </div>`;
@@ -590,36 +637,72 @@
     const hasInvalid = Object.keys(err).some((k) => err[k]);
     const statusText = hasInvalid ? 'Invalid' : (changed.length ? 'Edited' : '');
     const draftBadge = `<span class="projectsDraftBadge" data-draft-badge="${changed.length ? '1' : '0'}" aria-label="${changed.length ? changed.length + ' pending field change(s)' : 'no pending changes'}${statusText ? ', ' + statusText : ''}">${changed.length ? statusText || changed.length + ' pending' : ''}</span>${statusText ? ` <span class="projectsRowStatus" data-row-status="${statusText.toLowerCase()}" aria-hidden="true">${statusText}</span>` : ''}`;
-    const valueText = f.value ? `${f.currency ? f.currency + ' ' : ''}${f.value}` : '—';
+    // ACT 3B presentation: when Currency is rendered as its own compact
+    // column (Commercial / All), Value shows the numeric current value only —
+    // never the duplicated "BRL 80000" form. record.value/record.currency stay
+    // unchanged; this is presentation-only.
+    const valueText = f.value ? String(f.value) : '—';
     const sourceText = `${r.sourceDisplayName || r.sourceName || r.sourcePath || '—'}:${r.sourceLine || ''}`;
     const cell = (field) => (changed.indexOf(field) !== -1 ? ' projectsCellChanged' : '');
+
+    // ACT 3B: render only active preset columns in the compact row.
+    const cols = activeColumns();
+    const primaryCells = [];
+    primaryCells.push(
+      `<div class="projectsCell projectsCellToggle" role="cell" data-col="toggle">
+        <button type="button" class="projectsExpandBtn" data-action="toggle-details"
+          aria-expanded="${expanded ? 'true' : 'false'}"
+          aria-controls="details-${escapeHtml(r.key)}"
+          aria-label="${expanded ? 'Close Project details' : (r.managed ? 'Edit Project details' : 'View Project details')}">${expanded ? 'Close' : (r.managed ? 'Edit' : 'View')}</button>
+      </div>`
+    );
+    for (const col of cols) {
+      if (col === 'toggle') continue;
+      const def = COLUMN_DEFINITIONS[col];
+      let content = '';
+      switch (col) {
+        case 'project':
+          content = `<span class="projectsRowName">${escapeHtml(r.name)}</span>${managedTag}${draftBadge}`;
+          break;
+        case 'stage':
+          content = escapeHtml(stageLabel(f.stage));
+          break;
+        case 'state':
+          content = escapeHtml(stateLabel(f.state));
+          break;
+        case 'value':
+          content = escapeHtml(valueText);
+          break;
+        case 'currency':
+          content = escapeHtml(f.currency || '—');
+          break;
+        case 'order':
+          content = escapeHtml(f.expectedOrder || '—');
+          break;
+        case 'delivery':
+          content = escapeHtml(f.expectedDelivery || '—');
+          break;
+        case 'billing':
+          content = escapeHtml(f.expectedBilling || '—');
+          break;
+        case 'source':
+          content = `<button type="button" class="projectsRowSource" data-action="open-source"
+            data-path="${escapeHtml(r.sourcePath)}" data-kind="${escapeHtml(r.sourceKind)}"
+            data-line="${escapeHtml(String(r.sourceLine))}"
+            aria-label="Open source for ${escapeHtml(r.name)}">${escapeHtml(sourceText)}</button>`;
+          break;
+      }
+      const cellClass = def.cellClass ? ' ' + def.cellClass : '';
+      const cellChanged = cell(col);
+      primaryCells.push(
+        `<div class="projectsCell${cellClass}${cellChanged}" role="cell" data-col="${col}">${content}</div>`
+      );
+    }
 
     // The collapsed row is READ-ONLY: no input, no selector, no per-row Apply.
     const primaryRow = `
       <div class="projectsRow${changed.length ? ' projectsRowChanged' : ''}" role="row" data-projects-key="${escapeHtml(r.key)}"
-           data-projects-managed="${r.managed ? 'true' : 'false'}" data-row-state="${viewState.applying ? 'saving' : 'idle'}"${changedAttr}>
-        <div class="projectsCell projectsCellToggle" role="cell" data-col="toggle">
-          <button type="button" class="projectsExpandBtn" data-action="toggle-details"
-            aria-expanded="${expanded ? 'true' : 'false'}"
-            aria-controls="details-${escapeHtml(r.key)}"
-            aria-label="${expanded ? 'Close Project details' : (r.managed ? 'Edit Project details' : 'View Project details')}">${expanded ? 'Close' : (r.managed ? 'Edit' : 'View')}</button>
-        </div>
-        <div class="projectsCell projectsCellTitle" role="cell" data-col="project">
-          <span class="projectsRowName">${escapeHtml(r.name)}</span>${managedTag}${draftBadge}
-        </div>
-        <div class="projectsCell projectsCellStage${cell('stage')}" role="cell" data-col="stage">${escapeHtml(stageLabel(f.stage))}</div>
-        <div class="projectsCell projectsCellState${cell('state')}" role="cell" data-col="state">${escapeHtml(stateLabel(f.state))}</div>
-        <div class="projectsCell projectsCellValue${cell('value')}" role="cell" data-col="value">${escapeHtml(valueText)}</div>
-        <div class="projectsCell projectsCellOrder${cell('expectedOrder')}" role="cell" data-col="order">${escapeHtml(f.expectedOrder || '—')}</div>
-        <div class="projectsCell projectsCellDelivery${cell('expectedDelivery')}" role="cell" data-col="delivery">${escapeHtml(f.expectedDelivery || '—')}</div>
-        <div class="projectsCell projectsCellBilling${cell('expectedBilling')}" role="cell" data-col="billing">${escapeHtml(f.expectedBilling || '—')}</div>
-        <div class="projectsCell projectsCellSource" role="cell" data-col="source">
-          <button type="button" class="projectsRowSource" data-action="open-source"
-            data-path="${escapeHtml(r.sourcePath)}" data-kind="${escapeHtml(r.sourceKind)}"
-            data-line="${escapeHtml(String(r.sourceLine))}"
-            aria-label="Open source for ${escapeHtml(r.name)}">${escapeHtml(sourceText)}</button>
-        </div>
-      </div>`;
+           data-projects-managed="${r.managed ? 'true' : 'false'}" data-row-state="${viewState.applying ? 'saving' : 'idle'}"${changedAttr}>${primaryCells.join('')}</div>`;
 
     const createdText = r.created
       ? escapeHtml(r.created)
@@ -735,6 +818,7 @@
     if (!all.length) return { html: renderEmpty('No Projects yet.'), count: 0, ready: true, state: 'empty' };
 
     const f = viewState.filters;
+    const emptyHtml = rows.length ? '' : '<div class="projectsEmpty">No Projects match the current filters.</div>';
     // Normalize a stale source selection against the current Index: a source
     // that no longer exists resets to All without touching other filters.
     f.source = normalizeSourceValue(f.source, all);
@@ -743,6 +827,13 @@
     const srcSelected = srcIsAll ? '' : `<option value="${escapeHtml(f.source)}" selected>Legacy: ${escapeHtml(f.source)}</option>`;
     const filterHtml = `
       <div class="projectsFilters" role="group" aria-label="Project filters">
+        <div class="projectsColumns" role="group" aria-label="Project columns">
+          <button type="button" class="projectsColumnsBtn" data-action="columns-menu" aria-haspopup="menu" aria-expanded="false" aria-label="Columns">Columns: ${escapeHtml(activePresetLabel())}</button>
+          <div class="projectsColumnsMenu" data-columns-menu="1" role="menu" hidden>
+            ${COLUMN_PRESET_KEYS.map((p) => `
+              <button type="button" class="projectsColumnsOption${p === viewState.columnPreset ? ' selected' : ''}" data-action="column-preset" data-column-preset="${escapeHtml(p)}" role="menuitemradio" aria-checked="${p === viewState.columnPreset ? 'true' : 'false'}">${escapeHtml(COLUMN_PRESET_LABELS[p])}</button>`).join('')}
+          </div>
+        </div>
         <input class="projectsFilterSearch" type="search" data-filter="search" value="${escapeHtml(viewState.search)}" placeholder="Search projects" aria-label="Search projects" />
         <select class="projectsFilterSelect" data-filter="source" aria-label="Source filter"><option value=""${srcIsAll ? ' selected' : ''}>All Sources</option>${srcOpts.map((o) => `<option value="${escapeHtml(o.value)}"${(!srcIsAll && o.value === f.source) ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}${srcSelected}</select>
         <select class="projectsFilterSelect" data-filter="stage" aria-label="Stage filter">${opts(STAGE_OPTIONS, f.stage, 'All stages')}</select>
@@ -771,25 +862,24 @@
         ${totals.totals.map((t) => `<span class="projectsTotalCurrency">${escapeHtml(t.currency)} ${escapeHtml(String(t.totalValue))}</span>`).join('')}
       </div>`;
 
-    const emptyHtml = rows.length ? '' : '<div class="projectsEmpty">No Projects match the current filters.</div>';
-
     // ONE header row. Source stays a column of the same logical row.
+    // ACT 3B: header cells are driven by the ACTIVE column preset list.
+    const cols = activeColumns();
+    const headerCells = [];
+    headerCells.push(`<span class="projectsHeadCell" role="columnheader"><span class="projectsVisuallyHidden">Expand</span></span>`);
+    for (const col of cols) {
+      if (col === 'toggle') continue;
+      const def = COLUMN_DEFINITIONS[col];
+      headerCells.push(`<span class="projectsHeadCell" role="columnheader">${escapeHtml(def.header)}</span>`);
+    }
     const header = `
       <div class="projectsHeadRow" role="row">
-        <span class="projectsHeadCell" role="columnheader"><span class="projectsVisuallyHidden">Expand</span></span>
-        <span class="projectsHeadCell" role="columnheader">Project</span>
-        <span class="projectsHeadCell" role="columnheader">Stage</span>
-        <span class="projectsHeadCell" role="columnheader">State</span>
-        <span class="projectsHeadCell" role="columnheader">Value</span>
-        <span class="projectsHeadCell" role="columnheader">Order</span>
-        <span class="projectsHeadCell" role="columnheader">Delivery</span>
-        <span class="projectsHeadCell" role="columnheader">Billing</span>
-        <span class="projectsHeadCell" role="columnheader">Source</span>
+        ${headerCells.join('')}
       </div>`;
 
     const body = `
       <div class="projectsBody" data-projects-scroll-owner="1" tabindex="0" role="region" aria-label="Project list">
-        <div class="projectsTable" role="table" aria-label="Projects">
+        <div class="projectsTable" role="table" aria-label="Projects" data-projects-preset="${escapeHtml(viewState.columnPreset)}">
           ${header}
           <div role="rowgroup">${rows.length ? rows.map((r) => rowHtml(r, viewState.expandedKeys)).join('') : emptyHtml}</div>
         </div>
@@ -1314,6 +1404,40 @@
       applyAllDrafts();
       return;
     }
+    if (action === 'columns-menu') {
+      event.preventDefault();
+      // Close any open menu first
+      const existingMenu = document.querySelector('.projectsColumnsMenu:not([hidden])');
+      if (existingMenu) existingMenu.hidden = true;
+      // Toggle the clicked menu (the menu is a SIBLING of the button, not a child)
+      const menu = btn.parentElement.querySelector('[data-columns-menu="1"]');
+      if (menu) {
+        const wasOpen = !menu.hidden;
+        menu.hidden = wasOpen;
+        btn.setAttribute('aria-expanded', String(!menu.hidden));
+        if (!menu.hidden) {
+          const firstFocusable = menu.querySelector('button');
+          if (firstFocusable) firstFocusable.focus();
+        }
+      }
+      return;
+    }
+    if (action === 'column-preset') {
+      event.preventDefault();
+      const preset = btn.getAttribute('data-column-preset');
+      if (preset && COLUMN_PRESET_KEYS.indexOf(preset) !== -1) {
+        setColumnPreset(preset);
+        // Close the menu and return focus to the Columns button
+        const menu = btn.closest('.projectsColumnsMenu');
+        if (menu) { menu.hidden = true; }
+        const control = btn.closest('.projectsColumns').querySelector('[data-action="columns-menu"]');
+        if (control) {
+          control.setAttribute('aria-expanded', 'false');
+          control.focus();
+        }
+      }
+      return;
+    }
   }
 
   // A control change updates the DRAFT ONLY. It never Saves, never calls the
@@ -1514,6 +1638,20 @@
   }
 
   function onControlKeydown(event) {
+    // ACT 3B: Escape closes the Columns menu and returns focus to the button.
+    if (event.key === 'Escape') {
+      const openMenu = document.querySelector('.projectsColumnsMenu:not([hidden])');
+      if (openMenu) {
+        event.preventDefault();
+        openMenu.hidden = true;
+        const control = openMenu.closest('.projectsColumns').querySelector('[data-action="columns-menu"]');
+        if (control) {
+          control.setAttribute('aria-expanded', 'false');
+          control.focus();
+        }
+        return;
+      }
+    }
     const el = event.target;
     if (!el || typeof el.getAttribute !== 'function') return;
     const field = el.getAttribute('data-field');
@@ -1732,6 +1870,7 @@
     resetViewState,
     setFilter,
     clearFilters,
+    setColumnPreset,
     getViewState: () => JSON.parse(JSON.stringify(viewState)),
     buildProjection,
     applyFilters,

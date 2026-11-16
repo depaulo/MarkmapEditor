@@ -122,6 +122,9 @@
   --accent: #16a34a;
   --accent-hover: #15803d;
   --accent-soft: rgba(22, 163, 74, 0.12);
+  --projects-controls-sticky-top: 0;
+  --projects-summary-sticky-top: 0;
+  --projects-header-sticky-top: 0;
 }
 
 html.dark {
@@ -4930,9 +4933,9 @@ html.projects-view-active .splitter::before { content: none; }
 }
 .projectsQuarterYear,
 .projectsQuarterQuarter {
-  flex: 0 1 5.5rem;
-  min-width: 4.5rem;
-  max-width: 7rem;
+  flex: 0 1 auto;
+  min-width: 50px;
+  max-width: 100px;
 }
 .projectsQuarterLegacy {
   display: inline-block;
@@ -5029,16 +5032,29 @@ html.projects-view-active .splitter::before { content: none; }
 .projectsHeadRow {
   font-weight: 650; font-size: 12px; color: var(--text);
   border-bottom: 1px solid var(--menu-border); padding: 6px 0;
+  /* Sticky header inside .projectsBody scroll owner */
+  position: sticky;
+  top: var(--projects-header-sticky-top, 0);
+  z-index: 1;
+  background: var(--surface-panel, #e4e4e7);
 }
 .projectsVisuallyHidden {
   position: absolute; width: 1px; height: 1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap;
 }
 .projectsRow {
-  padding: 6px 0; border-bottom: 1px solid var(--menu-border);
+  padding: 4px 0; border-bottom: 1px solid var(--menu-border);
+  min-height: 40px;
+}
+.projectsRow:hover {
+  background: var(--surface-hover);
 }
 .projectsRow[data-row-state="saving"] { opacity: 0.6; }
 .projectsCell { font-size: 12px; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+/* §3 compact enterprise data-table: consistent 8-12px horizontal cell padding,
+   kept separate from the base .projectsCell rule so the mutation-control
+   contract CC3 stays exact. */
+.projectsRow .projectsCell { padding: 0 8px; box-sizing: border-box; }
 .projectsCellTitle { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .projectsRowName { font-weight: 600; word-break: break-word; }
 .projectsUnmanagedTag { font-size: 10px; opacity: 0.7; }
@@ -5062,7 +5078,15 @@ html.projects-view-active .splitter::before { content: none; }
   background: var(--toolbar-bg); color: var(--text);
   text-align: left;
 }
-.projectsExpandBtn { padding: 0 6px; min-width: 28px; text-align: center; }
+.projectsExpandBtn {
+  padding: 0 6px;
+  min-width: 50px;
+  width: 50px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .projectsRowSource, .projectsDetailSource { max-width: 100%; overflow-wrap: anywhere; }
 
 /* Exactly ONE details region per row, spanning the complete grid width. */
@@ -5106,7 +5130,48 @@ html.projects-view-active .splitter::before { content: none; }
   border: 1px solid var(--menu-border); border-radius: 6px;
   background: var(--toolbar-bg); color: var(--text);
 }
+/* §3 semantic field widths — each field keeps its proportional width so
+   Stage/State/Value/Currency stay readable on wide desktops, and each complete
+   Year+Quarter pair wraps as a unit at narrow widths without squeezing below
+   legibility. Data-field attribute selectors win over the base class rule. */
+.projectsCellSelect[data-field="stage"],
+.projectsCellSelect[data-field="state"] { min-width: 110px; max-width: 140px; }
+.projectsCellInput[data-field="value"]  { min-width: 140px; max-width: 220px; }
+.projectsCellSelect[data-field="currency"] { min-width: 80px; max-width: 100px; }
+.projectsQuarterYear { min-width: 96px; max-width: 110px; white-space: nowrap; }
+.projectsQuarterQuarter { min-width: 72px; max-width: 90px; white-space: nowrap; }
+/* created/source sit in the secondary metadata row at their own width */
+.projectsDetailCreated { min-width: 0; overflow-wrap: anywhere; }
 .projectsDetailItem { font-size: 12px; color: var(--text); overflow-wrap: anywhere; }
+/* Secondary metadata row — below primary controls, quieter text. */
+.projectsDetailsMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--menu-border);
+  font-size: 11px;
+  color: color-mix(in srgb, var(--text) 60%);
+  min-width: 0;
+}
+.projectsDetailsMeta .projectsDetailCreated {
+  flex: 0 0 auto;
+  overflow-wrap: nowrap;
+}
+.projectsDetailsMeta .projectsDetailItem {
+  min-width: 0;
+}
+.projectsDetailsMeta .projectsDetailSource {
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.projectsDetailsMeta .projectsDetailSource[title],
+.projectsDetailsMeta .projectsDetailSource[aria-label] {
+  /* full path remains available via title / accessible name */
+}
 
 /* ONE global change bar (no per-row Apply / Cancel anywhere).
    It sits OUTSIDE the scroll owner, so it is continuously reachable and can
@@ -5133,21 +5198,25 @@ html.projects-view-active .splitter::before { content: none; }
    The desktop grid is REPLACED here, never merely narrowed, so no destructive
    horizontal overflow is possible. */
 @media (max-width: 767px) {
+  /* ACT 3B: the collapsed narrow row is preset-scoped, exactly like the
+     desktop grid. The renderer's activeColumns() is the authoritative column
+     set, so CSS defines tracks ONLY for the columns that are actually
+     rendered — never a fixed nth-child visibility mask. */
   .projectsHeadRow, .projectsRow {
     grid-template-columns: 28px minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
   }
-  /* §1 narrow: the accepted five-track collapsed row is unchanged. Stage,
-     Delivery and Billing are re-flowed OUT of the summary (their values stay
-     fully readable in the expanded details) so the visible set is byte-for-byte
-     the accepted one — no squeeze, no horizontal scroll, no page overflow. */
-  .projectsHeadRow .projectsHeadCell:nth-child(3) { display: none; }
-  .projectsHeadRow .projectsHeadCell:nth-child(7) { display: none; }
-  .projectsHeadRow .projectsHeadCell:nth-child(8) { display: none; }
-  .projectsRow .projectsCell[data-col="stage"] { display: none; }
-  .projectsRow .projectsCell[data-col="delivery"] { display: none; }
-  .projectsRow .projectsCell[data-col="billing"] { display: none; }
-  .projectsRow .projectsCell[data-col="source"] { grid-column: 2 / -1; }
-  .projectsHeadRow .projectsHeadCell:nth-child(9) { grid-column: 2 / -1; }
+  [data-projects-preset="commercial"] .projectsHeadRow,
+  [data-projects-preset="commercial"] .projectsRow {
+    grid-template-columns: 28px minmax(0, 2fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+  [data-projects-preset="delivery"] .projectsHeadRow,
+  [data-projects-preset="delivery"] .projectsRow {
+    grid-template-columns: 28px minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+  [data-projects-preset="all"] .projectsHeadRow,
+  [data-projects-preset="all"] .projectsRow {
+    grid-template-columns: 28px minmax(0, 2fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
   .projectsRowDetails { padding-left: 0; }
   .projectsDetailsFields { grid-template-columns: minmax(0, 1fr); }
   .projectsDetailsReadOnly { flex-direction: column; gap: 4px; }
@@ -5168,6 +5237,94 @@ html.projects-view-active .splitter::before { content: none; }
   background: rgba(127, 127, 127, 0.05);
 }
 
+/* ACT 3B: Columns control and preset-scoped grid tracks. */
+.projectsColumns {
+  position: relative;
+}
+
+/* Columns control mirrors the Projects filter controls exactly:
+   same height, border, radius, font-size, background token, focus-visible. */
+.projectsColumnsBtn {
+  height: 30px;
+  padding: 0 8px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--menu-border);
+  border-radius: 6px;
+  background: var(--toolbar-bg);
+  color: var(--text);
+}
+.projectsColumnsBtn:focus-visible {
+  outline: 2px solid var(--accent, #4fc3f7);
+  outline-offset: 2px;
+}
+.projectsColumnsMenu[hidden] {
+  display: none;
+}
+
+.projectsColumnsMenu:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 150px;
+  margin-top: 4px;
+  padding: 4px 0;
+  border: 1px solid var(--menu-border);
+  border-radius: 6px;
+  background: var(--toolbar-bg);
+  color: var(--text);
+  z-index: 3;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Selected item uses existing theme tokens. */
+.projectsColumnsMenu button.selected,
+.projectsColumnsMenu button[aria-checked="true"] {
+  background: color-mix(in srgb, var(--toolbar-bg) 80%, var(--primary) 20%);
+}
+
+/* Compact menu items — not spreadsheet tabs. */
+.projectsColumnsMenu button {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.projectsColumnsMenu button:hover {
+  background: color-mix(in srgb, var(--toolbar-bg) 70%, var(--primary) 15%);
+}
+.projectsColumnsMenu button:focus-visible {
+  outline: 2px solid var(--accent, #4fc3f7);
+  outline-offset: 2px;
+}
+
+/* Preset-specific compact grid tracks — runtime emits only active columns. */
+[data-projects-preset="commercial"] .projectsHeadRow,
+[data-projects-preset="commercial"] .projectsRow {
+  grid-template-columns: 36px minmax(10rem, 2.2fr) minmax(8rem, 1.4fr) minmax(8rem, 1.3fr) minmax(8rem, 1.3fr) minmax(7rem, 1fr) minmax(7rem, 1fr);
+}
+
+/* Ensure Summary preset keeps original compact template */
+[data-projects-preset="summary"] .projectsHeadRow,
+[data-projects-preset="summary"] .projectsRow {
+  grid-template-columns: 36px minmax(10rem, 2.2fr) minmax(7rem, 1fr) minmax(7rem, 1fr) minmax(8rem, 1.1fr);
+}
+
+[data-projects-preset="delivery"] .projectsHeadRow,
+[data-projects-preset="delivery"] .projectsRow {
+  grid-template-columns: 36px minmax(10rem, 2.2fr) minmax(7rem, 1.2fr) minmax(7rem, 1.2fr) minmax(8rem, 1.2fr) minmax(8rem, 1.2fr);
+}
+
+[data-projects-preset="all"] .projectsHeadRow,
+[data-projects-preset="all"] .projectsRow {
+  grid-template-columns: 36px minmax(10rem, 2.2fr) minmax(7rem, 1.2fr) minmax(8rem, 1.2fr) minmax(8rem, 1.2fr) minmax(8rem, 1.2fr) minmax(7rem, 1.2fr) minmax(7rem, 1.2fr) minmax(8rem, 1.3fr) minmax(8rem, 1.3fr);
+}
 /* Find Files section inside Workspace Knowledge */
 #workspaceKnowledgeFindFilesSection {
   display: grid;
@@ -5522,17 +5679,6 @@ html.projects-view-active .splitter::before { content: none; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-#workspaceKnowledgeFindFilesSection .workspaceTagCount {
-  flex: 0 0 auto;
-}
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#workspaceKnowledgeFindFilesSection .workspaceTagCount {
-  flex: 0 0 auto;
 }
 
 /* =========================== */

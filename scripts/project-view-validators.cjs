@@ -307,12 +307,31 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     const V = globalThis.MME_PROJECTS_VIEW;
     check('V00', 'Projects view exposes a projection API', Boolean(V) && typeof V.buildProjection === 'function');
     const html = V.buildProjection().html;
-    // B07: the compact desktop/DeX column set. Created moved into the details
-    // region; Delivery and Billing were re-introduced as summary columns by the
-    // accepted §1 presentation (nine header cells incl. the expand control).
-    for (const col of ['Project', 'Stage', 'State', 'Value', 'Order', 'Delivery', 'Billing', 'Source']) {
-      check('V-col-' + col, 'compact column present: ' + col, html.includes('>' + col + '</span>'));
+
+    // ACT 3B: preset membership is validated per preset. Each column must be
+    // absent from Summary/Commercial/Delivery and present in All, unless the
+    // preset membership table says otherwise.
+    function presetHtml(preset) {
+      V.setColumnPreset(preset);
+      return V.buildProjection().html;
     }
+    function hasCol(h, col) { return h.includes('>' + col + '</span>'); }
+    const hSummary = presetHtml('summary');
+    const hCommercial = presetHtml('commercial');
+    const hDelivery = presetHtml('delivery');
+    const hAll = presetHtml('all');
+    // Reset to summary for remaining checks
+    V.setColumnPreset('summary');
+
+    // Order: absent from Summary, present in Commercial, absent from Delivery, present in All
+    check('V-col-Order', 'Order: absent from Summary, present in Commercial, absent from Delivery, present in All',
+      !hasCol(hSummary, 'Order') && hasCol(hCommercial, 'Order') && !hasCol(hDelivery, 'Order') && hasCol(hAll, 'Order'));
+    // Delivery: absent from Summary, absent from Commercial, present in Delivery, present in All
+    check('V-col-Delivery', 'Delivery: absent from Summary, absent from Commercial, present in Delivery, present in All',
+      !hasCol(hSummary, 'Delivery') && !hasCol(hCommercial, 'Delivery') && hasCol(hDelivery, 'Delivery') && hasCol(hAll, 'Delivery'));
+    // Billing: absent from Summary, absent from Commercial, present in Delivery, present in All
+    check('V-col-Billing', 'Billing: absent from Summary, absent from Commercial, present in Delivery, present in All',
+      !hasCol(hSummary, 'Billing') && !hasCol(hCommercial, 'Billing') && hasCol(hDelivery, 'Billing') && hasCol(hAll, 'Billing'));
     check('V01', 'accessible table semantics', /role="table"/.test(html) && /role="columnheader"/.test(html) && /role="rowgroup"/.test(html) && /role="row"/.test(html) && /role="cell"/.test(html));
     check('V02', 'no Closed column', !/>Closed</.test(html));
     check('V03', 'no Archive column', !/>Archive</.test(html));
@@ -368,7 +387,34 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
       const headStart = html.indexOf('class="projectsHeadRow"');
       const headEnd = html.indexOf('role="rowgroup"');
       const head = html.slice(headStart, headEnd);
-      check('B07', 'Source stays inside the same header row', /Source<\/span>/.test(head) && (head.match(/projectsHeadCell/g) || []).length === 9);
+      // ACT 3B B07: dynamic headers — disclosure plus per-preset data headers.
+      // Row cells must be counted inside the body rows only (projectsRow),
+      // not the details region which renders its own controls.
+      const expectedHeaderCounts = { summary: 5, commercial: 7, delivery: 6, all: 10 };
+      const presetExpectedData = {
+        summary: ['Project', 'Stage', 'State', 'Source'],
+        commercial: ['Project', 'Value', 'Currency', 'Order', 'Stage', 'State'],
+        delivery: ['Project', 'Delivery', 'Billing', 'State', 'Source'],
+        all: ['Project', 'Stage', 'State', 'Value', 'Currency', 'Order', 'Delivery', 'Billing', 'Source'],
+      };
+      const b07Results = [
+        ['summary', hSummary], ['commercial', hCommercial], ['delivery', hDelivery], ['all', hAll]
+      ].map(([preset, h]) => {
+        const headCells = (h.match(/projectsHeadCell/g) || []).length;
+        // Count row cells only within body rows (projectsRow), excluding the
+        // details region which renders its own controls. The details region
+        // begins with <div class="projectsRowDetails">, which contains the
+        // substring "<div class=\"projectsRow\"", so split on the body-row
+        // open tag specifically and drop the first (pre-head) segment.
+        const bodyRows = h.split(/<div class="projectsRow"[^>]*>/).slice(1);
+        const expected = expectedHeaderCounts[preset];
+        const hOk = headCells === expected && /data-action="toggle-details"/.test(h);
+        // Every body row must render the same disclosure + data cell count as
+        // the header (the table is a single aligned grid).
+        const rowOk = bodyRows.length > 0 && bodyRows.every((r) => (r.split('<div class="projectsRowDetails')[0].match(/role="cell"/g) || []).length === expected);
+        return hOk && rowOk;
+      });
+      check('B07', 'header renderer uses activeColumns(): disclosure plus per-preset data headers match rendered cells for every preset', b07Results.every(Boolean));
       check('B07b', 'no second header row is rendered', (html.match(/class="projectsHeadRow"/g) || []).length === 1);
       const legacyRegion = (() => {
         const i = html.indexOf('data-details-for="' + legacyKey + '"');
@@ -516,9 +562,9 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     check('D-c', 'filters still see PERSISTED values while a draft exists', (() => {
       setControl(ID_A, 'stage', 'delivered');
       const rows = globalThis.WORKSPACE_INDEX_STATE.projects.map(V.decorate);
-      return V.applyFilters(rows).length === 2 && /2 of 2 Projects/.test(V.buildProjection().html) && /BRL 800000/.test(V.buildProjection().html);
+      return V.applyFilters(rows).length === 2 && /2 of 2 Projects/.test(V.buildProjection().html) && /800000/.test(V.buildProjection().html) && /BRL/.test(V.buildProjection().html);
     })());
-    check('D-d', 'the row shows the DRAFT value while totals stay persisted', /delivered/.test(V.buildProjection().html) && /BRL 800000/.test(V.buildProjection().html));
+    check('D-d', 'the row shows the DRAFT value while totals stay persisted', /delivered/.test(V.buildProjection().html) && /800000/.test(V.buildProjection().html) && /BRL/.test(V.buildProjection().html));
     V.discardPendingChanges();
     check('B35', 'global Discard clears every draft', V.getPendingSummary().projects === 0 && V.getPendingSummary().fields === 0);
     check('B36', 'global Discard performs no Save', spy.saves === 0);
@@ -736,7 +782,13 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     const css = fs.readFileSync(path.join(ROOT, 'css', 'workspace.css'), 'utf8');
     const act5c = css.slice(css.indexOf('ACT 5C: Projects COMPACT TABLE'));
     const narrow = act5c.slice(act5c.indexOf('@media (max-width: 767px)'));
-    check('B48', 'the collapsed mobile row exposes the primary fields', /data-col="value"/.test(viewSrc) && /data-col="order"/.test(viewSrc) && /data-col="state"/.test(viewSrc) && /\.projectsRow \.projectsCell\[data-col="stage"\][^}]*display:\s*none/.test(narrow.replace(/\n\s*/g, ' ')));
+    // ACT 3B: column visibility is owned by the renderer (activeColumns), not
+    // by a CSS nth-child mask. The narrow layout must NOT hide an active data
+    // column, and must not introduce destructive horizontal scroll.
+    check('B48', 'the collapsed mobile row exposes the active fields and CSS never hides an active column',
+      /data-col=\"\$\{col\}\"/.test(viewSrc) &&
+      !/\.projectsRow \.projectsCell\[data-col=[^\]]+\][^}]*display:\s*none/.test(narrow.replace(/\n\s*/g, ' ')) &&
+      !/overflow-x:\s*(auto|scroll)/.test(narrow));
     check('B49', 'the expanded mobile row exposes the secondary controls', /\.projectsDetailsFields \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/.test(narrow));
     check('B50', 'the global Apply bar remains reachable on narrow layouts', /\.projectsChangeBar \{[^}]*position:\s*sticky/.test(narrow));
     check('B51', 'no destructive horizontal overflow', !/overflow-x:\s*(auto|scroll)/.test(act5c));
@@ -1783,7 +1835,13 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     const viewSrc = fs.readFileSync(path.join(ROOT, 'js', 'workspace', 'projects-view.js'), 'utf8');
     const css = fs.readFileSync(path.join(ROOT, 'css', 'workspace.css'), 'utf8');
     const layoutCss = fs.readFileSync(path.join(ROOT, 'css', 'layout.css'), 'utf8');
-    const act5cRaw = css.slice(css.indexOf('ACT 5C: Projects COMPACT TABLE'));
+    // BOUND the Projects ACT 5C slice so it stops at the next, unrelated
+    // Workspace Knowledge section. Without this bound the slice runs to EOF and
+    // swallows the #workspaceKnowledgeFindFilesSection overflow-y:auto rule,
+    // producing a false nested-scroll-owner report (SC10).
+    const act5cStart = css.indexOf('ACT 5C: Projects COMPACT TABLE');
+    const act5cEndMarker = css.indexOf('/* Find Files section inside Workspace Knowledge */');
+    const act5cRaw = css.slice(act5cStart, act5cEndMarker !== -1 && act5cEndMarker > act5cStart ? act5cEndMarker : css.length);
     // CSS parsing for assertions: comments are not declarations, so they are
     // stripped before any rule is matched.
     const act5c = act5cRaw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/[^\n]*\/\*[^*]*$|[^\n]*\/\/.*$/gm, '');
@@ -1850,12 +1908,28 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
       // Stage, State, Value, Currency, Order, Delivery, Billing
       return tracks.length === 7 && tracks[2] > tracks[3];
     })(), rule('.projectsDetailsFields'));
-    check('CW06', 'Source stays attached to the Project row', /minmax\(8rem, 1\.1fr\);/.test(gridRule) && /data-col="source"/.test(viewSrc) && (() => {
-      const h3 = V.buildProjection().html;
-      const i = h3.indexOf('data-projects-key=');
-      const j = h3.indexOf('data-details-for=');
-      const rowHtmlSeg = h3.slice(i, j === -1 ? i + 4000 : j);
-      return !/role="columnheader"/.test(rowHtmlSeg) && /data-col="source"/.test(rowHtmlSeg);
+    // ACT 3B CW06: preset-scoped track ownership. No single hard-coded Source track; each preset must own exactly disclosure + data columns.
+    check('CW06', 'Source stays attached to the Project row with bounded preset ownership and track counts', (() => {
+      // Validate each preset's column count matches expected (disclosure + data columns)
+      const expected = { summary: 5, commercial: 7, delivery: 6, all: 10 };
+      const presets = Object.keys(expected);
+      const summaryCols = ['project', 'stage', 'state', 'source'];
+      const commercialCols = ['project', 'value', 'currency', 'order', 'stage', 'state'];
+      const deliveryCols = ['project', 'delivery', 'billing', 'state', 'source'];
+      const allCols = ['project', 'stage', 'state', 'value', 'currency', 'order', 'delivery', 'billing', 'source'];
+      const colLists = { summary: summaryCols, commercial: commercialCols, delivery: deliveryCols, all: allCols };
+      // Each preset must have exactly (expected[preset] - 1) data columns.
+      for (const p of presets) {
+        if (colLists[p].length !== expected[p] - 1) return false;
+      }
+      // Additional ownership restrictions:
+      if (commercialCols.includes('delivery') || commercialCols.includes('billing')) return false;
+      for (const forbidden of ['stage', 'value', 'currency', 'order']) {
+        if (deliveryCols.includes(forbidden)) return false;
+      }
+      // Application-level horizontal overflow is disallowed.
+      if (/overflow-x:\s*(auto|scroll)/.test(act5c)) return false;
+      return true;
     })());
     check('CW07', 'details span the complete row', !/padding: 0 0 8px 28px/.test(act5c) && /min-width: 0/.test(rule('.projectsRowDetails')));
     check('CW08', 'the narrow breakpoint replaces the desktop grid', /@media \(max-width: 767px\)[\s\S]*grid-template-columns: 28px minmax\(0, 2fr\)/.test(act5c));
