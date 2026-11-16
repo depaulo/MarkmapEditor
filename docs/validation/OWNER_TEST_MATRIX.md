@@ -42,3 +42,5 @@ Rules:
 - Tier M runs only in disposable copies, sequentially
   (TEST_CATALOG Profiles: `npm run validate:mutation:projects`).
 - Static fixtures never substitute for the browser/device checkpoint column.
+
+| js/workspace/projects-view.js | node --check | — | project-view | yes — project-view controls | owner visual checkpoint (desktop + narrow) | workspace.css, main.js apply bridge |  // FUNCTIONAL: identity, drafts, mutation, Apply/Discard, Save boundary, preset state; BROWSER: appearance, sticky, wrapping, focus, responsive layout, visible header/cell alignment; RELEASE: APP_VERSION, productVersion, cache, Release Notes, service worker.

@@ -214,6 +214,36 @@ Never convert static validation (e.g., `git diff --check`, `node --check`) into 
 
 ---
 
+
+
+## 11. VALIDATION RATIONALIZATION WORKFLOW RULES (added after ACT 3B closure)
+
+### Owner evidence rule:
+If the owner supplies equivalent or stronger real-Workspace browser evidence before the agent finishes a broad Playwright run:
+- stop the redundant broad run;
+- use the owner evidence for fulfilled scenarios;
+- run only missing bounded regression checks;
+- clearly distinguish owner evidence from automated evidence.
+
+### Visual-only correction rule:
+Do not rerun complete browser acceptance after a visual-only correction.
+Run only the scenario that covers the corrected behavior plus one functional smoke check.
+
+### Validator timing rule:
+Do not update validators while the product implementation is still changing unless the validator protects a critical architecture or mutation boundary.
+Preferred sequence:
+implement to functional completion
+→ syntax/diff check
+→ one browser smoke
+→ align targeted validators once
+→ targeted browser acceptance once
+
+### Release check separation:
+Do not let release checks (T01, T04, T07, N08, N09) block normal Projects/Reports feature implementation.
+These belong to PACKAGE5 profile only, run at package/version boundaries.
+
+Do not remove them from the repository, but ensure normal feature work does not run them by default.
+
 ## 10. REFERENCES
 
 ### Related Documents

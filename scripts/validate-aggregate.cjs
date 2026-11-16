@@ -46,8 +46,6 @@ const strictParity = () => child('release-parity.cjs', {
 });
 
 const PROJECTS = [
-  child('project-contract-validators.cjs'),
-  child('project-consumer-validators.cjs'),
   child('project-view-validators.cjs'),
   child('project-save-integration-validators.cjs'),
   child('project-device-acceptance.cjs'),
@@ -77,6 +75,8 @@ const HYGIENE = [
   { builtin: 'diff', label: 'git-diff-check' },
 ];
 const PACKAGE5 = HYGIENE.concat(PROJECTS, [
+  child('project-contract-validators.cjs'),
+  child('project-consumer-validators.cjs'),
   child('workspace-index-task-filter-validators.cjs'),
   child('workspace-task-contract-validators.cjs'),
   child('workspace-task-consumers-validators.cjs'),

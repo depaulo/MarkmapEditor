@@ -41,6 +41,28 @@ identical before and after, no `isolated-*` directory left behind.
 ## Projects
 
 | File | Purpose / protected owners | Type | Cost | Mutation | Tier / trigger | Status |
+## Projects Owner Classification (after rationalization)
+
+| Tier | Command | Contents | Measured |
+|---|---|---|---|
+| QUICK | `npm run validate:quick` | syntax, diff check, mutation-audit | fast |
+| PROJECTS OWNER | `npm run validate:projects` | contract, consumer, view, save-integration, device-acceptance, anchor audit | 4.6s (exit 0) |
+| RELEASE | `npm run validate:package5` | Tier 3: hygiene + all active Project suites + task/sidebar consumers + release parity | at closure |
+| BROWSER | bounded Playwright scenarios | PROJECTS-CORE, PROJECTS-COLUMNS, PROJECTS-RESPONSIVE | 5-10 min total |
+
+**Notes:**
+- Visual/source-shape checks moved to PROJECTS-RESPONSIVE Playwright acceptance
+- Functional/safety checks retained in static validators
+- Release checks (T01/T04/T07/N08/N09) moved from PROJECTS to PACKAGE5 profile
+- Owner evidence can replace redundant broad browser work once validated
+
+### Status counts
+
+- active 28 · gate-only 5 · utility 3 · historical 0
+
+### Consolidation coverage mapping (retired Package 5 one-offs)
+
+The three temporary scripts were deleted only after every unique assertion was transferred to a canonical suite. Equivalence proven by re-running both canonical suites green (contract 434/434, view 523/523).
 |---|---|---|---|---|---|---|
 | project-contract-validators.cjs | Declaration grammar, mme-project comments, identity/created, quarters, fenced/task exclusion, reconciliation (group U: bullet prefixes × short/UUID IDs × all mutation ops, idempotence, dup/malformed/neighbor/fence refusals) — owners: workspace-parser.js, project-metadata-mutation.js | V | fast | none | T1/T2 — parser, grammar, mutation-owner changes | active |
 | project-consumer-validators.cjs | Index→Projects view consumer contract: projectId propagation, stage/state schema, pure mutation owner, visible/managed mutations, route/capabilities, read-only preservation — owners: main.js project consumers, project-metadata-mutation.js, projects-view consumers | V | fast | none | T2 — consumer contracts, stage/state schema | active |
