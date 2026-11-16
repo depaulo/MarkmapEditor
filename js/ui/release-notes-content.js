@@ -17,9 +17,9 @@
   //   limitations?, helpTopic? (links to a Help topic ID).
   const RELEASES = Object.freeze([
     {
-      version: '0.9.0',
+      version: '0.9.1',
       title: 'MarkmapEditor 0.9.0: Document Surface and Workspace Consistency',
-      summary: t`Version 0.9.0 introduces Edit and Read modes to Current Document. Read renders current Markdown in the Editor column, including unsaved text. Edit restores selection, cursor and reading position. Opening another Note while Reading refreshes the same Read Surface. Read initially aligns with the Editor's logical reading position. Read and HTML Preview retain independent scroll and heading navigation. Editor mutation tools are hidden in Read. Workspace Note and Find Files presentation is aligned. Archive is the final Sidebar feature panel.`,
+      summary: t`Version 0.9.1 introduces Edit and Read modes to Current Document. Read renders current Markdown in the Editor column, including unsaved text. Edit restores selection, cursor and reading position. Opening another Note while Reading refreshes the same Read Surface. Read initially aligns with the Editor's logical reading position. Read and HTML Preview retain independent scroll and heading navigation. Editor mutation tools are hidden in Read. Workspace Note and Find Files presentation is aligned. Archive is the final Sidebar feature panel.`,
       expanded: true,
       changes: [
         {
