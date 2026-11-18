@@ -17,6 +17,57 @@
   //   limitations?, helpTopic? (links to a Help topic ID).
   const RELEASES = Object.freeze([
     {
+      version: '0.9.2',
+      title: 'MarkmapEditor 0.9.2: Reliability Hotfix',
+      summary: t`Version 0.9.2 is a focused reliability hotfix. It corrects the Service Worker activation lifetime so owned-cache cleanup and clients.claim() both wait inside one activate event.waitUntil(), and adds the Projects Review module (js/workspace/projects-view.js) to the offline app shell. Read and Edit now synchronize through one live editor buffer: Edit renders Read from the current buffer (including dirty unsaved edits) and Edit restores the same buffer, cursor, selection and scroll, with a serialized transition guard so rapid Read/Edit commands cannot interleave. Find Files preserves Search query, cursor and focus across tag selection, tag removal and Show more/less actions. The Show more control follows the dark application theme and the Projects/Report/Archive Sidebar sections now share one consistent separator.`,
+      expanded: true,
+      changes: [
+        {
+          group: 'Service Worker',
+          items: [
+            'Activation lifetime corrected: owned-cache cleanup and clients.claim() both wait inside one activate event.waitUntil().',
+            'Projects Review module (js/workspace/projects-view.js) added to the offline app shell so the Projects surface works on first offline launch.',
+            'Fixture loader (js/workspace/fixture-loader.js) remains local test infrastructure and is not required as a production offline asset.',
+            'Update Ready remains user-controlled; no unconditional skipWaiting during install.',
+          ],
+        },
+        {
+          group: 'Current Document',
+          items: [
+            'Read and Edit synchronize through one live editor buffer; no separate Read Markdown state and no file read or Save during mode switching.',
+            'Edit renders Read from the current live editor buffer, including dirty unsaved edits; Read shows only after a successful render.',
+            'Edit restores the same buffer, cursor, selection and scroll; file identity, handle and dirty state are preserved.',
+            'A serialized transition guard prevents out-of-order Read/Edit transitions; the last accepted command wins.',
+            'Opening another Workspace file while in Read refreshes the Read Surface and Edit shows the new file.',
+          ],
+        },
+        {
+          group: 'Workspace Knowledge',
+          items: [
+            'Find Files preserves Search query, cursor range and focus across tag selection, tag removal and Show more/less actions.',
+            'Focus restoration is scoped to the Find Files section; unrelated Workspace refresh does not steal focus or auto-focus Search.',
+          ],
+        },
+        {
+          group: 'Sidebar',
+          items: [
+            'Show more/less control follows the dark application theme with existing border, text and radius tokens, visible hover and focus-visible.',
+            'Projects, Report and Archive Sidebar sections now share one consistent separator.',
+          ],
+        },
+        {
+          group: 'Preserved',
+          items: [
+            'Report, Projects, Task, Note and Save owners preserved unchanged.',
+            'Workspace Index remains a read-only overview and navigation surface.',
+            'No Report Composer implementation started.',
+          ],
+        },
+      ],
+      tryIt: t`Open a Workspace Note, type a unique unsaved marker in Edit, choose Read and confirm the marker appears, then return to Edit and confirm the marker and dirty state remain. In Find Files, enter a query, place the cursor in the middle, select two tags, clear one tag, then use Show more and Show less and confirm the query, cursor and focus are preserved.`,
+      uiPath: 'Open a Note → type a marker → Read → Edit → Find Files → query → tag 1 → tag 2 → clear tag → Show more → Show less.',
+    },
+    {
       version: '0.9.1',
       title: 'MarkmapEditor 0.9.0: Document Surface and Workspace Consistency',
       summary: t`Version 0.9.1 introduces Edit and Read modes to Current Document. Read renders current Markdown in the Editor column, including unsaved text. Edit restores selection, cursor and reading position. Opening another Note while Reading refreshes the same Read Surface. Read initially aligns with the Editor's logical reading position. Read and HTML Preview retain independent scroll and heading navigation. Editor mutation tools are hidden in Read. Workspace Note and Find Files presentation is aligned. Archive is the final Sidebar feature panel.`,

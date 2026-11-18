@@ -11,13 +11,13 @@ const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self
 
 // APP_VERSION is the single authoritative release/version owner. It names the
 // installed cache identity (APP_CACHE / RUNTIME_CACHE) for this release
-// boundary: MarkmapEditor 0.8.0 — Document and Workspace Knowledge. This boundary
-// carries the accepted Package 6 (Expanded-View Behavior and Visual Consistency)
-// implementation, so an installed 0.8.0 client will discover a new worker and
+// boundary: MarkmapEditor 0.9.2 — Reliability Hotfix.
+// This boundary carries the accepted Package 6 (Expanded-View Behavior and Visual Consistency)
+// implementation, so an installed 0.9.2 client will discover a new worker and
 // follow the existing user-controlled Update Ready contract. All changed assets
 // are deterministic precache entries, so a new identity ensures installed clients
 // receive the complete accepted package.
-const APP_VERSION = 'markmap-journal-pwa-0.9.1-document-workspace-knowledge';
+const APP_VERSION = 'markmap-journal-pwa-0.9.2-document-workspace-knowledge';
 // Stable base prefix for every cache this application owns. Activation cleanup
 // deletes only caches matching this prefix so unrelated origin caches are
 // never touched.
@@ -93,6 +93,10 @@ const LOCAL_APP_SHELL = [
   './js/workspace/journal-workspace.js',
   './js/workspace/workspace-index-workspace.js',
   './js/workspace/workspace-index-document.js',
+  // REQUIRED offline shell: ACT 5B-4 Dedicated Projects route / container foundation.
+  // Loaded last by script-loader.js so Host/capabilities/Utils are ready.
+  // First offline launch depends on this module opening the Projects Review surface.
+  './js/workspace/projects-view.js',
   './js/core/mode-session.js',
 
   // Dynamically loaded workspace modules (script-loader.js)
@@ -656,10 +660,8 @@ sw.addEventListener('activate', (event) => {
           )
           .map((key) => caches.delete(key))
       );
-    })
+    }).then(() => sw.clients.claim())
   );
-
-  sw.clients.claim();
 });
 
 // Message-gated activation (0.6.1). The page requests activation ONLY after
