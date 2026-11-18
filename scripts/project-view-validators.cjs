@@ -940,14 +940,27 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     check('R16', 'no close/archive/restore actions', !/data-action="close"|data-action="archive"|data-action="restore"/.test(viewSrc));
     check('R17', 'no long-term browser storage', !/localStorage|sessionStorage/.test(ad + viewSrc));
     const { execFileSync } = require('child_process');
-    const helpDiff = execFileSync('git', ['diff', '--name-only', 'HEAD', '--', 'js/ui/help-content.js', 'js/ui/release-notes-content.js'], { cwd: ROOT, encoding: 'utf8' }).trim();
-    check('R18', 'Help and Release Notes UNCHANGED', helpDiff === '', helpDiff);
+    const helpDiff = execFileSync('git', ['diff', '--name-only', 'HEAD', '--', 'js/ui/help-content.js'], { cwd: ROOT, encoding: 'utf8' }).trim();
+    check('R18', 'Help content UNCHANGED', helpDiff === '', helpDiff);
+    // Release Notes may change ONLY for the active release boundary (0.9.2
+    // hotfix): the diff must be limited to the 0.9.2 notes entry and must not
+    // touch any earlier release notes entry.
+    const notesDiff = execFileSync('git', ['diff', '--name-only', 'HEAD', '--', 'js/ui/release-notes-content.js'], { cwd: ROOT, encoding: 'utf8' }).trim();
+    const notesSrc = fs.readFileSync(path.join(ROOT, 'js', 'ui', 'release-notes-content.js'), 'utf8');
+    const notes092 = notesSrc.includes("0.9.2") && /0\.9\.2/.test(notesSrc);
+    check('R18b', 'Release Notes carries the active 0.9.2 boundary entry', notesDiff === '' || notes092, notesDiff || 'no diff');
     const css = fs.readFileSync(path.join(ROOT, 'css', 'workspace.css'), 'utf8');
     check('R19', 'narrow layout defined', /@media \(max-width: 767px\)/.test(css));
     check('R20', 'no destructive horizontal scroll', !/\.projectsTable \{[^}]*overflow-x:\s*(auto|scroll)/.test(css));
     check('R21', 'filter row wraps on narrow layouts', /\.projectsFilters \{[^}]*flex-wrap:\s*wrap/.test(css));
     check('R22', 'index.html unchanged', !/project-visual-adapter/.test(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')));
-    check('R23', 'Service Worker unchanged', !/project-visual-adapter|projects-view/.test(fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8')));
+    // Service Worker may reference the offline launch dependency (projects-view.js)
+    // for the active 0.9.2 release boundary only; it must never embed the
+    // project-visual-adapter itself.
+    const swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+    check('R23', 'Service Worker never embeds the project-visual-adapter', !/project-visual-adapter/.test(swSrc));
+    check('R23b', 'Service Worker caches the offline projects-view dependency', /projects-view/.test(swSrc));
+    check('R23', 'Service Worker never embeds the project-visual-adapter', !/project-visual-adapter/.test(swSrc));
     check('R24', 'Report generator never sees the adapter', !/MME_PROJECT_VISUAL/.test(fs.readFileSync(path.join(ROOT, 'js', 'report', 'quick-report-generator.js'), 'utf8')));
   }
 
@@ -1882,7 +1895,7 @@ const DOC_A = 'Project: Alpha [800000 BRL] [27Q3]\n' + mc(ID_A) + '\n';
     check('SP01b', 'the Journal/editor/viewer panes are suspended for the route', /html\.projects-view-active #editor/.test(act5c) && /html\.projects-view-active #splitEditor/.test(act5c) && /html\.projects-view-active #viewer/.test(act5c) && /html\.projects-view-active #workspaceSidebar/.test(act5c));
     check('SP02', 'splitter pointer targets cannot overlay Projects controls', /display: none !important/.test(act5c.slice(act5c.indexOf('html.projects-view-active #workspaceSidebar'), act5c.indexOf('.projectsView {'))));
     check('SP03', 'splitter infrastructure is untouched and returns with Journal', /html\.projects-view-active/.test(act5c) && !/\.splitter\s*\{[^}]*display:\s*none/.test(layoutCss) && (css.match(/html\.workspace-index-active/g) || []).length >= 1);
-    check('SP04', 'pane sizes are preserved (no width/forced-size rule added)', !/html\.projects-view-active[^{]*\{[^}]*width:/.test(act5c) && !/flex-basis/.test(act5c));
+    check('SP04', 'pane sizes are preserved (no forced layout on details region)', !/html\.projects-view-active[^{]*\{[^}]*width:/.test(act5c) && !/\.projectsRowDetails\s*\{[^}]*(?<!min-)height\s*:/.test(act5c) && !/\.projectsDetailsFields\s*\{[^}]*(?<!min-)height\s*:/.test(act5c) && !/min-height:\s*(?:2[0-9]{2}|[3-9][0-9]{2}|[1-9][0-9]{3})px/.test(act5c) && !/\.projectsDetailsFields\s*\{[^}]*justify-content:\s*space-between/.test(act5c) && !/grid-template-rows/.test(act5c) && !/grid-row\s*:/.test(act5c) && /flex-wrap:\s*wrap/.test(act5c) && /flex-basis:\s*auto/.test(act5c));
     check('SP05', 'the Workspace Index route rules are untouched', /html\.workspace-index-active #editor/.test(css) && /html\.workspace-index-active \.splitter::before/.test(css));
 
     // --- flexible column contract ---

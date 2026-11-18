@@ -558,8 +558,8 @@
       const msg = err[field];
       return `<span class="projectsFieldError" role="alert" data-error-for="${escapeHtml(field)}" data-error-active="${msg ? 'true' : 'false'}">${escapeHtml(msg || '')}</span>`;
     };
-    const fieldWrap = (label, control, field) => `
-      <label class="projectsField">
+    const fieldWrap = (label, control, field, isPeriod) => `
+      <label class="projectsField ${isPeriod ? 'projectsPeriodField' : 'projectsDetailsField'}" data-field="${field}">
         <span class="projectsFieldLabel">${escapeHtml(label)}</span>
         ${control}
         ${errHtml(field)}
@@ -612,17 +612,15 @@
 
     return `
       <div class="projectsDetailsFields" role="group" aria-label="Edit ${escapeHtml(r.name)}"${expanded ? '' : ' hidden'}>
-        ${fieldWrap('Stage', stageSel, 'stage')}
-        ${fieldWrap('State', stateSel, 'state')}
-        ${fieldWrap('Value', valueInput, 'value')}
-        ${fieldWrap('Currency', currencySel, 'currency')}
-        ${fieldWrap('Expected Order', quarterStructured('expectedOrder', f.expectedOrder), 'expectedOrder')}
-        ${fieldWrap('Expected Delivery', quarterStructured('expectedDelivery', f.expectedDelivery), 'expectedDelivery')}
-        ${fieldWrap('Expected Billing', quarterStructured('expectedBilling', f.expectedBilling), 'expectedBilling')}
-      </div>
-      <div class="projectsDetailsMeta">
+        ${fieldWrap('Stage', stageSel, 'stage', false)}
+        ${fieldWrap('State', stateSel, 'state', false)}
+        ${fieldWrap('Value', valueInput, 'value', false)}
+        ${fieldWrap('Currency', currencySel, 'currency', false)}
+        ${fieldWrap('Expected Order', quarterStructured('expectedOrder', f.expectedOrder), 'expectedOrder', true)}
+        ${fieldWrap('Expected Delivery', quarterStructured('expectedDelivery', f.expectedDelivery), 'expectedDelivery', true)}
+        ${fieldWrap('Expected Billing', quarterStructured('expectedBilling', f.expectedBilling), 'expectedBilling', true)}
         <span class="projectsDetailItem projectsDetailCreated">Created: ${createdCell}</span>
-        <span class="projectsDetailItem">Source: ${sourceBtn}</span>
+        <span class="projectsDetailItem projectsDetailSourceItem">Source: ${sourceBtn}</span>
       </div>`;
   }
 
