@@ -2213,6 +2213,10 @@ async function switchToRead() {
   try {
     readSurface = ensureDocumentReadSurface();
 
+    // ACT 5C — capture editor state before render/hide so the restored
+    // selection and scroll reflect the live editor at command time.
+    captureDocumentEditorState();
+
     await renderDocumentReadSurface(readSurface);
 
     const editSurface = getDocumentEditSurfaceElement();
@@ -2224,9 +2228,6 @@ async function switchToRead() {
     // ACT 5D.1 — bind heading-link navigation to the Read Surface once per
     // persistent surface; innerHTML replacement does not remove the listener.
     wireRenderedHeadingAnchors(readSurface);
-
-    // ACT 5C — capture editor state before hiding CodeMirror
-    captureDocumentEditorState();
 
     // ACT 5C — capture logical reading position from visible Editor scroller
     // (transition-local value; not stored in ModeSession, does not overwrite
@@ -2301,6 +2302,15 @@ async function switchToEdit() {
   if (!(editSurface instanceof HTMLElement)) {
     throw new Error('CodeMirror wrapper unavailable');
   }
+  // ACT 5C — capture the current Read Surface logical scroll ratio before it
+  // is hidden. This is the transition-local Read → Edit position and is
+  // applied to the visible CodeMirror scroller after layout; it is never
+  // persisted and belongs only to the current active file + transition.
+  const readRatio =
+    readSurface instanceof HTMLElement
+      ? _getScrollRatio(readSurface)
+      : null;
+
   if (readSurface) {
     readSurface.hidden = true;
 
@@ -2308,8 +2318,34 @@ async function switchToEdit() {
   }
   setDocumentEditSurfaceVisible(true);
 
+  // ACT 5C — await one bounded, measurable browser layout boundary before
+  // restoring editor state. The Editor scroller only becomes measurable once
+  // CodeMirror is visible; restoring scrollTop before layout would use stale
+  // geometry and drop the reading position.
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve);
+    });
+  });
+
   // ACT 5C — restore editor state after CodeMirror is visible
   restoreDocumentEditorState();
+
+  // ACT 5C — apply the captured Read ratio to the visible CodeMirror scroller
+  // AFTER restoreDocumentEditorState() so the Read → Edit position reflects the
+  // current Read scroll rather than the stale Edit scrollTop. Guarded to 0–1;
+  // skipped when there was no Read Surface (first boot), preserving the restored
+  // Edit scrollTop instead of zeroing it.
+  if (readRatio !== null) {
+    const cmScroller = document.querySelector('#cmHost .cm-scroller');
+
+    if (cmScroller instanceof HTMLElement) {
+      const safeRatio =
+        Math.max(0, Math.min(1, Number(readRatio) || 0));
+
+      _setScrollRatio(cmScroller, safeRatio);
+    }
+  }
 
   documentMode = 'edit';
 
@@ -2321,13 +2357,26 @@ async function switchToEdit() {
   return true;
 }
 
+// ACT 5C — serialized mode transitions. The last accepted command wins or the
+// current transition completes before the next begins; no timers or arbitrary
+// delays. One in-flight transition Promise is the single transition guard.
+let documentModeTransitionChain = Promise.resolve();
+
+function enqueueDocumentModeTransition(mode) {
+  const step = documentModeTransitionChain
+    .catch(() => {})
+    .then(() => (mode === 'read' ? switchToRead() : switchToEdit()));
+  documentModeTransitionChain = step.catch(() => {});
+  return step;
+}
+
 async function applyDocumentMode(mode) {
   if (mode === 'read') {
-    return switchToRead();
+    return enqueueDocumentModeTransition('read');
   }
 
   if (mode === 'edit') {
-    return switchToEdit();
+    return enqueueDocumentModeTransition('edit');
   }
 
   throw new Error(
@@ -3988,80 +4037,66 @@ function renderWorkspaceSelectedTags() {
   host.innerHTML = '';
 }
 
-function normalizeWorkspaceFindFilesOrder() {
-  const section =
-    document.getElementById('workspaceKnowledgeFindFilesSection');
+function ensureChildOrder() {
+  const section = document.getElementById('workspaceKnowledgeFindFilesSection');
+  if (!section) return false;
 
-  const label =
-    section?.querySelector('.workspaceKnowledgeSectionLabel');
+  const searchHost = document.getElementById('workspaceFindFilesSearchHost');
+  const tagsHost = document.getElementById('workspaceFindFilesTagsHost');
+  const resultsHost = document.getElementById('workspaceFindFilesResultsHost');
+  const searchPanel = document.getElementById('workspaceSearchPanel');
+  const tagsPanel = document.getElementById('workspaceTagsPanel');
+  const searchResults = document.getElementById('workspaceSearchResults');
+  const tagsToggle = document.getElementById('workspaceFindFilesTagsToggle');
 
-  const description =
-    section?.querySelector('.workspaceKnowledgeSectionDescription');
+  if (!searchHost || !tagsHost || !resultsHost || !searchPanel || !tagsPanel || !searchResults) return false;
 
-  const searchHost =
-    document.getElementById('workspaceFindFilesSearchHost');
-
-  const selectedHost =
-    document.getElementById('workspaceFindFilesSelectedTags');
-
-  const tagsHost =
-    document.getElementById('workspaceFindFilesTagsHost');
-
-  const tagsToggle =
-    document.getElementById('workspaceFindFilesTagsToggle');
-
-  const resultsHost =
-    document.getElementById('workspaceFindFilesResultsHost');
-
-  const searchPanel =
-    document.getElementById('workspaceSearchPanel');
-
-  const tagsPanel =
-    document.getElementById('workspaceTagsPanel');
-
-  const searchResults =
-    document.getElementById('workspaceSearchResults');
-
-  if (
-    !section ||
-    !label ||
-    !description ||
-    !searchHost ||
-    !tagsHost ||
-    !tagsToggle ||
-    !resultsHost ||
-    !searchPanel ||
-    !tagsPanel ||
-    !searchResults
-  ) {
-    return false;
+  // Idempotent: only move a node when it is not already where it belongs.
+  // Never reparent an already correctly placed connected node.
+  if (searchPanel.parentNode !== searchHost) {
+    searchHost.appendChild(searchPanel);
+  }
+  if (tagsPanel.parentNode !== tagsHost) {
+    tagsHost.appendChild(tagsPanel);
+  }
+  if (searchResults.parentNode !== resultsHost) {
+    resultsHost.appendChild(searchResults);
   }
 
-  searchHost.appendChild(searchPanel);
-  tagsHost.appendChild(tagsPanel);
-  resultsHost.appendChild(searchResults);
+  // Preserve the direct-child order of the section. Reorder only when the
+  // current children are not already in the expected sequence, so a correctly
+  // placed node is never detached/re-attached.
+  const label = section.querySelector('.workspaceKnowledgeSectionLabel');
+  const description = section.querySelector('.workspaceKnowledgeSectionDescription');
+  const selectedHost = document.getElementById('workspaceFindFilesSelectedTags');
 
   const orderedNodes = [
     label,
     description,
     searchHost,
   ];
+  if (selectedHost) orderedNodes.push(selectedHost);
+  orderedNodes.push(tagsHost, tagsToggle, resultsHost);
 
-  if (selectedHost) {
-    selectedHost.hidden = true;
-    selectedHost.innerHTML = '';
-    orderedNodes.push(selectedHost);
+  const children = Array.from(section.children).filter((c) => orderedNodes.includes(c));
+  let needsReorder = false;
+  for (let i = 0; i < children.length; i++) {
+    if (children[i] !== orderedNodes[i]) { needsReorder = true; break; }
   }
 
-  orderedNodes.push(
-    tagsHost,
-    tagsToggle,
-    resultsHost
-  );
-
-  section.append(...orderedNodes);
+  if (needsReorder) {
+    for (const node of orderedNodes) {
+      if (node && node.parentNode === section) {
+        section.appendChild(node);
+      }
+    }
+  }
 
   return true;
+}
+
+function normalizeWorkspaceFindFilesOrder() {
+  return ensureChildOrder();
 }
 
 // ACT 4 — show/hide the "Show more tags" toggle based on the number of tags.
@@ -4149,29 +4184,122 @@ function updateWorkspaceTagsToggleVisibility() {
   });
 }
 
-// ACT 4 — shared Find Files result coordinator. Reuses existing Search query
-// state (__workspaceSearchLastQuery / workspaceSearchInput) and selected-Tag
-// state (__workspaceActiveTag). Renders tag chips into #workspaceTagsList and
-// shared file results into #workspaceSearchResults, the one visible
-// file-result list inside Find Files.
-function renderWorkspaceFindFiles() {
-  normalizeWorkspaceFindFilesOrder();
+// ACT 4 — Find Files focus preservation (bounded 0.9.2 hotfix).
+// Captures focus/selection/scroll only when focus is inside the Find Files
+// section, then restores after a rerender. The Search input is the single
+// focus-restoration target when it (or another Find Files control) owned
+// focus; focus outside Find Files is never stolen, and unrelated Workspace
+// refresh never auto-focuses Search.
+function captureWorkspaceFindFilesFocus() {
+  const findFilesSection = document.getElementById('workspaceKnowledgeFindFilesSection');
+  const input = document.getElementById('workspaceSearchInput');
+  const resultsEl = document.getElementById('workspaceSearchResults');
+  const sidebar = document.getElementById('workspaceSidebar');
+
+  const active = document.activeElement;
+  const focusInsideFindFiles = Boolean(
+    findFilesSection && active && findFilesSection.contains(active)
+  );
+
+  if (!focusInsideFindFiles) {
+    return null;
+  }
+
+  return {
+    searchOwnedFocus: Boolean(input && active === input),
+    query: input ? String(input.value || '') : '',
+    selectionStart: input && typeof input.selectionStart === 'number' ? input.selectionStart : null,
+    selectionEnd: input && typeof input.selectionEnd === 'number' ? input.selectionEnd : null,
+    sidebarScrollTop: sidebar ? sidebar.scrollTop : 0,
+    resultsScrollTop: resultsEl ? resultsEl.scrollTop : 0,
+  };
+}
+
+function restoreWorkspaceFindFilesFocus(snapshot) {
+  if (!snapshot) return;
 
   const input = document.getElementById('workspaceSearchInput');
   const resultsEl = document.getElementById('workspaceSearchResults');
+  const sidebar = document.getElementById('workspaceSidebar');
+
+  // Restore scroll positions where practical.
+  if (sidebar) sidebar.scrollTop = snapshot.sidebarScrollTop;
+  if (resultsEl) resultsEl.scrollTop = snapshot.resultsScrollTop;
+
+  // Only restore focus/selection when the search input owned focus before the
+  // rerender, per the Find Files focus-preservation contract.
+  // If focus was on a tag button or other control, leave focus undisturbed.
+  if (!input || !snapshot.searchOwnedFocus) return;
+
+  if (typeof snapshot.query === 'string' && input.value !== snapshot.query) {
+    input.value = snapshot.query;
+  }
+
+  try {
+    input.focus();
+    if (typeof snapshot.selectionStart === 'number' &&
+        typeof snapshot.selectionEnd === 'number') {
+      input.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd);
+    }
+  } catch {}
+}
+
+// ACT 4 — focus the Find Files Search input after a tag action destroys the
+// clicked tag control. Preserves the current cursor/selection range.
+function focusWorkspaceFindFilesSearch() {
+  const input = document.getElementById('workspaceSearchInput');
+  if (!input) return;
+
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+
+  try {
+    input.focus();
+    if (typeof start === 'number' && typeof end === 'number') {
+      input.setSelectionRange(start, end);
+    }
+  } catch {}
+}
+
+// ACT 4 — shared Find Files result coordinator. Reuses existing Search query
+// state (__workspaceSearchLastQuery / workspaceSearchInput) and selected-Tag
+// ACT 4 — Find Files rendering split (0.9.2 hotfix).
+//
+// renderWorkspaceFindFilesControls()  — ensures persistent Search/Tags
+//   controls exist and are wired once; never replaces connected controls.
+// renderWorkspaceTagChips()           — updates tag chips + toggle visibility
+//   only; does not touch Search input or results.
+// renderWorkspaceFindFilesResults()   — reads current query + selected tags,
+//   updates only results/count/empty state; the single path used by input.
+// renderWorkspaceFindFiles()          — public coordinator for structural /
+//   external refreshes; ensures controls, normalizes order only when needed,
+//   renders chips and results.
+// ensureChildOrder()                  — idempotent child-order guard; never
+//   moves an already correctly placed connected node.
+
+// Ensure persistent Search/Tags controls exist and are wired once.
+// Called only when controls may be absent (initial creation / structural
+// refresh). Does not replace or reparent already-connected controls.
+function renderWorkspaceFindFilesControls() {
+  ensureWorkspaceSearchPanel();
+  ensureWorkspaceTagsPanel();
+  wireWorkspaceTagsPanel();
+}
+
+// Update tag-chip state and bounded visibility only.
+// Preserves workspaceSelectedTags and workspaceTagsExpanded owners.
+// Does not recreate Search; does not rebuild the Workspace Index.
+function renderWorkspaceTagChips() {
   const chipsContainer = document.getElementById('workspaceTagsList');
   const selectedTagsContainer = document.getElementById('workspaceFindFilesSelectedTags');
   const tagsToggle = document.getElementById('workspaceFindFilesTagsToggle');
 
-  if (!input || !resultsEl || !chipsContainer) return;
+  if (!chipsContainer) return;
 
-  const query = String(input.value || '').trim();
-  const normalized = normalizeWorkspaceSearchQuery(query);
-
-  // --- Render selected-tags summary above the chip list ---
+  // Render selected-tags summary above the chip list.
   renderWorkspaceSelectedTags(selectedTagsContainer);
 
-  // --- Render Tag chips (always, independent of query state) ---
+  // Render Tag chips (always, independent of query state).
   const tags = WORKSPACE_INDEX_STATE?.ready && WORKSPACE_INDEX_STATE.tags
     ? getWorkspaceTagsSummary()
     : [];
@@ -4195,19 +4323,21 @@ function renderWorkspaceFindFiles() {
     })
     .join('');
 
-  // --- Update tags toggle visibility (show when > N tags) ---
+  // Update tags toggle visibility (show when > N tags).
   updateWorkspaceTagsToggleVisibility(tagsToggle, tags.length);
+}
 
-  // No query and no selected Tags: show concise instruction in the results host.
-  if (!normalized && workspaceSelectedTags.size === 0) {
-    resultsEl.hidden = false;
-    resultsEl.innerHTML = `
-      <div class="workspaceFindFilesEmpty">
-        Search or select a tag to find files.
-      </div>
-    `;
-    return;
-  }
+// Update only result count, results, and empty state.
+// Reads the current query and selected tags. Does not touch Search input,
+// tag chips, toggle, or Workspace Index.
+function renderWorkspaceFindFilesResults() {
+  const input = document.getElementById('workspaceSearchInput');
+  const resultsEl = document.getElementById('workspaceSearchResults');
+
+  if (!input || !resultsEl) return;
+
+  const query = String(input.value || '').trim();
+  const normalized = normalizeWorkspaceSearchQuery(query);
 
   // Candidates come from the saved Workspace Index (notes only — existing file-search scope).
   const candidates = [...(WORKSPACE_INDEX_STATE?.byKind?.notes || [])]
@@ -4231,6 +4361,16 @@ function renderWorkspaceFindFiles() {
       const tagPaths = new Set(tagFiles.map((f) => String(f.path || '')));
       matches = matches.filter((file) => tagPaths.has(String(file.path || '')));
     }
+  }
+
+  if (!normalized && workspaceSelectedTags.size === 0) {
+    resultsEl.hidden = false;
+    resultsEl.innerHTML = `
+      <div class="workspaceFindFilesEmpty">
+        Search or select a tag to find files.
+      </div>
+    `;
+    return;
   }
 
   if (!matches.length) {
@@ -4284,7 +4424,25 @@ function renderWorkspaceFindFiles() {
   resultsEl.innerHTML = rows;
   window.updateWorkspaceActiveFileHighlight?.();
   resultsEl.hidden = false;
-  updateWorkspaceTagsToggleVisibility();
+}
+
+// Public coordinator for structural and external refreshes.
+// Ensures controls exist; normalizes order only when a node is not already
+// in its correct persistent location; renders tag chips; renders results.
+// Focus restoration remains only a fallback for unavoidable structural
+// refresh, not the ordinary input path.
+function renderWorkspaceFindFiles() {
+  renderWorkspaceFindFilesControls();
+  normalizeWorkspaceFindFilesOrder();
+  renderWorkspaceTagChips();
+  renderWorkspaceFindFilesResults();
+
+  // Bounded post-layout measurement for Show more visibility.
+  // The toggle must reflect the correct state immediately after structural
+  // setup, without requiring a Note open or Index rebuild.
+  requestAnimationFrame(() => {
+    updateWorkspaceTagsToggleVisibility();
+  });
 }
 
 function renderWorkspaceTagResults(tag) {
@@ -4392,8 +4550,10 @@ function wireWorkspaceTagsPanel() {
 
       renderWorkspaceTagsPanel({ skipFindFiles: true });
       renderWorkspaceSelectedTags();
-      renderWorkspaceFindFiles();
+      renderWorkspaceTagChips();
+      renderWorkspaceFindFilesResults();
       updateWorkspaceTagsToggleVisibility();
+      focusWorkspaceFindFilesSearch();
 
       log?.(
         `Workspace Find Files: tags selected=${workspaceSelectedTags.size}`
@@ -4409,8 +4569,10 @@ function wireWorkspaceTagsPanel() {
       workspaceSelectedTags.clear();
       renderWorkspaceTagsPanel({ skipFindFiles: true });
       renderWorkspaceSelectedTags();
-      renderWorkspaceFindFiles();
+      renderWorkspaceTagChips();
+      renderWorkspaceFindFilesResults();
       updateWorkspaceTagsToggleVisibility();
+      focusWorkspaceFindFilesSearch();
       log?.('Workspace Find Files: cleared all tags');
       return;
     }
@@ -4424,8 +4586,10 @@ function wireWorkspaceTagsPanel() {
         workspaceSelectedTags.delete(tag);
         renderWorkspaceTagsPanel({ skipFindFiles: true });
         renderWorkspaceSelectedTags();
-        renderWorkspaceFindFiles();
+        renderWorkspaceTagChips();
+        renderWorkspaceFindFilesResults();
         updateWorkspaceTagsToggleVisibility();
+        focusWorkspaceFindFilesSearch();
         log?.(`Workspace Find Files: removed tag #${tag}`);
       }
       return;
@@ -4901,6 +5065,9 @@ function ensureWorkspaceSidebarGroups() {
     { id: 'workspaceControlsGroup', key: 'workspace-controls', label: 'Workspace Controls' },
     { id: 'workspaceCurrentDocumentGroup', key: 'current-document', label: 'Current Document' },
     { id: 'workspaceIndexGroup', key: 'workspace-index', label: 'Workspace Knowledge' },
+    { id: 'workspaceTagsGroup', key: 'tags', label: 'Tags' },
+    { id: 'workspaceSearchGroup', key: 'search', label: 'Search' },
+    { id: 'workspaceLinksInGroup', key: 'links-in', label: 'Links In' },
     { id: 'workspaceNotesGroup', key: 'notes', label: 'Notes' },
     { id: 'workspaceKnowledgeGroup', key: 'knowledge', label: 'Knowledge' },
     { id: 'workspaceTasksGroup', key: 'tasks', label: 'Tasks' },
@@ -4942,6 +5109,7 @@ function ensureWorkspaceSidebarGroups() {
     workspaceJournalsPanel: 'notes',
     workspaceConceptsPanel: 'knowledge',
     workspaceTagsPanel: 'tags',
+    workspaceRelatedPanel: 'links-in',
     workspaceProjectsPanel: 'projects',
     workspaceIndexPanel: 'workspace-index',
     workspaceArchivePanel: 'archive',
@@ -4971,6 +5139,7 @@ function ensureWorkspaceSidebarGroups() {
     'workspaceKnowledgeGroup',
     'workspaceTasksGroup',
     'workspaceProjectsGroup',
+    'workspaceArchiveGroup',
   ];
   let groupAnchor = host.querySelector('.workspaceHeader') || null;
   for (const groupId of groupOrder) {
@@ -5012,6 +5181,9 @@ function normalizeWorkspacePanelOrder() {
     workspaceControlsGroup: [],
     workspaceCurrentDocumentGroup: ['workspaceActivePanel'],
     workspaceIndexGroup: ['workspaceIndexPanel'],
+    workspaceTagsGroup: ['workspaceTagsPanel'],
+    workspaceSearchGroup: ['workspaceSearchPanel'],
+    workspaceLinksInGroup: ['workspaceRelatedPanel'],
     workspaceNotesGroup: ['workspaceJournalsPanel'],
     workspaceKnowledgeGroup: ['workspaceConceptsPanel'],
     workspaceTasksGroup: ['workspaceTasksPanel'],
@@ -5024,10 +5196,14 @@ function normalizeWorkspacePanelOrder() {
     'workspaceControlsGroup',
     'workspaceCurrentDocumentGroup',
     'workspaceIndexGroup',
+    'workspaceTagsGroup',
+    'workspaceSearchGroup',
+    'workspaceLinksInGroup',
     'workspaceNotesGroup',
     'workspaceKnowledgeGroup',
     'workspaceTasksGroup',
     'workspaceProjectsGroup',
+    'workspaceArchiveGroup',
   ];
 
   // Order groups in the host (after header, before ungrouped content).
@@ -5230,20 +5406,18 @@ function normalizeWorkspaceSidebarTail() {
 
   const report = document.getElementById('workspaceReportPanel');
 
-  const archiveGroup = document.getElementById('workspaceArchiveGroup');
-
   const navControls = document.getElementById('workspaceNavControls');
 
+  // Canonical tail order: all groups (incl. ArchiveGroup as the last group),
+  // then the ungrouped Report panel right before the Navigation controls.
+  // ArchiveGroup keeps its group position maintained by
+  // ensureWorkspaceSidebarGroups(); it must not be moved into the tail.
   if (report && report.parentNode === host) {
     host.appendChild(report);
   }
 
-  if (archiveGroup && archiveGroup.parentNode === host) {
-    host.appendChild(archiveGroup);
-  }
-
-  if (navControls && navControls.parentNode === host) {
-    host.appendChild(navControls);
+  if (report && navControls && navControls.parentNode === host) {
+    host.insertBefore(report, navControls);
   }
 }
 
@@ -6397,7 +6571,7 @@ function wireWorkspaceSearch() {
     clearTimeout(__workspaceSearchTimer);
 
     __workspaceSearchTimer = setTimeout(() => {
-      renderWorkspaceFindFiles();
+      renderWorkspaceFindFilesResults();
     }, 180);
   });
 
@@ -6408,7 +6582,10 @@ function wireWorkspaceSearch() {
       resultsEl.hidden = true;
       resultsEl.innerHTML = '';
       __workspaceSearchLastQuery = '';
-      renderWorkspaceFindFiles();
+      renderWorkspaceTagChips();
+      renderWorkspaceFindFilesResults();
+      updateWorkspaceTagsToggleVisibility();
+      focusWorkspaceFindFilesSearch();
       log?.('Workspace Search: cleared');
     }
   });

@@ -218,6 +218,7 @@ const OWNER_API = [
   'const forceUpgradeWorkspacePanelMarkup = () => {};',
   'const isWorkspacePanelCollapsed = () => false;',
   'const applyWorkspacePanelCollapsed = () => {};',
+  'globalThis.isWorkspaceFileArchived = (n) => Boolean(n?.archived);',
   'function saveSmart() {',
   '  globalThis.__h.saves = (globalThis.__h.saves || 0) + 1;',
   '  return Promise.resolve({ ok: true });',
@@ -423,10 +424,14 @@ function buildTagsSandbox() {
     els[id] = makeEl(id);
   }
   const src = [
-    'const WORKSPACE_INDEX_STATE = { ready: true, tags: new Map() };',
+    'const WORKSPACE_INDEX_STATE = { ready: true, tags: new Map(), byPath: new Map() };',
     'let WORKSPACE_STATE = { rootHandle: {} };',
     'let __workspaceActiveTag = "";',
+    'const workspaceSelectedTags = new Set();',
+    'let workspaceTagsExpanded = false;',
     'const log = () => {};',
+    'const normalizeWorkspaceFindFilesOrder = () => {};',
+    'const renderWorkspaceFindFiles = () => {};',
     'const ensureWorkspaceTagsPanel = () => els.workspaceTagsPanel;',
     'const isWorkspacePanelCollapsed = () => false;',
     'const applyWorkspacePanelCollapsed = () => {};',
@@ -437,10 +442,11 @@ function buildTagsSandbox() {
     extractBlockFrom(MAIN_SOURCE, 'function getWorkspaceTagFiles(tag) {'),
     extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagResults(tag) {'),
     extractBlockFrom(MAIN_SOURCE, 'function applyWorkspaceTagsPresentation(panel) {'),
-    extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagsPanel() {'),
+    extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagsPanel(options = {}) {'),
     'return {',
     '  renderWorkspaceTagsPanel,',
     '  setTags: (m) => { WORKSPACE_INDEX_STATE.tags = m; },',
+    '  setByPath: (m) => { WORKSPACE_INDEX_STATE.byPath = m; },',
     '  setActiveTag: (t) => { __workspaceActiveTag = t; },',
     '  setReady: (v) => { WORKSPACE_INDEX_STATE.ready = v; },',
     '  setRoot: (v) => { WORKSPACE_STATE.rootHandle = v; },',
@@ -563,6 +569,7 @@ function buildTagsSandbox() {
   const T = buildTagsSandbox();
   const restoreTags = T.restore;
   T.api.setTags(new Map([['alpha', ['notes/a.md', 'notes/b.md']], ['beta', ['notes/a.md']]]));
+  T.api.setByPath(new Map([['notes/a.md', { path: 'notes/a.md', name: 'a.md' }], ['notes/b.md', { path: 'notes/b.md', name: 'b.md' }]]));
   T.api.renderWorkspaceTagsPanel();
   const tagsTwo = T.els.workspaceTagsBadge.textContent;
   T.api.setTags(new Map());
@@ -644,7 +651,7 @@ function buildTagsSandbox() {
   // assertion, and the Related half asserts the migrated canonical contract.
   await check('B24', 'badge correction changed no underlying count and no filtering', () => {
     const relBody = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceRelatedPanel() {');
-    const tagBody = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagsPanel() {');
+    const tagBody = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagsPanel(options = {}) {');
     return /badge\.textContent = `\$\{linksInRows\.length\}`/.test(relBody) &&
       /badge\.textContent = `\$\{tags\.length\}`/.test(tagBody) &&
       /renderWorkspaceTagResults\(__workspaceActiveTag\)/.test(tagBody) &&
@@ -656,7 +663,7 @@ function buildTagsSandbox() {
 
   await check('B24a', 'B24 Tags half independently detects a broken Tags badge', () => {
     // Mutate ONLY the Tags half. B24 must fail; the Links In half is untouched.
-    const tagBody = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagsPanel() {');
+    const tagBody = extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagsPanel(options = {}) {');
     const broken = tagBody.replace('badge.textContent = `${tags.length}`;',
       'badge.textContent = `${tags.length} tags`;');
     if (broken === tagBody) return false;
@@ -674,7 +681,7 @@ function buildTagsSandbox() {
     if (broken === relBody) return false;
     return !/badge\.textContent = `\$\{linksInRows\.length\}`/.test(broken) &&
       /badge\.textContent = `\$\{tags\.length\}`/.test(
-        extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagsPanel() {'));
+        extractBlockFrom(MAIN_SOURCE, 'function renderWorkspaceTagsPanel(options = {}) {'));
   });
 
   // ===============================================================
@@ -848,7 +855,7 @@ function buildTagsSandbox() {
   await check('Y42', 'no Links In rename, no Task / Wiki Links / Projects / Report change', () => {
     const main = stripCssComments(MAIN_SOURCE);
     return /Links In/.test(main) &&
-      /Links out/.test(main) &&
+      /Links Out/.test(main) &&
       /parseMmeTaskMetadata/.test(main) &&
       /MME_WIKI_LINKS/.test(read('js', 'links', 'wiki-links.js')) &&
       !/ACT V0[\s\S]{0,80}(task-review|wiki-links|report-panel)/.test(main);
@@ -864,7 +871,7 @@ function buildTagsSandbox() {
   // the 0.7.0 cache identity; the ACT V0 fences below confirm no internal
   // scaffolding leaks into shipped product files.
   await check('Y44', 'no internal scaffolding leaks into shipped product files', () => {
-    return /markmap-journal-pwa-0\.7\.0-projects-foundation/.test(SW_SOURCE) &&
+    return /markmap-journal-pwa-0\.9\.2/.test(SW_SOURCE) &&
       !/ACT V0/.test(SW_SOURCE) &&
       !/ACT V0/.test(read('js', 'ui', 'help-content.js')) &&
       !/ACT V0/.test(read('js', 'ui', 'release-notes-content.js')) &&
@@ -950,10 +957,14 @@ function buildTagsSandbox() {
       els[id] = makeEl(id);
     }
     const api = new Function('els', [
-      'const WORKSPACE_INDEX_STATE = { ready: true, tags: new Map() };',
+      'const WORKSPACE_INDEX_STATE = { ready: true, tags: new Map(), byPath: new Map() };',
       'let WORKSPACE_STATE = { rootHandle: {} };',
       'let __workspaceActiveTag = "";',
+      'const workspaceSelectedTags = new Set();',
+      'let workspaceTagsExpanded = false;',
       'const log = () => {};',
+      'const normalizeWorkspaceFindFilesOrder = () => {};',
+      'const renderWorkspaceFindFiles = () => {};',
       'const ensureWorkspaceTagsPanel = () => els.workspaceTagsPanel;',
       'const isWorkspacePanelCollapsed = () => false;',
       'const applyWorkspacePanelCollapsed = () => {};',
@@ -964,11 +975,12 @@ function buildTagsSandbox() {
       extractBlockFrom(src, 'function getWorkspaceTagFiles(tag) {'),
       extractBlockFrom(src, 'function renderWorkspaceTagResults(tag) {'),
       extractBlockFrom(src, 'function applyWorkspaceTagsPresentation(panel) {'),
-      extractBlockFrom(src, 'function renderWorkspaceTagsPanel() {'),
-      'return { renderWorkspaceTagsPanel, setTags: (m) => { WORKSPACE_INDEX_STATE.tags = m; } };',
+      extractBlockFrom(src, 'function renderWorkspaceTagsPanel(options = {}) {'),
+      'return { renderWorkspaceTagsPanel, setTags: (m) => { WORKSPACE_INDEX_STATE.tags = m; }, setByPath: (m) => { WORKSPACE_INDEX_STATE.byPath = m; } };',
     ].join('\n\n'))(els);
     const restoreMut = installDoc(els);
     api.setTags(new Map([['alpha', ['notes/a.md']], ['beta', ['notes/b.md']]]));
+    api.setByPath(new Map([['notes/a.md', { path: 'notes/a.md', name: 'a.md' }], ['notes/b.md', { path: 'notes/b.md', name: 'b.md' }]]));
     api.renderWorkspaceTagsPanel();
     const result = els.workspaceTagsBadge.textContent === '2 tags';
     restoreMut();
@@ -1452,6 +1464,8 @@ const STRUCTURAL_OWNER_SOURCES = [
   'function ensureWorkspaceIndexPanel() {',
   'function ensureWorkspaceSidebarGroups() {',
   'function normalizeWorkspacePanelOrder() {',
+  'function normalizeWorkspaceSidebarTail() {',
+  'function ensureChildOrder() {',
 ].map((marker) => extractBlockFrom(MAIN_SOURCE, marker));
 
 const STRUCTURAL_API_FACTORY = new Function(
@@ -1459,7 +1473,8 @@ const STRUCTURAL_API_FACTORY = new Function(
   'log',
   STRUCTURAL_OWNER_SOURCES.join('\n\n') +
     '\n\nreturn { getWorkspaceSidebarContentHost, ensureWorkspaceActivePanel, ' +
-    'ensureWorkspaceIndexPanel, ensureWorkspaceSidebarGroups, normalizeWorkspacePanelOrder };'
+    'ensureWorkspaceIndexPanel, ensureWorkspaceSidebarGroups, normalizeWorkspacePanelOrder, ' +
+    'normalizeWorkspaceSidebarTail, ensureChildOrder };'
 );
 
 const GROUP_IDS = [
@@ -1539,6 +1554,7 @@ function runStructuralPipeline(fixturePanels) {
 
   const navControls = makeTreeElement('div');
   navControls.className = 'workspaceNavControls';
+  navControls.id = 'workspaceNavControls';
   scroller.appendChild(navControls);
 
   const api = STRUCTURAL_API_FACTORY(doc, null);
