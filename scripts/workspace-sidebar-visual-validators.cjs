@@ -1488,6 +1488,7 @@ const GROUP_IDS = [
   'workspaceKnowledgeGroup',
   'workspaceTasksGroup',
   'workspaceProjectsGroup',
+  'workspaceReportPanel',
   'workspaceArchiveGroup',
 ];
 
@@ -1516,7 +1517,6 @@ const FLAT_PANEL_ORDER = [
   'workspaceTasksPanel',           // Tasks
   'workspaceProjectsPanel',        // Projects
   'workspaceArchivePanel',         // Archive
-  'workspaceReportPanel',          // Report (ungrouped, protected)
 ];
 
 // One full structural pass in the order finalizeWorkspaceSidebar runs the
@@ -1690,7 +1690,7 @@ await check('S31', 'executed DOM: group order and within-group panel order match
     else if (actual.join(',') !== expected.join(',')) reasons.push(gid + ' children: ' + actual.join(',') + ', expected ' + expected.join(','));
   }
   const tail = kids.slice(GROUP_IDS.length + 1).map((n) => n.id || n.className);
-  if (tail.join(',') !== 'workspaceReportPanel,workspaceNavControls') {
+  if (tail.join(',') !== 'workspaceNavControls') {
     reasons.push('ungrouped tail: ' + (tail.join(',') || 'empty'));
   }
   d31 = reasons.length ? reasons.join('; ') : null;
@@ -1701,19 +1701,19 @@ await check('S31', 'executed DOM: group order and within-group panel order match
 // rendered tree (catches detached subtrees and duplicated containers)
 await check('S32', 'executed DOM: no detached or duplicated groups/panels in the rendered tree', () => {
   const state = runStructuralPipeline();
-  const all = GROUP_IDS.concat(MAPPED_PANEL_IDS).concat(['workspaceReportPanel']);
+  const all = GROUP_IDS.concat(MAPPED_PANEL_IDS);
   const bad = all.filter((id) => countIdInTree(state.doc.documentElement, id) !== 1);
   d32 = bad.length ? 'rendered-tree occurrence != 1 for: ' + bad.join(', ') : null;
   return bad.length === 0;
 }, () => d32);
 
 // S33: protected scope — Report stays a direct child of the host, after the groups
-await check('S33', 'executed DOM: Reports panel stays ungrouped after the groups', () => {
+await check('S33', 'executed DOM: Reports panel stays ungrouped after Projects and before Archive', () => {
   const state = runStructuralPipeline();
   const report = state.doc.getElementById('workspaceReportPanel');
   const archiveIdx = state.host.childNodes.findIndex((n) => n.id === 'workspaceArchiveGroup');
   const reportIdx = report ? state.host.childNodes.indexOf(report) : -1;
-  const ok = Boolean(report) && report.parentNode === state.host && archiveIdx !== -1 && reportIdx > archiveIdx;
+  const ok = Boolean(report) && report.parentNode === state.host && archiveIdx !== -1 && reportIdx < archiveIdx;
   d33 = ok ? null : 'report attached=' + Boolean(report && report.parentNode === state.host) +
     ', reportIdx=' + reportIdx + ', archiveIdx=' + archiveIdx;
   return ok;
@@ -1773,7 +1773,7 @@ await check('S35', 'executed DOM: per-group single-panel membership and flat seq
 
 // S36: full group precedence chain — Controls → Current Document →
 // Workspace Index → Tags → Search → Links In → Notes → Knowledge
-// → Tasks → Projects → Archive → Report
+// → Tasks → Projects → Report → Archive
 // Every adjacent pair must be consecutive on the host; Report stays outside
 // all knowledge groups while following Archive
 await check('S36', 'executed DOM: full group precedence chain with immediate adjacency', () => {
@@ -1782,7 +1782,7 @@ await check('S36', 'executed DOM: full group precedence chain with immediate adj
   const chain = ['workspaceControlsGroup','workspaceCurrentDocumentGroup','workspaceIndexGroup',
                  'workspaceTagsGroup','workspaceSearchGroup','workspaceLinksInGroup',
                  'workspaceNotesGroup','workspaceKnowledgeGroup','workspaceTasksGroup',
-                 'workspaceProjectsGroup','workspaceArchiveGroup','workspaceReportPanel'];
+                 'workspaceProjectsGroup','workspaceReportPanel','workspaceArchiveGroup'];
   const positions = chain.map(pos);
   const reasons = [];
   for (let i = 0; i < positions.length; i++) {
@@ -1837,7 +1837,7 @@ await check('S38', 'executed DOM: repeated finalization preserves exact order, n
     }),
   });
   const before = snapshot();
-  const all = GROUP_IDS.concat(MAPPED_PANEL_IDS).concat(['workspaceReportPanel']);
+  const all = GROUP_IDS.concat(MAPPED_PANEL_IDS);
   const nodesBefore = all.map((id) => state.doc.getElementById(id));
   state.api.ensureWorkspaceSidebarGroups();
   state.api.normalizeWorkspacePanelOrder();
@@ -1900,7 +1900,7 @@ await check('S39', 'executed DOM: missing optional panels are skipped without br
     if (actual !== null && actual.length !== 0) reasons.push(gid + ' should be empty but has: ' + actual.join(','));
   }
   const tail = state.host.childNodes.slice(GROUP_IDS.length + 1).map((n) => n.id || n.className);
-  if (tail.join(',') !== 'workspaceReportPanel,workspaceNavControls') {
+  if (tail.join(',') !== 'workspaceNavControls') {
     reasons.push('ungrouped tail: ' + (tail.join(',') || 'empty'));
   }
   d39 = reasons.length ? reasons.join('; ') : null;

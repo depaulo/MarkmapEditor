@@ -901,15 +901,10 @@ html.journal-sidebar-collapsed #workspaceActivePanel {
   gap: 8px;
 }
 
-/* Shared top-level panel separator contract: Tasks inherits the same
-   border-top as the other top-level collapsible panels. */
+/* Shared top-level panel separator contract: all top-level panels
+   share the same border-top for consistent visual separation. */
 #workspaceTasksPanel {
   border-top: 1px solid var(--menu-border);
-  /* Tasks→Report boundary: the Report panel owns no border-top of its own,
-     so Tasks carries the shared separator on its bottom edge. Panel-root
-     level keeps the line visible in both collapsed and expanded states,
-     matching the other Sidebar panel boundaries without touching Report. */
-  border-bottom: 1px solid var(--menu-border);
 }
 
 /* Collapsed Tasks: keep title + badge, hide the contextual Board action.
@@ -4222,6 +4217,9 @@ html.journal-sidebar-collapsed #workspaceConceptsPanel {
 
 .workspaceReportPanel {
   display: block;
+  border-top: 1px solid var(--menu-border);
+  /* Projects→Report boundary: visible separator between Projects and Report.
+     Archive panel has its own border-top from the shared panel contract. */
 }
 
 .workspaceReportPanel .workspacePanelBody {
@@ -5836,6 +5834,35 @@ html.projects-view-active .splitter::before { content: none; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Show more button (Show more/Show less toggle) */
+#workspaceKnowledgeFindFilesSection #workspaceFindFilesTagsToggle {
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--menu-border);
+  border-radius: 6px;
+  background: var(--toolbar-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+#workspaceKnowledgeFindFilesSection #workspaceFindFilesTagsToggle:hover {
+  background: var(--menu-hover);
+}
+
+#workspaceKnowledgeFindFilesSection #workspaceFindFilesTagsToggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+#workspaceKnowledgeFindFilesSection #workspaceFindFilesTagsToggle:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* =========================== */

@@ -5405,19 +5405,22 @@ function normalizeWorkspaceSidebarTail() {
   }
 
   const report = document.getElementById('workspaceReportPanel');
-
+  const archiveGroup = document.getElementById('workspaceArchiveGroup');
   const navControls = document.getElementById('workspaceNavControls');
 
-  // Canonical tail order: all groups (incl. ArchiveGroup as the last group),
-  // then the ungrouped Report panel right before the Navigation controls.
-  // ArchiveGroup keeps its group position maintained by
+  // Canonical tail order: ungrouped Report panel right before Archive group,
+  // then Navigation controls. ArchiveGroup keeps its group position maintained by
   // ensureWorkspaceSidebarGroups(); it must not be moved into the tail.
   if (report && report.parentNode === host) {
-    host.appendChild(report);
+    if (archiveGroup && archiveGroup.parentNode === host) {
+      host.insertBefore(report, archiveGroup);
+    } else {
+      host.appendChild(report);
+    }
   }
 
-  if (report && navControls && navControls.parentNode === host) {
-    host.insertBefore(report, navControls);
+  if (navControls && navControls.parentNode === host) {
+    host.insertBefore(navControls, null);
   }
 }
 
