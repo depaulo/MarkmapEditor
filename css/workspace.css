@@ -1414,6 +1414,15 @@ html.workspace-empty #workspaceArchivePanel {
   display: none !important;
 }
 
+/* Report panel */
+#workspaceReportPanel {
+  padding: 10px;
+  border-top: 1px solid var(--menu-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 html.workspace-empty #btnJournalToday {
   opacity: 0.45;
   cursor: not-allowed;
@@ -1878,6 +1887,11 @@ html.journal-sidebar-collapsed #workspaceTagsPanel {
 
 html.journal-sidebar-collapsed #workspaceProjectsPanel {
   display: none !important;
+}
+
+/* Separator between Projects and Report panels */
+#workspaceProjectsPanel {
+  border-bottom: 1px solid var(--menu-border);
 }
 
 .workspaceProjectsHeader {
@@ -5863,6 +5877,18 @@ html.projects-view-active .splitter::before { content: none; }
 #workspaceKnowledgeFindFilesSection #workspaceFindFilesTagsToggle:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* Dark mode: invert Find Files toggle colors */
+html.dark #workspaceKnowledgeFindFilesSection #workspaceFindFilesTagsToggle {
+  border-color: var(--menu-border);
+  background: var(--surface-panel);
+  color: var(--text);
+}
+
+/* Dark mode hover */
+html.dark #workspaceKnowledgeFindFilesSection #workspaceFindFilesTagsToggle:hover {
+  background: var(--surface-hover);
 }
 
 /* =========================== */

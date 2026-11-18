@@ -5175,35 +5175,23 @@ function normalizeWorkspacePanelOrder() {
 
   // Panel order within each group (by panel ID). Each group holds exactly
   // one panel for the accepted flat visible order:
-  //   Controls → Current Document → Workspace Knowledge → Notes → Knowledge
-  //   → Tasks → Projects → Report → Archive
+  //   Controls → Projects → Report → Archive → Navigation controls
   const groupPanelOrders = {
     workspaceControlsGroup: [],
-    workspaceCurrentDocumentGroup: ['workspaceActivePanel'],
-    workspaceIndexGroup: ['workspaceIndexPanel'],
-    workspaceTagsGroup: ['workspaceTagsPanel'],
-    workspaceSearchGroup: ['workspaceSearchPanel'],
-    workspaceLinksInGroup: ['workspaceRelatedPanel'],
-    workspaceNotesGroup: ['workspaceJournalsPanel'],
-    workspaceKnowledgeGroup: ['workspaceConceptsPanel'],
-    workspaceTasksGroup: ['workspaceTasksPanel'],
     workspaceProjectsGroup: ['workspaceProjectsPanel'],
+    workspaceReportGroup: ['workspaceReportPanel'],
     workspaceArchiveGroup: ['workspaceArchivePanel'],
+    workspaceNavControlsGroup: ['workspaceNavControls'],
   };
 
   // Group order in the host (after header, before ungrouped content).
+  // Final flat owner-approved sidebar canonical order:
+  //   Projects → Report → Archive → Navigation controls
   const groupOrder = [
-    'workspaceControlsGroup',
-    'workspaceCurrentDocumentGroup',
-    'workspaceIndexGroup',
-    'workspaceTagsGroup',
-    'workspaceSearchGroup',
-    'workspaceLinksInGroup',
-    'workspaceNotesGroup',
-    'workspaceKnowledgeGroup',
-    'workspaceTasksGroup',
     'workspaceProjectsGroup',
+    'workspaceReportGroup',
     'workspaceArchiveGroup',
+    'workspaceNavControlsGroup',
   ];
 
   // Order groups in the host (after header, before ungrouped content).
