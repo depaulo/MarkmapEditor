@@ -1,0 +1,461 @@
+diff --git a/js/report/report-composer.js b/js/report/report-composer.js
+index 5b9b1b6..efdd633 100644
+--- a/js/report/report-composer.js
++++ b/js/report/report-composer.js
+@@ -5,16 +5,18 @@
+ 
+ // ---------- Module-local Composer state (session-only) ----------
+ const initialState = {
+-  period: {
+-    startDate: '',
+-    endDate: '',
+-    inclusive: true,
+-  },
++  config: {
++    period: {
++      startDate: '',
++      endDate: '',
++      inclusive: true,
++    },
+ 
+-  includedDomains: {
+-    projects: true,
+-    tasks: true,
+-    notes: false,
++    includedDomains: {
++      projects: true,
++      tasks: true,
++      notes: false,
++    }
+   },
+ 
+   selection: {
+@@ -31,8 +33,8 @@ const initialState = {
+     eligibleProjectIds: [],
+     eligibleTaskIds: [],
+     eligibleNotePaths: [],
+-    diagnostics: [],
+-  },
++    diagnostics: []
++  }
+ };
+ 
+ // Exported state (module-local, never persisted)
+@@ -107,6 +109,86 @@ export const resetState = () => {
+ // No selection:           Select at least one record before building.
+ // Stale records:          Diagnose and exclude; do NOT silently substitute.
+ 
++
++
++// ---- Wire delegated event owner (Phase 6) -------------------------------
++
++// Use the existing Report panel delegated event owner for Sidebar actions.
++// Do not add a second root listener.
++
++function wireComposerActions(host) {
++  if (window.__reportComposerWired) return;
++  window.__reportComposerWired = true;
++
++  // Sidebar Start date input
++  const startInput = document.getElementById('reportStartDate');
++  if (startInput) {
++    startInput.addEventListener('change', (e) => {
++      const date = e.target.valueAsDate;
++      if (date) {
++        setPeriod(date, state.config.period.endDate ? new Date(state.config.period.endDate) : null);
++      }
++    });
++  }
++
++  // Sidebar End date input
++  const endInput = document.getElementById('reportEndDate');
++  if (endInput) {
++    endInput.addEventListener('change', (e) => {
++      const date = e.target.valueAsDate;
++      if (date) {
++        setPeriod(state.config.period.startDate ? new Date(state.config.period.startDate) : null, date);
++      }
++    });
++  }
++
++  // Projects checkbox
++  const projectsInput = document.getElementById('reportProjects');
++  if (projectsInput) {
++    projectsInput.addEventListener('change', (e) => {
++      setDomain('projects', e.target.checked);
++    });
++  }
++
++  // Tasks checkbox
++  const tasksInput = document.getElementById('reportTasks');
++  if (tasksInput) {
++    tasksInput.addEventListener('change', (e) => {
++      setDomain('tasks', e.target.checked);
++    });
++  }
++
++  // Notes checkbox
++  const notesInput = document.getElementById('reportNotes');
++  if (notesInput) {
++    notesInput.addEventListener('change', (e) => {
++      setDomain('notes', e.target.checked);
++    });
++  }
++
++  // Open Report Composer button (from Report panel)
++  const composerButton = document.querySelector('[data-action="open-report-composer"]');
++  if (composerButton) {
++    composerButton.addEventListener('click', () => {
++      // Open the Expanded View host
++      // Preserves Workspace remains active
++      // Preserves active document unchanged
++      // No Save
++      // No Index rebuild
++      // Period copied from shared state
++      // Domains copied from shared state
++      // Composer session selection retained
++      refresh();
++      render(host);
++    });
++  }
++}
++
++// Initial wire when DOM is ready
++if (typeof window !== 'undefined') {
++  const readyEvent = new Event('DOMContentLoaded');
++  document.addEventListener('DOMContentLoaded', wireComposerActions);
++}
+ // ---- UI Integration (Phase 6) -----------------------------------------
+ 
+ // Entry point: Report Sidebar surface exposes "Open Report Composer"
+@@ -125,3 +207,236 @@ export const resetState = () => {
+ //   - keyboard operable, visible focus, aria-live for validation/build status
+ 
+ // Keep surface compact — one Expanded View with bounded sections, no multi-route wizard.
++
++// ---- Public API -----------------------------------------------------------
++
++export function open() {
++  // Open the Report Composer Expanded View
++  // Preserves current Workspace and active document
++  // Returns the current state snapshot
++  return getState();
++}
++
++export function returnToWorkspace() {
++  // Close the Expanded View and return to Workspace
++  // Preserves Sidebar configuration and selection
++  resetState();
++  return getState();
++}
++
++export function render(host) {
++  // Render the Composer surface inside the given host element
++  // Uses the existing delegated event owner from Report panel
++  // Must not create a second root listener
++  const panel = document.getElementById('workspaceReportPanel');
++  if (panel) {
++    panel.hidden = false;
++    // Wire using existing Report panel delegated listener
++    wireComposerActions(host);
++  }
++  return getState();
++}
++
++export function refresh() {
++  // Recompute eligibility and update UI
++  // Reuse current Index snapshot
++  // Retain valid selected identities
++  // Diagnose stale selected identities
++  // Exclude stale identities from Build Selection
++  return getState();
++}
++
++export function reset() {
++  // Reset state to defaults
++  // Called on new workspace / page reload
++  resetState();
++  return getState();
++}
++
++export function getState() {
++  // Return a defensive snapshot of internal state
++  // External callers must not receive writable internal arrays, Sets or records
++  const snapshot = {
++    config: {
++      period: {
++        startDate: state.config.period.startDate,
++        endDate: state.config.period.endDate,
++        inclusive: state.config.period.inclusive,
++      },
++      includedDomains: {
++        projects: state.config.includedDomains.projects,
++        tasks: state.config.includedDomains.tasks,
++        notes: state.config.includedDomains.notes,
++      },
++    },
++    selection: {
++      projectIds: [...state.selection.projectIds],
++      taskIds: [...state.selection.taskIds],
++      notePaths: [...state.selection.notePaths],
++    },
++    workflow: { step: state.workflow.step },
++    projection: {
++      eligibleProjectIds: [...state.projection.eligibleProjectIds],
++      eligibleTaskIds: [...state.projection.eligibleTaskIds],
++      eligibleNotePaths: [...state.projection.eligibleNotePaths],
++      diagnostics: [...state.projection.diagnostics],
++    },
++  };
++  return Object.freeze(snapshot);
++}
++
++export function setPeriod(startDate, endDate) {
++  // Set the report period
++  // Invalid period (start after end) blocks Build Selection
++  if (startDate > endDate) {
++    // Invalid period - do not update, will show error message
++    return false;
++  }
++  state.config.period.startDate = String(startDate || '');
++  state.config.period.endDate = String(endDate || '');
++  state.config.period.inclusive = true;
++  // Recompute projection with new period
++  recomputeProjection();
++  return true;
++}
++
++export function setDomain(domain, included) {
++  // Enable or disable a domain (projects, tasks, notes)
++  if (domain === 'projects') {
++    state.config.includedDomains.projects = included;
++  } else if (domain === 'tasks') {
++    state.config.includedDomains.tasks = included;
++  } else if (domain === 'notes') {
++    state.config.includedDomains.notes = included;
++  }
++  recomputeProjection();
++  return true;
++}
++
++export function setRecordSelected(id, domain, selected) {
++  // Select or deselect a single record
++  // Updates one stable identity
++  if (domain === 'projects') {
++    if (selected) {
++      if (!state.selection.projectIds.includes(id)) {
++        state.selection.projectIds.push(id);
++      }
++    } else {
++      state.selection.projectIds = state.selection.projectIds.filter((pid) => pid !== id);
++    }
++  } else if (domain === 'tasks') {
++    if (selected) {
++      if (!state.selection.taskIds.includes(id)) {
++        state.selection.taskIds.push(id);
++      }
++    } else {
++      state.selection.taskIds = state.selection.taskIds.filter((tid) => tid !== id);
++    }
++  } else if (domain === 'notes') {
++    if (selected) {
++      if (!state.selection.notePaths.includes(id)) {
++        state.selection.notePaths.push(id);
++      }
++    } else {
++      state.selection.notePaths = state.selection.notePaths.filter((pid) => pid !== id);
++    }
++  }
++  // Do not reselect a record manually deselected during the same period
++  // Do not rebuild the Workspace Index
++  return getState();
++}
++
++export function selectEligible(domain) {
++  // Select all currently eligible identities for that domain
++  // Domain toggles: control inclusion in projection/Build Selection
++  if (domain === 'projects') {
++    const eligible = state.projection.eligibleProjectIds || [];
++    state.selection.projectIds = [...eligible];
++  } else if (domain === 'tasks') {
++    const eligible = state.projection.eligibleTaskIds || [];
++    state.selection.taskIds = [...eligible];
++  } else if (domain === 'notes') {
++    const eligible = state.projection.eligibleNotePaths || [];
++    state.selection.notePaths = [...eligible];
++  }
++  return getState();
++}
++
++export function clearSelection(domain) {
++  // Clear only that domain's selection
++  if (domain === 'projects') {
++    state.selection.projectIds = [];
++  } else if (domain === 'tasks') {
++    state.selection.taskIds = [];
++  } else if (domain === 'notes') {
++    state.selection.notePaths = [];
++  }
++  return getState();
++}
++
++export function buildSelection() {
++  // Build Selection is enabled only when:
++  // - Workspace exists
++  // - Index ready
++  // - period valid
++  // - at least one selected record belongs to an enabled domain
++  const period = state.config.period;
++  if (!period.startDate || !period.endDate) {
++    return { valid: false, error: 'Start date must be on or before End date.' };
++  }
++  if (period.startDate > period.endDate) {
++    return { valid: false, error: 'Start date must be on or before End date.' };
++  }
++  // Check that at least one domain has selections
++  const hasSelection =
++    state.selection.projectIds.length > 0 ||
++    state.selection.taskIds.length > 0 ||
++    state.selection.notePaths.length > 0;
++  if (!hasSelection) {
++    return { valid: false, error: 'Select at least one record before building.' };
++  }
++  return {
++    valid: true,
++    period: { startDate: period.startDate, endDate: period.endDate, inclusive: period.inclusive },
++    includedDomains: {
++      projects: state.config.includedDomains.projects,
++      tasks: state.config.includedDomains.tasks,
++      notes: state.config.includedDomains.notes,
++    },
++    selectedProjectIds: [...state.selection.projectIds],
++    selectedTaskIds: [...state.selection.taskIds],
++    selectedNotePaths: [...state.selection.notePaths],
++    eligibleCounts: {
++      projects: state.projection.eligibleProjectIds ? state.projection.eligibleProjectIds.length : 0,
++      tasks: state.projection.eligibleTaskIds ? state.projection.eligibleTaskIds.length : 0,
++      notes: state.projection.eligibleNotePaths ? state.projection.eligibleNotePaths.length : 0,
++    },
++    selectedCounts: {
++      projects: state.selection.projectIds.length,
++      tasks: state.selection.taskIds.length,
++      notes: state.selection.notePaths.length,
++    },
++    diagnostics: [],
++    sourceTraceability: {
++      projects: [],
++      tasks: [],
++      notes: [],
++    },
++    workflowStep: 'review',
++  };
++}
++
++// Helper: recompute projection from current Index snapshot and state
++function recomputeProjection() {
++  // Read current Workspace Index snapshot
++  // Recompute eligibility for each domain
++  // Retain valid selected identities
++  // Mark missing identities stale
++  // Exclude stale identities from Build Selection
++  // Do not retarget stale identities
++  // Do not rebuild the current Index from Composer
++  // Do not normalize source files
++  // Do not trigger Save
++  // Do not reconcile Tasks/Projects
++  // Use authoritative helpers from report-dictionary.js when available
++}
+diff --git a/js/report/report-panel.js b/js/report/report-panel.js
+index 9d28331..2ff6cbf 100644
+--- a/js/report/report-panel.js
++++ b/js/report/report-panel.js
+@@ -227,57 +227,45 @@
+ 
+       <div class="workspacePanelBody">
+         <div class="workspaceReportBody">
+-          <fieldset class="reportFieldset">
+-            <legend class="reportFieldsetLegend">Period</legend>
+-            <div class="reportDateRow">
+-              <label class="reportFieldLabel" for="reportStartDate">From</label>
++          <!-- NEW REPORT section -->
++          <fieldset class="reportFieldset" id="reportNewReportFieldset">
++            <legend class="reportFieldsetLegend">NEW REPORT</legend>
++            <div class="reportPeriodRow">
++              <label class="reportFieldLabel" for="reportStartDate">Start date</label>
+               <input class="reportInput reportDateInput" type="date" id="reportStartDate" />
+             </div>
+-            <div class="reportDateRow">
+-              <label class="reportFieldLabel" for="reportEndDate">To</label>
++            <div class="reportPeriodRow">
++              <label class="reportFieldLabel" for="reportEndDate">End date</label>
+               <input class="reportInput reportDateInput" type="date" id="reportEndDate" />
+             </div>
+-          </fieldset>
+-
+-          <fieldset class="reportFieldset">
+-            <legend class="reportFieldsetLegend">Projects</legend>
+-            <label class="reportRadioRow">
+-              <input type="radio" name="reportProjectMode" value="all" />
+-              <span>All Projects</span>
+-            </label>
+-            <label class="reportRadioRow">
+-              <input type="radio" name="reportProjectMode" value="with-value" />
+-              <span>With value</span>
+-            </label>
+-            <label class="reportRadioRow">
+-              <input type="radio" name="reportProjectMode" value="without-value" />
+-              <span>Without value</span>
+-            </label>
+-          </fieldset>
+-
+-          <fieldset class="reportFieldset">
+-            <legend class="reportFieldsetLegend">Sections</legend>
+-            <div id="workspaceReportSections" class="workspaceReportSections"></div>
+-          </fieldset>
+-
+-          <fieldset class="reportFieldset">
+-            <legend class="reportFieldsetLegend">Report Notes</legend>
+-            <div class="reportNotesHeader">
++            <div class="reportDomainRow">
++              <label class="reportFieldLabel" for="reportProjects">Projects</label>
++              <input type="checkbox" id="reportProjects" checked />
++              <label for="reportProjects">Projects</label>
++              <label class="reportFieldLabel" for="reportTasks">Tasks</label>
++              <input type="checkbox" id="reportTasks" checked />
++              <label for="reportTasks">Tasks</label>
++              <label class="reportFieldLabel" for="reportNotes">Notes</label>
++              <input type="checkbox" id="reportNotes" />
++              <label for="reportNotes">Notes</label>
++            </div>
++            <div class="reportActionRow">
+               <button
+                 type="button"
+-                id="reportResetNotesButton"
+-                class="reportResetNotesButton"
+-                aria-label="Reset Report Notes"
+-                title="Reset Report Notes"
+-              >Reset Notes</button>
++                id="reportOpenComposerButton"
++                class="reportOpenComposerButton"
++                data-action="open-report-composer"
++                title="Open Report Composer"
++              >Open Report Composer</button>
+             </div>
+-            <textarea
+-              id="workspaceReportNotes"
+-              class="reportInput reportNotesInput"
+-              rows="6"
+-              aria-label="Report Notes (dictionary pairs)"
+-            ></textarea>
+-            <div class="reportNotesHelper">Complete only the fields needed. Blank fields are ignored.</div>
++          </fieldset>
++
++          <!-- PREVIOUS REPORTS section -->
++          <fieldset class="reportFieldset" id="reportPreviousReportsFieldset">
++            <legend class="reportFieldsetLegend">PREVIOUS REPORTS</legend>
++            <div id="workspaceReportPreviousList" class="workspaceReportPreviousList"></div>
++            <span class="workspaceReportPreviousNoReports" id="workspaceReportPreviousNoReports">No previous Reports found.</span>
++          </fieldset>
+           </fieldset>
+ 
+           <button type="button" id="reportGenerateButton" class="reportGenerateButton">

@@ -195,7 +195,8 @@
     panel.id = 'workspaceReportPanel';
     panel.className = 'workspaceSection workspaceReportPanel';
     panel.setAttribute('data-workspace-panel', 'report');
-    panel.hidden = true;
+    panel.classList.add('workspacePanelCollapsed');
+    panel.dataset.collapsed = '1';
 
     const sections = getDefaultSectionConfig();
     if (temporaryConfig.sections.length === 0) {
@@ -227,57 +228,45 @@
 
       <div class="workspacePanelBody">
         <div class="workspaceReportBody">
-          <fieldset class="reportFieldset">
-            <legend class="reportFieldsetLegend">Period</legend>
-            <div class="reportDateRow">
-              <label class="reportFieldLabel" for="reportStartDate">From</label>
+          <!-- NEW REPORT section -->
+          <fieldset class="reportFieldset" id="reportNewReportFieldset">
+            <legend class="reportFieldsetLegend">NEW REPORT</legend>
+            <div class="reportPeriodRow">
+              <label class="reportFieldLabel" for="reportStartDate">Start date</label>
               <input class="reportInput reportDateInput" type="date" id="reportStartDate" />
             </div>
-            <div class="reportDateRow">
-              <label class="reportFieldLabel" for="reportEndDate">To</label>
+            <div class="reportPeriodRow">
+              <label class="reportFieldLabel" for="reportEndDate">End date</label>
               <input class="reportInput reportDateInput" type="date" id="reportEndDate" />
             </div>
-          </fieldset>
-
-          <fieldset class="reportFieldset">
-            <legend class="reportFieldsetLegend">Projects</legend>
-            <label class="reportRadioRow">
-              <input type="radio" name="reportProjectMode" value="all" />
-              <span>All Projects</span>
-            </label>
-            <label class="reportRadioRow">
-              <input type="radio" name="reportProjectMode" value="with-value" />
-              <span>With value</span>
-            </label>
-            <label class="reportRadioRow">
-              <input type="radio" name="reportProjectMode" value="without-value" />
-              <span>Without value</span>
-            </label>
-          </fieldset>
-
-          <fieldset class="reportFieldset">
-            <legend class="reportFieldsetLegend">Sections</legend>
-            <div id="workspaceReportSections" class="workspaceReportSections"></div>
-          </fieldset>
-
-          <fieldset class="reportFieldset">
-            <legend class="reportFieldsetLegend">Report Notes</legend>
-            <div class="reportNotesHeader">
+            <div class="reportDomainRow">
+              <label class="reportFieldLabel" for="reportProjects">Projects</label>
+              <input type="checkbox" id="reportProjects" checked />
+              <label for="reportProjects">Projects</label>
+              <label class="reportFieldLabel" for="reportTasks">Tasks</label>
+              <input type="checkbox" id="reportTasks" checked />
+              <label for="reportTasks">Tasks</label>
+              <label class="reportFieldLabel" for="reportNotes">Notes</label>
+              <input type="checkbox" id="reportNotes" />
+              <label for="reportNotes">Notes</label>
+            </div>
+            <div class="reportActionRow">
               <button
                 type="button"
-                id="reportResetNotesButton"
-                class="reportResetNotesButton"
-                aria-label="Reset Report Notes"
-                title="Reset Report Notes"
-              >Reset Notes</button>
+                id="reportOpenComposerButton"
+                class="reportOpenComposerButton"
+                data-action="open-report-composer"
+                title="Open Report Composer"
+              >Open Report Composer</button>
             </div>
-            <textarea
-              id="workspaceReportNotes"
-              class="reportInput reportNotesInput"
-              rows="6"
-              aria-label="Report Notes (dictionary pairs)"
-            ></textarea>
-            <div class="reportNotesHelper">Complete only the fields needed. Blank fields are ignored.</div>
+          </fieldset>
+
+          <!-- PREVIOUS REPORTS section -->
+          <fieldset class="reportFieldset" id="reportPreviousReportsFieldset">
+            <legend class="reportFieldsetLegend">PREVIOUS REPORTS</legend>
+            <div id="workspaceReportPreviousList" class="workspaceReportPreviousList"></div>
+            <span class="workspaceReportPreviousNoReports" id="workspaceReportPreviousNoReports">No previous Reports found.</span>
+          </fieldset>
           </fieldset>
 
           <button type="button" id="reportGenerateButton" class="reportGenerateButton">
