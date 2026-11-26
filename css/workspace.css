@@ -3043,6 +3043,391 @@ html.workspace-index-active #viewer {
   }
 }
 
+/* ========================================================================
+   Report Composer — Expanded View layout.
+   Mounted into #layout (positioned below the main toolbar). Shown under the
+   report-composer-active root class, mirroring the Workspace Index
+   html.workspace-index-active convention.
+   ======================================================================== */
+
+#workspaceReportComposer {
+  display: none;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+html.report-composer-active #workspaceReportComposer {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Composer active: suspend Journal/editor/sidebar presentation so the
+   splitters (#splitEditor, #splitHtml) and panes are neither visible nor
+   interactive in Composer. Visibility and layout are restored when the root
+   class is removed on Back (no splitter widths or preferences are changed). */
+html.report-composer-active #workspaceSidebar,
+html.report-composer-active #splitEditor,
+html.report-composer-active #viewer,
+html.report-composer-active #splitHtml,
+html.report-composer-active #editor {
+  display: none !important;
+}
+
+.reportComposerView {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.reportComposerHeader {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-page);
+}
+
+/* Separate domain labels and counts visually without changing their values. */
+.reportComposerDomainRow {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.reportComposerDomainValue {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted, #666);
+  white-space: nowrap;
+}
+
+/* Report Composer — presentation (scoped, no behavior change). */
+.reportComposerHeader {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.reportComposerView {
+  display: flex;
+  flex-direction: column;
+}
+.reportComposerView .reportComposerBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.reportComposerView .reportComposerActions {
+  flex: none;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ========================================================================
+   Report Composer — Configure / records / review (scoped, read-only).
+   Reuses existing theme tokens; no behavior change beyond presentation.
+   ======================================================================== */
+.reportComposerConfigure {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.reportComposerConfigureHeading {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #888);
+  margin: 0 0 6px;
+  padding: 0;
+}
+.reportComposerPeriodInputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.reportComposerFieldLabel {
+  font-size: 12px;
+  color: var(--muted, #888);
+  min-width: 0;
+}
+.reportComposerPeriodInput {
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-subtle, #ccc);
+  border-radius: 4px;
+  background: var(--surface-raised, #fff);
+  color: var(--text, #1a1a1a);
+}
+html.dark .reportComposerPeriodInput {
+  background: var(--surface-panel, #2d2d2d);
+  border-color: var(--border-strong, #555555);
+  color: var(--text, #d4d4d4);
+}
+.reportComposerPeriodValue {
+  font-size: 12px;
+  color: var(--text, #1a1a1a);
+  margin-top: 2px;
+}
+.reportComposerPeriodInvalid {
+  color: var(--danger, #c62828);
+}
+.reportComposerIncludeGroup {
+  margin-top: 6px;
+}
+.reportComposerDomainChecks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+}
+.reportComposerDomainCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text, #1a1a1a);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.reportComposerDomainCheck input {
+  margin: 0;
+  flex: none;
+  accent-color: var(--accent, #1976d2);
+}
+html.dark .reportComposerDomainCheck {
+  color: var(--text, #d4d4d4);
+}
+.reportComposerDomainSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: baseline;
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+.reportComposerSectionTools {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 4px 0 8px;
+}
+.reportComposerSectionTool {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-subtle, #ccc);
+  border-radius: 4px;
+  background: var(--surface-raised, #fafafa);
+  color: var(--text, #1a1a1a);
+  cursor: pointer;
+}
+.reportComposerSectionTool:hover:not(:disabled) {
+  background: var(--surface-hover, #f0f0f0);
+}
+.reportComposerSectionTool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+html.dark .reportComposerSectionTool {
+  background: var(--surface-panel, #2d2d2d);
+  color: var(--text, #d4d4d4);
+  border-color: var(--border-subtle, #3e3e42);
+}
+.reportComposerSectionSubhead {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #888);
+  margin: 8px 0 4px;
+}
+html.dark .reportComposerSectionSubhead {
+  color: var(--muted, #aaaaaa);
+}
+.reportComposerSectionEmpty {
+  font-size: 12px;
+  color: var(--muted, #888);
+  padding: 8px 0;
+  font-style: italic;
+}
+.reportComposerFilterLabel {
+  font-size: 11px;
+  color: var(--muted, #888);
+  margin: 2px 0 0;
+  font-style: italic;
+}
+html.dark .reportComposerFilterLabel {
+  color: var(--muted, #aaaaaa);
+}
+
+/* Report Composer — Review selection output */
+.reportComposerReviewOut {
+  margin-top: 8px;
+}
+.reportComposerReviewHead {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.reportComposerReviewCounts {
+  font-size: 12px;
+  color: var(--muted, #888);
+  margin-bottom: 6px;
+}
+html.dark .reportComposerReviewCounts {
+  color: var(--muted, #aaaaaa);
+}
+.reportComposerReviewList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reportComposerReviewRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--surface-raised);
+  font-size: 12px;
+}
+.reportComposerReviewName {
+  font-weight: 600;
+}
+.reportComposerReviewMeta {
+  color: var(--muted, #888);
+  font-size: 11px;
+}
+.reportComposerReviewError {
+  font-size: 12px;
+  color: var(--danger, #c62828);
+  margin-bottom: 6px;
+}
+.reportComposerReviewNone {
+  font-size: 12px;
+  color: var(--muted, #888);
+  padding: 8px 0;
+  font-style: italic;
+}
+
+/* Sidebar — New Report primary action + session summary */
+.reportOpenComposerPrimary {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border-strong, #a1a1aa);
+  border-radius: 4px;
+  background: var(--accent, #1976d2);
+  color: #fff;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.reportOpenComposerPrimary:hover:not(:disabled) {
+  background: var(--accent-hover, #2c7fd4);
+  border-color: var(--accent-hover, #2c7fd4);
+}
+.reportOpenComposerPrimary:focus-visible {
+  outline: 2px solid var(--accent, #1976d2);
+  outline-offset: 2px;
+}
+html.dark .reportOpenComposerPrimary {
+  background: var(--accent, #1976d2);
+  color: #fff;
+}
+.reportSessionSummary {
+  font-size: 12px;
+  color: var(--muted, #888);
+  margin-bottom: 8px;
+}
+html.dark .reportSessionSummary {
+  color: var(--muted, #aaaaaa);
+}
+
+/* Composer — per-section block header: title, effective period, Use global toggle. */
+.reportComposerSectionBlock {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.reportComposerSectionHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.reportComposerSectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.reportComposerSectionCounts {
+  font-size: 12px;
+  color: var(--muted, #888);
+  margin-left: auto;
+  white-space: nowrap;
+}
+.reportComposerEffectivePeriod {
+  font-size: 12px;
+  color: var(--muted, #888);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.reportComposerEffectivePeriod.reportComposerPeriodInvalid {
+  color: var(--danger, #c62828);
+}
+.reportComposerUseGlobal {
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.reportComposerUseGlobal input {
+  margin: 0 4px 0 0;
+  accent-color: var(--accent, #1976d2);
+}
+.reportComposerCustomPeriod {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+  margin-bottom: 8px;
+}
+.reportComposerViewSelector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+  margin-bottom: 8px;
+}
+.reportComposerViewSelect {
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-subtle, #ccc);
+  border-radius: 4px;
+  background: var(--surface-raised, #fff);
+  color: var(--text, #1a1a1a);
+}
+html.dark .reportComposerViewSelect {
+  background: var(--surface-panel, #2d2d2d);
+  border-color: var(--border-strong, #555555);
+  color: var(--text, #d4d4d4);
+}
+
 /* ---- Index sections ---- */
 .wsIndexSection {
   width: 100%;
@@ -4538,6 +4923,78 @@ html.dark .reportGenerateButton:disabled {
   color: var(--muted, #888);
   border-color: var(--border-subtle, #3e3e42);
   background: var(--surface-panel, #2d2d2d);
+}
+
+/* ========================================================================
+   Report Sidebar — domain controls and action weighting (scoped).
+   One label per domain (checkbox + text), aligned and attached; Open Report
+   Composer is the themed primary action; Generate Quick Report keeps
+   secondary visual weight.
+   ======================================================================== */
+#workspaceReportPanel .reportDomainRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin: 6px 0 4px;
+}
+#workspaceReportPanel .reportDomainOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text, #1a1a1a);
+  cursor: pointer;
+  white-space: nowrap;
+}
+#workspaceReportPanel .reportDomainOption input {
+  margin: 0;
+  flex: none;
+  accent-color: var(--accent, #1976d2);
+}
+html.dark #workspaceReportPanel .reportDomainOption {
+  color: var(--text, #d4d4d4);
+}
+
+/* Open Report Composer: full-width themed primary action with visible focus. */
+#workspaceReportPanel .reportOpenComposerButton {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border-strong, #a1a1aa);
+  border-radius: 4px;
+  background: var(--accent, #1976d2);
+  color: #fff;
+  cursor: pointer;
+  margin-top: 6px;
+}
+#workspaceReportPanel .reportOpenComposerButton:hover:not(:disabled) {
+  background: var(--accent-hover, #2c7fd4);
+  border-color: var(--accent-hover, #2c7fd4);
+}
+#workspaceReportPanel .reportOpenComposerButton:focus-visible {
+  outline: 2px solid var(--accent, #1976d2);
+  outline-offset: 2px;
+}
+html.dark #workspaceReportPanel .reportOpenComposerButton {
+  background: var(--accent, #1976d2);
+  color: #fff;
+}
+
+/* Generate Quick Report: secondary visual weight (base colors only; the
+   existing .reportGenerateButton:* state rules keep precedence via higher
+   specificity so disabled/hover/focus behavior is unchanged). */
+.reportGenerateButton {
+  background: var(--surface-raised, #fafafa);
+  color: var(--text, #1a1a1a);
+  border-color: var(--border-subtle, #d4d4d8);
+}
+html.dark .reportGenerateButton {
+  background: var(--surface-panel, #2d2d2d);
+  color: var(--text, #d4d4d4);
+  border-color: var(--border-subtle, #3e3e42);
 }
 
 .workspaceReportStatus {
@@ -6040,4 +6497,133 @@ html.dark #workspaceKnowledgeFindFilesSection #workspaceFindFilesTagsToggle:hove
 /* Ensure Edit surface respects hidden attribute */
 #editor .CodeMirror[hidden] {
   display: none !important;
+}
+
+/* =========================================================================
+   Report Reader view — dedicated read-only surface for generated drafts.
+   ========================================================================= */
+
+.reportReaderView {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-family, system-ui, -apple-system, sans-serif);
+  color: var(--text-primary, var(--mme-text, #1a1a1a));
+}
+
+.reportReaderHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color, var(--mme-border, #cbd5e0));
+  background: var(--bg-surface, var(--mme-bg-surface, #f7fafc));
+  flex-shrink: 0;
+}
+
+html.dark .reportReaderHeader {
+  background: var(--mme-bg-surface, #2d3748);
+  border-bottom-color: var(--mme-border, #4a5568);
+  color: var(--mme-text, #e2e8f0);
+}
+
+.reportReaderBackButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  background: var(--bg-button, var(--mme-bg-button, #fff));
+  border: 1px solid var(--border-color, var(--mme-border, #cbd5e0));
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-primary, var(--mme-text, #1a1a1a));
+  flex-shrink: 0;
+}
+
+html.dark .reportReaderBackButton {
+  background: var(--mme-bg-button, #4a5568);
+  border-color: var(--mme-border, #4a5568);
+  color: var(--mme-text, #e2e8f0);
+}
+
+.reportReaderBackButton:hover {
+  background: var(--bg-button-hover, var(--mme-bg-button-hover, #edf2f7));
+}
+
+html.dark .reportReaderBackButton:hover {
+  background: var(--mme-bg-button-hover, #4a5568);
+}
+
+.reportReaderTitle {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.reportReaderStatus {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent, var(--mme-accent, #2563eb));
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+html.dark .reportReaderStatus {
+  color: var(--mme-accent, #60a5fa);
+}
+
+.reportReaderPeriod {
+  font-size: 13px;
+  color: var(--text-secondary, var(--mme-text-secondary, #718096));
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+html.dark .reportReaderPeriod {
+  color: var(--mme-text-secondary, #a0aec0);
+}
+
+.reportReaderBody {
+  flex: 1;
+  overflow: auto;
+  padding: 20px 24px;
+  box-sizing: border-box;
+  line-height: 1.6;
+}
+
+.reportReaderContent {
+  font-size: 14px;
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+  .reportReaderContent {
+    font-size: 13px;
+  }
+  .reportReaderBody {
+    padding: 16px 16px;
+  }
+}
+
+/* Prevent tables from widening the page on narrow screens */
+.reportReaderContent table {
+  max-width: 100%;
+  border-collapse: collapse;
+}
+
+.reportReaderContent th,
+.reportReaderContent td {
+  border: 1px solid var(--border-color, var(--mme-border, #cbd5e0));
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 13px;
+}
+
+html.dark .reportReaderContent th,
+html.dark .reportReaderContent td {
+  border-color: var(--mme-border, #4a5568);
 }

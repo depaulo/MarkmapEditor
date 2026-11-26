@@ -364,3 +364,99 @@ Browser gate: Task Board opens normally; visible exit works; Escape/close works;
 - Package 6 release gate: CLOSED
 - 0.8.0 activation: NOT AUTHORIZED (pending owner authorization)
 - Release candidate committed (adac27d) awaiting activation decision.
+
+## Report Composer → First Report Reader — CDP Acceptance (S22 Termux native, 2026-11-25)
+
+HEAD: `5785a73c` (branch `development`). Diff: `css/workspace.css`, `js/main.js`, `js/report/report-composer.js`, `js/report/report-panel.js` (source fixes); `docs/architecture/MarkmapEditor_Report_Composer_WORKFLOW.md` (untracked, new); `scripts/report-composer-acceptance.cjs`, `scripts/report-composer-smoke.cjs` (untracked, new).
+
+### Evidências estáticas (PASS)
+- `node --check js/report/report-composer.js`: PASS
+- `node --check js/report/report-panel.js`: PASS
+- `node --check js/main.js`: PASS
+- `git diff --check`: clean
+- `scripts/report-composer-validators.cjs`: RESULT: PASS
+
+### Evidências de browser (CDP + F1)
+
+| Etapa | Status | Detalhe |
+|-------|--------|---------|
+| CDP conectado (porta 9222) | PASS | `http://127.0.0.1:9222/json/version` retorna JSON com `webSocketDebuggerUrl`; Chromium/155 headless |
+| App servida (porta 8000) | PASS | `http://127.0.0.1:8000/` retorna HTML do MarkmapEditor |
+| `playwright-core` resolução | PASS (workaround) | v1.58.2 em `~/.local/share/playwright-termux-native/node_modules/playwright-core`; requer `Object.defineProperty(process, 'platform', {value:'linux'})` antes do require (Android não suportado nativamente) |
+| Launcher do Chromium com CDP | PASS | Lançado com `chromium --headless --new --remote-debugging-port=9222 --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-address=127.0.0.1` |
+| F1 fixture ativado | PASS | `http://127.0.0.1:8000/?mme-fixture=projects-review`; banner `#mmeFixtureBanner` visível |
+| Workspace Index construído | PASS | Logs: `Workspace Index: built files=3 notes=3 tags=1 tasks=5 openTasks=2 doneTasks=3 links=4 projects=3` |
+| Report Composer aberto | PASS | Botão `#reportOpenComposerButton` clicado; log "[Report Composer] Expanded Report opened"; Container `#workspaceReportComposer` existe, `hidden: false`, `visible: true`, `childCount > 0` com controles de período, seções e botões |
+| Review (Report Composer) | PASS | Matriz de aceitação executada via CDP + F1; 25/25 casos PASS (veja matriz abaixo) |
+| Generate Report → Reader | PASS | CASO 7: 10/10 casos PASS — Reader aberto com rascunho Markdown, seções Projects/Tasks/Notes/Sources, Unsaved draft, período, Back preserva seleção |
+
+### Correções de produto aplicadas (esta sessão)
+
+**`js/report/report-composer.js`:**
+1. **First-open config sync:** `composerActivate()` chama `syncSidebarConfigToComposerIfEmpty()` — datas e domínios do Sidebar chegam ao Composer na primeira abertura sem segunda edição. Nunca sobrescreve configuração viva do Composer. Lê inputs do DOM (não legacy `temporaryConfig`).
+2. **Select all / Deselect all:** renomeados de "Select eligible"/"Clear". Limitados aos elegíveis da seção. `Select all` desabilitado quando não há elegíveis ou todos já selecionados; `Deselect all` desabilitado quando nada selecionado.
+3. **Match reasons traduzidos:** `readableMatchReason()` traduz IDs internos para rótulos legíveis (ex: "Expected Order quarter overlaps period", "Open at period end"). Nunca rotula quarter de forecast como data de criação.
+4. **Generate Report:** `generateReport()` constrói um único rascunho Markdown em memória a partir da seleção revisada. Filtra apenas itens selecionados. Nunca refiltra silenciosamente. Não grava arquivo. Persiste no estado da sessão (`workflow.step = 'generated'`, `generatedMarkdown`, `generatedDictionary`).
+5. **Reader view:** `renderReaderView()` exibe superfície de leitura dedicada com título, período, status "Unsaved draft", seções Projects/Tasks/Notes/Sources, controle "Back to Composer". Tabelas respeitam largura em telas estreitas. `returnToComposer()` preserva seleção, períodos e estilos.
+
+**`js/report/report-panel.js`:**
+1. Removida linha enganosa "Projects:0 · Tasks:0" do resumo de sessão e JS associado (`reportSessionSummary`).
+2. Removido badge "Config" do cabeçalho do Sidebar (redundante com botão Configure Report).
+3. Mantido Quick Report sob "More report actions" disclosure; Draw.io contextual preservado.
+
+**`css/workspace.css`:**
+- Adicionados estilos `.reportReaderView` (cabeçalho fixo, corpo rolável, largura de leitura confortável, tabelas com overflow controlado em telas estreitas, suporte a tema dark).
+
+### Smoke test — execuções
+
+- Execução 1: PASS (8/8 estágios)
+- Execução 2: PASS (8/8 estágios) — mesmo comando, nova aba, sem reconfigurar ambiente
+
+### Matriz de aceitação — executada (CDP + F1, 2026-11-25)
+
+**CASOS 1–6 (Composer configuração e seleção): 15/15 PASS**
+
+| Caso | Status | Detalhe |
+|------|--------|---------|
+| Período global 2026-10-01 a 2026-12-31 | PASS | Período definido via fill; start=2026-10-01 end=2026-12-31 |
+| Open Task visível (sem vencimento) | PASS | Aberta sem due date = open at period end |
+| Todo visível (sem vencimento) | PASS | Aberta sem due date = open at period end |
+| Projetos gerenciados não indexados no F1 | PASS | F1 index tem 3 projects unmanaged; sem quarter para filtrar (limitação do fixture) |
+| Open Task selecionada | PASS | Checkbox da task Open Task foi marcado |
+| Todo selecionado | PASS | Checkbox da task Todo foi marcado |
+| Review mostra Open Task | PASS | Open Task aparece no Review selection |
+| Review mostra Todo | PASS | Todo aparece no Review selection |
+| Review NÃO mostra Completed Task | PASS | Completed Task não aparece (done sem completedDate) |
+| Review counts mostra 2 selecionados | PASS | Selected: 2 of 2 eligible |
+| Tasks período custom 27q3 | PASS | Tasks período custom 2026-07-01 a 2026-09-30 (27q3) |
+| Projects mantém global independente | PASS | Projects mantém período global (herança preservada) |
+| Período incompleto não gera fallback | PASS | End date vazio → período incompleto, Build desabilitado |
+| Período global restaurado | PASS | 2026-10-01 to 2026-12-31 válido após restauração |
+| Seleção preservada após Back/reabertura | PASS | Open Task ainda selecionado após reabertura do Composer |
+
+**CASO 7 (Generate Report → Reader): 10/10 PASS**
+
+| Caso | Status | Detalhe |
+|------|--------|---------|
+| Generate Report botão visível após Review | PASS | Botão aparece no estado de review |
+| Reader view aberta após Generate Report | PASS | `reportReaderView` presente no DOM |
+| Reader título presente | PASS | Título do relatório exibido |
+| Reader status Unsaved draft | PASS | Status mostra rascunho não salvo |
+| Reader mostra período | PASS | Período 2026-10-01 a 2026-12-31 exibido |
+| Reader contém Open Task | PASS | Open Task aparece no conteúdo do Reader |
+| Reader contém Todo | PASS | Todo aparece no conteúdo do Reader |
+| Reader NÃO contém Completed Task | PASS | Completed Task não aparece como item (não selecionada) |
+| Reader contém seção Sources | PASS | Seção Sources com referências estáveis |
+| Seleção preservada após Reader→Composer | PASS | Open Task ainda selecionado após retornar do Reader |
+
+### Limitação do fixture F1
+
+O índice F1 contém apenas 3 Projects, todos unmanaged (sem quarter). PROJECT_ALPHA (Order: 26q4) e PROJECT_BETA (Order: 27q4) do CUSTOMER_A não são indexados como Projects gerenciados. Para validar o filtro trimestral de Projects (26q4 vs 27q4), seria necessário um fixture descartável com blocos `<!-- mme-project -->Project: X, Order: 26q4`.
+
+### Evidências
+
+- Screenshots e JSON: `~/mme-cdp-evidence/` (smoke-composer-open.png, smoke-result.json, acceptance-composer-open.png, acceptance-review.png, acceptance-complete.png, acceptance-result.json, etc.)
+- Script de smoke test: `scripts/report-composer-smoke.cjs` (no repositório)
+- Script de aceitação: `scripts/report-composer-acceptance.cjs` (no repositório)
+- Scripts temporários de investigação: `~/mme-acceptance-*.cjs`, `~/mme-inspect-*.cjs` (não commitados, fora do repositório)
+- Guia de fluxo: `docs/validation/PLAYWRIGHT_MCP_BROWSER_VALIDATION.md` seção 8

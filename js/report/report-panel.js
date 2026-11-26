@@ -222,13 +222,12 @@
           </span>
         </button>
         <span class="workspacePanelHeaderControls">
-          <span id="workspaceReportBadge" class="workspacePanelBadge">Config</span>
         </span>
       </div>
 
       <div class="workspacePanelBody">
         <div class="workspaceReportBody">
-          <!-- NEW REPORT section -->
+          <!-- NEW REPORT section — global configuration, one primary action -->
           <fieldset class="reportFieldset" id="reportNewReportFieldset">
             <legend class="reportFieldsetLegend">NEW REPORT</legend>
             <div class="reportPeriodRow">
@@ -240,25 +239,26 @@
               <input class="reportInput reportDateInput" type="date" id="reportEndDate" />
             </div>
             <div class="reportDomainRow">
-              <label class="reportFieldLabel" for="reportProjects">Projects</label>
-              <input type="checkbox" id="reportProjects" checked />
-              <label for="reportProjects">Projects</label>
-              <label class="reportFieldLabel" for="reportTasks">Tasks</label>
-              <input type="checkbox" id="reportTasks" checked />
-              <label for="reportTasks">Tasks</label>
-              <label class="reportFieldLabel" for="reportNotes">Notes</label>
-              <input type="checkbox" id="reportNotes" />
-              <label for="reportNotes">Notes</label>
+              <label class="reportDomainOption">
+                <input type="checkbox" id="reportProjects" checked />
+                <span>Projects</span>
+              </label>
+              <label class="reportDomainOption">
+                <input type="checkbox" id="reportTasks" checked />
+                <span>Tasks</span>
+              </label>
+              <label class="reportDomainOption">
+                <input type="checkbox" id="reportNotes" />
+                <span>Notes</span>
+              </label>
             </div>
-            <div class="reportActionRow">
-              <button
-                type="button"
-                id="reportOpenComposerButton"
-                class="reportOpenComposerButton"
-                data-action="open-report-composer"
-                title="Open Report Composer"
-              >Open Report Composer</button>
-            </div>
+            <button
+              type="button"
+              id="reportOpenComposerButton"
+              class="reportOpenComposerButton reportOpenComposerPrimary"
+              data-action="open-report-composer"
+              title="Configure Report"
+            >Configure Report</button>
           </fieldset>
 
           <!-- PREVIOUS REPORTS section -->
@@ -267,11 +267,15 @@
             <div id="workspaceReportPreviousList" class="workspaceReportPreviousList"></div>
             <span class="workspaceReportPreviousNoReports" id="workspaceReportPreviousNoReports">No previous Reports found.</span>
           </fieldset>
-          </fieldset>
 
-          <button type="button" id="reportGenerateButton" class="reportGenerateButton">
-            Generate Report
-          </button>
+          <!-- Legacy Quick Report configuration — secondary actions, kept
+               separate from the Composer-owned New Report configuration. -->
+          <fieldset class="reportFieldset" id="reportLegacyActionsFieldset">
+            <legend class="reportFieldsetLegend">More report actions</legend>
+            <button type="button" id="reportGenerateButton" class="reportGenerateButton">
+              Generate Quick Report
+            </button>
+          </fieldset>
 
           <!-- ACT H3: Draw.io reconciliation entry point. -->
           <fieldset class="reportFieldset drawioReportEntryFieldset">
@@ -298,7 +302,7 @@
       host.appendChild(panel);
     }
 
-    log('Report: panel rendered');
+        log('Report: panel rendered');
     return panel;
   }
 
@@ -316,18 +320,36 @@
     if (startDate) {
       startDate.value = temporaryConfig.startDate;
       startDate.addEventListener('change', () => {
-        temporaryConfig.startDate = startDate.value || '';
+        const val = startDate.value || '';
+        temporaryConfig.startDate = val;
         refreshGenerateAvailability();
         safeStatus('');
+        // Share the global period with the Composer session.
+        try {
+          const composer = (typeof globalThis !== 'undefined' && globalThis.MME_REPORT_COMPOSER) ||
+            (typeof window !== 'undefined' && window.MME_REPORT_COMPOSER);
+          if (composer && typeof composer.setPeriod === 'function') {
+            composer.setPeriod(val, endDate ? endDate.value || null : null);
+          }
+        } catch (e) {}
       });
     }
 
     if (endDate) {
       endDate.value = temporaryConfig.endDate;
       endDate.addEventListener('change', () => {
-        temporaryConfig.endDate = endDate.value || '';
+        const val = endDate.value || '';
+        temporaryConfig.endDate = val;
         refreshGenerateAvailability();
         safeStatus('');
+        // Share the global period with the Composer session.
+        try {
+          const composer = (typeof globalThis !== 'undefined' && globalThis.MME_REPORT_COMPOSER) ||
+            (typeof window !== 'undefined' && window.MME_REPORT_COMPOSER);
+          if (composer && typeof composer.setPeriod === 'function') {
+            composer.setPeriod(startDate ? startDate.value || null : null, val);
+          }
+        } catch (e) {}
       });
     }
 
@@ -344,6 +366,22 @@
         resetReportNotes();
       });
     }
+
+    // Share domain inclusion with the Composer session.
+    ['projects', 'tasks', 'notes'].forEach(function (domain) {
+      var cb = document.getElementById('report' + domain.charAt(0).toUpperCase() + domain.slice(1));
+      if (cb) {
+        cb.addEventListener('change', function () {
+          try {
+            var composer = (typeof globalThis !== 'undefined' && globalThis.MME_REPORT_COMPOSER) ||
+              (typeof window !== 'undefined' && window.MME_REPORT_COMPOSER);
+            if (composer && typeof composer.setDomain === 'function') {
+              composer.setDomain(domain, cb.checked);
+            }
+          } catch (e) {}
+        });
+      }
+    });
 
     const radios = panel.querySelectorAll('input[name="reportProjectMode"]');
     radios.forEach((radio) => {
@@ -393,6 +431,27 @@
       drawioEntry.dataset.drawioWired = '1';
       drawioEntry.addEventListener('click', () => {
         handleDrawioReconcileClick(drawioEntry);
+      });
+    }
+
+    // Wire Open Report Composer button — the Composer owns its own editable
+    // configuration (Configure section). Opening resumes the current session
+    // configuration; it does not import Sidebar / Quick Report inputs.
+    const composerBtn = panel.querySelector('[data-action="open-report-composer"]');
+    if (composerBtn && !composerBtn.dataset.composerWired) {
+      composerBtn.dataset.composerWired = '1';
+      composerBtn.addEventListener('click', () => {
+        const composer = (typeof globalThis !== 'undefined' && globalThis.MME_REPORT_COMPOSER) ||
+          (typeof window !== 'undefined' && window.MME_REPORT_COMPOSER);
+        if (!composer) {
+          safeStatus('Composer API not available');
+          return;
+        }
+        if (typeof composer.open === 'function') {
+          composer.open();
+        } else {
+          safeStatus('Composer open() not available');
+        }
       });
     }
 
@@ -749,7 +808,7 @@
   }
 
   function handleGenerate() {
-    // Generate New Report: this always prepares the current configuration. If a
+    // Generate Quick Report: this always prepares the current configuration. If a
     // Report is already active, openVirtualReport (adapter) runs the coordinated
     // Save/Discard/Cancel decision for the current Report before replacing it.
     // The new configuration (prepareReport) is validated BEFORE that decision, so
@@ -817,7 +876,7 @@
 
     if (generate) {
       generate.disabled = !valid;
-      generate.textContent = reportActive ? 'Generate New Report' : 'Generate Report';
+      generate.textContent = 'Generate Quick Report';
       generate.title = reportActive
         ? valid
           ? 'Create a new Report from the current configuration.'
