@@ -5393,22 +5393,27 @@ function normalizeWorkspaceSidebarTail() {
   }
 
   const report = document.getElementById('workspaceReportPanel');
+  const projectsGroup = document.getElementById('workspaceProjectsGroup');
   const archiveGroup = document.getElementById('workspaceArchiveGroup');
-  const navControls = document.getElementById('workspaceNavControls');
 
-  // Canonical tail order: ungrouped Report panel right before Archive group,
-  // then Navigation controls. ArchiveGroup keeps its group position maintained by
-  // ensureWorkspaceSidebarGroups(); it must not be moved into the tail.
-  if (report && report.parentNode === host) {
-    if (archiveGroup && archiveGroup.parentNode === host) {
-      host.insertBefore(report, archiveGroup);
-    } else {
-      host.appendChild(report);
-    }
+  // Canonical tail: all other functional panels keep their existing relative
+  // order, then Projects -> Report -> Archive form one contiguous ordered
+  // tail at the end of the functional-panel list.
+  //
+  // ProjectsGroup/ArchiveGroup move with their panels (collapse state and
+  // listeners preserved); Report is ungrouped and is moved directly.
+  // Navigation controls (#workspaceNavControls) live outside this host as a
+  // persistent footer and are left untouched as the end anchor.
+  //
+  // Idempotent: re-appending already-correct nodes is a no-op move.
+  if (projectsGroup && projectsGroup.parentNode === host) {
+    host.appendChild(projectsGroup);
   }
-
-  if (navControls && navControls.parentNode === host) {
-    host.insertBefore(navControls, null);
+  if (report && report.parentNode === host) {
+    host.appendChild(report);
+  }
+  if (archiveGroup && archiveGroup.parentNode === host) {
+    host.appendChild(archiveGroup);
   }
 }
 

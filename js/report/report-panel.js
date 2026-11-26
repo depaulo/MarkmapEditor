@@ -275,6 +275,10 @@
             <button type="button" id="reportGenerateButton" class="reportGenerateButton">
               Generate Quick Report
             </button>
+            <button type="button" id="reportOpenReportButton" class="reportOpenReportButton">
+              Open Report…
+            </button>
+            <input type="file" id="reportOpenFileInput" accept=".md,.markdown,.txt" style="display: none" />
           </fieldset>
 
           <!-- ACT H3: Draw.io reconciliation entry point. -->
@@ -364,6 +368,46 @@
     if (resetNotesBtn) {
       resetNotesBtn.addEventListener('click', () => {
         resetReportNotes();
+      });
+    }
+
+    // Open Report button — triggers a real file read via hidden input
+    const openReportBtn = document.getElementById('reportOpenReportButton');
+    if (openReportBtn) {
+      openReportBtn.addEventListener('click', () => {
+        const fileInput = document.getElementById('reportOpenFileInput');
+        if (fileInput) {
+          fileInput.value = '';
+          fileInput.click();
+        }
+      });
+    }
+    // File input change handler — reads the chosen .md and opens it
+    const fileInput = document.getElementById('reportOpenFileInput');
+    if (fileInput) {
+      fileInput.addEventListener('change', (event) => {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target.result || '';
+          if (!content || typeof content !== 'string') {
+            log?.('Report: open report read failed — empty or unreadable file');
+            return;
+          }
+          const composer = (typeof globalThis !== 'undefined' && globalThis.MME_REPORT_COMPOSER) ||
+                           (typeof window !== 'undefined' && window.MME_REPORT_COMPOSER);
+          if (composer && typeof composer.openReportFromFile === 'function') {
+            composer.openReportFromFile(content);
+          } else {
+            log?.('Report: open report — Composer API not available');
+          }
+        };
+        reader.onerror = () => {
+          log?.('Report: open report read failed — file read error');
+        };
+        reader.readAsText(file);
       });
     }
 

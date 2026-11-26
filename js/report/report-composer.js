@@ -1548,6 +1548,24 @@ function renderReaderView(host) {
   periodDiv.textContent = 'Period: ' + periodText;
   header.appendChild(periodDiv);
 
+  // Edit Markdown button
+  var editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'reportReaderEditButton';
+  editBtn.setAttribute('data-report-action', 'reader-edit-markdown');
+  editBtn.textContent = 'Edit Markdown';
+  editBtn.addEventListener('click', function () { openMarkdownEditor(); });
+  header.appendChild(editBtn);
+
+  // Save button
+  var saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'reportReaderSaveButton';
+  saveBtn.setAttribute('data-report-action', 'reader-save-report');
+  saveBtn.textContent = 'Save';
+  saveBtn.addEventListener('click', function () { saveReport(); });
+  header.appendChild(saveBtn);
+
   view.appendChild(header);
 
   // Body - scrollable content area
@@ -1574,6 +1592,408 @@ function returnToComposer() {
     workflow: { step: 'review' },
   }));
   renderComposerView(getComposerContainer());
+}
+
+// =========================================================================
+// Edit Markdown support
+// =========================================================================
+
+function openMarkdownEditor() {
+  var markdown = state.editedMarkdown || state.generatedMarkdown || '';
+  if (!markdown) {
+    logComposer('No markdown to edit');
+    return;
+  }
+
+  // Set a flag so returnToComposer knows we came from editor mode
+  state = Object.freeze(Object.assign({}, state, {
+    workflow: { step: 'editor' },
+    editedMarkdown: markdown,
+  }));
+
+  // Force re-render to show the editor state
+  renderComposerView(getComposerContainer());
+}
+
+// Build versioned report metadata frontmatter from current Composer state.
+// Shared contract between Save and Open.
+function buildReportFrontmatter() {
+  var cfg = state.config;
+  var sel = state.selection;
+  var lines = [];
+  lines.push('---');
+  lines.push('report_version: 1');
+  lines.push('type: report');
+  lines.push('period_start: ' + (cfg.period.startDate || ''));
+  lines.push('period_end: ' + (cfg.period.endDate || ''));
+  lines.push('project_scope: ' + (cfg.includedDomains.projects && cfg.includedDomains.tasks && cfg.includedDomains.notes ? 'all' : 'partial'));
+  lines.push('domains_projects: ' + Boolean(cfg.includedDomains.projects));
+  lines.push('domains_tasks: ' + Boolean(cfg.includedDomains.tasks));
+  lines.push('domains_notes: ' + Boolean(cfg.includedDomains.notes));
+  lines.push('sections_projects_enabled: ' + Boolean(cfg.sections.projects.enabled));
+  lines.push('sections_projects_initialView: ' + (cfg.sections.projects.initialView || ''));
+  lines.push('sections_projects_periodOverride_start: ' + (cfg.sections.projects.periodOverride && cfg.sections.projects.periodOverride.startDate ? cfg.sections.projects.periodOverride.startDate : ''));
+  lines.push('sections_projects_periodOverride_end: ' + (cfg.sections.projects.periodOverride && cfg.sections.projects.periodOverride.endDate ? cfg.sections.projects.periodOverride.endDate : ''));
+  lines.push('sections_tasks_enabled: ' + Boolean(cfg.sections.tasks.enabled));
+  lines.push('sections_tasks_initialView: ' + (cfg.sections.tasks.initialView || ''));
+  lines.push('sections_tasks_periodOverride_start: ' + (cfg.sections.tasks.periodOverride && cfg.sections.tasks.periodOverride.startDate ? cfg.sections.tasks.periodOverride.startDate : ''));
+  lines.push('sections_tasks_periodOverride_end: ' + (cfg.sections.tasks.periodOverride && cfg.sections.tasks.periodOverride.endDate ? cfg.sections.tasks.periodOverride.endDate : ''));
+  lines.push('sections_notes_enabled: ' + Boolean(cfg.sections.notes.enabled));
+  lines.push('sections_notes_initialView: ' + (cfg.sections.notes.initialView || ''));
+  lines.push('sections_notes_periodOverride_start: ' + (cfg.sections.notes.periodOverride && cfg.sections.notes.periodOverride.startDate ? cfg.sections.notes.periodOverride.startDate : ''));
+  lines.push('sections_notes_periodOverride_end: ' + (cfg.sections.notes.periodOverride && cfg.sections.notes.periodOverride.endDate ? cfg.sections.notes.periodOverride.endDate : ''));
+  lines.push('included_projects: ' + (sel.projectIds ? sel.projectIds.join(',') : ''));
+  lines.push('included_tasks: ' + (sel.taskIds ? sel.taskIds.join(',') : ''));
+  lines.push('included_notes: ' + (sel.notePaths ? sel.notePaths.join(',') : ''));
+  lines.push('---');
+  lines.push('');
+  return lines.join('\n');
+}
+
+// Trigger a browser download of the report markdown with frontmatter metadata.
+function downloadReport(text, filename) {
+  var blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename || 'report.md';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  logComposer('Report downloaded: ' + (filename || 'report.md'));
+}
+
+function saveReport() {
+  var markdown = state.generatedMarkdown || '';
+  if (!markdown) {
+    logComposer('No markdown to save');
+    return;
+  }
+
+  // Build frontmatter from current Composer state
+  var frontmatter = buildReportFrontmatter();
+
+  // Strip any existing frontmatter from markdown to avoid duplicate blocks.
+  // gen.buildMarkdown() may already include a frontmatter block; we replace it
+  // with the single canonical block from buildReportFrontmatter().
+  var bodyContent = markdown;
+  var mdLines = markdown.split('\n');
+  var fmStart = -1;
+  var fmEnd = -1;
+  for (var i = 0; i < mdLines.length; i++) {
+    if (mdLines[i].trim() === '---') {
+      if (fmStart === -1) {
+        fmStart = i;
+      } else {
+        fmEnd = i;
+        break;
+      }
+    }
+  }
+  if (fmStart !== -1 && fmEnd !== -1) {
+    bodyContent = mdLines.slice(fmEnd + 1).join('\n').replace(/^\n*/, '');
+  }
+
+  var fullContent = frontmatter + bodyContent;
+
+  // Trigger download via Blob
+  var filename = 'report-' + (state.config.period.startDate || 'unknown') + '-' + (state.config.period.endDate || 'unknown') + '.md';
+  downloadReport(fullContent, filename);
+
+  // Mark as saved in composer state
+  state = Object.freeze(Object.assign({}, state, {
+    workflow: { step: 'saved' },
+    savedMarkdown: fullContent,
+  }));
+
+  // Notify success
+  logComposer('Report saved successfully with metadata frontmatter');
+  renderReaderView(getComposerContainer());
+}
+
+function openReport() {
+  var markdown = state.generatedMarkdown || '';
+  if (!markdown) {
+    logComposer('No markdown to open');
+    return;
+  }
+
+  // Parse the frontmatter to recognize a saved report
+  var frontmatter = '';
+  var lines = markdown.split('\n');
+  var i = 0;
+
+  // Look for the --- delimiters that mark the frontmatter
+  var frontmatterStart = -1;
+  var frontmatterEnd = -1;
+
+  for (i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === '---') {
+      if (frontmatterStart === -1) {
+        frontmatterStart = i;
+      } else {
+        frontmatterEnd = i;
+        break;
+      }
+    }
+  }
+
+  // If we found frontmatter, parse it
+  var reportMetadata = {};
+  if (frontmatterStart !== -1 && frontmatterEnd !== -1) {
+    var frontmatterLines = lines.slice(frontmatterStart + 1, frontmatterEnd);
+    for (var j = 0; j < frontmatterLines.length; j++) {
+      var line = frontmatterLines[j].trim();
+      var colonIndex = line.indexOf(':');
+      if (colonIndex !== -1) {
+        var key = line.substring(0, colonIndex).trim().toLowerCase();
+        var value = line.substring(colonIndex + 1).trim();
+        reportMetadata[key] = value;
+      }
+    }
+  }
+
+  // Check if this is a recognized report format
+  if (reportMetadata.type !== 'report') {
+    // Not a recognized report format - still allow reading the original Markdown
+    logComposer('Recognized as Markdown (not a report format); opening as read-only');
+    // Fall through to read-only viewing
+  }
+
+  // Restore Composer configuration from the saved report
+  restoreReportConfig(reportMetadata);
+
+  // Switch to saved-snapshot mode
+  state = Object.freeze(Object.assign({}, state, {
+    workflow: { step: 'snapshot' },
+  }));
+
+  // Render the Reader showing the original Markdown
+  renderReaderView(getComposerContainer());
+}
+
+function openReportFromFile(content) {
+  if (!content || typeof content !== 'string') {
+    logComposer('No markdown content to open');
+    return;
+  }
+
+  // Parse the frontmatter to recognize a saved report
+  var lines = content.split('\n');
+  var i = 0;
+
+  // Look for the --- delimiters that mark the frontmatter
+  var frontmatterStart = -1;
+  var frontmatterEnd = -1;
+
+  for (i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === '---') {
+      if (frontmatterStart === -1) {
+        frontmatterStart = i;
+      } else {
+        frontmatterEnd = i;
+        break;
+      }
+    }
+  }
+
+  // If we found frontmatter, parse it
+  var reportMetadata = {};
+  if (frontmatterStart !== -1 && frontmatterEnd !== -1) {
+    var frontmatterLines = lines.slice(frontmatterStart + 1, frontmatterEnd);
+    for (var j = 0; j < frontmatterLines.length; j++) {
+      var line = frontmatterLines[j].trim();
+      var colonIndex = line.indexOf(':');
+      if (colonIndex !== -1) {
+        var key = line.substring(0, colonIndex).trim().toLowerCase();
+        var value = line.substring(colonIndex + 1).trim();
+        reportMetadata[key] = value;
+      }
+    }
+  }
+
+  // Check if this is a recognized report format
+  if (reportMetadata.type !== 'report') {
+    logComposer('Recognized as Markdown (not a report format); opening as read-only');
+  }
+
+  // Restore Composer configuration from the saved report
+  restoreReportConfig(reportMetadata);
+
+  // Switch to saved-snapshot mode
+  state = Object.freeze(Object.assign({}, state, {
+    workflow: { step: 'snapshot' },
+  }));
+
+  // Extract body (content after frontmatter, or full content if no frontmatter)
+  var bodyContent = content;
+  if (frontmatterStart !== -1 && frontmatterEnd !== -1) {
+    bodyContent = lines.slice(frontmatterEnd + 1).join('\n');
+    bodyContent = bodyContent.replace(/^\n*/, '');
+  }
+
+  // Render the Reader showing the original Markdown from file
+  var container = getComposerContainer();
+  if (!container) return;
+  container.innerHTML = '';
+  container.hidden = false;
+
+  var period = state.config.period || { startDate: '', endDate: '' };
+  var periodNorm = normalizePeriod(period.startDate, period.endDate);
+  var periodText = periodNorm.status === 'complete'
+    ? periodNorm.startDate + ' to ' + periodNorm.endDate + ' (inclusive)'
+    : '—';
+
+  var view = document.createElement('div');
+  view.className = 'reportReaderView';
+  view.hidden = false;
+
+  var header = document.createElement('div');
+  header.className = 'reportReaderHeader';
+
+  var backBtn = document.createElement('button');
+  backBtn.type = 'button';
+  backBtn.className = 'reportReaderBackButton';
+  backBtn.setAttribute('data-report-action', 'reader-back-to-composer');
+  backBtn.textContent = 'Back to Composer';
+  backBtn.addEventListener('click', function () { returnToComposer(); });
+  header.appendChild(backBtn);
+
+  var titleDiv = document.createElement('div');
+  titleDiv.className = 'reportReaderTitle';
+  titleDiv.textContent = 'Report';
+  header.appendChild(titleDiv);
+
+  var statusDiv = document.createElement('div');
+  statusDiv.className = 'reportReaderStatus';
+  statusDiv.textContent = 'Saved report';
+  header.appendChild(statusDiv);
+
+  var periodDiv = document.createElement('div');
+  periodDiv.className = 'reportReaderPeriod';
+  periodDiv.textContent = 'Period: ' + periodText;
+  header.appendChild(periodDiv);
+
+  var editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'reportReaderEditButton';
+  editBtn.setAttribute('data-report-action', 'reader-edit-markdown');
+  editBtn.textContent = 'Edit Markdown';
+  editBtn.addEventListener('click', function () { openMarkdownEditor(); });
+  header.appendChild(editBtn);
+
+  header.appendChild(document.createElement('div'));
+
+  view.appendChild(header);
+
+  var body = document.createElement('div');
+  body.className = 'reportReaderBody';
+
+  var contentDiv = document.createElement('div');
+  contentDiv.className = 'reportReaderContent';
+  contentDiv.style.whiteSpace = 'pre-wrap';
+  contentDiv.style.wordWrap = 'break-word';
+  contentDiv.textContent = bodyContent;
+  body.appendChild(contentDiv);
+
+  view.appendChild(body);
+
+  container.appendChild(view);
+}
+
+function restoreReportConfig(meta) {
+  if (!meta || typeof meta !== 'object') return;
+
+  // Restore global period
+  if (meta.period_start && meta.period_end) {
+    state = Object.freeze(Object.assign({}, state, {
+      config: Object.assign({}, state.config, {
+        period: {
+          startDate: meta.period_start,
+          endDate: meta.period_end,
+          inclusive: true
+        }
+      })
+    }));
+  }
+
+  // Restore included domains (individual booleans take priority over scope shorthand)
+  if (meta.domains_projects !== undefined) {
+    state.config.includedDomains.projects = meta.domains_projects === 'true';
+  }
+  if (meta.domains_tasks !== undefined) {
+    state.config.includedDomains.tasks = meta.domains_tasks === 'true';
+  }
+  if (meta.domains_notes !== undefined) {
+    state.config.includedDomains.notes = meta.domains_notes === 'true';
+  }
+  // Fallback: project_scope shorthand if individual domains not present
+  if (meta.domains_projects === undefined && meta.domains_tasks === undefined && meta.domains_notes === undefined) {
+    if (meta.project_scope === 'all') {
+      state.config.includedDomains.projects = true;
+      state.config.includedDomains.tasks = true;
+      state.config.includedDomains.notes = true;
+    }
+  }
+
+  // Restore section overrides and initial styles
+  var sections = state.config.sections;
+  if (meta.sections_projects_enabled !== undefined) {
+    sections.projects.enabled = meta.sections_projects_enabled === 'true';
+  }
+  if (meta.sections_projects_initialView) {
+    sections.projects.initialView = meta.sections_projects_initialView;
+  }
+  if (meta.sections_projects_periodOverride_start !== undefined && meta.sections_projects_periodOverride_start !== '') {
+    if (!sections.projects.periodOverride) sections.projects.periodOverride = {};
+    sections.projects.periodOverride.startDate = meta.sections_projects_periodOverride_start;
+  }
+  if (meta.sections_projects_periodOverride_end !== undefined && meta.sections_projects_periodOverride_end !== '') {
+    if (!sections.projects.periodOverride) sections.projects.periodOverride = {};
+    sections.projects.periodOverride.endDate = meta.sections_projects_periodOverride_end;
+  }
+
+  if (meta.sections_tasks_enabled !== undefined) {
+    sections.tasks.enabled = meta.sections_tasks_enabled === 'true';
+  }
+  if (meta.sections_tasks_initialView) {
+    sections.tasks.initialView = meta.sections_tasks_initialView;
+  }
+  if (meta.sections_tasks_periodOverride_start !== undefined && meta.sections_tasks_periodOverride_start !== '') {
+    if (!sections.tasks.periodOverride) sections.tasks.periodOverride = {};
+    sections.tasks.periodOverride.startDate = meta.sections_tasks_periodOverride_start;
+  }
+  if (meta.sections_tasks_periodOverride_end !== undefined && meta.sections_tasks_periodOverride_end !== '') {
+    if (!sections.tasks.periodOverride) sections.tasks.periodOverride = {};
+    sections.tasks.periodOverride.endDate = meta.sections_tasks_periodOverride_end;
+  }
+
+  if (meta.sections_notes_enabled !== undefined) {
+    sections.notes.enabled = meta.sections_notes_enabled === 'true';
+  }
+  if (meta.sections_notes_initialView) {
+    sections.notes.initialView = meta.sections_notes_initialView;
+  }
+  if (meta.sections_notes_periodOverride_start !== undefined && meta.sections_notes_periodOverride_start !== '') {
+    if (!sections.notes.periodOverride) sections.notes.periodOverride = {};
+    sections.notes.periodOverride.startDate = meta.sections_notes_periodOverride_start;
+  }
+  if (meta.sections_notes_periodOverride_end !== undefined && meta.sections_notes_periodOverride_end !== '') {
+    if (!sections.notes.periodOverride) sections.notes.periodOverride = {};
+    sections.notes.periodOverride.endDate = meta.sections_notes_periodOverride_end;
+  }
+
+  // Restore included item IDs by section
+  if (meta.included_projects) {
+    state.selection.projectIds = meta.included_projects.split(',').filter(Boolean);
+  }
+  if (meta.included_tasks) {
+    state.selection.taskIds = meta.included_tasks.split(',').filter(Boolean);
+  }
+  if (meta.included_notes) {
+    state.selection.notePaths = meta.included_notes.split(',').filter(Boolean);
+  }
 }
 
 function recomputeProjection() {
@@ -1757,6 +2177,7 @@ const composerAPI = Object.freeze({
   clearSelection,
   buildSelection,
   generateReport,
+  openReportFromFile,
   recomputeProjection
 });
 

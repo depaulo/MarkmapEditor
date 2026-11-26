@@ -173,7 +173,95 @@ An agent may stop only the server process started by that task.
 
 ---
 
-## 8. TOOL POLICY
+## 8. FLUXO S22/TERMUX NATIVO + CDP + F1 (separado do headless MCP)
+
+Este fluxo roda no Termux nativo do S22 (Android), não no Codespaces/remoto, e não depende do
+`@playwright/mcp` nem do Composio. Usa Playwright direto (`playwright-core`) com
+`connectOverCDP` no loopback do Chromium já rodando no S22, mais o fixture local F1
+(`js/workspace/fixture-loader.js`) para popular o Workspace Index sem o seletor de pasta.
+
+### 8.1 Pré-requisitos confirmados no S22
+
+- Chromium com CDP na porta **9222** (`http://127.0.0.1:9222/json/version` retorna JSON com `webSocketDebuggerUrl`)
+- App servida na porta **8000** (`http://127.0.0.1:8000/` retorna HTML do MarkmapEditor)
+- `playwright-core` instalado em `~/.local/share/playwright-termux-native/node_modules/playwright-core` (v1.58.2)
+- `playwright-core` **não carrega nativamente no Android** (`Unsupported platform: android`). Workaround: forçar
+  `Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })` antes de `require('playwright-core')`.
+  Após isso, `chromium.connectOverCDP` funciona normalmente.
+- Não instalar pacote nem escrever cliente CDP novo. Reutilizar `cdp-smoke.cjs` na raiz como base.
+
+### 8.2 Servidor da app
+
+```
+python3 -m http.server 8000 --bind 127.0.0.1
+```
+(rodar a partir da raiz do checkout `development`)
+
+### 8.3 URL do fixture F1
+
+```
+http://127.0.0.1:8000/?mme-fixture=projects-review
+```
+
+O fixture é read-only, não modifica o workspace real. Ativa o `WORKSPACE_STATE` com dados sintéticos
+(Projects: PROJECT_ALPHA, PROJECT_BETA, OWNER_A, FIXTURE_DRAFT, FIXTURE_INVALID_Q, FIXTURE_LEGACY;
+Tasks: Completed Task, Open Task) e dispara `buildWorkspaceIndex()` + evento `mme-workspace-index-ready`.
+
+Confirmação de ativação: banner `#mmeFixtureBanner` visível + logs `[fixture] activated` e
+`Workspace Index: built files=.. notes=.. tags=.. tasks=.. projects=..`.
+
+### 8.4 Comando do smoke (cópia descartável)
+
+Baseado em `cdp-smoke.cjs` na raiz, mas **sem** `page.setContent()` na aba de trabalho e **sem** fechar
+o Chromium do owner. Criar cópia temporária em `~/mme-composer-test.cjs`, conectar via CDP, navegar para
+a URL do fixture, verificar ativação, então tentar expor o Report Composer pela UI.
+
+### 8.5 Causa raiz da Sidebar oculta (S22 Termux nativo + CDP)
+
+O botão `#reportOpenComposerButton` existe no DOM mas não tem layout físico (`offsetParent=null`,
+`getBoundingClientRect()` zeros) porque o ancestral `ASIDE#workspaceSidebar` está com
+`display: none`.
+
+**Declaração CSS que aplica `display: none`:**
+- Seletor: `#workspaceSidebar` (regra base, arquivo `css/workspace.css`)
+- Valor: `display: none`
+- Isso ocorre porque o `<html>` tem `data-app-context="editor"`, não `"journal"`.
+
+**Regra CSS que tornaria o sidebar visível:**
+- Seletor: `html[data-app-context="journal"] #workspaceSidebar`
+- Valor: `display: flex`
+- Condição: `data-app-context` deve ser `"journal"` no `<html>`.
+
+**Estado atual confirmado (inspeção somente leitura):**
+- `data-app-context: "editor"` (confirmado via `document.documentElement.attributes`)
+- `bodyClasses: []` (sem classes adicionais no body)
+- `sidebar.classList: []` (sem classes no sidebar)
+- Nenhum seletor de modo visível na UI (`modeSelectors: []`)
+- Nenhum botão "Journal"/"Editor"/"Slides" como controle de modo visível
+- Journal workspace ativado internamente (logs: "journal workspace activated", "journalInitialized=true")
+- MAS `data-app-context` ainda é "editor" — não foi alterado para "journal"
+
+**Não é falha de conexão nem de CDP.** O CDP funciona normalmente. É o estado da UI:
+o app está no modo `editor` e não há controle visível para mudar para `journal`.
+
+**Fluxo manual conhecido:** Editor → Journal → Sidebar → Report
+
+Requer ação manual do owner na aba F1 já controlada pelo CDP:
+1. Carregar `http://127.0.0.1:8000/?mme-fixture=projects-review` (já carregada)
+2. Selecionar "Journal" no seletor de modo da aplicação (muda `data-app-context` de "editor" para "journal")
+3. Deixar a aba aberta — o coder retoma a automação nessa mesma aba para abrir o sidebar,
+   expandir Report, clicar em "Configure Report" e executar a matriz de aceite.
+
+Se o seletor de modo não for visível imediatamente, fechar primeiro o welcome dialog
+(botão "Start" ou ×) e então selecionar Journal.
+
+### 8.6 Evidências
+
+Salvas em `~/mme-cdp-evidence/` (screenshots PNG, JSON de resultados).
+
+---
+
+## 9. TOOL POLICY
 
 ### Preferred Tools
 In the headless MCP, prefer the following stable tools for validation:
